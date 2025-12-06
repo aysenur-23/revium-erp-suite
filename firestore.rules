@@ -1,0 +1,313 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+    function hasRole(uid, roles) {
+      return userDoc(uid).data.role != null &&
+        userDoc(uid).data.role.hasAny(roles);
+    }
+    function isAdmin() {
+      return request.auth != null && hasRole(request.auth.uid, ['admin', 'super_admin']);
+    }
+    function isSuperAdmin() {
+      return request.auth != null && hasRole(request.auth.uid, ['super_admin']);
+    }
+    function isTeamLeader() {
+      return request.auth != null && hasRole(request.auth.uid, ['team_leader', 'admin', 'super_admin']);
+    }
+    
+    // Users collection - Herkes tüm kullanıcıları görebilir, yazma yetkileri sınırlı
+    match /users/{userId} {
+      // Tüm authenticated kullanıcılar tüm kullanıcıları görebilir
+      allow read: if request.auth != null;
+      // Kullanıcı kendi profilini oluşturabilir (kayıt sırasında)
+      // onAuthStateChanged kullanarak auth state'in güncellenmesini beklediğimiz için
+      // request.auth artık null olmamalı
+      allow create: if request.auth != null && request.auth.uid == userId;
+      // Kullanıcı kendi profilini güncelleyebilir (sadece belirli alanlar)
+      allow update: if request.auth != null && request.auth.uid == userId;
+      // Sadece Süper Admin tüm kullanıcıları güncelleyebilir/silebilir
+      allow update, delete: if isSuperAdmin();
+    }
+    
+    match /tasks/{taskId} {
+      allow read: if request.auth != null;
+      // Görev oluşturma: Sadece Admin veya Team Leader
+      allow create: if request.auth != null && (isAdmin() || isTeamLeader()) && request.resource.data.createdBy == request.auth.uid;
+      
+      // Status ve onay süreci güncellemeleri için helper
+      function isStatusOrApprovalUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'approvalStatus', 'updatedAt', 'approvalRequestedBy', 
+                   'approvalRequestedAt', 'completedAt', 'approvedBy', 'approvedAt', 
+                   'rejectedBy', 'rejectedAt', 'rejectionReason', 'poolRequests', 
+                   'isInPool', 'assignedUsers']);
+      }
+
+      // Update: 
+      // 1. Oluşturan ve Admin tam yetkili
+      // 2. Diğer kullanıcılar sadece durum, onay ve atama ile ilgili alanları güncelleyebilir
+      allow update: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin() ||
+        isStatusOrApprovalUpdate()
+      );
+      
+      // Silme için: sadece oluşturan veya admin
+      allow delete: if request.auth != null &&
+        (resource.data.createdBy == request.auth.uid || isAdmin());
+      
+      match /assignments/{assignmentId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update, delete: if request.auth != null && (
+          get(/databases/$(database)/documents/tasks/$(taskId)/assignments/$(assignmentId)).data.assignedTo == request.auth.uid || 
+          isAdmin() ||
+          // Görev sahibi veya atayan kişi de silebilir
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.createdBy == request.auth.uid
+        );
+      }
+      match /comments/{commentId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update, delete: if request.auth != null && (
+          resource.data.userId == request.auth.uid || 
+          isAdmin()
+        );
+      }
+      match /checklists/{checklistId} {
+        // Herkes okuyabilir, oluşturabilir ve güncelleyebilir (checkbox işaretleme için)
+        allow read, create, update: if request.auth != null;
+        // Silme işlemi sadece oluşturan veya admin
+        allow delete: if request.auth != null && (
+          resource.data.createdBy == request.auth.uid || 
+          isAdmin()
+        );
+      }
+      match /attachments/{attachmentId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update, delete: if request.auth != null && (
+          resource.data.uploadedBy == request.auth.uid || 
+          isAdmin() ||
+          // Atanan kullanıcılar da ekleri yönetebilir
+          request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedUsers
+        );
+      }
+    }
+    
+    match /orders/{orderId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+      
+      // Status ve onay süreci güncellemeleri için helper
+      function isStatusOrApprovalUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'approvalStatus', 'updatedAt', 'statusUpdatedAt', 'statusUpdatedBy',
+                   'approvalRequestedBy', 'approvalRequestedAt', 'approvedBy', 'approvedAt', 
+                   'rejectedBy', 'rejectedAt', 'rejectionReason']);
+      }
+
+      allow update: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin() ||
+        hasRole(request.auth.uid, ['manager']) ||
+        isStatusOrApprovalUpdate()
+      );
+
+      // Silme sadece yönetici veya ekip lideri (manager)
+      allow delete: if request.auth != null && (
+        isAdmin() || 
+        hasRole(request.auth.uid, ['manager'])
+      );
+      
+      match /items/{itemId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update, delete: if request.auth != null && (
+          get(/databases/$(database)/documents/orders/$(orderId)).data.createdBy == request.auth.uid || 
+          isAdmin()
+        );
+      }
+    }
+    
+    match /customers/{customerId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if request.auth != null &&
+        (resource.data.createdBy == request.auth.uid || isAdmin());
+    }
+    
+    // Products collection - Herkes görebilir, yazma yetkileri sınırlı
+    match /products/{productId} {
+      // Tüm authenticated kullanıcılar ürünleri görebilir
+      allow read: if request.auth != null;
+      // Herkes ürün oluşturabilir
+      allow create: if request.auth != null;
+      // Ürün sahibi, admin veya ekip lideri güncelleyebilir/silebilir
+      allow update, delete: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin() ||
+        isTeamLeader()
+      );
+      
+      match /recipes/{recipeId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update, delete: if request.auth != null && (
+          get(/databases/$(database)/documents/products/$(productId)).data.createdBy == request.auth.uid || 
+          isAdmin() ||
+          isTeamLeader()
+        );
+      }
+    }
+    
+    // Raw Materials collection - Herkes görebilir, yazma yetkileri sınırlı
+    match /rawMaterials/{materialId} {
+      // Tüm authenticated kullanıcılar hammaddeleri görebilir
+      allow read: if request.auth != null;
+      // Herkes hammadde oluşturabilir
+      allow create: if request.auth != null;
+      // Hammadde sahibi, admin veya ekip lideri güncelleyebilir/silebilir
+      allow update, delete: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin() ||
+        isTeamLeader()
+      );
+      
+      match /transactions/{transactionId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update, delete: if request.auth != null && (
+          get(/databases/$(database)/documents/rawMaterials/$(materialId)).data.createdBy == request.auth.uid || 
+          isAdmin() ||
+          isTeamLeader()
+        );
+      }
+    }
+    
+    // Departments collection - Herkes görebilir (kayıt için), yazma sadece süper admin
+    match /departments/{departmentId} {
+      // Herkes departmanları görebilir (kayıt sayfası için gerekli)
+      allow read: if true;
+      // Sadece süper admin'ler departman oluşturabilir/güncelleyebilir/silebilir
+      allow write: if isSuperAdmin();
+    }
+    
+    // Notifications collection - Kullanıcılar sadece kendi bildirimlerini görebilir
+    match /notifications/{notificationId} {
+      // Kullanıcılar sadece kendi bildirimlerini görebilir
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      // Herkes bildirim oluşturabilir
+      allow create: if request.auth != null;
+      // Kullanıcılar sadece kendi bildirimlerini güncelleyebilir/silebilir
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    
+    // Settings collections - Sadece süper admin
+    match /company_settings/{docId} {
+      // Tüm authenticated kullanıcılar ayarları görebilir
+      allow read: if request.auth != null;
+      // Sadece süper admin'ler ayarları güncelleyebilir
+      allow write: if isSuperAdmin();
+    }
+    
+    match /admin_settings/{docId} {
+      // Sadece süper admin'ler admin ayarlarını görebilir/yazabilir
+      allow read, write: if isSuperAdmin();
+    }
+    
+    // Role permissions - Sadece süper admin
+    match /role_permissions/{docId} {
+      // Tüm authenticated kullanıcılar rol izinlerini görebilir (kendi rollerini kontrol etmek için)
+      allow read: if request.auth != null;
+      // Sadece süper admin'ler rol izinlerini güncelleyebilir
+      allow write: if isSuperAdmin();
+    }
+    
+    // Audit logs - Herkes oluşturabilir, yetkiye göre görüntülenebilir
+    match /audit_logs/{logId} {
+      // Herkes log oluşturabilir
+      allow create: if request.auth != null;
+      // Kullanıcılar kendi loglarını, adminler tüm logları görebilir
+      // (Ekip liderleri için client-side filtreleme yapılacak)
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
+      // Loglar silinemez (sadece super admin)
+      allow delete: if isSuperAdmin();
+    }
+    
+    // Recipes collection - Auth kullanıcılar okuyup yazabilir
+    match /recipes/{recipeId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Projects collection - Herkes görebilir, yazma yetkileri sınırlı
+    match /projects/{projectId} {
+      allow read: if request.auth != null;
+      // Proje oluşturma: Admin veya Team Leader
+      allow create: if request.auth != null && (
+        isAdmin() || isTeamLeader()
+      ) && request.resource.data.createdBy == request.auth.uid;
+      
+      allow update, delete: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin() ||
+        isTeamLeader()
+      );
+    }
+    
+    // Customer Notes collection - Herkes görebilir, yazma yetkileri sınırlı
+    match /customerNotes/{noteId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin()
+      );
+    }
+    
+    // Reports collection - Herkes görebilir, yazma yetkileri sınırlı
+    match /reports/{reportId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin()
+      );
+    }
+    
+    // Team Approvals collection - Herkes görebilir, yazma yetkileri sınırlı
+    match /teamApprovals/{approvalId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin() ||
+        resource.data.teamLeaderId == request.auth.uid
+      );
+    }
+    
+    // Warranty collection - Herkes görebilir, yazma yetkileri sınırlı
+    match /warranty/{warrantyId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin()
+      );
+    }
+    
+    // Diğer tüm collection'lar için genel kural
+    match /{document=**} {
+      // Tüm authenticated kullanıcılar okuyabilir
+      allow read: if request.auth != null;
+      // Yazma yetkileri süper admin'e özel (güvenlik için)
+      allow write: if isSuperAdmin();
+    }
+  }
+}

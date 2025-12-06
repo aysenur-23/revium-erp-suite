@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
+    
+    <!-- Primary Meta Tags -->
+    <title>Revium ERP - Profesyonel Kurumsal Kaynak Planlama Sistemi</title>
+    <meta name="title" content="Revium ERP - Profesyonel Kurumsal Kaynak Planlama Sistemi" />
+    <meta name="description" content="Revium ERP - Müşteri, ürün, sipariş, stok, görev ve proje yönetimi için kapsamlı kurumsal kaynak planlama sistemi. Modern, güvenli ve kullanıcı dostu ERP çözümü." />
+    <meta name="keywords" content="ERP, kurumsal kaynak planlama, müşteri yönetimi, sipariş takibi, stok yönetimi, proje yönetimi, görev yönetimi, Revium, iş yönetimi" />
+    <meta name="author" content="Revium Technology" />
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="Turkish" />
+    <meta name="revisit-after" content="7 days" />
+    
+    <!-- Theme & Mobile -->
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Revium ERP" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-TileColor" content="#2563eb" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://revpad-15232.web.app/" />
+    <meta property="og:title" content="Revium ERP - Profesyonel Kurumsal Kaynak Planlama Sistemi" />
+    <meta property="og:description" content="Müşteri, ürün, sipariş, stok, görev ve proje yönetimi için kapsamlı kurumsal kaynak planlama sistemi." />
+    <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/UZngBJYtxmZVztTj2n15Y7FvYT22/social-images/social-1763406513597-hazır-06.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Revium ERP Dashboard" />
+    <meta property="og:locale" content="tr_TR" />
+    <meta property="og:site_name" content="Revium ERP" />
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://revpad-15232.web.app/" />
+    <meta name="twitter:title" content="Revium ERP - Profesyonel Kurumsal Kaynak Planlama Sistemi" />
+    <meta name="twitter:description" content="Müşteri, ürün, sipariş, stok, görev ve proje yönetimi için kapsamlı kurumsal kaynak planlama sistemi." />
+    <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/UZngBJYtxmZVztTj2n15Y7FvYT22/social-images/social-1763406513597-hazır-06.png" />
+    <meta name="twitter:image:alt" content="Revium ERP Dashboard" />
+    <meta name="twitter:creator" content="@ReviumTech" />
+    <meta name="twitter:site" content="@ReviumTech" />
+    
+    <!-- Favicon & Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/rev-favicon.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/rev-favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/rev-favicon.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/rev-favicon.png" />
+    <link rel="apple-touch-icon" sizes="144x144" href="/rev-favicon.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/rev-favicon.png" />
+    <link rel="apple-touch-icon" sizes="114x114" href="/rev-favicon.png" />
+    <link rel="apple-touch-icon" sizes="76x76" href="/rev-favicon.png" />
+    <link rel="apple-touch-icon" sizes="72x72" href="/rev-favicon.png" />
+    <link rel="apple-touch-icon" sizes="60x60" href="/rev-favicon.png" />
+    <link rel="apple-touch-icon" sizes="57x57" href="/rev-favicon.png" />
+    <link rel="shortcut icon" href="/rev-favicon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Preconnect for Performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://firebase.googleapis.com" />
+    <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
+    <link rel="preconnect" href="https://revpad.net" />
+    <link rel="preconnect" href="https://apis.google.com" />
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+    <link rel="dns-prefetch" href="https://firebase.googleapis.com" />
+    <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com" />
+    <link rel="dns-prefetch" href="https://revpad.net" />
+    <link rel="dns-prefetch" href="https://apis.google.com" />
+    
+    <!-- Content Security Policy -->
+    <!-- Development için meta tag CSP kaldırıldı - Chrome extension CSP override'ını önlemek için -->
+    <!-- Production'da HTTP header'dan CSP uygulanacak -->
+    <!-- Development'ta Vite plugin CSP header'ları ekliyor -->
+    
+    <!-- Loading State Styles -->
+    <style>
+      /* Loading Screen */
+      #loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease-out;
+      }
+      
+      #loading-screen.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      
+      .loader {
+        width: 50px;
+        height: 50px;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top: 4px solid #ffffff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      .loading-text {
+        color: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        font-size: 18px;
+        font-weight: 500;
+        margin-top: 10px;
+      }
+      
+      .loading-logo {
+        width: 80px;
+        height: 80px;
+        margin-bottom: 30px;
+        opacity: 0.9;
+      }
+      
+      /* No Script Message */
+      .no-script {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #f3f4f6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        padding: 20px;
+        text-align: center;
+      }
+      
+      .no-script-content {
+        max-width: 500px;
+        background: white;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      }
+      
+      .no-script-content h1 {
+        color: #1f2937;
+        font-size: 24px;
+        margin-bottom: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      
+      .no-script-content p {
+        color: #6b7280;
+        font-size: 16px;
+        line-height: 1.6;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-Xd90qdO9.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-HS3kTX7E.css">
+  </head>
+
+  <body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+      <img src="/rev-favicon.png" alt="Revium Logo" class="loading-logo" />
+      <div class="loader"></div>
+      <div class="loading-text">Revium ERP Yükleniyor...</div>
+    </div>
+    
+    <!-- No Script Message -->
+    <noscript>
+      <div class="no-script">
+        <div class="no-script-content">
+          <h1>JavaScript Gerekli</h1>
+          <p>Revium ERP sistemini kullanabilmek için tarayıcınızda JavaScript'in etkin olması gerekmektedir.</p>
+          <p>Lütfen JavaScript'i etkinleştirip sayfayı yenileyin.</p>
+        </div>
+      </div>
+    </noscript>
+    
+    <!-- React App Root -->
+    <div id="root"></div>
+    
+    <!-- Main Script -->
+    
+    <!-- Loading Screen Removal Script -->
+    <script>
+      // Remove loading screen when app is ready
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          const loadingScreen = document.getElementById('loading-screen');
+          if (loadingScreen) {
+            loadingScreen.classList.add('hidden');
+            setTimeout(function() {
+              loadingScreen.remove();
+            }, 500);
+          }
+        }, 300);
+      });
+      
+      // Fallback: Remove loading screen after 5 seconds
+      setTimeout(function() {
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+          loadingScreen.classList.add('hidden');
+          setTimeout(function() {
+            loadingScreen.remove();
+          }, 500);
+        }
+      }, 5000);
+    </script>
+  </body>
+</html>
