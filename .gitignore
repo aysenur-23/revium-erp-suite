@@ -57,3 +57,7 @@ backend/
 legacy_before_firebase_migration/
 api/
 revpad-functions/
+
+# Google OAuth credentials
+client_secret_*.json
+*.apps.googleusercontent.com.json
