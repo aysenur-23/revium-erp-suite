@@ -439,8 +439,8 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
             </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 overflow-auto">
-          <div className="p-4 sm:p-6 flex justify-center bg-gradient-to-br from-muted/20 via-background to-muted/10">
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="w-full p-4 sm:p-6 flex justify-center bg-gradient-to-br from-muted/20 via-background to-muted/10">
             <div className="w-full max-w-[820px] space-y-4 sm:space-y-6">
           {/* Edit Mode Controls */}
           {isEditing && (

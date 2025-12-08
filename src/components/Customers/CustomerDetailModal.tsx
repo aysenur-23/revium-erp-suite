@@ -176,7 +176,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
     if (!customer?.id) return;
 
     try {
-      await deleteCustomer(customer.id);
+      await deleteCustomer(customer.id, user?.id);
       toast.success("Müşteri silindi");
       setDeleteDialogOpen(false);
       onOpenChange(false);
@@ -330,7 +330,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                       variant="secondary"
                       size="sm"
                       className="bg-primary/10 text-primary hover:bg-primary/20 rounded-lg px-3 py-1.5 font-medium shadow-sm text-xs sm:text-sm flex-shrink-0"
-                      onClick={() => window.location.href = `mailto:${customer.email}`}
+                      onClick={() => window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(customer.email)}`, '_blank')}
                       aria-label="E-posta gönder"
                     >
                       <Mail className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
@@ -673,19 +673,6 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">{customer.address}</p>
                         </div>
                     </div>
-                </>
-              )}
-
-              {customer.notes && (
-                <>
-                  <Separator />
-                  <div className="flex items-start gap-3">
-                    <FileText className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground mb-0.5">Notlar</p>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">{customer.notes}</p>
-                    </div>
-                  </div>
                 </>
               )}
 

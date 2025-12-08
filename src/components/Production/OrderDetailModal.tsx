@@ -1066,10 +1066,18 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             </Button>
                           )}
                           {(customer?.email || order?.customerEmail || order?.customer_email) && (
-                            <Button variant="outline" size="sm" asChild className="min-h-[44px] sm:min-h-0">
-                              <a href={`mailto:${customer?.email || order?.customerEmail || order?.customer_email}`}>
-                                E-posta Gönder
-                              </a>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="min-h-[44px] sm:min-h-0"
+                              onClick={() => {
+                                const email = customer?.email || order?.customerEmail || order?.customer_email;
+                                if (email) {
+                                  window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}`, '_blank');
+                                }
+                              }}
+                            >
+                              E-posta Gönder
                             </Button>
                           )}
                         </div>

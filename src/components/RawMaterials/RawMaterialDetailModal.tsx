@@ -317,14 +317,14 @@ export const RawMaterialDetailModal = ({
             <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
               <div className="max-w-full mx-auto h-full overflow-y-auto">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3 mb-4 sm:mb-6 min-h-[44px] sm:min-h-0">
-                    <TabsTrigger value="details" className="text-sm sm:text-base">
+                  <TabsList className="grid w-full grid-cols-3 mb-4 sm:mb-6 min-h-[44px] sm:min-h-0 overflow-hidden">
+                    <TabsTrigger value="details" className="text-sm sm:text-base whitespace-nowrap overflow-hidden text-ellipsis">
                       Detaylar
                     </TabsTrigger>
-                    <TabsTrigger value="recipes" className="text-sm sm:text-base">
+                    <TabsTrigger value="recipes" className="text-sm sm:text-base whitespace-nowrap overflow-hidden text-ellipsis">
                       Reçete
                     </TabsTrigger>
-                    <TabsTrigger value="transactions" className="text-sm sm:text-base">
+                    <TabsTrigger value="transactions" className="text-sm sm:text-base whitespace-nowrap overflow-hidden text-ellipsis">
                       Stok Hareketleri
                     </TabsTrigger>
                   </TabsList>
@@ -416,6 +416,17 @@ export const RawMaterialDetailModal = ({
                             {(() => {
                               const user = users.find(u => u.id === material.purchasedBy);
                               return user ? (user.fullName || user.displayName || user.email || "İsimsiz Kullanıcı") : "Yükleniyor...";
+                            })()}
+                          </p>
+                        </div>
+                      ) : null}
+                      {material.createdBy ? (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Ekleyen Kişi</p>
+                          <p className="font-medium">
+                            {(() => {
+                              const creator = users.find(u => u.id === material.createdBy);
+                              return creator ? (creator.fullName || creator.displayName || creator.email || "İsimsiz Kullanıcı") : (material.created_by_name || "Yükleniyor...");
                             })()}
                           </p>
                         </div>

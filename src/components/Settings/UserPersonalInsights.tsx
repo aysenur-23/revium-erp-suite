@@ -10,8 +10,9 @@ import { getAuditLogs, AuditLog } from "@/services/firebase/auditLogsService";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Download, CheckCircle2, Clock, XCircle, ListTodo, TrendingUp, ArrowRight } from "lucide-react";
 import { generateUserStatsPDF } from "@/services/pdfGenerator";
+import { useNavigate } from "react-router-dom";
 
 interface AssignmentWithTask extends TaskAssignment {
   taskId: string;
@@ -35,6 +36,7 @@ const formatDate = (value?: Date | string | null) => {
 
 export const UserPersonalInsights = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [assignments, setAssignments] = useState<AssignmentWithTask[]>([]);
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -157,48 +159,143 @@ export const UserPersonalInsights = () => {
     );
   }
 
+  const handleStatClick = (filter?: string) => {
+    navigate(`/tasks${filter ? `?filter=${filter}` : ''}`);
+  };
+
+  const statCards = [
+    { 
+      label: "Toplam Görev", 
+      value: stats.total, 
+      icon: ListTodo, 
+      color: "primary",
+      gradient: "from-primary/10 via-primary/5 to-white",
+      borderColor: "border-primary/20",
+      onClick: () => handleStatClick()
+    },
+    { 
+      label: "Aktif Görev", 
+      value: stats.active, 
+      icon: TrendingUp, 
+      color: "blue",
+      gradient: "from-blue-50 via-blue-10 to-white",
+      borderColor: "border-blue-200",
+      onClick: () => handleStatClick("active")
+    },
+    { 
+      label: "Tamamlanan", 
+      value: stats.completed, 
+      icon: CheckCircle2, 
+      color: "emerald",
+      gradient: "from-emerald-50 via-emerald-10 to-white",
+      borderColor: "border-emerald-200",
+      onClick: () => handleStatClick("completed")
+    },
+    { 
+      label: "Bekleyen", 
+      value: stats.pending, 
+      icon: Clock, 
+      color: "amber",
+      gradient: "from-amber-50 via-amber-10 to-white",
+      borderColor: "border-amber-200",
+      onClick: () => handleStatClick("pending")
+    },
+    { 
+      label: "Reddedilen", 
+      value: stats.rejected, 
+      icon: XCircle, 
+      color: "red",
+      gradient: "from-red-50 via-red-10 to-white",
+      borderColor: "border-red-200",
+      onClick: () => handleStatClick("rejected")
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Görev İstatistiklerim</CardTitle>
+      <Card className="border-2 shadow-lg">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-primary" />
+              </div>
+              Görev İstatistiklerim
+            </CardTitle>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={handleExportPDF}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">PDF İndir</span>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            {[
-              { label: "Toplam Görev", value: stats.total },
-              { label: "Aktif Görev", value: stats.active },
-              { label: "Reddedilen Görev", value: stats.rejected },
-              { label: "Tamamlanan Görev", value: stats.completed },
-              { label: "Bekleyen Görev", value: stats.pending },
-            ].map((item) => (
-              <Card key={item.label} className="border-dashed">
-                <CardHeader className="pb-1">
-                  <CardTitle className="text-sm text-muted-foreground">{item.label}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-semibold">{item.value}</p>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {statCards.map((stat) => {
+              const Icon = stat.icon;
+              const getIconBgClass = () => {
+                switch(stat.color) {
+                  case "primary": return "bg-primary/10";
+                  case "blue": return "bg-blue-500/10";
+                  case "emerald": return "bg-emerald-500/10";
+                  case "amber": return "bg-amber-500/10";
+                  case "red": return "bg-red-500/10";
+                  default: return "bg-primary/10";
+                }
+              };
+              const getIconColorClass = () => {
+                switch(stat.color) {
+                  case "primary": return "text-primary";
+                  case "blue": return "text-blue-600";
+                  case "emerald": return "text-emerald-600";
+                  case "amber": return "text-amber-600";
+                  case "red": return "text-red-600";
+                  default: return "text-primary";
+                }
+              };
+              return (
+                <Card 
+                  key={stat.label} 
+                  className={`bg-gradient-to-br ${stat.gradient} border-2 ${stat.borderColor} hover:shadow-xl transition-all duration-300 cursor-pointer group hover:-translate-y-1`}
+                  onClick={stat.onClick}
+                >
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className={`h-8 w-8 rounded-lg ${getIconBgClass()} flex items-center justify-center flex-shrink-0`}>
+                        <Icon className={`h-4 w-4 ${getIconColorClass()}`} />
+                      </div>
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wide mb-1.5 font-medium">
+                      {stat.label}
+                    </p>
+                    <p className="text-2xl sm:text-3xl font-bold text-foreground">{stat.value}</p>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Görevlerim</span>
-            <Button size="sm" variant="outline" onClick={handleExportPDF}>
-              <Download className="h-4 w-4 mr-2" />
-              PDF İndir
-            </Button>
+      <Card className="border-2 shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b">
+          <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <ListTodo className="h-5 w-5 text-primary" />
+            </div>
+            Görevlerim
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {assignments.length === 0 ? (
-            <div className="text-center text-muted-foreground py-4">
-              Henüz size atanan görev bulunmuyor.
+            <div className="text-center text-muted-foreground py-12">
+              <ListTodo className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-sm font-medium">Henüz size atanan görev bulunmuyor.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -214,7 +311,11 @@ export const UserPersonalInsights = () => {
                 </TableHeader>
                 <TableBody>
                   {assignments.map((assignment) => (
-                    <TableRow key={`${assignment.taskId}-${assignment.id}`}>
+                    <TableRow 
+                      key={`${assignment.taskId}-${assignment.id}`}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => navigate(`/tasks?taskId=${assignment.taskId}`)}
+                    >
                       <TableCell className="font-medium">{assignment.taskTitle}</TableCell>
                       <TableCell>
                         <Badge
@@ -231,11 +332,11 @@ export const UserPersonalInsights = () => {
                           {statusLabels[assignment.status] || assignment.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>{formatDate(assignment.assignedAt?.toDate?.())}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{formatDate(assignment.assignedAt?.toDate?.())}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
                         {assignment.acceptedAt ? formatDate(assignment.acceptedAt.toDate()) : "-"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
                         {assignment.completedAt ? formatDate(assignment.completedAt.toDate()) : "-"}
                       </TableCell>
                     </TableRow>
@@ -248,19 +349,25 @@ export const UserPersonalInsights = () => {
       </Card>
 
       {rejectionEntries.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Reddetme Notlarım</CardTitle>
+        <Card className="border-2 shadow-lg">
+          <CardHeader className="bg-gradient-to-r from-red-50/50 to-white border-b">
+            <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+                <XCircle className="h-5 w-5 text-red-600" />
+              </div>
+              Reddetme Notlarım
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {rejectionEntries.map((entry) => (
               <div
                 key={`${entry.taskId}-${entry.id}`}
-                className="rounded-lg border border-border p-4 space-y-2"
+                className="rounded-lg border-2 border-red-200 bg-red-50/30 hover:bg-red-50/50 p-4 space-y-2 transition-colors cursor-pointer"
+                onClick={() => navigate(`/tasks?taskId=${entry.taskId}`)}
               >
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>{entry.taskTitle}</span>
-                  <span>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-sm text-foreground">{entry.taskTitle}</span>
+                  <span className="text-xs text-muted-foreground">
                     {entry.assignedAt
                       ? formatDistanceToNow(entry.assignedAt.toDate(), {
                           addSuffix: true,
@@ -269,21 +376,27 @@ export const UserPersonalInsights = () => {
                       : "-"}
                   </span>
                 </div>
-                <p className="text-sm whitespace-pre-line">{entry.rejectionReason}</p>
+                <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{entry.rejectionReason}</p>
               </div>
             ))}
           </CardContent>
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>İşlem Geçmişim</CardTitle>
+      <Card className="border-2 shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b">
+          <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Clock className="h-5 w-5 text-primary" />
+            </div>
+            İşlem Geçmişim
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {logs.length === 0 ? (
-            <div className="text-center text-muted-foreground py-4">
-              Henüz işlem kaydı bulunmuyor.
+            <div className="text-center text-muted-foreground py-12">
+              <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-sm font-medium">Henüz işlem kaydı bulunmuyor.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -291,8 +404,6 @@ export const UserPersonalInsights = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>İşlem</TableHead>
-                    <TableHead>Bölüm</TableHead>
-                    <TableHead>Açıklama</TableHead>
                     <TableHead>Tarih</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -318,49 +429,48 @@ export const UserPersonalInsights = () => {
                       raw_materials: "Hammaddeler",
                       materials: "Malzemeler",
                       user_logins: "Giriş Kayıtları",
+                      task_assignments: "Görev Atamaları",
+                      warranty: "Garanti",
+                      customerNotes: "Müşteri Notları",
+                      user_roles: "Kullanıcı Rolleri",
+                      production_processes: "Üretim Süreçleri",
+                      profiles: "Profiller",
+                      notifications: "Bildirimler",
+                      shared_files: "Paylaşılan Dosyalar",
+                      reports: "Raporlar",
                     };
 
                     const actionLabel = actionLabels[log.action] || log.action;
-                    const tableLabel = tableLabels[log.tableName] || log.tableName;
 
-                    // Özel işlem: user_logins için açıklama
-                    let description = log.recordId ? `Kayıt ID: ${log.recordId.slice(0, 8)}...` : "Bilinmiyor";
+                    // Basit açıklama
+                    let description = "";
                     if (log.tableName === "user_logins") {
-                      // Metadata'dan giriş bilgilerini al
-                      const metadata = log.metadata as any;
-                      if (metadata?.method) {
-                        const methodLabels: Record<string, string> = {
-                          EMAIL: "E-posta ile giriş",
-                          GOOGLE: "Google ile giriş",
-                        };
-                        description = methodLabels[metadata.method] || `Giriş (${metadata.method})`;
-                      } else {
-                        description = "Sistem girişi";
-                      }
+                      description = "Giriş yaptı";
+                    } else {
+                      description = `${actionLabel} yaptı`;
                     }
 
                     return (
-                      <TableRow key={log.id}>
+                      <TableRow key={log.id} className="hover:bg-muted/30 transition-colors">
                         <TableCell>
-                          <Badge
-                            variant={
-                              log.action === "DELETE"
-                                ? "destructive"
-                                : log.action === "UPDATE"
-                                ? "secondary"
-                                : log.tableName === "user_logins"
-                                ? "default"
-                                : "default"
-                            }
-                          >
-                            {log.tableName === "user_logins" ? "Giriş Yapıldı" : actionLabel}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={
+                                log.action === "DELETE"
+                                  ? "destructive"
+                                  : log.action === "UPDATE"
+                                  ? "secondary"
+                                  : log.tableName === "user_logins"
+                                  ? "default"
+                                  : "default"
+                              }
+                            >
+                              {log.tableName === "user_logins" ? "Giriş Yapıldı" : actionLabel}
+                            </Badge>
+                            <span className="text-sm font-medium">{description}</span>
+                          </div>
                         </TableCell>
-                        <TableCell className="font-medium">{tableLabel}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {description}
-                        </TableCell>
-                        <TableCell>
                           {log.createdAt
                             ? formatDistanceToNow(log.createdAt.toDate(), {
                                 addSuffix: true,

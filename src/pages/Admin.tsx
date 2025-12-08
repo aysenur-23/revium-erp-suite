@@ -44,7 +44,7 @@ const Admin = () => {
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-3 sm:space-y-4 md:space-y-6">
           <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:pb-0 scrollbar-hide">
-            <TabsList className="flex w-full h-auto p-1 gap-1 sm:gap-2 min-w-max sm:min-w-0">
+            <TabsList className="flex h-auto p-1 gap-1 sm:gap-2 w-full sm:w-auto">
               <TabsTrigger value="dashboard" className="flex-1 sm:flex-initial gap-1 sm:gap-2 text-xs sm:text-sm min-h-[44px] sm:min-h-0 whitespace-nowrap">
                 <LayoutDashboard className="h-4 w-4 flex-shrink-0" />
                 <span>Dashboard</span>

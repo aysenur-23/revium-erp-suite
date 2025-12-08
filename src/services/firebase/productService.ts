@@ -154,9 +154,17 @@ export const updateProduct = async (
 /**
  * Ürünü sil
  */
-export const deleteProduct = async (productId: string): Promise<void> => {
+export const deleteProduct = async (productId: string, userId?: string): Promise<void> => {
   try {
+    // Eski veriyi al
+    const oldProduct = await getProductById(productId);
+    
     await deleteDoc(doc(firestore, "products", productId));
+    
+    // Audit log
+    if (userId) {
+      await logAudit("DELETE", "products", productId, userId, oldProduct, null);
+    }
   } catch (error) {
     // Sadece development'ta log göster
     if (import.meta.env.DEV) {

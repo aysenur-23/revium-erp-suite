@@ -117,27 +117,24 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
 
   return (
     <SidebarProvider closeSidebar={closeSidebar}>
-      <div className="h-screen bg-background flex flex-col overflow-hidden">
-        {/* Header Section - Fixed Height */}
-        <div className="flex flex-shrink-0">
-          {!isMobile && sidebarOpen && (
-            <div className="w-64 flex-shrink-0 bg-sidebar border-r border-sidebar-border h-12 sm:h-14 md:h-16 transition-all duration-300" />
-          )}
-          <div className="flex-1 min-w-0">
+      <div className="h-screen bg-background flex overflow-hidden">
+        {/* Sidebar - Full Height */}
+        <Sidebar 
+          isMobile={isMobile} 
+          open={sidebarOpen} 
+          onOpenChange={setSidebarOpen}
+          isCollapsed={!isMobile && !sidebarOpen}
+        />
+        {/* Right Section - Header + Content */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Header Section - Fixed Height */}
+          <div className="flex-shrink-0">
             <Header 
               onMenuClick={handleToggleSidebar}
               sidebarOpen={sidebarOpen}
             />
           </div>
-        </div>
-        {/* Content Section - Flexible, Scrollable */}
-        <div className="flex-1 flex overflow-hidden">
-          <Sidebar 
-            isMobile={isMobile} 
-            open={sidebarOpen} 
-            onOpenChange={setSidebarOpen}
-            isCollapsed={!isMobile && !sidebarOpen}
-          />
+          {/* Content Section - Flexible, Scrollable */}
           <main 
             ref={mainRef}
             className={cn(

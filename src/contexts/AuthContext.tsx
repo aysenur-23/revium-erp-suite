@@ -9,6 +9,8 @@ import {
   UserProfile,
   signInWithGoogle as signInWithGoogleService,
 } from "@/services/firebase/authService";
+import { REQUIRE_EMAIL_VERIFICATION } from "@/config/auth";
+import { getPermission, onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 
 interface User {
   id: string;
@@ -50,10 +52,57 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isTeamLeader, setIsTeamLeader] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const checkRoles = (userRoles: string[]) => {
-    setIsSuperAdmin(userRoles.includes('super_admin'));
-    setIsAdmin(userRoles.includes('admin') || userRoles.includes('super_admin'));
-    setIsTeamLeader(userRoles.includes('team_leader') || userRoles.includes('admin') || userRoles.includes('super_admin'));
+  // Check roles based on role_permissions system
+  const checkRoles = async (userProfile: UserProfile | null) => {
+    if (!userProfile || !userProfile.role || userProfile.role.length === 0) {
+      setIsSuperAdmin(false);
+      setIsAdmin(false);
+      setIsTeamLeader(false);
+      return;
+    }
+
+    const userRoles = userProfile.role;
+    
+    // Super admin: super_admin rolüne sahip mi?
+    const hasSuperAdminRole = userRoles.includes('super_admin');
+    setIsSuperAdmin(hasSuperAdminRole);
+
+    // Admin: admin veya super_admin rolüne sahip mi VE role_permissions sisteminde admin kaynaklarına erişim var mı?
+    const hasAdminRole = userRoles.includes('admin') || hasSuperAdminRole;
+    if (hasAdminRole) {
+      try {
+        // Admin paneli erişimi için audit_logs kaynağına canRead yetkisi kontrolü
+        // Eğer super_admin ise direkt true, değilse role_permissions'tan kontrol et
+        if (hasSuperAdminRole) {
+          setIsAdmin(true);
+        } else {
+          const adminPermission = await getPermission('admin', 'audit_logs');
+          setIsAdmin(adminPermission?.canRead === true);
+        }
+      } catch (error) {
+        // Hata durumunda fallback: rol array'inden kontrol et
+        setIsAdmin(hasAdminRole);
+      }
+    } else {
+      setIsAdmin(false);
+    }
+
+    // Team leader: team_leader rolüne sahip mi veya bir departmanın managerId'si mi?
+    const hasTeamLeaderRole = userRoles.includes('team_leader');
+    if (hasTeamLeaderRole || hasAdminRole) {
+      // Ekip lideri kontrolü: departments tablosundaki managerId alanına da bak
+      try {
+        const { getDepartments } = await import("@/services/firebase/departmentService");
+        const departments = await getDepartments();
+        const isManager = departments.some((dept) => dept.managerId === userProfile.id);
+        setIsTeamLeader(hasTeamLeaderRole || isManager || hasAdminRole);
+      } catch (error) {
+        // Hata durumunda fallback: rol array'inden kontrol et
+        setIsTeamLeader(hasTeamLeaderRole || hasAdminRole);
+      }
+    } else {
+      setIsTeamLeader(false);
+    }
   };
 
   const convertUserProfileToUser = (profile: UserProfile | null): User | null => {
@@ -73,40 +122,97 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     // Firebase Auth state listener
-    const unsubscribe = onAuthChange(async (userProfile) => {
-      if (userProfile) {
-        const userData = convertUserProfileToUser(userProfile);
-        setUser(userData);
-        if (userData?.roles) {
-          checkRoles(userData.roles);
+    let unsubscribe: (() => void) | null = null;
+    let isMounted = true;
+    
+    // Timeout: Eğer 5 saniye içinde auth state gelmezse loading'i false yap
+    // Bu, Firebase başlatılamazsa veya network sorunları varsa kullanıcının takılıp kalmasını önler
+    const loadingTimeout = setTimeout(() => {
+      if (isMounted) {
+        setLoading(false);
+        if (import.meta.env.DEV) {
+          console.warn("Auth state timeout (5 saniye) - loading'i false yapıyoruz");
         }
+      }
+    }, 5000);
+    
+    // Firebase Auth state listener'ı hemen başlat
+    try {
+      unsubscribe = onAuthChange(async (userProfile) => {
+        if (!isMounted) return;
         
-        // Ekip lideri kontrolü: Sadece role array'ine bakmak yeterli değil,
-        // departments tablosundaki managerId alanına da bakmalıyız
+        clearTimeout(loadingTimeout);
+        
         try {
-          const { getDepartments } = await import("@/services/firebase/departmentService");
-          const departments = await getDepartments();
-          const isManager = departments.some((dept) => dept.managerId === userProfile.id);
-          
-          // Eğer kullanıcı bir departmanın managerId'si ise, isTeamLeader'ı true yap
-          if (isManager) {
-            setIsTeamLeader(true);
+          if (userProfile) {
+            const userData = convertUserProfileToUser(userProfile);
+            setUser(userData);
+            // Check roles based on role_permissions system
+            await checkRoles(userProfile);
+            
+            // Listen to permission cache changes for real-time updates
+            const unsubscribePermissions = onPermissionCacheChange(async () => {
+              if (isMounted && userProfile) {
+                await checkRoles(userProfile);
+              }
+            });
+            
+            // Store unsubscribe function for cleanup
+            if (isMounted) {
+              (window as any).__unsubscribePermissions = unsubscribePermissions;
+            }
+          } else {
+            setUser(null);
+            setIsAdmin(false);
+            setIsSuperAdmin(false);
+            setIsTeamLeader(false);
           }
         } catch (error) {
-          // Hata durumunda sessizce devam et, role kontrolü yeterli
-          console.error("Ekip lideri kontrolü hatası:", error);
+          // Callback içinde hata oluşursa
+          if (import.meta.env.DEV) {
+            console.error("Auth state callback hatası:", error);
+          }
+          // Hata durumunda user'ı null yap ve loading'i false yap
+          if (isMounted) {
+            setUser(null);
+            setIsAdmin(false);
+            setIsSuperAdmin(false);
+            setIsTeamLeader(false);
+          }
+        } finally {
+          if (isMounted) {
+            setLoading(false);
+          }
         }
-      } else {
+      });
+    } catch (error) {
+      // Firebase initialization hatası durumunda
+      if (import.meta.env.DEV) {
+        console.error("Auth state listener hatası:", error);
+      }
+      clearTimeout(loadingTimeout);
+      if (isMounted) {
+        setLoading(false);
         setUser(null);
         setIsAdmin(false);
         setIsSuperAdmin(false);
         setIsTeamLeader(false);
       }
-      setLoading(false);
-    });
+    }
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      isMounted = false;
+      clearTimeout(loadingTimeout);
+      if (unsubscribe) {
+        unsubscribe();
+      }
+      // Cleanup permission cache listener
+      if ((window as any).__unsubscribePermissions) {
+        (window as any).__unsubscribePermissions();
+        delete (window as any).__unsubscribePermissions;
+      }
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -116,27 +222,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const userData = convertUserProfileToUser(result.user);
         setUser(userData);
         
-        if (userData?.roles) {
-          checkRoles(userData.roles);
-        }
-        
-        // Ekip lideri kontrolü: departments tablosundaki managerId alanına da bak
-        try {
-          const { getDepartments } = await import("@/services/firebase/departmentService");
-          const departments = await getDepartments();
-          const isManager = departments.some((dept) => dept.managerId === result.user?.id);
-          
-          if (isManager) {
-            setIsTeamLeader(true);
-          }
-        } catch (error) {
-          // Hata durumunda sessizce devam et
-          console.error("Ekip lideri kontrolü hatası:", error);
-        }
-        
-        // Email verification flag - Set to false to disable email verification temporarily
-        // TODO: Set to true when email verification is ready to be re-enabled
-        const REQUIRE_EMAIL_VERIFICATION = false;
+        // Check roles based on role_permissions system
+        await checkRoles(result.user);
         
         // E-posta doğrulanmamışsa doğrulama sayfasına yönlendir - sadece flag true ise
         if (REQUIRE_EMAIL_VERIFICATION && userData && !userData.emailVerified) {
@@ -162,23 +249,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const userData = convertUserProfileToUser(result.user);
         setUser(userData);
         
-        if (userData?.roles) {
-          checkRoles(userData.roles);
-        }
-        
-        // Ekip lideri kontrolü: departments tablosundaki managerId alanına da bak
-        try {
-          const { getDepartments } = await import("@/services/firebase/departmentService");
-          const departments = await getDepartments();
-          const isManager = departments.some((dept) => dept.managerId === result.user?.id);
-          
-          if (isManager) {
-            setIsTeamLeader(true);
-          }
-        } catch (error) {
-          // Hata durumunda sessizce devam et
-          console.error("Ekip lideri kontrolü hatası:", error);
-        }
+        // Check roles based on role_permissions system
+        await checkRoles(result.user);
         
         window.location.href = "/";
         return { success: true };

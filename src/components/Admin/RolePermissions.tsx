@@ -21,6 +21,8 @@ import {
   updatePermissionsWithSubPermissions,
   RoleDefinition,
   RolePermission,
+  onPermissionCacheChange,
+  clearPermissionCache,
 } from "@/services/firebase/rolePermissionsService";
 
 export const RolePermissions = () => {
@@ -41,6 +43,16 @@ export const RolePermissions = () => {
 
   useEffect(() => {
     fetchData();
+    
+    // Listen to permission cache changes for real-time updates
+    const unsubscribe = onPermissionCacheChange(() => {
+      // Refresh permissions when cache changes
+      fetchData();
+    });
+    
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const fetchData = async () => {
@@ -99,6 +111,8 @@ export const RolePermissions = () => {
       } else {
         await updatePermission(permissionId, { [field]: checked as boolean });
       }
+      // Clear cache to force refresh
+      clearPermissionCache();
       // toast.success("Yetki güncellendi"); // Too spammy for toggles
     } catch (error) {
       console.error("Update permission error:", error);

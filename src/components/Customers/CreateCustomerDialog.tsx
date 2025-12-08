@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { createCustomer } from "@/services/firebase/customerService";
+import { createCustomerNote } from "@/services/firebase/customerNoteService";
 import { normalizePhone } from "@/utils/phoneNormalizer";
 import { useAuth } from "@/contexts/AuthContext";
 import { User, Loader2, X, Save } from "lucide-react";
@@ -106,7 +107,7 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
         return;
       }
 
-      await createCustomer({
+      const newCustomer = await createCustomer({
         name: formData.name,
         company: formData.company || null,
         email: formData.email || null,
@@ -116,6 +117,22 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
         notes: formData.notes || null,
         createdBy: user.id,
       });
+      
+      // Eğer not varsa, bunu ayrı bir CustomerNote olarak da oluştur
+      if (formData.notes && formData.notes.trim()) {
+        try {
+          await createCustomerNote({
+            customerId: newCustomer.id,
+            type: "general",
+            title: "Müşteri Oluşturulurken Eklenen Not",
+            content: formData.notes.trim(),
+            createdBy: user.id,
+          });
+        } catch (noteError) {
+          // Not oluşturma hatası kritik değil, sadece logla
+          console.warn("Müşteri notu oluşturulamadı:", noteError);
+        }
+      }
       
       toast.success("Müşteri başarıyla oluşturuldu");
       onSuccess();

@@ -175,6 +175,25 @@ export const updateProject = async (
   try {
     // Eski veriyi al
     const oldProject = await getProjectById(projectId);
+    if (!oldProject) {
+      throw new Error("Proje bulunamadı");
+    }
+    
+    // Yetki kontrolü
+    if (userId) {
+      const { getUserProfile } = await import("@/services/firebase/authService");
+      const { canEditProject } = await import("@/utils/permissions");
+      const userProfile = await getUserProfile(userId);
+      
+      if (!userProfile) {
+        throw new Error("Kullanıcı profili bulunamadı");
+      }
+      
+      const canEdit = await canEditProject(oldProject, userProfile);
+      if (!canEdit) {
+        throw new Error("Bu projeyi düzenlemek için yetkiniz yok. Sadece yöneticiler, ekip liderleri veya projeyi oluşturan kişi düzenleyebilir.");
+      }
+    }
     
     await updateDoc(doc(firestore, PROJECTS_COLLECTION, projectId), {
       ...updates,
@@ -236,6 +255,25 @@ export const deleteProject = async (projectId: string, userId?: string): Promise
   try {
     // Eski veriyi al
     const oldProject = await getProjectById(projectId);
+    if (!oldProject) {
+      throw new Error("Proje bulunamadı");
+    }
+    
+    // Yetki kontrolü
+    if (userId) {
+      const { getUserProfile } = await import("@/services/firebase/authService");
+      const { canDeleteProject } = await import("@/utils/permissions");
+      const userProfile = await getUserProfile(userId);
+      
+      if (!userProfile) {
+        throw new Error("Kullanıcı profili bulunamadı");
+      }
+      
+      const canDelete = await canDeleteProject(oldProject, userProfile);
+      if (!canDelete) {
+        throw new Error("Bu projeyi silmek için yetkiniz yok. Sadece yöneticiler, ekip liderleri veya projeyi oluşturan kişi silebilir.");
+      }
+    }
     
     // Projeye ait görevleri bul ve sil
     const projectTasks = await getTasks({ projectId });

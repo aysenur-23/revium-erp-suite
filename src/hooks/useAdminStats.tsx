@@ -80,7 +80,8 @@ export const useAdminStats = () => {
         throw new Error(error.message || "Admin istatistikleri alınamadı");
       }
     },
-    refetchInterval: 30000,
-    staleTime: 5 * 60 * 1000,
+    refetchInterval: 120000, // 2 dakikada bir güncelle (performans için)
+    refetchOnWindowFocus: false, // Window focus'ta refetch yapma (performans için)
+    staleTime: 60000, // 1 dakika stale time (performans için)
   });
 };

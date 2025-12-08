@@ -1458,14 +1458,23 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
       ]);
     
     // Profesyonel tablo stilleri kullan
-    const tableStyles = createProfessionalTableStyles(doc);
+    const tableStyles = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
+    tableStyles.headStyles.fillColor = [59, 130, 246];
+    tableStyles.headStyles.textColor = [255, 255, 255];
+    tableStyles.headStyles.halign = "center";
+    tableStyles.bodyStyles.overflow = 'linebreak';
+    tableStyles.styles.overflow = 'linebreak';
     
     // Sayfa sığma kontrolü
     currentY = ensureTableFitsPage(doc, currentY, 200, mar, "Sipariş Durumu Dağılımı");
     
     // Tablo genişliğini sayfa genişliğine göre ayarla
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const tableWidth = pageWidth - (mar * 2);
+    const currentPageWidth = doc.internal.pageSize.getWidth();
+    const tableWidth = currentPageWidth - (mar * 2);
     
     autoTable(doc, {
       startY: currentY,
@@ -1476,7 +1485,7 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
       didParseCell: createDidParseCell(doc),
       ...tableStyles,
       columnStyles: {
-        0: { cellWidth: tableWidth * 0.35, halign: "left" }, // %35
+        0: { cellWidth: tableWidth * 0.35, halign: "left", overflow: 'linebreak' }, // %35
         1: { cellWidth: tableWidth * 0.20, halign: "right", fontStyle: "bold" }, // %20
         2: { cellWidth: tableWidth * 0.25, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %25
         3: { cellWidth: tableWidth * 0.20, halign: "right", fontStyle: "bold", textColor: [107, 114, 128] }, // %20
@@ -1519,14 +1528,23 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
     ]);
     
     // Profesyonel tablo stilleri kullan
-    const tableStyles2 = createProfessionalTableStyles(doc);
+    const tableStyles2 = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
+    tableStyles2.headStyles.fillColor = [59, 130, 246];
+    tableStyles2.headStyles.textColor = [255, 255, 255];
+    tableStyles2.headStyles.halign = "center";
+    tableStyles2.bodyStyles.overflow = 'linebreak';
+    tableStyles2.styles.overflow = 'linebreak';
     
     // Sayfa sığma kontrolü
     currentY = ensureTableFitsPage(doc, currentY, 200, mar, "En Çok Satan Ürünler");
     
     // Tablo genişliğini sayfa genişliğine göre ayarla
-    const pageWidth2 = doc.internal.pageSize.getWidth();
-    const tableWidth2 = pageWidth2 - (mar * 2);
+    const currentPageWidth2 = doc.internal.pageSize.getWidth();
+    const tableWidth2 = currentPageWidth2 - (mar * 2);
     
     autoTable(doc, {
       startY: currentY,
@@ -1538,7 +1556,7 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
       ...tableStyles2,
       columnStyles: {
         0: { cellWidth: tableWidth2 * 0.10, halign: "left", textColor: [107, 114, 128] }, // %10
-        1: { cellWidth: tableWidth2 * 0.50, halign: "left", fontStyle: "normal" }, // %50
+        1: { cellWidth: tableWidth2 * 0.50, halign: "left", fontStyle: "normal", overflow: 'linebreak' }, // %50
         2: { cellWidth: tableWidth2 * 0.15, halign: "right", fontStyle: "bold" }, // %15
         3: { cellWidth: tableWidth2 * 0.25, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %25
       },
@@ -1606,14 +1624,23 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
       ]);
       
       // Profesyonel tablo stilleri kullan
-      const tableStyles3 = createProfessionalTableStyles(doc);
+      const tableStyles3 = createProfessionalTableStyles(doc, {
+        headerFontSize: 12,
+        bodyFontSize: 11,
+        cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+      });
+      tableStyles3.headStyles.fillColor = [59, 130, 246];
+      tableStyles3.headStyles.textColor = [255, 255, 255];
+      tableStyles3.headStyles.halign = "center";
+      tableStyles3.bodyStyles.overflow = 'linebreak';
+      tableStyles3.styles.overflow = 'linebreak';
       
       // Sayfa sığma kontrolü
       currentY = ensureTableFitsPage(doc, currentY, 200, mar, "En Değerli Müşteriler");
       
       // Tablo genişliğini sayfa genişliğine göre ayarla
-      const pageWidth4 = doc.internal.pageSize.getWidth();
-      const tableWidth4 = pageWidth4 - (mar * 2);
+      const currentPageWidth4 = doc.internal.pageSize.getWidth();
+      const tableWidth4 = currentPageWidth4 - (mar * 2);
       
       autoTable(doc, {
         startY: currentY,
@@ -1625,7 +1652,7 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
         ...tableStyles3,
         columnStyles: {
           0: { cellWidth: tableWidth4 * 0.08, halign: "left", textColor: [107, 114, 128] }, // %8
-          1: { cellWidth: tableWidth4 * 0.35, halign: "left" }, // %35
+          1: { cellWidth: tableWidth4 * 0.35, halign: "left", overflow: 'linebreak' }, // %35
           2: { cellWidth: tableWidth4 * 0.15, halign: "right", fontStyle: "bold" }, // %15
           3: { cellWidth: tableWidth4 * 0.25, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %25
           4: { cellWidth: tableWidth4 * 0.17, halign: "right", textColor: [107, 114, 128] }, // %17
@@ -1702,6 +1729,21 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
         borderColor: PDF_CONSTANTS.primaryColor,
       });
         
+        // Profesyonel tablo stilleri kullan
+        const tableStylesDaily = createProfessionalTableStyles(doc, {
+          headerFontSize: 12,
+          bodyFontSize: 11,
+          cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+        });
+        tableStylesDaily.headStyles.fillColor = [59, 130, 246];
+        tableStylesDaily.headStyles.textColor = [255, 255, 255];
+        tableStylesDaily.headStyles.halign = "center";
+        tableStylesDaily.bodyStyles.overflow = 'linebreak';
+        tableStylesDaily.styles.overflow = 'linebreak';
+        
+        // Sayfa sığma kontrolü
+        currentY = ensureTableFitsPage(doc, currentY, 200, mar, "Son 14 Günlük Trend");
+        
         autoTable(doc, {
           startY: currentY,
           head: [['Tarih', 'Sipariş', 'Gelir']],
@@ -1709,37 +1751,11 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
           margin: { left: mar, right: mar },
           tableWidth: tableWidthDaily,
           didParseCell: createDidParseCell(doc),
-          headStyles: { 
-            fillColor: [243, 244, 246],
-            textColor: [17, 24, 39],
-            fontStyle: "bold", 
-            fontSize: 12,
-            font: getFontName(doc),
-            lineColor: [209, 213, 219],
-            lineWidth: { top: 1, bottom: 1, left: 1, right: 1 },
-            cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
-          },
-          bodyStyles: { 
-            textColor: [31, 41, 55],
-            fontSize: 11,
-            font: getFontName(doc),
-            lineColor: [229, 231, 235],
-            lineWidth: { bottom: 1 },
-            cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
-          },
-          styles: { 
-            font: getFontName(doc), 
-            fontStyle: "normal", 
-            fontSize: 11,
-            cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
-          },
+          ...tableStylesDaily,
           columnStyles: {
             0: { cellWidth: tableWidthDaily * 0.35, halign: "left" }, // %35
             1: { cellWidth: tableWidthDaily * 0.25, halign: "right", fontStyle: "bold" }, // %25
             2: { cellWidth: tableWidthDaily * 0.40, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %40
-          },
-          alternateRowStyles: {
-            fillColor: [249, 250, 251]
           },
         });
       
@@ -1918,22 +1934,36 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
       });
     
     // Profesyonel tablo stilleri kullan
-    const tableStyles = createProfessionalTableStyles(doc);
+    const tableStyles = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
+    tableStyles.headStyles.fillColor = [59, 130, 246];
+    tableStyles.headStyles.textColor = [255, 255, 255];
+    tableStyles.headStyles.halign = "center";
+    tableStyles.bodyStyles.overflow = 'linebreak';
+    tableStyles.styles.overflow = 'linebreak';
     
     // Sayfa sığma kontrolü
     currentY = ensureTableFitsPage(doc, currentY, 200, mar, "Durum Dağılımı");
+    
+    // Tablo genişliğini sayfa genişliğine göre ayarla
+    const currentPageWidth = doc.internal.pageSize.getWidth();
+    const tableWidth = currentPageWidth - (mar * 2);
     
     autoTable(doc, {
       startY: currentY,
       head: [['Durum', 'Sipariş Sayısı', 'Oran']],
       body: statusData,
       margin: { left: mar, right: mar },
+      tableWidth: tableWidth,
       didParseCell: createDidParseCell(doc),
       ...tableStyles,
       columnStyles: {
-        0: { cellWidth: "auto", halign: "left" },
-        1: { cellWidth: 100, halign: "right", fontStyle: "bold" },
-        2: { cellWidth: 80, halign: "right", fontStyle: "bold", textColor: [107, 114, 128] },
+        0: { cellWidth: tableWidth * 0.50, halign: "left", overflow: 'linebreak' }, // %50
+        1: { cellWidth: tableWidth * 0.25, halign: "right", fontStyle: "bold" }, // %25
+        2: { cellWidth: tableWidth * 0.25, halign: "right", fontStyle: "bold", textColor: [107, 114, 128] }, // %25
       },
     });
     
@@ -1977,14 +2007,23 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
     ]);
     
     // Profesyonel tablo stilleri kullan
-    const tableStyles2 = createProfessionalTableStyles(doc);
+    const tableStyles2 = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
+    tableStyles2.headStyles.fillColor = [59, 130, 246];
+    tableStyles2.headStyles.textColor = [255, 255, 255];
+    tableStyles2.headStyles.halign = "center";
+    tableStyles2.bodyStyles.overflow = 'linebreak';
+    tableStyles2.styles.overflow = 'linebreak';
     
     // Sayfa sığma kontrolü
     currentY = ensureTableFitsPage(doc, currentY, 200, mar, "En Çok Üretilen Ürünler");
     
     // Tablo genişliğini sayfa genişliğine göre ayarla
-    const pageWidth2 = doc.internal.pageSize.getWidth();
-    const tableWidth2 = pageWidth2 - (mar * 2);
+    const currentPageWidth2 = doc.internal.pageSize.getWidth();
+    const tableWidth2 = currentPageWidth2 - (mar * 2);
     
     autoTable(doc, {
       startY: currentY,
@@ -1996,7 +2035,7 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
       ...tableStyles2,
       columnStyles: {
         0: { cellWidth: tableWidth2 * 0.10, halign: "left", textColor: [107, 114, 128] }, // %10
-        1: { cellWidth: tableWidth2 * 0.50, halign: "left" }, // %50
+        1: { cellWidth: tableWidth2 * 0.50, halign: "left", overflow: 'linebreak' }, // %50
         2: { cellWidth: tableWidth2 * 0.20, halign: "right", fontStyle: "bold" }, // %20
         3: { cellWidth: tableWidth2 * 0.20, halign: "right", fontStyle: "bold" }, // %20
       },
@@ -2041,25 +2080,38 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
     });
     
     // Profesyonel tablo stilleri kullan
-    const tableStyles3 = createProfessionalTableStyles(doc);
+    const tableStyles3 = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
+    tableStyles3.headStyles.fillColor = [59, 130, 246];
+    tableStyles3.headStyles.textColor = [255, 255, 255];
+    tableStyles3.headStyles.halign = "center";
+    tableStyles3.bodyStyles.overflow = 'linebreak';
+    tableStyles3.styles.overflow = 'linebreak';
     
     // Sayfa sığma kontrolü
     currentY = ensureTableFitsPage(doc, currentY, 200, mar, "Ürün Bazlı Üretim Verimliliği");
+    
+    // Tablo genişliğini sayfa genişliğine göre ayarla
+    const currentPageWidth3 = doc.internal.pageSize.getWidth();
+    const currentTableWidth3 = currentPageWidth3 - (mar * 2);
     
     autoTable(doc, {
       startY: currentY,
       head: [['Sıra', 'Ürün', 'Toplam Miktar', 'Sipariş', 'Ortalama/Sipariş']],
       body: efficiencyData,
       margin: { left: mar, right: mar },
-      tableWidth: tableWidth3,
+      tableWidth: currentTableWidth3,
       didParseCell: createDidParseCell(doc),
       ...tableStyles3,
       columnStyles: {
-        0: { cellWidth: tableWidth3 * 0.08, halign: "left", textColor: [107, 114, 128] }, // %8
-        1: { cellWidth: tableWidth3 * 0.40, halign: "left" }, // %40
-        2: { cellWidth: tableWidth3 * 0.18, halign: "right", fontStyle: "bold" }, // %18
-        3: { cellWidth: tableWidth3 * 0.15, halign: "right", fontStyle: "bold" }, // %15
-        4: { cellWidth: tableWidth3 * 0.19, halign: "right", textColor: [107, 114, 128] }, // %19
+        0: { cellWidth: currentTableWidth3 * 0.08, halign: "left", textColor: [107, 114, 128] }, // %8
+        1: { cellWidth: currentTableWidth3 * 0.40, halign: "left", overflow: 'linebreak' }, // %40
+        2: { cellWidth: currentTableWidth3 * 0.18, halign: "right", fontStyle: "bold" }, // %18
+        3: { cellWidth: currentTableWidth3 * 0.15, halign: "right", fontStyle: "bold" }, // %15
+        4: { cellWidth: currentTableWidth3 * 0.19, halign: "right", textColor: [107, 114, 128] }, // %19
       },
     });
     
@@ -2221,10 +2273,23 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
     });
     
     // Profesyonel tablo stilleri kullan
-    const tableStyles = createProfessionalTableStyles(doc);
+    const tableStyles = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
+    tableStyles.headStyles.fillColor = [59, 130, 246];
+    tableStyles.headStyles.textColor = [255, 255, 255];
+    tableStyles.headStyles.halign = "center";
+    tableStyles.bodyStyles.overflow = 'linebreak';
+    tableStyles.styles.overflow = 'linebreak';
     
     // Sayfa sığma kontrolü
     currentY = ensureTableFitsPage(doc, currentY, 200, mar, "En Değerli Müşteriler");
+    
+    // Tablo genişliğini sayfa genişliğine göre ayarla
+    const currentPageWidth = doc.internal.pageSize.getWidth();
+    const currentTableWidth = currentPageWidth - (mar * 2);
     
     autoTable(doc, {
       startY: currentY,
@@ -2236,14 +2301,14 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
         safeFormatCurrency(safeNumber(c.total))
       ]),
       margin: { left: mar, right: mar },
-      tableWidth: tableWidth,
+      tableWidth: currentTableWidth,
       didParseCell: createDidParseCell(doc),
       ...tableStyles,
       columnStyles: {
-        0: { cellWidth: tableWidth * 0.10, halign: "left", textColor: [107, 114, 128] }, // %10
-        1: { cellWidth: tableWidth * 0.40, halign: "left" }, // %40
-        2: { cellWidth: tableWidth * 0.20, halign: "right", fontStyle: "bold" }, // %20
-        3: { cellWidth: tableWidth * 0.30, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %30
+        0: { cellWidth: currentTableWidth * 0.10, halign: "left", textColor: [107, 114, 128] }, // %10
+        1: { cellWidth: currentTableWidth * 0.40, halign: "left", overflow: 'linebreak' }, // %40
+        2: { cellWidth: currentTableWidth * 0.20, halign: "right", fontStyle: "bold" }, // %20
+        3: { cellWidth: currentTableWidth * 0.30, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %30
       },
     });
     
@@ -2270,10 +2335,23 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
     });
     
     // Profesyonel tablo stilleri kullan
-    const tableStyles2 = createProfessionalTableStyles(doc);
+    const tableStyles2 = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
+    tableStyles2.headStyles.fillColor = [59, 130, 246];
+    tableStyles2.headStyles.textColor = [255, 255, 255];
+    tableStyles2.headStyles.halign = "center";
+    tableStyles2.bodyStyles.overflow = 'linebreak';
+    tableStyles2.styles.overflow = 'linebreak';
     
     // Sayfa sığma kontrolü
     currentY = ensureTableFitsPage(doc, currentY, 150, mar, "Müşteri Segmentasyonu");
+    
+    // Tablo genişliğini sayfa genişliğine göre ayarla
+    const currentPageWidthSeg = doc.internal.pageSize.getWidth();
+    const currentTableWidthSeg = currentPageWidthSeg - (mar * 2);
     
     autoTable(doc, {
       startY: currentY,
@@ -2284,8 +2362,13 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
         ['Düşük Değerli (<₺10K)', safeNumber(data.segments.low).toString()],
       ],
       margin: { left: mar, right: mar },
+      tableWidth: currentTableWidthSeg,
       didParseCell: createDidParseCell(doc),
       ...tableStyles2,
+      columnStyles: {
+        0: { cellWidth: currentTableWidthSeg * 0.70, halign: "left", overflow: 'linebreak' }, // %70
+        1: { cellWidth: currentTableWidthSeg * 0.30, halign: "right", fontStyle: "bold" }, // %30
+      },
     });
   }
   
@@ -2328,6 +2411,21 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
       borderColor: PDF_CONSTANTS.primaryColor,
     });
     
+    // Profesyonel tablo stilleri kullan
+    const tableStyles3 = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
+    tableStyles3.headStyles.fillColor = [59, 130, 246];
+    tableStyles3.headStyles.textColor = [255, 255, 255];
+    tableStyles3.headStyles.halign = "center";
+    tableStyles3.bodyStyles.overflow = 'linebreak';
+    tableStyles3.styles.overflow = 'linebreak';
+    
+    // Sayfa sığma kontrolü
+    currentY = ensureTableFitsPage(doc, currentY, 200, mar, "Müşteri Detay Analizi");
+    
     autoTable(doc, {
       startY: currentY,
       head: [['Sıra', 'Müşteri', 'Sipariş', 'Toplam', 'Ortalama', 'Segment']],
@@ -2335,33 +2433,10 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
       margin: { left: mar, right: mar },
       tableWidth: tableWidth5,
       didParseCell: createDidParseCell(doc),
-      headStyles: { 
-        fillColor: [243, 244, 246],
-        textColor: [17, 24, 39],
-        fontStyle: "bold", 
-        fontSize: 12,
-        font: getFontName(doc),
-        lineColor: [209, 213, 219],
-        lineWidth: { top: 1, bottom: 1, left: 1, right: 1 },
-        cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
-      },
-      bodyStyles: { 
-        textColor: [31, 41, 55],
-        fontSize: 11,
-        font: getFontName(doc),
-        lineColor: [229, 231, 235],
-        lineWidth: { bottom: 1 },
-        cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
-      },
-      styles: { 
-        font: getFontName(doc), 
-        fontStyle: "normal", 
-        fontSize: 11,
-        cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
-      },
+      ...tableStyles3,
       columnStyles: {
         0: { cellWidth: tableWidth5 * 0.07, halign: "left", textColor: [107, 114, 128] }, // %7
-        1: { cellWidth: tableWidth5 * 0.30, halign: "left" }, // %30
+        1: { cellWidth: tableWidth5 * 0.30, halign: "left", overflow: 'linebreak' }, // %30
         2: { cellWidth: tableWidth5 * 0.12, halign: "right", fontStyle: "bold" }, // %12
         3: { cellWidth: tableWidth5 * 0.20, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %20
         4: { cellWidth: tableWidth5 * 0.18, halign: "right", textColor: [107, 114, 128] }, // %18
@@ -2619,10 +2694,23 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
     });
     
     // Profesyonel tablo stilleri kullan
-    const tableStyles = createProfessionalTableStyles(doc);
+    const tableStyles = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
+    tableStyles.headStyles.fillColor = [59, 130, 246];
+    tableStyles.headStyles.textColor = [255, 255, 255];
+    tableStyles.headStyles.halign = "center";
+    tableStyles.bodyStyles.overflow = 'linebreak';
+    tableStyles.styles.overflow = 'linebreak';
     
     // Sayfa sığma kontrolü
     currentY = ensureTableFitsPage(doc, currentY, 200, mar, "En Karlı Ürünler");
+    
+    // Tablo genişliğini sayfa genişliğine göre ayarla
+    const currentPageWidth = doc.internal.pageSize.getWidth();
+    const currentTableWidth = currentPageWidth - (mar * 2);
     
     autoTable(doc, {
       startY: currentY,
@@ -2635,15 +2723,15 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
         safeFormatCurrency(safeNumber(p.profit))
       ]),
       margin: { left: mar, right: mar },
-      tableWidth: tableWidth,
+      tableWidth: currentTableWidth,
       didParseCell: createDidParseCell(doc),
       ...tableStyles,
       columnStyles: {
-        0: { cellWidth: tableWidth * 0.08, halign: "left", textColor: [107, 114, 128] }, // %8
-        1: { cellWidth: tableWidth * 0.40, halign: "left" }, // %40
-        2: { cellWidth: tableWidth * 0.17, halign: "right", fontStyle: "bold", textColor: [34, 197, 94] }, // %17
-        3: { cellWidth: tableWidth * 0.17, halign: "right", fontStyle: "bold", textColor: [239, 68, 68] }, // %17
-        4: { cellWidth: tableWidth * 0.18, halign: "right", fontStyle: "bold", textColor: [16, 185, 129] }, // %18
+        0: { cellWidth: currentTableWidth * 0.08, halign: "left", textColor: [107, 114, 128] }, // %8
+        1: { cellWidth: currentTableWidth * 0.40, halign: "left", overflow: 'linebreak' }, // %40
+        2: { cellWidth: currentTableWidth * 0.17, halign: "right", fontStyle: "bold", textColor: [34, 197, 94] }, // %17
+        3: { cellWidth: currentTableWidth * 0.17, halign: "right", fontStyle: "bold", textColor: [239, 68, 68] }, // %17
+        4: { cellWidth: currentTableWidth * 0.18, halign: "right", fontStyle: "bold", textColor: [16, 185, 129] }, // %18
       },
     });
   }
@@ -2687,30 +2775,37 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
     });
     
     // Profesyonel tablo stilleri kullan (özel header rengi ile)
-    const tableStyles2 = createProfessionalTableStyles(doc);
+    const tableStyles2 = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
     tableStyles2.headStyles.fillColor = [221, 83, 53]; // Primary color
     tableStyles2.headStyles.textColor = [255, 255, 255]; // White text
+    tableStyles2.headStyles.halign = "center";
+    tableStyles2.bodyStyles.overflow = 'linebreak';
+    tableStyles2.styles.overflow = 'linebreak';
     
     // Sayfa sığma kontrolü
     currentY = ensureTableFitsPage(doc, currentY, 200, mar, "Aylık Gelir-Gider-Kar Trendi");
     
     // Tablo genişliğini sayfa genişliğine göre ayarla
-    const pageWidth2 = doc.internal.pageSize.getWidth();
-    const tableWidth2 = pageWidth2 - (mar * 2);
+    const currentPageWidth2 = doc.internal.pageSize.getWidth();
+    const currentTableWidth2 = currentPageWidth2 - (mar * 2);
     
     autoTable(doc, {
       startY: currentY,
       head: [['Ay', 'Gelir', 'Gider', 'Kar']],
       body: trendData,
       margin: { left: mar, right: mar },
-      tableWidth: tableWidth2,
+      tableWidth: currentTableWidth2,
       didParseCell: createDidParseCell(doc),
       ...tableStyles2,
       columnStyles: {
-        0: { cellWidth: tableWidth2 * 0.25, halign: "left" },  // %25
-        1: { cellWidth: tableWidth2 * 0.25, halign: "right" }, // %25
-        2: { cellWidth: tableWidth2 * 0.25, halign: "right" }, // %25
-        3: { cellWidth: tableWidth2 * 0.25, halign: "right" }, // %25
+        0: { cellWidth: currentTableWidth2 * 0.25, halign: "left" },  // %25
+        1: { cellWidth: currentTableWidth2 * 0.25, halign: "right" }, // %25
+        2: { cellWidth: currentTableWidth2 * 0.25, halign: "right" }, // %25
+        3: { cellWidth: currentTableWidth2 * 0.25, halign: "right" }, // %25
       },
     });
   }
@@ -2753,23 +2848,36 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
       });
       
       // Profesyonel tablo stilleri kullan
-      const tableStyles3 = createProfessionalTableStyles(doc);
+      const tableStyles3 = createProfessionalTableStyles(doc, {
+        headerFontSize: 12,
+        bodyFontSize: 11,
+        cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+      });
+      tableStyles3.headStyles.fillColor = [59, 130, 246];
+      tableStyles3.headStyles.textColor = [255, 255, 255];
+      tableStyles3.headStyles.halign = "center";
+      tableStyles3.bodyStyles.overflow = 'linebreak';
+      tableStyles3.styles.overflow = 'linebreak';
       
       // Sayfa sığma kontrolü
       currentY = ensureTableFitsPage(doc, currentY, 200, mar, "Gider Kalemleri Analizi");
+      
+      // Tablo genişliğini sayfa genişliğine göre ayarla
+      const currentPageWidth3 = doc.internal.pageSize.getWidth();
+      const currentTableWidth3 = currentPageWidth3 - (mar * 2);
       
       autoTable(doc, {
         startY: currentY,
         head: [['Kategori', 'Tutar', 'Oran']],
         body: costTableData,
         margin: { left: mar, right: mar },
-        tableWidth: tableWidth3,
+        tableWidth: currentTableWidth3,
         didParseCell: createDidParseCell(doc),
         ...tableStyles3,
         columnStyles: {
-          0: { cellWidth: tableWidth3 * 0.55, halign: "left" }, // %55
-          1: { cellWidth: tableWidth3 * 0.30, halign: "right", fontStyle: "bold", textColor: [220, 38, 38] }, // %30
-          2: { cellWidth: tableWidth3 * 0.15, halign: "right", textColor: [107, 114, 128] }, // %15
+          0: { cellWidth: currentTableWidth3 * 0.55, halign: "left", overflow: 'linebreak' }, // %55
+          1: { cellWidth: currentTableWidth3 * 0.30, halign: "right", fontStyle: "bold", textColor: [220, 38, 38] }, // %30
+          2: { cellWidth: currentTableWidth3 * 0.15, halign: "right", textColor: [107, 114, 128] }, // %15
         },
       });
       
@@ -3015,39 +3123,33 @@ export const generateUserStatsPDF = async (
     ["Aktif Görevler", userStats.active.toString(), userStats.total > 0 ? `%${Math.round((userStats.active / userStats.total) * 100)}` : "%0"],
   ];
 
+  // Detaylı istatistikler için profesyonel tablo stilleri
+  const detailedTableStyles = createProfessionalTableStyles(doc, {
+    headerFontSize: 12,
+    bodyFontSize: 11,
+    cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+  });
+  detailedTableStyles.headStyles.fillColor = [59, 130, 246];
+  detailedTableStyles.headStyles.textColor = [255, 255, 255];
+  detailedTableStyles.headStyles.halign = "center";
+  detailedTableStyles.bodyStyles.halign = "center";
+  detailedTableStyles.bodyStyles.textColor = [31, 41, 55];
+  
+  const currentPageWidth = doc.internal.pageSize.getWidth();
+  const detailedTableWidth = currentPageWidth - (mar * 2);
+  
   autoTable(doc, {
     startY: yPos,
     head: [detailedStats[0]],
     body: detailedStats.slice(1),
     didParseCell: createDidParseCell(doc),
-    headStyles: { 
-      fillColor: [59, 130, 246], 
-      textColor: 255, 
-      fontStyle: "bold", 
-      fontSize: 12, 
-      font: getFontName(doc),
-      halign: "center"
-    },
-    bodyStyles: { 
-      textColor: [0, 0, 0], 
-      fontSize: 11, 
-      font: getFontName(doc),
-      halign: "center"
-    },
-    styles: { 
-      font: getFontName(doc), 
-      fontStyle: "normal", 
-      fontSize: 11,
-      cellPadding: 8
-    },
     margin: { left: mar, right: mar },
-    alternateRowStyles: {
-      fillColor: [249, 250, 251]
-    },
+    tableWidth: detailedTableWidth,
+    ...detailedTableStyles,
     columnStyles: {
-      0: { cellWidth: "auto", halign: "left" },
-      1: { cellWidth: 100, halign: "center" },
-      2: { cellWidth: 80, halign: "center" },
+      0: { cellWidth: detailedTableWidth * 0.50, halign: "left" }, // %50 - metrik adı için
+      1: { cellWidth: detailedTableWidth * 0.25, halign: "center" }, // %25 - değer için
+      2: { cellWidth: detailedTableWidth * 0.25, halign: "center" }, // %25 - oran için
     },
   });
 
@@ -3094,18 +3196,24 @@ export const generateUserStatsPDF = async (
     });
 
     // Profesyonel tablo stilleri kullan (özel header rengi ile)
-    const tableStyles = createProfessionalTableStyles(doc);
+    const tableStyles = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
     tableStyles.headStyles.fillColor = [59, 130, 246]; // Blue
     tableStyles.headStyles.textColor = [255, 255, 255]; // White
     tableStyles.headStyles.halign = "center";
     tableStyles.bodyStyles.halign = "left";
+    tableStyles.bodyStyles.overflow = 'linebreak';
+    tableStyles.styles.overflow = 'linebreak';
     
     // Sayfa sığma kontrolü
     yPos = ensureTableFitsPage(doc, yPos, 200, mar, "Görev Detayları");
     
     // Tablo genişliğini sayfa genişliğine göre ayarla
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const tableWidth = pageWidth - (mar * 2);
+    const currentPageWidth = doc.internal.pageSize.getWidth();
+    const tableWidth = currentPageWidth - (mar * 2);
     
     autoTable(doc, {
       startY: yPos,
@@ -3116,37 +3224,55 @@ export const generateUserStatsPDF = async (
       didParseCell: createDidParseCell(doc),
       ...tableStyles,
       columnStyles: {
-        0: { cellWidth: tableWidth * 0.45, halign: "left" }, // %45
-        1: { cellWidth: tableWidth * 0.18, halign: "center" }, // %18
-        2: { cellWidth: tableWidth * 0.18, halign: "center" }, // %18
-        3: { cellWidth: tableWidth * 0.19, halign: "center" }, // %19
+        0: { cellWidth: tableWidth * 0.40, halign: "left", overflow: 'linebreak' }, // %40 - görev başlığı için daha fazla alan
+        1: { cellWidth: tableWidth * 0.20, halign: "center" }, // %20
+        2: { cellWidth: tableWidth * 0.20, halign: "center" }, // %20
+        3: { cellWidth: tableWidth * 0.20, halign: "center" }, // %20
       },
     });
   }
 
   // Özet bölümü
   const finalY = (doc as any).lastAutoTable?.finalY || yPos;
-  if (finalY < pageHeight - 100) {
+  if (finalY < pageHeight - 120) {
     yPos = finalY + 30;
+    
+    // Özet metnini hazırla
+    const completionRate = userStats.total > 0 ? Math.round((userStats.completed / userStats.total) * 100) : 0;
+    const summaryText = `${userStats.userName} kullanıcısı toplam ${userStats.total} görev almış, ${userStats.completed} görevi tamamlamıştır. Tamamlanma oranı: %${completionRate}`;
+    
+    // Metni satırlara böl (maksimum genişlik kontrolü)
+    const currentPageWidth = doc.internal.pageSize.getWidth();
+    const maxWidth = currentPageWidth - 2 * mar - 30; // 30pt padding
+    const lines = doc.splitTextToSize(summaryText, maxWidth);
+    const lineHeight = 14;
+    const summaryHeight = Math.max(70, 20 + (lines.length * lineHeight) + 10); // Minimum 70pt, dinamik yükseklik
+    
+    // Sayfa sığmazsa yeni sayfa ekle
+    if (yPos + summaryHeight > pageHeight - 100) {
+      doc.addPage();
+      const template = createPDFTemplate(doc);
+      drawPDFBackground(doc, template);
+      yPos = mar + 30;
+    }
     
     safeSetFontUser(true);
     doc.setTextColor(255, 255, 255);
-    const summaryHeight = 50;
     doc.setFillColor(59, 130, 246);
     doc.setDrawColor(59, 130, 246);
-    doc.roundedRect(mar, yPos, pageWidth - 2 * mar, summaryHeight, 6, 6, "F");
-    doc.roundedRect(mar, yPos, pageWidth - 2 * mar, summaryHeight, 6, 6, "S");
+    doc.setLineWidth(1.5);
+    const summaryPageWidth = doc.internal.pageSize.getWidth();
+    doc.roundedRect(mar, yPos, summaryPageWidth - 2 * mar, summaryHeight, 6, 6, "F");
+    doc.roundedRect(mar, yPos, summaryPageWidth - 2 * mar, summaryHeight, 6, 6, "S");
     
-    safeTextUser("Özet", mar + 15, yPos + 30, 16);
+    safeTextUser("Özet", mar + 15, yPos + 20, 16);
     
     safeSetFontUser(false);
-    const completionRate = userStats.total > 0 ? Math.round((userStats.completed / userStats.total) * 100) : 0;
-    safeTextUser(
-      `${userStats.userName} kullanıcısı toplam ${userStats.total} görev almış, ${userStats.completed} görevi tamamlamıştır. Tamamlanma oranı: %${completionRate}`,
-      mar + 15,
-      yPos + 50,
-      11
-    );
+    doc.setTextColor(255, 255, 255);
+    // Metni satır satır yaz
+    lines.forEach((line: string, index: number) => {
+      safeTextUser(line, mar + 15, yPos + 40 + (index * lineHeight), 11);
+    });
   }
 
   // Footer'ı ekle
@@ -3483,9 +3609,9 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
     bodyFontSize: 12,
     cellPadding: { top: 14, right: 16, bottom: 14, left: 16 }
   });
-  tableStyles.headStyles.fillColor = [249, 250, 251]; // gray-50 (daha profesyonel)
-  tableStyles.headStyles.textColor = [17, 24, 39]; // gray-900
-  tableStyles.headStyles.halign = "left";
+  tableStyles.headStyles.fillColor = [59, 130, 246]; // Blue (tutarlılık için)
+  tableStyles.headStyles.textColor = [255, 255, 255]; // White
+  tableStyles.headStyles.halign = "center";
   tableStyles.bodyStyles.overflow = 'linebreak';
   tableStyles.styles.overflow = 'linebreak';
   

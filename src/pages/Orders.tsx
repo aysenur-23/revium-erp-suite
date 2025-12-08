@@ -65,58 +65,70 @@ const Orders = () => {
           return;
         }
         
-        // Eğer totalAmount yoksa, item'lardan hesapla - Promise.allSettled ile güvenli hale getir
-        const ordersWithTotals = await Promise.allSettled(
-          firebaseOrders.map(async (order) => {
+        // Performans için: totalAmount'u olanları önce işle, olmayanları sonra batch olarak işle
+        // Önce totalAmount'u olanları filtrele
+        const ordersWithTotal = firebaseOrders.filter(order => order?.totalAmount || order?.total_amount);
+        const ordersWithoutTotal = firebaseOrders.filter(order => !order?.totalAmount && !order?.total_amount);
+        
+        // TotalAmount'u olanları hızlıca işle
+        const processedWithTotal: Order[] = ordersWithTotal.map(order => ({
+          ...order,
+          totalAmount: order.totalAmount || order.total_amount,
+          total_amount: order.totalAmount || order.total_amount,
+        })) as Order[];
+        
+        // TotalAmount'u olmayanları batch olarak işle (performans için sadece ilk 20'sini)
+        const limitedOrdersWithoutTotal = ordersWithoutTotal.slice(0, 20);
+        const ordersWithCalculatedTotals = await Promise.allSettled(
+          limitedOrdersWithoutTotal.map(async (order) => {
             if (!order?.id) return null;
             try {
-              // Eğer totalAmount varsa olduğu gibi kullan
-              if (order.totalAmount || order.total_amount) {
-                return order;
-              }
+              const items = await getOrderItems(order.id);
+              const calculatedTotal = (Array.isArray(items) ? items : []).reduce((sum, item) => {
+                if (!item) return sum;
+                const itemTotal = item.total || ((item.unitPrice || item.unit_price || 0) * (item.quantity || 0)) - (item.discount || 0);
+                return sum + itemTotal;
+              }, 0);
               
-              // Yoksa item'lardan hesapla
-              try {
-                const items = await getOrderItems(order.id);
-                const calculatedTotal = (Array.isArray(items) ? items : []).reduce((sum, item) => {
-                  if (!item) return sum;
-                  const itemTotal = item.total || ((item.unitPrice || item.unit_price || 0) * (item.quantity || 0)) - (item.discount || 0);
-                  return sum + itemTotal;
-                }, 0);
-                
-                const calculatedQuantity = (Array.isArray(items) ? items : []).reduce((sum, item) => sum + (item?.quantity || 0), 0);
-                
-                // Tax hesapla (eğer varsa)
-                const taxRate = order.taxRate || order.tax_rate || 0;
-                const subtotal = calculatedTotal;
-                const taxAmount = subtotal * (taxRate / 100);
-                const grandTotal = subtotal + taxAmount;
-                
-                return {
-                  ...order,
-                  totalAmount: grandTotal,
-                  total_amount: grandTotal,
-                  totalQuantity: calculatedQuantity,
-                  total_quantity: calculatedQuantity,
-                  subtotal: subtotal,
-                };
-              } catch (error) {
-                console.error(`Order ${order.id} items yüklenemedi:`, error);
-                return order;
-              }
+              const calculatedQuantity = (Array.isArray(items) ? items : []).reduce((sum, item) => sum + (item?.quantity || 0), 0);
+              
+              const taxRate = order.taxRate || order.tax_rate || 0;
+              const subtotal = calculatedTotal;
+              const taxAmount = subtotal * (taxRate / 100);
+              const grandTotal = subtotal + taxAmount;
+              
+              return {
+                ...order,
+                totalAmount: grandTotal,
+                total_amount: grandTotal,
+                totalQuantity: calculatedQuantity,
+                total_quantity: calculatedQuantity,
+                subtotal: subtotal,
+              } as Order;
             } catch (error) {
-              console.error(`Error processing order ${order.id}:`, error);
-              return order; // Hata durumunda orijinal order'ı döndür
+              // Sessizce handle et - performans için
+              return {
+                ...order,
+                totalAmount: 0,
+                total_amount: 0,
+              } as Order;
             }
           })
         );
         
-        // Promise.allSettled sonuçlarını işle
-        const validOrders = ordersWithTotals
-          .filter((result): result is PromiseFulfilledResult<Order> => 
-            result.status === 'fulfilled' && result.value !== null
-          )
-          .map(result => result.value as Order);
+        // Geri kalan siparişleri totalAmount=0 ile ekle
+        const remainingOrders: Order[] = ordersWithoutTotal.slice(20).map(order => ({
+          ...order,
+          totalAmount: 0,
+          total_amount: 0,
+        })) as Order[];
+        
+        const calculatedOrders: Order[] = ordersWithCalculatedTotals
+          .filter((result) => result.status === 'fulfilled' && result.value !== null)
+          .map(result => (result as PromiseFulfilledResult<Order>).value);
+        
+        // Tüm siparişleri birleştir
+        const validOrders = [...processedWithTotal, ...calculatedOrders, ...remainingOrders];
         
         // Search ve sort işlemleri frontend'de yapılacak
         let filtered = validOrders;

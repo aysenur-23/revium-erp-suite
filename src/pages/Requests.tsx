@@ -187,15 +187,24 @@ const Requests = () => {
                     )}
                 </TableCell>
                 <TableCell>
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1.5">
                         {getStatusBadge(req.status)}
                         {req.rejectionReason && (
-                            <span className="text-[10px] text-red-500 max-w-[150px]">{req.rejectionReason}</span>
+                            <span className="text-xs text-red-600 font-medium max-w-[150px]">{req.rejectionReason}</span>
                         )}
                         {req.approvedBy && (
-                            <span className="text-[10px] text-muted-foreground">
-                                Onaylayan: {usersMap[req.approvedBy]}
-                            </span>
+                            <div className="flex flex-col gap-0.5 mt-1">
+                                <span className="text-xs font-medium text-emerald-700">
+                                    Onaylayan: {usersMap[req.approvedBy] || "Bilinmiyor"}
+                                </span>
+                                {req.approvedAt && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                        {req.approvedAt instanceof Object 
+                                            ? format(req.approvedAt.toDate(), "d MMM yyyy HH:mm", { locale: tr })
+                                            : "-"}
+                                    </span>
+                                )}
+                            </div>
                         )}
                     </div>
                 </TableCell>

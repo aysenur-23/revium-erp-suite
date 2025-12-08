@@ -26,6 +26,10 @@ export default defineConfig(({ mode }) => ({
     assetsDir: "assets",
     sourcemap: false,
     minify: "esbuild",
+    // Target modern browsers but with better compatibility
+    target: ['es2015', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+    // CSS code splitting
+    cssCodeSplit: true,
     rollupOptions: {
       output: {
         // Vendor chunk'ları - lucide-react'ı ayrı chunk'a ayır (export sorununu çözer)

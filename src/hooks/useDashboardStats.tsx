@@ -135,11 +135,12 @@ export const useDashboardStats = () => {
         salesQuotes = [];
       }
 
+      // Performans için: Sadece gerekli verileri al (limit ile)
       const [customers, orders, products, tasks] = await Promise.all([
-        getCustomers(),
-        getOrders(),
-        getProducts(),
-        getTasks(),
+        getCustomers().then(c => c.slice(0, 100)), // Son 100 müşteri
+        getOrders().then(o => o.slice(0, 200)), // Son 200 sipariş
+        getProducts().then(p => p.slice(0, 100)), // Son 100 ürün
+        getTasks().then(t => t.slice(0, 50)), // Son 50 görev
       ]);
 
       // İstatistikleri hesapla
@@ -279,11 +280,22 @@ export const useDashboardStats = () => {
 
       return stats;
     },
-    refetchInterval: 30000,
-    refetchOnWindowFocus: true,
-    refetchOnMount: true,
-    retry: 2,
-    retryDelay: 5000,
-    staleTime: 15000,
+    refetchInterval: 180000, // 3 dakikada bir güncelle (performans için)
+    refetchOnWindowFocus: false, // Window focus'ta refetch yapma (performans için)
+    refetchOnMount: false, // İlk mount'ta refetch yapma (cache'den göster - performans için)
+    retry: 1, // Retry sayısını azalt (performans için)
+    retryDelay: 2000, // Retry delay'i azalt (performans için - 2 saniye)
+    staleTime: 120000, // 2 dakika stale time (performans için)
+    // İlk yüklemede daha hızlı render için placeholder data
+    placeholderData: (previousData) => previousData || {
+      customers: { total: 0, trend: 0 },
+      orders: { total: 0, active: 0, trend: 0 },
+      products: { total_stock: 0, low_stock_count: 0, trend: 0 },
+      revenue: { current_month: 0, trend: 0 },
+      recent_orders: [],
+      low_stock_products: [],
+      quotes: { total_amount: 0, count: 0 },
+      quote_conversion_rate: 0,
+    },
   });
 };

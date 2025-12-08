@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, memo } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { StatCard } from "@/components/Dashboard/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,61 +17,76 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { isAdmin, user } = useAuth();
   
-  // Tasks'i dinamik olarak güncelle
+  // Tasks'i dinamik olarak güncelle - İlk yüklemede sadece kritik verileri al
+  // Performans için: Sadece kullanıcının görevlerini al
   const { data: tasks = [], isLoading: tasksLoading } = useQuery({
-    queryKey: ["dashboard-tasks"],
+    queryKey: ["dashboard-tasks", user?.id],
     queryFn: async () => {
       try {
-        return await getTasks();
+        // İlk yüklemede sadece son 20 görevi al (performans için)
+        const allTasks = await getTasks();
+        // Kullanıcının görevlerini önceliklendir
+        if (user?.id) {
+          const userTasks = allTasks.filter(t => t.createdBy === user.id).slice(0, 20);
+          if (userTasks.length > 0) return userTasks;
+        }
+        return allTasks.slice(0, 20);
       } catch (error) {
         console.error("Tasks yüklenirken hata:", error);
         return [];
       }
     },
-    refetchInterval: 30000, // 30 saniyede bir güncelle
-    refetchOnWindowFocus: true,
-    staleTime: 15000,
+    enabled: !!user?.id, // Sadece kullanıcı varsa çalıştır
+    refetchInterval: 180000, // 3 dakikada bir güncelle (performans için)
+    refetchOnWindowFocus: false, // Window focus'ta refetch yapma (performans için)
+    staleTime: 120000, // 2 dakika stale time (performans için)
+    // İlk yüklemede daha hızlı render için
+    placeholderData: [], // Boş array ile başla, loading state'i daha hızlı geçer
   });
 
   // Task assignments'ları dinamik olarak güncelle (kabul edilen görevleri kontrol etmek için)
+  // Performans için: Sadece ilk 10 görev için assignment'ları al
   const { data: taskAssignmentsMap = new Map(), isLoading: assignmentsLoading } = useQuery({
-    queryKey: ["dashboard-task-assignments", tasks.map(t => t.id).join(",")],
+    queryKey: ["dashboard-task-assignments", tasks.slice(0, 10).map(t => t.id).join(",")],
     queryFn: async () => {
       if (!user?.id || tasks.length === 0) return new Map();
       try {
         const assignmentsMap = new Map<string, any[]>();
-        // Her görev için assignment'ları al
+        // Sadece ilk 10 görev için assignment'ları al (performans için)
+        const limitedTasks = tasks.slice(0, 10);
+        // Her görev için assignment'ları al (batch işlem, paralel)
         await Promise.all(
-          tasks.map(async (task) => {
+          limitedTasks.map(async (task) => {
             try {
               const assignments = await getTaskAssignments(task.id);
               assignmentsMap.set(task.id, assignments);
             } catch (error) {
-              console.error(`Task ${task.id} assignments yüklenirken hata:`, error);
+              // Sessizce handle et - performans için
               assignmentsMap.set(task.id, []);
             }
           })
         );
         return assignmentsMap;
       } catch (error) {
-        console.error("Task assignments yüklenirken hata:", error);
+        // Sessizce handle et - performans için
         return new Map();
       }
     },
     enabled: tasks.length > 0 && !!user?.id,
-    refetchInterval: 30000, // 30 saniyede bir güncelle
-    refetchOnWindowFocus: true,
-    staleTime: 15000,
+    refetchInterval: 180000, // 3 dakikada bir güncelle (performans için)
+    refetchOnWindowFocus: false, // Window focus'ta refetch yapma (performans için)
+    staleTime: 120000, // 2 dakika stale time (performans için)
   });
 
   // Düşük stoklu ürünleri ve hammaddeleri dinamik olarak güncelle
+  // Performans için: Sadece ilk 50 ürün/hammaddeyi kontrol et
   const { data: lowStockItems = [], isLoading: lowStockLoading } = useQuery({
     queryKey: ["dashboard-low-stock-items"],
     queryFn: async () => {
       try {
         const [products, rawMaterials] = await Promise.all([
-          getProducts(),
-          getRawMaterials(),
+          getProducts().then(p => p.slice(0, 50)), // Son 50 ürün
+          getRawMaterials().then(r => r.slice(0, 50)), // Son 50 hammadde
         ]);
         
         // Düşük stoklu ve tükenen ürünleri filtrele
@@ -124,23 +139,27 @@ const Dashboard = () => {
         return [];
       }
     },
-    refetchInterval: 20000, // 20 saniyede bir güncelle (daha sık)
-    refetchOnWindowFocus: true,
-    staleTime: 10000, // 10 saniye stale time
+    refetchInterval: 180000, // 3 dakikada bir güncelle (performans için)
+    refetchOnWindowFocus: false, // Window focus'ta refetch yapma (performans için)
+    staleTime: 120000, // 2 dakika stale time (performans için)
   });
 
+  // Performans için: useMemo ile optimize edilmiş hesaplamalar
   const { overdueTasks, upcomingTasks, myTasksCount } = useMemo(() => {
+    if (!user?.id || tasks.length === 0) {
+      return { overdueTasks: [], upcomingTasks: [], myTasksCount: 0 };
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const sevenDaysLater = new Date(today);
     sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
 
+    // Performans için: Sadece ilk 50 görevi kontrol et
+    const limitedTasks = tasks.slice(0, 50);
+
     // "Görevlerim" sayfasındaki mantıkla aynı: Sadece kabul edilen görevleri say
-    // 1. Kullanıcının oluşturduğu görevler
-    // 2. Kullanıcıya atanan ve kabul edilen (accepted) görevler
-    // 3. onlyInMyTasks flag'li görevler (sadece oluşturan görebilir)
-    const myTasks = tasks.filter((task) => {
-      if (!user?.id) return false;
+    const myTasks = limitedTasks.filter((task) => {
       // Tamamlanmış veya iptal edilmiş görevleri hariç tut
       if (task.status === "completed" || task.status === "cancelled") return false;
       // Arşivlenmiş görevleri hariç tut
@@ -154,12 +173,14 @@ const Dashboard = () => {
         return task.createdBy === user.id;
       }
       
-      // 3. Kullanıcıya atanan ve kabul edilen görevler
-      const assignments = taskAssignmentsMap.get(task.id) || [];
-      const userAssignment = assignments.find(
-        (a: any) => a.assignedTo === user.id && a.status === "accepted"
-      );
-      if (userAssignment) return true;
+      // 3. Kullanıcıya atanan ve kabul edilen görevler (sadece taskAssignmentsMap'te varsa kontrol et)
+      const assignments = taskAssignmentsMap.get(task.id);
+      if (assignments && assignments.length > 0) {
+        const userAssignment = assignments.find(
+          (a: any) => a.assignedTo === user.id && a.status === "accepted"
+        );
+        if (userAssignment) return true;
+      }
       
       return false;
     });

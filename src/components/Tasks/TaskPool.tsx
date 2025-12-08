@@ -145,13 +145,20 @@ const TaskPool = () => {
       });
       setProjects(projectsMap);
       // Gizli projeleri filtrele: Sadece yönetici, oluşturan ve projede görevi olanlar görebilir
+      // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir
       const visibleProjects = await Promise.all(
         allProjects.map(async (project) => {
           if (!project.isPrivate) return project; // Gizli olmayan projeler herkes görebilir
-          if (isAdmin || isSuperAdmin || isTeamLeader) return project; // Adminler ve ekip liderleri tüm projeleri görebilir
+          if (isSuperAdmin) return project; // Üst yöneticiler tüm projeleri görebilir
+          if (isAdmin) return project; // Yöneticiler tüm projeleri görebilir
           if (user?.id && project.createdBy === user.id) return project; // Oluşturan görebilir
           
-          // Projede görevi olan kullanıcılar görebilir
+          // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
+          if (isTeamLeader) {
+            return null; // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
+          }
+          
+          // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
           if (user?.id) {
             try {
               const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");

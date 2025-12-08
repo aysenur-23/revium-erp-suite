@@ -95,7 +95,7 @@ const Products = () => {
     if (!selectedProduct) return;
 
     try {
-      await deleteProduct(selectedProduct.id);
+      await deleteProduct(selectedProduct.id, user?.id);
       toast.success("Ürün silindi");
       fetchProducts();
       setDeleteDialogOpen(false);

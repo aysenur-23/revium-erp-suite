@@ -7,7 +7,7 @@ import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getAnalytics, Analytics } from "firebase/analytics";
 import { getAuth, Auth } from "firebase/auth";
 import { getDatabase, Database } from "firebase/database";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { getFirestore, Firestore, initializeFirestore, CACHE_SIZE_UNLIMITED, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
@@ -84,15 +84,20 @@ if (getApps().length === 0) {
     } else {
       app = initializeApp(normalizedFirebaseConfig);
       
-      // Initialize Analytics (only in browser, not in SSR)
+      // Initialize Analytics lazily (only when needed, not on initial load)
+      // This improves initial page load performance
       if (typeof window !== 'undefined') {
-        try {
-          analytics = getAnalytics(app);
-        } catch (error: any) {
-          if (import.meta.env.DEV) {
-            console.warn('Firebase Analytics initialization failed:', error?.message || 'Unknown error');
+        // Analytics'i asenkron olarak başlat (performans için)
+        setTimeout(() => {
+          try {
+            analytics = getAnalytics(app);
+          } catch (error: any) {
+            // Silently handle - Analytics is not critical for app functionality
+            if (import.meta.env.DEV) {
+              console.warn('Firebase Analytics initialization failed:', error?.message || 'Unknown error');
+            }
           }
-        }
+        }, 1000); // 1 saniye sonra başlat (sayfa yüklenmesini engellemesin)
       }
       
       // Initialize Auth
@@ -121,10 +126,13 @@ if (getApps().length === 0) {
         // Sessizce handle et - gereksiz bilgilendirme
       }
       
-      // Initialize Firestore
+      // Initialize Firestore - Performans için persistence'ı kaldırdık
+      // Persistence IndexedDB işlemleri yavaşlatıyor, bu yüzden normal Firestore kullanıyoruz
+      // Offline desteği gerekirse daha sonra eklenebilir
       try {
         firestore = getFirestore(app);
       } catch (error: any) {
+        // Silently handle - Firestore might not be critical for app startup
         if (import.meta.env.DEV) {
           console.warn('Firebase Firestore initialization failed:', error?.message || 'Unknown error');
         }
@@ -180,10 +188,17 @@ if (getApps().length === 0) {
       }
     }
     try {
+      // If Firestore is already initialized (from previous app initialization), just get the existing instance
+      // Don't try to re-initialize with persistence as it will fail with "already been started" error
       firestore = getFirestore(app);
     } catch (error: any) {
-      if (import.meta.env.DEV) {
-        console.warn('Firestore might not be initialized:', error?.message || 'Unknown error');
+      // Silently handle - Firestore might not be initialized yet or there's an error
+      // This is non-critical as Firestore will be initialized when needed
+      const errorMessage = error?.message || '';
+      if (errorMessage.includes('already been started') || errorMessage.includes('already initialized')) {
+        // This is expected - Firestore is already initialized, just ignore
+      } else if (import.meta.env.DEV) {
+        console.warn('Firestore might not be initialized:', errorMessage);
       }
     }
     try {

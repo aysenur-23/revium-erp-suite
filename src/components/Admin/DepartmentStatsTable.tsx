@@ -1,12 +1,13 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getDepartments } from "@/services/firebase/departmentService";
-import { getTasks } from "@/services/firebase/taskService";
+import { getDepartments, DepartmentWithStats } from "@/services/firebase/departmentService";
+import { subscribeToTasks, Task } from "@/services/firebase/taskService";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { DepartmentDetailModal } from "./DepartmentDetailModal";
+import { onSnapshot, collection, Unsubscribe } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 interface DepartmentStat {
   id: string;
@@ -21,107 +22,185 @@ interface DepartmentStat {
 
 export const DepartmentStatsTable = () => {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ["department-stats"],
-    queryFn: async () => {
-      // Fetch departments, tasks, and users in parallel
-      const [departments, allTasks, allUsers] = await Promise.all([
-        getDepartments(),
-        getTasks(),
-        getAllUsers(),
-      ]);
+  const [stats, setStats] = useState<DepartmentStat[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [departments, setDepartments] = useState<DepartmentWithStats[]>([]);
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
 
-      // Debug: Eğer departman yoksa veya görev yoksa bilgi ver
-      if (import.meta.env.DEV) {
-        console.log("Department Stats Debug:", {
-          departmentsCount: departments.length,
-          tasksCount: allTasks.length,
-          usersCount: allUsers.length,
-        });
-      }
-
-      // Calculate stats for each department
-      const stats = departments.map((dept) => {
-        // Ekip üyelerini bul (approvedTeams, pendingTeams veya departmentId ile)
-        const teamMembers = allUsers.filter((user: UserProfile) => {
-          // Direkt departman ID'si eşleşiyorsa
-          if (user.departmentId === dept.id) return true;
-          // Onaylanmış ekiplerde varsa
-          if (user.approvedTeams && user.approvedTeams.includes(dept.id)) return true;
-          // Bekleyen ekiplerde varsa
-          if (user.pendingTeams && user.pendingTeams.includes(dept.id)) return true;
-          return false;
-        });
-
-        // Ekip lideri bilgisini al (sadece silinmemiş kullanıcılar)
-        const manager = dept.managerId 
-          ? allUsers.find((u: UserProfile) => u.id === dept.managerId && !(u as any).deleted)
-          : null;
-
-        // Ekip üyelerinin ID'lerini al
-        const teamMemberIds = new Set(teamMembers.map((u: UserProfile) => u.id));
-
-        // Departmana ait görevleri bul - birden fazla yöntemle
-        const allDeptTasks = allTasks.filter((task) => {
-          // 1. productionProcessId ile direkt bağlantı
-          if (task.productionProcessId && task.productionProcessId === dept.id) {
-            return true;
-          }
-
-          // 2. Görev ekip üyelerinden birine atanmışsa (assignedUsers string array veya object array)
-          if (task.assignedUsers && Array.isArray(task.assignedUsers)) {
-            const hasAssignedMember = task.assignedUsers.some((u: any) => {
-              // Eğer string ise direkt ID karşılaştırması
-              if (typeof u === 'string') {
-                return teamMemberIds.has(u);
-              }
-              // Eğer object ise id field'ına bak
-              if (u && typeof u === 'object') {
-                const userId = u.id || u.assignedTo || u.userId;
-                return userId && teamMemberIds.has(userId);
-              }
-              return false;
-            });
-            if (hasAssignedMember) return true;
-          }
-
-          // 3. Görev ekip üyelerinden biri tarafından oluşturulmuşsa
-          if (task.createdBy && teamMemberIds.has(task.createdBy)) {
-            return true;
-          }
-          
-          return false;
-        });
-
-        // Aktif görevler: completed ve cancelled olmayanlar
-        // Onaylanmış görevler (completed + approved) tamamlanmış sayılır
-        const activeTasks = allDeptTasks.filter((t) => 
-          t.status !== 'completed' && t.status !== 'cancelled'
-        ).length;
-        // Tamamlanmış görevler: status completed olanlar (onaylanmış veya onaylanmamış)
-        const completedTasks = allDeptTasks.filter((t) => t.status === 'completed').length;
-        // İptal edilen görevler (gerçekten iptal edilenler)
-        const cancelledTasks = allDeptTasks.filter((t) => t.status === 'cancelled').length;
-        const total = activeTasks + completedTasks + cancelledTasks;
-        // Tamamlanma oranı: tamamlanmış + iptal edilen / toplam
-        const completionRate = total > 0 ? ((completedTasks + cancelledTasks) / total) * 100 : 0;
-
-        return {
-          id: dept.id,
-          name: dept.name,
-          process_count: 0, // Production processes collection henüz mevcut değil
-          active_tasks: activeTasks,
-          completed_tasks: completedTasks,
-          completion_rate: completionRate,
-          team_members: teamMembers.length,
-          manager_name: manager?.fullName || manager?.displayName || undefined,
-        } as DepartmentStat;
+  // İstatistikleri hesapla
+  const calculateStats = useCallback((depts: DepartmentWithStats[], tasks: Task[], users: UserProfile[]) => {
+    return depts.map((dept) => {
+      // Ekip üyelerini bul (approvedTeams, pendingTeams veya departmentId ile)
+      const teamMembers = users.filter((user: UserProfile) => {
+        // Direkt departman ID'si eşleşiyorsa
+        if (user.departmentId === dept.id) return true;
+        // Onaylanmış ekiplerde varsa
+        if (user.approvedTeams && user.approvedTeams.includes(dept.id)) return true;
+        // Bekleyen ekiplerde varsa
+        if (user.pendingTeams && user.pendingTeams.includes(dept.id)) return true;
+        return false;
       });
 
-      return stats;
-    },
-    refetchInterval: 30000,
-  });
+      // Ekip lideri bilgisini al (sadece silinmemiş kullanıcılar)
+      const manager = dept.managerId 
+        ? users.find((u: UserProfile) => u.id === dept.managerId && !(u as any).deleted)
+        : null;
+
+      // Ekip üyelerinin ID'lerini al
+      const teamMemberIds = new Set(teamMembers.map((u: UserProfile) => u.id));
+
+      // Departmana ait görevleri bul - birden fazla yöntemle
+      const allDeptTasks = tasks.filter((task) => {
+        // 1. productionProcessId ile direkt bağlantı
+        if (task.productionProcessId && task.productionProcessId === dept.id) {
+          return true;
+        }
+
+        // 2. Görev ekip üyelerinden birine atanmışsa (assignedUsers string array veya object array)
+        if (task.assignedUsers && Array.isArray(task.assignedUsers)) {
+          const hasAssignedMember = task.assignedUsers.some((u: any) => {
+            // Eğer string ise direkt ID karşılaştırması
+            if (typeof u === 'string') {
+              return teamMemberIds.has(u);
+            }
+            // Eğer object ise id field'ına bak
+            if (u && typeof u === 'object') {
+              const userId = u.id || u.assignedTo || u.userId;
+              return userId && teamMemberIds.has(userId);
+            }
+            return false;
+          });
+          if (hasAssignedMember) return true;
+        }
+
+        // 3. Görev ekip üyelerinden biri tarafından oluşturulmuşsa
+        if (task.createdBy && teamMemberIds.has(task.createdBy)) {
+          return true;
+        }
+        
+        return false;
+      });
+
+      // Aktif görevler: completed ve cancelled olmayanlar
+      const activeTasks = allDeptTasks.filter((t) => 
+        t.status !== 'completed' && t.status !== 'cancelled'
+      ).length;
+      // Tamamlanmış görevler: status completed olanlar
+      const completedTasks = allDeptTasks.filter((t) => t.status === 'completed').length;
+      // İptal edilen görevler
+      const cancelledTasks = allDeptTasks.filter((t) => t.status === 'cancelled').length;
+      const total = activeTasks + completedTasks + cancelledTasks;
+      // Tamamlanma oranı: sadece tamamlanmış görevler / toplam (iptal edilenler dahil değil)
+      const completionRate = total > 0 ? (completedTasks / total) * 100 : 0;
+
+      return {
+        id: dept.id,
+        name: dept.name,
+        process_count: 0, // Production processes collection henüz mevcut değil
+        active_tasks: activeTasks,
+        completed_tasks: completedTasks,
+        completion_rate: completionRate,
+        team_members: teamMembers.length,
+        manager_name: manager?.fullName || manager?.displayName || undefined,
+      } as DepartmentStat;
+    });
+  }, []);
+
+  // Real-time listener'ları kur
+  useEffect(() => {
+    let unsubscribeTasks: Unsubscribe | null = null;
+    let unsubscribeDepartments: Unsubscribe | null = null;
+    let unsubscribeUsers: Unsubscribe | null = null;
+    let isMounted = true;
+
+    const loadInitialData = async () => {
+      try {
+        // İlk yüklemede tüm verileri al
+        const [depts, users] = await Promise.all([
+          getDepartments(),
+          getAllUsers(),
+        ]);
+        
+        if (!isMounted) return;
+        
+        setDepartments(depts);
+        setAllUsers(users);
+        
+        // Görevler için real-time listener başlat
+        unsubscribeTasks = subscribeToTasks({}, (tasks) => {
+          if (!isMounted) return;
+          setAllTasks(tasks);
+          setIsLoading(false);
+        });
+      } catch (error) {
+        console.error("Error loading initial data:", error);
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadInitialData();
+
+    // Departments için real-time listener
+    if (db) {
+      unsubscribeDepartments = onSnapshot(
+        collection(db, "departments"),
+        async (snapshot) => {
+          if (!isMounted) return;
+          // getDepartments fonksiyonunu kullanarak manager bilgilerini de al
+          try {
+            const depts = await getDepartments();
+            setDepartments(depts);
+          } catch (error) {
+            console.error("Error fetching departments with manager info:", error);
+            // Fallback: sadece temel bilgileri al
+            const depts = snapshot.docs.map((docSnap) => ({
+              id: docSnap.id,
+              ...docSnap.data(),
+            })) as DepartmentWithStats[];
+            setDepartments(depts);
+          }
+        },
+        (error) => {
+          console.error("Departments snapshot error:", error);
+        }
+      );
+    }
+
+    // Users için real-time listener
+    if (db) {
+      unsubscribeUsers = onSnapshot(
+        collection(db, "users"),
+        (snapshot) => {
+          if (!isMounted) return;
+          const users = snapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          })) as UserProfile[];
+          setAllUsers(users);
+        },
+        (error) => {
+          console.error("Users snapshot error:", error);
+        }
+      );
+    }
+
+    // Cleanup
+    return () => {
+      isMounted = false;
+      if (unsubscribeTasks) unsubscribeTasks();
+      if (unsubscribeDepartments) unsubscribeDepartments();
+      if (unsubscribeUsers) unsubscribeUsers();
+    };
+  }, []);
+
+  // Veriler değiştiğinde istatistikleri güncelle
+  useEffect(() => {
+    const calculatedStats = calculateStats(departments, allTasks, allUsers);
+    setStats(calculatedStats);
+  }, [departments, allTasks, allUsers, calculateStats]);
 
   if (isLoading) {
     return (

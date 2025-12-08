@@ -41,12 +41,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { getAllUsers, UserProfile } from "@/services/firebase/authService";
+import { getAllUsers, UserProfile, updateFirebaseUserProfile } from "@/services/firebase/authService";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 
 export const DepartmentManagement = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [departments, setDepartments] = useState<DepartmentWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -106,13 +106,15 @@ export const DepartmentManagement = () => {
         await updateDepartment(editingDept.id, {
           name: formData.name,
           description: formData.description || null,
-        });
+        }, user?.id || null);
         toast.success("Departman güncellendi");
       } else {
         // Yeni oluştur
         await createDepartment(
           formData.name,
-          formData.description || null
+          formData.description || null,
+          null,
+          user?.id || null
         );
         toast.success("Departman oluşturuldu");
       }
@@ -129,7 +131,7 @@ export const DepartmentManagement = () => {
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await deleteDepartment(id);
+      await deleteDepartment(id, user?.id || null);
       toast.success("Departman başarıyla silindi");
       fetchDepartments();
     } catch (error: any) {
@@ -182,14 +184,55 @@ export const DepartmentManagement = () => {
 
     setAssigningLeader(true);
     try {
+      const newManagerId = selectedUserId === "none" ? null : selectedUserId;
+      
+      // Eski manager'ın rolünü güncelle (eğer başka departmanda manager değilse)
+      if (selectedDeptForLeader.managerId && selectedDeptForLeader.managerId !== newManagerId) {
+        const oldManager = users.find(u => u.id === selectedDeptForLeader.managerId);
+        if (oldManager) {
+          // Eski manager'ın başka departmanda manager olup olmadığını kontrol et
+          const otherDeptAsManager = departments.find(
+            d => d.id !== selectedDeptForLeader.id && d.managerId === oldManager.id
+          );
+          
+          // Eğer başka departmanda manager değilse, team_leader rolünü kaldır
+          if (!otherDeptAsManager) {
+            const currentRoles = oldManager.role || [];
+            const updatedRoles = currentRoles.filter((r: string) => r !== "team_leader");
+            if (updatedRoles.length === 0) {
+              updatedRoles.push("viewer"); // En azından viewer rolü olsun
+            }
+            await updateFirebaseUserProfile(oldManager.id, {
+              role: updatedRoles,
+            });
+          }
+        }
+      }
+      
+      // Yeni manager'ı departmana ata
       await updateDepartment(selectedDeptForLeader.id, {
-        managerId: selectedUserId === "none" ? null : selectedUserId,
-      });
+        managerId: newManagerId,
+      }, user?.id || null);
+      
+      // Yeni manager'ın rolünü team_leader olarak güncelle
+      if (newManagerId) {
+        const newManager = users.find(u => u.id === newManagerId);
+        if (newManager) {
+          const currentRoles = newManager.role || [];
+          if (!currentRoles.includes("team_leader")) {
+            await updateFirebaseUserProfile(newManagerId, {
+              role: [...currentRoles, "team_leader"],
+            });
+          }
+        }
+      }
+      
       toast.success("Ekip lideri başarıyla atandı");
       setAssignLeaderOpen(false);
       setSelectedDeptForLeader(null);
       setSelectedUserId("");
       fetchDepartments();
+      fetchUsers(); // Kullanıcı rolleri güncellendi, yeniden yükle
     } catch (error: any) {
       toast.error("Ekip lideri atanırken hata: " + error.message);
     } finally {
@@ -287,7 +330,7 @@ export const DepartmentManagement = () => {
                     <TableHead className="min-w-[150px]">Departman</TableHead>
                     <TableHead className="hidden md:table-cell min-w-[200px]">Açıklama</TableHead>
                     <TableHead className="min-w-[120px]">Kullanıcı Sayısı</TableHead>
-                    <TableHead className="hidden lg:table-cell min-w-[150px]">Manager</TableHead>
+                    <TableHead className="min-w-[150px]">Ekip Lideri</TableHead>
                     <TableHead className="text-right min-w-[120px]">İşlemler</TableHead>
               </TableRow>
             </TableHeader>
@@ -304,11 +347,6 @@ export const DepartmentManagement = () => {
                                 {dept.description}
                               </p>
                             )}
-                            {dept.managerName && (
-                              <p className="text-xs text-muted-foreground lg:hidden mt-0.5">
-                                Lider: {dept.managerName}
-                              </p>
-                            )}
                           </div>
                     </div>
                   </TableCell>
@@ -323,8 +361,8 @@ export const DepartmentManagement = () => {
                           <span className="text-sm sm:text-base">{dept.userCount || 0}</span>
                     </div>
                   </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <span className="text-sm">{dept.managerName || "Atanmamış"}</span>
+                      <TableCell>
+                        <span className="text-sm font-medium">{dept.managerName || <span className="text-muted-foreground">Atanmamış</span>}</span>
                   </TableCell>
                   <TableCell className="text-right">
                         <div className="flex justify-end gap-1 sm:gap-2">

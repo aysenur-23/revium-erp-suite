@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -21,10 +21,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import logo from "@/assets/rev-logo.png";
 import { getProjects, Project } from "@/services/firebase/projectService";
+import logo from "@/assets/rev-logo.png";
 
 interface SidebarProps {
   isMobile: boolean;
@@ -35,11 +36,37 @@ interface SidebarProps {
 
 export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: SidebarProps) => {
   const { user, isSuperAdmin, isAdmin, isTeamLeader } = useAuth();
+  const { canRead } = usePermissions();
   const location = useLocation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
+  const [canAccessTeamManagement, setCanAccessTeamManagement] = useState(false);
+  const [canAccessAdmin, setCanAccessAdmin] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // Check permissions for menu items
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user) {
+        setCanAccessTeamManagement(false);
+        setCanAccessAdmin(false);
+        return;
+      }
+
+      // Team Management: can read departments or is team leader
+      const canReadDepts = await canRead("departments");
+      setCanAccessTeamManagement(canReadDepts || isTeamLeader);
+
+      // Admin Panel: can read audit_logs
+      const canReadAudit = await canRead("audit_logs");
+      setCanAccessAdmin(canReadAudit);
+    };
+
+    checkPermissions();
+  }, [user, isTeamLeader, canRead]);
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -60,10 +87,18 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
             if (!project.isPrivate) return project;
             
             // Gizli projeler için özel kontroller
+            // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir
             if (isSuperAdmin) return project; // Üst yöneticiler tüm projeleri görebilir
+            if (isAdmin) return project; // Yöneticiler tüm projeleri görebilir
             if (user?.id && project.createdBy === user.id) return project; // Oluşturan görebilir
             
-            // Projede görevi olan kullanıcılar görebilir
+            // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
+            const isTeamLeader = user?.roles?.includes("team_leader");
+            if (isTeamLeader) {
+              return null; // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
+            }
+            
+            // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
             if (user?.id) {
               try {
                 const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");
@@ -111,10 +146,14 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
     }
   };
 
+  // Sidebar taşma kontrolü - sadece gerçek taşma durumunda kapat (scroll edilebilir içerik normaldir)
+  // Bu kontrolü kaldırdık çünkü scroll edilebilir içerik olması sidebar'ın kapatılması için bir neden değil
+  // Kullanıcı scroll yaparak tüm içeriği görebilir
+
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-    ...(isAdmin || isTeamLeader ? [{ icon: UserCog, label: "Ekip Yönetimi", path: "/team-management" }] : []),
-    ...(isAdmin ? [{ icon: Shield, label: "Admin Paneli", path: "/admin" }] : []),
+    ...(canAccessTeamManagement ? [{ icon: UserCog, label: "Ekip Yönetimi", path: "/team-management" }] : []),
+    ...(canAccessAdmin ? [{ icon: Shield, label: "Admin Paneli", path: "/admin" }] : []),
     { icon: ShoppingCart, label: "Siparişler", path: "/orders" },
     { icon: Factory, label: "Üretim Siparişleri", path: "/production" },
     { icon: Users, label: "Müşteriler", path: "/customers" },
@@ -127,15 +166,16 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
   ];
 
   const content = (
-    <div className="flex h-full w-64 flex-col bg-sidebar border-r border-sidebar-border">
-      <div className="flex h-12 sm:h-14 md:h-16 items-start justify-center border-b border-sidebar-border px-3 flex-shrink-0 pt-2">
-        <div className="flex items-center justify-center gap-2 w-full">
-          <img src={logo} alt="Revium ERP" className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg object-contain bg-white/90 p-1 flex-shrink-0" />
-          <span className="text-base sm:text-lg font-bold text-sidebar-foreground">Revium ERP</span>
+    <div ref={sidebarRef} className="flex h-full w-64 flex-col bg-sidebar border-r border-sidebar-border overflow-hidden relative z-50">
+      {/* Logo Section - Sidebar'ın en üstünde */}
+      <div className="flex-shrink-0 bg-sidebar border-b border-sidebar-border pt-4 pb-2 z-[99999] relative">
+        <div className="flex items-center gap-2 px-3 sm:px-4">
+          <img src={logo} alt="Revium ERP" className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 rounded-lg object-contain bg-white p-1 flex-shrink-0" />
+          <span className="text-base sm:text-lg md:text-xl font-bold text-sidebar-foreground">Revium ERP</span>
         </div>
       </div>
 
-      <nav className="flex flex-col gap-0.5 p-2 overflow-y-auto flex-1 min-h-0">
+      <nav ref={navRef} className="flex flex-col gap-0.5 px-2 pt-5 pb-2 overflow-y-auto flex-1 min-h-0">
         {/* Dashboard */}
         <NavLink
           to="/"
@@ -154,7 +194,7 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
         </NavLink>
 
         {/* Ekip Yönetimi - 3. sıra */}
-        {(isAdmin || isTeamLeader) && (
+        {canAccessTeamManagement && (
           <NavLink
             to="/team-management"
             className={({ isActive }) =>
@@ -173,7 +213,7 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
         )}
 
         {/* Admin Paneli - 4. sıra */}
-        {isAdmin && (
+        {canAccessAdmin && (
           <NavLink
             to="/admin"
             className={({ isActive }) =>
@@ -191,7 +231,71 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
           </NavLink>
         )}
 
-        {/* Görevler Collapsible Menü */}
+        {/* Projeler Collapsible Menü */}
+        <Collapsible open={projectsOpen} onOpenChange={setProjectsOpen}>
+          <CollapsibleTrigger
+            className={cn(
+              "flex items-center justify-between w-full px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg transition-all duration-200",
+              "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "touch-manipulation min-h-[44px] sm:min-h-[36px] active:bg-sidebar-accent/80 text-sm sm:text-xs"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <FolderKanban className="h-4 w-4 flex-shrink-0" />
+              <span className="font-medium text-xs">Projeler</span>
+            </div>
+            {projectsOpen ? (
+              <ChevronDown className="h-4 w-4 flex-shrink-0" />
+            ) : (
+              <ChevronRight className="h-4 w-4 flex-shrink-0" />
+            )}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-0.5">
+            <div className="ml-2 space-y-0.5 border-l-2 border-sidebar-border pl-2">
+              <NavLink
+                to="/projects"
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-1 rounded-lg transition-all duration-200",
+                    "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    "touch-manipulation min-h-[40px] sm:min-h-[32px] active:bg-sidebar-accent/80 text-sm sm:text-xs",
+                    isActive && "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
+                  )
+                }
+                onClick={handleNavClick}
+              >
+                <span className="text-xs">Proje Listesi</span>
+              </NavLink>
+              {loadingProjects ? (
+                <div className="px-2.5 py-1 text-xs text-muted-foreground">Yükleniyor...</div>
+              ) : projects.length === 0 ? (
+                <div className="px-2.5 py-1 text-xs text-muted-foreground">Proje yok</div>
+              ) : (
+                projects
+                  .filter((project) => project.name?.toLowerCase() !== "genel görevler" && project.name?.toLowerCase() !== "genel")
+                  .map((project) => (
+                    <NavLink
+                      key={project.id}
+                      to={`/projects/${project.id}/tasks?view=board`}
+                      className={({ isActive }) =>
+                        cn(
+                          "flex items-center gap-2 px-2.5 py-1 rounded-lg transition-all duration-200",
+                          "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                          "touch-manipulation min-h-[32px] active:bg-sidebar-accent/80",
+                          isActive && "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
+                        )
+                      }
+                      onClick={handleNavClick}
+                    >
+                      <span className="text-xs truncate">{project.name}</span>
+                    </NavLink>
+                  ))
+              )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Görevler Collapsible Menü - Projelerin altında */}
         <Collapsible open={tasksOpen} onOpenChange={setTasksOpen}>
           <CollapsibleTrigger
             className={cn(
@@ -279,7 +383,7 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
                 <span className="text-xs">Görev Havuzu</span>
               </NavLink>
               {/* Arşiv - Sadece yönetici ve ekip lideri görebilir */}
-              {(isAdmin || isTeamLeader) && (
+              {canAccessTeamManagement && (
                 <NavLink
                   to="/tasks/archive"
                   className={({ isActive }) =>
@@ -295,70 +399,6 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
                   <Archive className="h-3.5 w-3.5 flex-shrink-0" />
                   <span className="text-xs">Arşiv</span>
                 </NavLink>
-              )}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-
-        {/* Projeler Collapsible Menü */}
-        <Collapsible open={projectsOpen} onOpenChange={setProjectsOpen}>
-          <CollapsibleTrigger
-            className={cn(
-              "flex items-center justify-between w-full px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg transition-all duration-200",
-              "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              "touch-manipulation min-h-[44px] sm:min-h-[36px] active:bg-sidebar-accent/80 text-sm sm:text-xs"
-            )}
-          >
-            <div className="flex items-center gap-2">
-              <FolderKanban className="h-4 w-4 flex-shrink-0" />
-              <span className="font-medium text-xs">Projeler</span>
-            </div>
-            {projectsOpen ? (
-              <ChevronDown className="h-4 w-4 flex-shrink-0" />
-            ) : (
-              <ChevronRight className="h-4 w-4 flex-shrink-0" />
-            )}
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-0.5">
-            <div className="ml-2 space-y-0.5 border-l-2 border-sidebar-border pl-2">
-              <NavLink
-                to="/projects"
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-1 rounded-lg transition-all duration-200",
-                    "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    "touch-manipulation min-h-[40px] sm:min-h-[32px] active:bg-sidebar-accent/80 text-sm sm:text-xs",
-                    isActive && "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
-                  )
-                }
-                onClick={handleNavClick}
-              >
-                <span className="text-xs">Proje Listesi</span>
-              </NavLink>
-              {loadingProjects ? (
-                <div className="px-2.5 py-1 text-xs text-muted-foreground">Yükleniyor...</div>
-              ) : projects.length === 0 ? (
-                <div className="px-2.5 py-1 text-xs text-muted-foreground">Proje yok</div>
-              ) : (
-                projects
-                  .filter((project) => project.name?.toLowerCase() !== "genel görevler" && project.name?.toLowerCase() !== "genel")
-                  .map((project) => (
-                    <NavLink
-                      key={project.id}
-                      to={`/projects/${project.id}/tasks?view=board`}
-                      className={({ isActive }) =>
-                        cn(
-                          "flex items-center gap-2 px-2.5 py-1 rounded-lg transition-all duration-200",
-                          "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                          "touch-manipulation min-h-[32px] active:bg-sidebar-accent/80",
-                          isActive && "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
-                        )
-                      }
-                      onClick={handleNavClick}
-                    >
-                      <span className="text-xs truncate">{project.name}</span>
-                    </NavLink>
-                  ))
               )}
             </div>
           </CollapsibleContent>
@@ -413,7 +453,7 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
   return (
     <aside 
       className={cn(
-        "h-full transition-all duration-300 flex-shrink-0 overflow-hidden",
+        "h-full transition-all duration-300 flex-shrink-0 overflow-hidden relative z-50",
         isCollapsed ? "w-0" : "w-64"
       )}
     >

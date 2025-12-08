@@ -21,13 +21,6 @@ import { RawMaterialDetailModal } from "@/components/RawMaterials/RawMaterialDet
 import { DetailedValueReportModal } from "@/components/Statistics/DetailedValueReportModal";
 import { LoadingState } from "@/components/ui/loading-state";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -54,7 +47,6 @@ const RawMaterials = () => {
   const tableRef = useRef<HTMLDivElement>(null);
   const [materials, setMaterials] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [stockView, setStockView] = useState<"all" | "normal" | "low" | "out">("all");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -70,9 +62,12 @@ const RawMaterials = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
 
   useEffect(() => {
-    fetchMaterials();
-    fetchUsers();
-  }, []);
+    const initializeData = async () => {
+      await fetchUsers();
+      await fetchMaterials();
+    };
+    initializeData();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchUsers = async () => {
     try {
@@ -87,9 +82,20 @@ const RawMaterials = () => {
     setLoading(true);
     try {
       const materialsData = await getRawMaterials();
-      // Kullanıcı adlarını ekle
+      // Kullanıcı adlarını ekle - eğer users henüz yüklenmemişse tekrar yükle
+      let usersToUse = users;
+      if (usersToUse.length === 0) {
+        usersToUse = await getAllUsers();
+        setUsers(usersToUse);
+      }
       const materialsWithUserNames = materialsData.map((material) => {
-        const creator = users.find((u) => u.id === material.createdBy);
+        if (!material.createdBy) {
+          return {
+            ...material,
+            created_by_name: "-",
+          };
+        }
+        const creator = usersToUse.find((u) => u.id === material.createdBy);
         return {
           ...material,
           created_by_name: creator
@@ -112,14 +118,19 @@ const RawMaterials = () => {
     if (users.length > 0 && materials.length > 0) {
       const materialsWithUserNames = materials.map((material) => {
         const creator = users.find((u) => u.id === material.createdBy);
-        return {
-          ...material,
-          created_by_name: creator
-            ? creator.fullName || creator.displayName || creator.email || "-"
-            : "-",
-        };
+        const creatorName = creator
+          ? creator.fullName || creator.displayName || creator.email || "-"
+          : "-";
+        // Sadece değişiklik varsa güncelle
+        if (material.created_by_name !== creatorName) {
+          return {
+            ...material,
+            created_by_name: creatorName,
+          };
+        }
+        return material;
       });
-      // Sadece değişiklik varsa güncelle
+      // Değişiklik kontrolü
       const hasChanges = materialsWithUserNames.some(
         (m, i) => m.created_by_name !== materials[i]?.created_by_name
       );
@@ -127,7 +138,7 @@ const RawMaterials = () => {
         setMaterials(materialsWithUserNames);
       }
     }
-  }, [users.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [users, materials.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getCategoryLabel = (category: string) => {
     const labels: Record<string, string> = {
@@ -175,7 +186,6 @@ const RawMaterials = () => {
       if (stockView === "low" && !isLow) return false;
       if (stockView === "out" && !isOut) return false;
       if (stockView === "normal" && !isNormal) return false;
-      if (categoryFilter !== "all" && m.category !== categoryFilter) return false;
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const nameMatch = m.name?.toLowerCase().includes(query) || false;
@@ -186,7 +196,7 @@ const RawMaterials = () => {
       }
       return true;
     });
-  }, [materials, searchQuery, categoryFilter, stockView]);
+  }, [materials, searchQuery, stockView]);
 
   // İstatistikler - her zaman tüm materials üzerinden hesaplanır (filtreleme etkilemez)
   const stats = useMemo(() => {
@@ -235,7 +245,6 @@ const RawMaterials = () => {
       description: "Tüm kayıtlar",
       onClick: () => {
         setStockView("all");
-        setCategoryFilter("all");
         setSearchQuery("");
         setActiveStatCard("total-materials");
       },
@@ -320,7 +329,7 @@ const RawMaterials = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, categoryFilter, stockView]);
+  }, [searchQuery, stockView]);
 
   // İçerik sığmıyorsa sidebar'ı otomatik kapat
   useEffect(() => {
@@ -463,35 +472,13 @@ const RawMaterials = () => {
                 />
               </div>
               
-              {/* Kategori Filtresi */}
-              <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
-                <Select value={categoryFilter} onValueChange={(value) => {
-                  setCategoryFilter(value);
-                  setActiveStatCard(null);
-                }}>
-                  <SelectTrigger className="w-full h-9 sm:h-10 text-xs sm:text-sm">
-                    <SelectValue placeholder="Kategori" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tüm Kategoriler</SelectItem>
-                    <SelectItem value="chemical">Kimyasal</SelectItem>
-                    <SelectItem value="metal">Metal</SelectItem>
-                    <SelectItem value="plastic">Plastik</SelectItem>
-                    <SelectItem value="electronic">Elektronik</SelectItem>
-                    <SelectItem value="packaging">Ambalaj</SelectItem>
-                    <SelectItem value="other">Diğer</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
               {/* Filtreleri Temizle */}
-              {(searchQuery || categoryFilter !== "all" || stockView !== "all") && (
+              {(searchQuery || stockView !== "all") && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
                     setSearchQuery("");
-                    setCategoryFilter("all");
                     setStockView("all");
                     setActiveStatCard(null);
                   }}
@@ -517,12 +504,12 @@ const RawMaterials = () => {
                     <Package className="h-12 w-12 text-muted-foreground/50" />
                   </div>
                   <p className="text-muted-foreground font-medium text-base">
-                    {searchQuery || categoryFilter !== "all" || stockView !== "all"
+                    {searchQuery || stockView !== "all"
                       ? "Arama sonucu bulunamadı"
                       : "Henüz hammadde bulunmuyor"}
                   </p>
                   <p className="text-sm text-muted-foreground/70 max-w-md">
-                    {searchQuery || categoryFilter !== "all" || stockView !== "all"
+                    {searchQuery || stockView !== "all"
                       ? "Filtreleri değiştirerek tekrar deneyin"
                       : "Yeni hammadde eklemek için yukarıdaki butona tıklayın"}
                   </p>
@@ -537,12 +524,9 @@ const RawMaterials = () => {
                         <TableRow>
                           <TableHead className="w-[25%] sm:w-[20%]">Hammadde</TableHead>
                           <TableHead className="w-[15%] whitespace-nowrap hidden md:table-cell">Stok Kodu</TableHead>
-                          <TableHead className="w-[10%] whitespace-nowrap hidden lg:table-cell">Kategori</TableHead>
                           <TableHead className="w-[10%] text-right whitespace-nowrap hidden xl:table-cell">Stok Durumu</TableHead>
                           <TableHead className="w-[15%] sm:w-[12%] text-right whitespace-nowrap">Mevcut</TableHead>
-                          <TableHead className="w-[10%] text-right whitespace-nowrap hidden xl:table-cell">Min. Stok</TableHead>
-                          <TableHead className="w-[10%] whitespace-nowrap hidden 2xl:table-cell">Tedarikçi</TableHead>
-                          <TableHead className="w-[10%] whitespace-nowrap hidden 2xl:table-cell">Ekleyen</TableHead>
+                          <TableHead className="w-[15%] whitespace-nowrap hidden lg:table-cell">Ekleyen</TableHead>
                           <TableHead className="w-[10%] whitespace-nowrap hidden lg:table-cell">Durum</TableHead>
                           <TableHead className="w-[20%] sm:w-[15%] text-right whitespace-nowrap">İşlemler</TableHead>
                         </TableRow>
@@ -584,9 +568,6 @@ const RawMaterials = () => {
                                   </TooltipProvider>
                                 </div>
                                 <div className="flex items-center gap-1.5 md:hidden flex-wrap">
-                                  <Badge variant="outline" className="font-normal text-[10px] px-1 py-0">
-                                    {getCategoryLabel(material.category)}
-                                  </Badge>
                                   <Badge
                                     variant={stockStatus.variant}
                                     className={cn(
@@ -609,11 +590,6 @@ const RawMaterials = () => {
                                 {material.sku || material.code || "-"}
                               </span>
                             </TableCell>
-                            <TableCell className="hidden lg:table-cell">
-                              <Badge variant="outline" className="font-normal text-xs px-1.5 py-0.5">
-                                {getCategoryLabel(material.category)}
-                              </Badge>
-                            </TableCell>
                             <TableCell className="text-right whitespace-nowrap hidden xl:table-cell">
                               <div className="flex flex-col items-end gap-0.5">
                                 <Progress 
@@ -635,31 +611,9 @@ const RawMaterials = () => {
                                 <span className={cn(stockStatus.color, "text-xs sm:text-sm")}>
                                   {currentStock} {material.unit}
                                 </span>
-                                <span className="text-[10px] text-muted-foreground xl:hidden">
-                                  Min: {minStock}
-                                </span>
                               </div>
                             </TableCell>
-                            <TableCell className="text-right text-muted-foreground whitespace-nowrap hidden xl:table-cell text-xs">
-                              {minStock} {material.unit}
-                            </TableCell>
-                            <TableCell className="hidden 2xl:table-cell">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="text-xs truncate block" title={material.supplier || "-"}>
-                                      {material.supplier || "-"}
-                                    </span>
-                                  </TooltipTrigger>
-                                  {material.supplier && (
-                                    <TooltipContent>
-                                      <p>{material.supplier}</p>
-                                    </TooltipContent>
-                                  )}
-                                </Tooltip>
-                              </TooltipProvider>
-                            </TableCell>
-                            <TableCell className="hidden 2xl:table-cell">
+                            <TableCell className="hidden lg:table-cell">
                               <div className="flex items-center gap-1">
                                 <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                                 <TooltipProvider>
@@ -742,7 +696,6 @@ const RawMaterials = () => {
                     </TableBody>
                   </Table>
                 </div>
-              </div>
                 
                 {totalPages > 1 && (
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t">

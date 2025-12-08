@@ -334,7 +334,7 @@ export const DetailedValueReportModal = ({
         </DialogHeader>
         
         <ScrollArea className="flex-1 min-h-0">
-          <div className="p-3 sm:p-4 space-y-4">
+          <div className="w-full p-3 sm:p-4 space-y-4">
 
           {loading ? (
             <div className="flex items-center justify-center py-12">

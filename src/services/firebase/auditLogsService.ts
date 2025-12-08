@@ -27,6 +27,7 @@ export interface AuditLog {
   createdAt: Timestamp;
   userName?: string;
   userEmail?: string;
+  metadata?: any;
 }
 
 const AUDIT_LOGS_COLLECTION = "audit_logs";

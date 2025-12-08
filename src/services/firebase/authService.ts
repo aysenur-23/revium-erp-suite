@@ -630,133 +630,216 @@ let lastLoginUpdateTime: Map<string, number> = new Map();
 
 export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
   if (!auth) {
-    console.error('Firebase Auth is not initialized');
-    callback(null);
+    if (import.meta.env.DEV) {
+      console.error('Firebase Auth is not initialized');
+      console.warn('Firebase yapılandırması eksik olabilir. Lütfen .env dosyasını kontrol edin.');
+    }
+    // Hemen callback çağır (loading state'i false yapmak için)
+    // Firebase başlatılamazsa kullanıcı auth sayfasına yönlendirilecek
+    setTimeout(() => callback(null), 0);
     return () => {}; // Return empty unsubscribe function
   }
-  return onAuthStateChanged(auth, async (firebaseUser) => {
-    if (firebaseUser) {
-      // Önce direkt Firestore'dan silinmiş kullanıcı kontrolü yap
-      if (firestore) {
-        try {
-          const userDoc = await getDoc(doc(firestore, "users", firebaseUser.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            if (userData.deleted === true) {
-              // Hemen çıkış yap
+  
+  // Firestore kontrolü - opsiyonel ama önerilir
+  if (!firestore) {
+    if (import.meta.env.DEV) {
+      console.warn('Firestore is not initialized - bazı özellikler çalışmayabilir');
+    }
+    // Firestore olmadan da devam edebiliriz, sadece user profile alınamaz
+  }
+  
+  // Timeout: Eğer 3 saniye içinde auth state gelmezse callback(null) çağır
+  let timeoutFired = false;
+  const timeout = setTimeout(() => {
+    if (!timeoutFired) {
+      console.warn('Auth state timeout - callback(null) çağrılıyor');
+      timeoutFired = true;
+      callback(null);
+    }
+  }, 3000);
+  
+  const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    // Async callback'i promise olarak wrap et ve unhandled rejection'ları yakala
+    (async () => {
+      try {
+        // Timeout'u iptal et - auth state geldi
+        if (!timeoutFired) {
+          clearTimeout(timeout);
+          timeoutFired = true;
+        }
+        
+        if (firebaseUser) {
+          // Önce direkt Firestore'dan silinmiş kullanıcı kontrolü yap
+          if (firestore) {
+            try {
+              const userDoc = await getDoc(doc(firestore, "users", firebaseUser.uid));
+              if (userDoc.exists()) {
+                const userData = userDoc.data();
+                if (userData.deleted === true) {
+                  // Hemen çıkış yap
+                  try {
+                    await firebaseSignOut(auth);
+                  } catch (signOutError) {
+                    if (import.meta.env.DEV) {
+                      console.error("Çıkış yapılırken hata:", signOutError);
+                    }
+                  }
+                  callback(null);
+                  return;
+                }
+              }
+            } catch (checkError) {
+              if (import.meta.env.DEV) {
+                console.error("Kullanıcı kontrolü hatası:", checkError);
+              }
+              // Kontrol hatası olsa bile devam et, getUserProfile kontrol edecek
+            }
+          }
+          
+          try {
+            let userProfile = await getUserProfile(firebaseUser.uid);
+            // Eğer userProfile null ise (silinmiş kullanıcı), çıkış yap
+            if (!userProfile) {
               try {
                 await firebaseSignOut(auth);
               } catch (signOutError) {
-                console.error("Çıkış yapılırken hata:", signOutError);
+                if (import.meta.env.DEV) {
+                  console.error("Çıkış yapılırken hata:", signOutError);
+                }
               }
               callback(null);
               return;
             }
-          }
-        } catch (checkError) {
-          console.error("Kullanıcı kontrolü hatası:", checkError);
-          // Kontrol hatası olsa bile devam et, getUserProfile kontrol edecek
-        }
-      }
-      
-      try {
-        let userProfile = await getUserProfile(firebaseUser.uid);
-        // Eğer userProfile null ise (silinmiş kullanıcı), çıkış yap
-        if (!userProfile) {
-          try {
-            await firebaseSignOut(auth);
-          } catch (signOutError) {
-            console.error("Çıkış yapılırken hata:", signOutError);
-          }
-          callback(null);
-          return;
-        }
-        
-        // Son giriş zamanını güncelle (sadece gerektiğinde, duplicate güncellemeleri önlemek için)
-        // Not: login() ve signInWithGoogle() fonksiyonlarında zaten güncelleniyor,
-        // burada sadece sayfa yenilendiğinde veya başka bir cihazdan giriş yapıldığında güncellenmeli
-        const now = Date.now();
-        const lastUpdate = lastLoginUpdateTime.get(firebaseUser.uid) || 0;
-        const timeSinceLastUpdate = now - lastUpdate;
-        
-        // Eğer son güncellemeden 1 dakikadan fazla zaman geçtiyse veya hiç güncellenmemişse
-        // (1 dakika yeterli, çünkü login() ve signInWithGoogle() zaten güncelliyor)
-        if (timeSinceLastUpdate > 1 * 60 * 1000 || lastUpdate === 0) {
-          try {
-            // Mevcut lastLoginAt değerini kontrol et
-            const currentLastLogin = userProfile.lastLoginAt;
-            let shouldUpdate = false;
             
-            // Eğer lastLoginAt yoksa veya geçersizse mutlaka güncelle
-            if (!currentLastLogin) {
-              shouldUpdate = true;
-            } else {
-              // Eğer lastLoginAt çok eskiyse (30 dakikadan fazla) güncelle
+            // Son giriş zamanını güncelle (sadece gerektiğinde, duplicate güncellemeleri önlemek için)
+            // Not: login() ve signInWithGoogle() fonksiyonlarında zaten güncelleniyor,
+            // burada sadece sayfa yenilendiğinde veya başka bir cihazdan giriş yapıldığında güncellenmeli
+            const now = Date.now();
+            const lastUpdate = lastLoginUpdateTime.get(firebaseUser.uid) || 0;
+            const timeSinceLastUpdate = now - lastUpdate;
+            
+            // Eğer son güncellemeden 1 dakikadan fazla zaman geçtiyse veya hiç güncellenmemişse
+            // (1 dakika yeterli, çünkü login() ve signInWithGoogle() zaten güncelliyor)
+            if (timeSinceLastUpdate > 1 * 60 * 1000 || lastUpdate === 0) {
               try {
-                let loginDate: Date;
-                if (currentLastLogin instanceof Timestamp) {
-                  loginDate = currentLastLogin.toDate();
-                } else if (currentLastLogin && typeof currentLastLogin === 'object' && 'toDate' in currentLastLogin) {
-                  loginDate = (currentLastLogin as any).toDate();
-                } else if (currentLastLogin && typeof currentLastLogin === 'object' && '_seconds' in currentLastLogin) {
-                  const seconds = Number((currentLastLogin as any)._seconds);
-                  const nanoseconds = Number((currentLastLogin as any)._nanoseconds) || 0;
-                  loginDate = new Timestamp(seconds, nanoseconds).toDate();
-                } else {
-                  shouldUpdate = true; // Geçersiz format, güncelle
-                }
+                // Mevcut lastLoginAt değerini kontrol et
+                const currentLastLogin = userProfile.lastLoginAt;
+                let shouldUpdate = false;
                 
-                if (!shouldUpdate && loginDate) {
-                  const diffInMinutes = Math.floor((now - loginDate.getTime()) / (1000 * 60));
-                  // Eğer son giriş 30 dakikadan fazla önceyse güncelle
-                  if (diffInMinutes > 30) {
+                // Eğer lastLoginAt yoksa veya geçersizse mutlaka güncelle
+                if (!currentLastLogin) {
+                  shouldUpdate = true;
+                } else {
+                  // Eğer lastLoginAt çok eskiyse (30 dakikadan fazla) güncelle
+                  try {
+                    let loginDate: Date;
+                    if (currentLastLogin instanceof Timestamp) {
+                      loginDate = currentLastLogin.toDate();
+                    } else if (currentLastLogin && typeof currentLastLogin === 'object' && 'toDate' in currentLastLogin) {
+                      loginDate = (currentLastLogin as any).toDate();
+                    } else if (currentLastLogin && typeof currentLastLogin === 'object' && '_seconds' in currentLastLogin) {
+                      const seconds = Number((currentLastLogin as any)._seconds);
+                      const nanoseconds = Number((currentLastLogin as any)._nanoseconds) || 0;
+                      loginDate = new Timestamp(seconds, nanoseconds).toDate();
+                    } else {
+                      shouldUpdate = true; // Geçersiz format, güncelle
+                    }
+                    
+                    if (!shouldUpdate && loginDate) {
+                      const diffInMinutes = Math.floor((now - loginDate.getTime()) / (1000 * 60));
+                      // Eğer son giriş 30 dakikadan fazla önceyse güncelle
+                      if (diffInMinutes > 30) {
+                        shouldUpdate = true;
+                      }
+                    }
+                  } catch (parseError) {
+                    // Parse hatası varsa güncelle
                     shouldUpdate = true;
                   }
                 }
-              } catch (parseError) {
-                // Parse hatası varsa güncelle
-                shouldUpdate = true;
+                
+                if (shouldUpdate) {
+                  // serverTimestamp() kullanarak sunucu zamanını kaydet
+                  await updateDoc(doc(firestore, "users", firebaseUser.uid), {
+                    lastLoginAt: serverTimestamp(),
+                  });
+                  lastLoginUpdateTime.set(firebaseUser.uid, now);
+                  
+                  // Profili yeniden yükle (güncellenmiş lastLoginAt ile)
+                  await new Promise(resolve => setTimeout(resolve, 200)); // 200ms bekle (serverTimestamp işlemesi için)
+                  const updatedProfile = await getUserProfile(firebaseUser.uid);
+                  if (updatedProfile) {
+                    userProfile = updatedProfile;
+                  }
+                }
+              } catch (updateError) {
+                if (import.meta.env.DEV) {
+                  console.error("Son giriş zamanı güncellenirken hata (onAuthChange):", updateError);
+                }
+                // Hata olsa bile devam et
               }
             }
             
-            if (shouldUpdate) {
-              // serverTimestamp() kullanarak sunucu zamanını kaydet
-              await updateDoc(doc(firestore, "users", firebaseUser.uid), {
-                lastLoginAt: serverTimestamp(),
-              });
-              lastLoginUpdateTime.set(firebaseUser.uid, now);
-              
-              // Profili yeniden yükle (güncellenmiş lastLoginAt ile)
-              await new Promise(resolve => setTimeout(resolve, 200)); // 200ms bekle (serverTimestamp işlemesi için)
-              const updatedProfile = await getUserProfile(firebaseUser.uid);
-              if (updatedProfile) {
-                userProfile = updatedProfile;
+            callback(userProfile);
+          } catch (error: any) {
+            // Silinmiş kullanıcı ise çıkış yap
+            if (error.message?.includes("silinmiş")) {
+              try {
+                await firebaseSignOut(auth);
+              } catch (signOutError) {
+                if (import.meta.env.DEV) {
+                  console.error("Çıkış yapılırken hata:", signOutError);
+                }
               }
+              callback(null);
+            } else {
+              // Diğer hatalar için de callback(null) çağır
+              if (import.meta.env.DEV) {
+                console.error("onAuthChange callback hatası:", error);
+              }
+              callback(null);
             }
-          } catch (updateError) {
-            console.error("Son giriş zamanı güncellenirken hata (onAuthChange):", updateError);
-            // Hata olsa bile devam et
           }
-        }
-        
-        callback(userProfile);
-      } catch (error: any) {
-        // Silinmiş kullanıcı ise çıkış yap
-        if (error.message?.includes("silinmiş")) {
-          try {
-            await firebaseSignOut(auth);
-          } catch (signOutError) {
-            console.error("Çıkış yapılırken hata:", signOutError);
-          }
-          callback(null);
         } else {
           callback(null);
         }
+      } catch (error: any) {
+        // En dış seviye hata yakalama - unhandled promise rejection'ları önle
+        if (import.meta.env.DEV) {
+          console.error("onAuthChange async callback hatası:", error);
+        }
+        // Hata durumunda callback(null) çağır
+        try {
+          callback(null);
+        } catch (callbackError) {
+          // Callback çağrısı bile başarısız olursa sessizce handle et
+          if (import.meta.env.DEV) {
+            console.error("onAuthChange callback çağrısı hatası:", callbackError);
+          }
+        }
       }
-    } else {
-      callback(null);
-    }
+    })().catch((error) => {
+      // Promise rejection'ları yakala
+      if (import.meta.env.DEV) {
+        console.error("onAuthChange promise rejection:", error);
+      }
+      try {
+        callback(null);
+      } catch (callbackError) {
+        if (import.meta.env.DEV) {
+          console.error("onAuthChange callback çağrısı hatası (promise rejection):", callbackError);
+        }
+      }
+    });
   });
+  
+  // Return unsubscribe function that also clears timeout
+  return () => {
+    if (!timeoutFired) {
+      clearTimeout(timeout);
+    }
+    unsubscribe();
+  };
 };
 
 /**
@@ -1149,4 +1232,5 @@ export const deleteUser = async (userId: string, deletedBy: string): Promise<voi
     throw error;
   }
 };
+
 

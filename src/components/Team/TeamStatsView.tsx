@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -6,12 +6,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Users, CheckSquare, Clock, TrendingUp, AlertCircle, CalendarDays, Target, Award, BarChart3 } from "lucide-react";
 import { addDays, isAfter, isBefore, startOfDay, subDays } from "date-fns";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, collection, onSnapshot, Unsubscribe } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDepartments, Department } from "@/services/firebase/departmentService";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
-import { getTasks, Task } from "@/services/firebase/taskService";
+import { getTasks, Task, subscribeToTasks } from "@/services/firebase/taskService";
 import { DepartmentDetailModal } from "@/components/Admin/DepartmentDetailModal";
+import { firestore } from "@/lib/firebase";
 
 export const TeamStatsView = () => {
   const { user, isAdmin, isTeamLeader } = useAuth();
@@ -23,13 +24,7 @@ export const TeamStatsView = () => {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("all");
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchTeamStats();
-    }
-  }, [user, selectedTeamFilter]);
-
-  const fetchTeamStats = async () => {
+  const fetchTeamStats = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
     try {
@@ -133,7 +128,66 @@ export const TeamStatsView = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, isAdmin, selectedTeamFilter]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchTeamStats();
+    }
+  }, [user, selectedTeamFilter, fetchTeamStats]);
+
+  // Dinamik güncelleme için real-time listeners
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    let unsubscribeTasks: Unsubscribe | null = null;
+    let unsubscribeDepartments: Unsubscribe | null = null;
+    let unsubscribeUsers: Unsubscribe | null = null;
+    let isMounted = true;
+
+    // Tasks için real-time listener
+    unsubscribeTasks = subscribeToTasks({}, (tasks) => {
+      if (!isMounted) return;
+      setTasks(tasks);
+    });
+
+    // Departments için real-time listener
+    unsubscribeDepartments = onSnapshot(
+      collection(firestore, "departments"),
+      async () => {
+        if (!isMounted) return;
+        try {
+          const depts = await getDepartments();
+          setAllDepartments(depts);
+        } catch (error) {
+          console.error("Error fetching departments:", error);
+        }
+      },
+      (error) => {
+        console.error("Departments snapshot error:", error);
+      }
+    );
+
+    // Users için real-time listener
+    unsubscribeUsers = onSnapshot(
+      collection(firestore, "users"),
+      () => {
+        if (!isMounted) return;
+        // Users değiştiğinde sadece veriyi yenile, fetchTeamStats çağırma
+        // fetchTeamStats zaten useEffect'te çağrılacak
+      },
+      (error) => {
+        console.error("Users snapshot error:", error);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      if (unsubscribeTasks) unsubscribeTasks();
+      if (unsubscribeDepartments) unsubscribeDepartments();
+      if (unsubscribeUsers) unsubscribeUsers();
+    };
+  }, [user, selectedTeamFilter, fetchTeamStats]);
 
   // Geciken görevler
   const overdueTasks = tasks.filter(t => {

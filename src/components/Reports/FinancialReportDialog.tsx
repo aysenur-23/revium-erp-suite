@@ -374,8 +374,8 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
             Tarih aralığı seçerek detaylı mali rapor oluşturun ve PDF olarak indirin
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="flex-1 min-h-0 overflow-auto">
-          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="w-full p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Tarih Seçimi - Profesyonel Tasarım */}
           <Card className="bg-gradient-to-br from-gray-50/50 to-white border-2">
             <CardHeader className="pb-3">
@@ -641,19 +641,19 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
             </div>
           )}
 
-          <div className="flex gap-3 pt-2">
-            <Button 
-              onClick={generateReport} 
-              disabled={loading || !reportData} 
-              size="lg"
-              className="flex-1 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg"
-            >
-            <Download className="mr-2 h-4 w-4" />
-              {loading ? "PDF Oluşturuluyor..." : reportData ? "PDF İndir" : "Tarih Aralığı Seçin"}
-          </Button>
-          </div>
           </div>
         </ScrollArea>
+        <div className="flex-shrink-0 px-4 sm:px-6 pb-4 sm:pb-6 pt-4 border-t">
+          <Button 
+            onClick={generateReport} 
+            disabled={loading || !reportData} 
+            size="lg"
+            className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {loading ? "PDF Oluşturuluyor..." : reportData ? "PDF İndir" : "Tarih Aralığı Seçin"}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

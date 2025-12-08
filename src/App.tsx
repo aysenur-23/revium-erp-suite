@@ -13,27 +13,33 @@ import { Loader2 } from "lucide-react";
 import { MainLayout } from "./components/Layout/MainLayout";
 
 // Lazy load pages for better performance with error handling
+// Optimized for faster initial load
 const lazyWithRetry = (componentImport: () => Promise<any>) => {
   return lazy(async () => {
     let lastError: any;
-    const maxRetries = 2;
+    const maxRetries = 2; // Retry sayısı
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         return await componentImport();
       } catch (error) {
         lastError = error;
-        console.error(`Lazy loading error (attempt ${attempt + 1}/${maxRetries}):`, error);
+        // Sadece development'ta log göster
+        if (import.meta.env.DEV) {
+          console.error(`Lazy loading error (attempt ${attempt + 1}/${maxRetries}):`, error);
+        }
         
         // Son deneme değilse bekle ve tekrar dene
         if (attempt < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 1 saniye bekle
         }
       }
     }
     
     // Tüm denemeler başarısız oldu, hatayı fırlat
-    console.error("Lazy loading failed after all retries:", lastError);
+    if (import.meta.env.DEV) {
+      console.error("Lazy loading failed after all retries:", lastError);
+    }
     throw lastError;
   });
 };
@@ -82,6 +88,11 @@ const queryClient = new QueryClient({
       retry: 1, // Retry sayısını azalt
       staleTime: 5 * 60 * 1000, // 5 dakika stale time
       gcTime: 10 * 60 * 1000, // 10 dakika cache time (eski cacheTime yerine)
+      // İlk yüklemede daha hızlı render için
+      refetchOnMount: false, // Mount'ta refetch yapma (cache'den göster - performans için)
+      networkMode: 'online', // Sadece online'dayken fetch yap
+      // Performans için: Query'leri daha agresif cache'le
+      structuralSharing: true, // Structural sharing ile gereksiz re-render'ları önle
     },
   },
 });
@@ -125,13 +136,7 @@ const router = createBrowserRouter(
         { path: "*", element: <NotFound />, errorElement: <ErrorPage /> },
       ],
     },
-  ],
-  {
-    future: {
-      v7_startTransition: true,
-      v7_relativeSplatPath: true,
-    },
-  }
+  ]
 );
 
 const App = () => (

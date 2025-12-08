@@ -444,6 +444,31 @@ export const getTaskById = async (taskId: string): Promise<Task | null> => {
  */
 export const createTask = async (taskData: Omit<Task, "id" | "createdAt" | "updatedAt">): Promise<Task> => {
   try {
+    // Projeye görev ekleme yetkisi kontrolü
+    if (taskData.projectId) {
+      const { getProjectById } = await import("@/services/firebase/projectService");
+      const { getUserProfile } = await import("@/services/firebase/authService");
+      const { canCreateTask, canEditProject } = await import("@/utils/permissions");
+      
+      const project = await getProjectById(taskData.projectId);
+      if (project) {
+        const userProfile = await getUserProfile(taskData.createdBy);
+        if (userProfile) {
+          // Görev oluşturma yetkisi kontrolü
+          const canCreate = await canCreateTask(userProfile, []);
+          if (!canCreate) {
+            throw new Error("Görev oluşturma yetkiniz yok. Sadece yöneticiler ve ekip liderleri görev oluşturabilir.");
+          }
+          
+          // Proje sahibi kontrolü - ekip lideri veya admin değilse, sadece proje sahibi görev ekleyebilir
+          const canEdit = await canEditProject(project, userProfile);
+          if (!canEdit && project.createdBy !== taskData.createdBy) {
+            throw new Error("Bu projeye görev ekleme yetkiniz yok. Sadece proje sahibi, yöneticiler veya ekip liderleri görev ekleyebilir.");
+          }
+        }
+      }
+    }
+    
     const taskDoc: any = {
       ...taskData,
       createdAt: serverTimestamp(),
@@ -570,6 +595,33 @@ export const updateTask = async (
   try {
     // Eski veriyi al
     const oldTask = await getTaskById(taskId);
+    if (!oldTask) {
+      throw new Error("Görev bulunamadı");
+    }
+    
+    // Yetki kontrolü - sadece içerik güncellemeleri için (status, approvalStatus gibi alanlar için değil)
+    const isContentUpdate = updates.title !== undefined || 
+                            updates.description !== undefined || 
+                            updates.priority !== undefined || 
+                            updates.dueDate !== undefined || 
+                            updates.labels !== undefined ||
+                            updates.projectId !== undefined ||
+                            updates.isPrivate !== undefined;
+    
+    if (isContentUpdate && userId) {
+      const { getUserProfile } = await import("@/services/firebase/authService");
+      const { canEditTask } = await import("@/utils/permissions");
+      const userProfile = await getUserProfile(userId);
+      
+      if (!userProfile) {
+        throw new Error("Kullanıcı profili bulunamadı");
+      }
+      
+      const canEdit = await canEditTask(oldTask, userProfile);
+      if (!canEdit) {
+        throw new Error("Bu görevi düzenlemek için yetkiniz yok. Sadece yöneticiler, ekip liderleri veya görevi oluşturan kişi düzenleyebilir.");
+      }
+    }
     
     const updateData: any = {
       ...updates,
@@ -757,6 +809,22 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
     const oldTask = await getTaskById(taskId);
     if (!oldTask) {
       throw new Error("Görev bulunamadı");
+    }
+    
+    // Yetki kontrolü
+    if (userId) {
+      const { getUserProfile } = await import("@/services/firebase/authService");
+      const { canDeleteTask } = await import("@/utils/permissions");
+      const userProfile = await getUserProfile(userId);
+      
+      if (!userProfile) {
+        throw new Error("Kullanıcı profili bulunamadı");
+      }
+      
+      const canDelete = await canDeleteTask(oldTask, userProfile);
+      if (!canDelete) {
+        throw new Error("Bu görevi silmek için yetkiniz yok. Sadece yöneticiler, ekip liderleri veya görevi oluşturan kişi silebilir.");
+      }
     }
     
     // Bildirim göndermek için gerekli bilgileri al
@@ -1320,7 +1388,7 @@ export const updateChecklistItem = async (
       const { getUserProfile } = await import("./authService");
       const userProfile = await getUserProfile(userId);
       
-      if (userProfile && (isAdmin(userProfile) || isMainAdmin(userProfile))) {
+      if (userProfile && (await isAdmin(userProfile) || await isMainAdmin(userProfile))) {
         // Yöneticiler her zaman işaretleyebilir
       } else {
         // Atanan kullanıcı kontrolü
@@ -1633,9 +1701,8 @@ export const addTaskAttachment = async (
     }
 
     // Admin kontrolü - adminler her zaman dosya ekleyebilir
-    const isAdmin = userProfile.role?.includes("admin") || 
-                    userProfile.role?.includes("super_admin") || 
-                    userProfile.role?.includes("main_admin");
+    const { isAdmin: checkIsAdmin, isMainAdmin } = await import("@/utils/permissions");
+    const isAdmin = await checkIsAdmin(userProfile) || await isMainAdmin(userProfile);
 
     // Eğer admin değilse, göreve atanmış olup olmadığını veya görevi oluşturmuş olup olmadığını kontrol et
     if (!isAdmin) {
@@ -1724,9 +1791,8 @@ export const deleteTaskAttachment = async (taskId: string, attachmentId: string)
     }
 
     // Admin kontrolü - adminler her zaman dosya silebilir
-    const isAdmin = userProfile.role?.includes("admin") || 
-                    userProfile.role?.includes("super_admin") || 
-                    userProfile.role?.includes("main_admin");
+    const { isAdmin: checkIsAdmin, isMainAdmin } = await import("@/utils/permissions");
+    const isAdmin = await checkIsAdmin(userProfile) || await isMainAdmin(userProfile);
 
     // Eğer admin değilse, göreve atanmış olup olmadığını veya görevi oluşturmuş olup olmadığını kontrol et
     if (!isAdmin) {
@@ -1953,9 +2019,8 @@ export const requestTaskApproval = async (taskId: string, requestedBy: string): 
     }
 
     // Admin kontrolü - adminler her zaman onaya gönderebilir
-    const isAdmin = requesterProfile.role?.includes("admin") || 
-                    requesterProfile.role?.includes("super_admin") || 
-                    requesterProfile.role?.includes("main_admin");
+    const { isAdmin: checkIsAdmin, isMainAdmin } = await import("@/utils/permissions");
+    const isAdmin = await checkIsAdmin(requesterProfile) || await isMainAdmin(requesterProfile);
     
     // Eğer admin değilse, göreve atanmış olup olmadığını kontrol et
     if (!isAdmin) {
@@ -2043,14 +2108,18 @@ export const approveTask = async (taskId: string, approvedBy: string): Promise<v
       throw new Error("Kullanıcı profili bulunamadı");
     }
 
-    const isAdmin = approverProfile.role?.includes("admin") || 
-                    approverProfile.role?.includes("super_admin") || 
-                    approverProfile.role?.includes("main_admin");
+    const { isAdmin: checkIsAdmin, isMainAdmin } = await import("@/utils/permissions");
+    const isAdmin = await checkIsAdmin(approverProfile) || await isMainAdmin(approverProfile);
     const isTeamLeader = approverProfile.role?.includes("team_leader");
     const isCreator = task.createdBy === approvedBy;
 
     // Yönetici veya görevi veren ekip lideri onaylayabilir
-    if (!isAdmin && !(isTeamLeader && isCreator)) {
+    // Ekip lideri kontrolü için role_permissions sisteminden kontrol et
+    const { canPerformSubPermission } = await import("@/utils/permissions");
+    const canApprove = await canPerformSubPermission(approverProfile, "tasks", "canApprove");
+    const hasTeamLeaderPermission = isTeamLeader && (canApprove || isCreator);
+
+    if (!isAdmin && !hasTeamLeaderPermission) {
       throw new Error("Bu görevi onaylamak için yetkiniz yok. Sadece yöneticiler veya görevi veren ekip liderleri onaylayabilir.");
     }
 
@@ -2076,31 +2145,59 @@ export const approveTask = async (taskId: string, approvedBy: string): Promise<v
     // Audit log for approval
     await logAudit("UPDATE", "tasks", taskId, approvedBy, { approvalStatus: "pending", status: oldStatus }, { approvalStatus: "approved", status: "completed" });
 
-    // Onay isteyene bildirim gönder - sadece duplicate kontrolü ile
+    // Onay isteyene ve atanan kişilere bildirim gönder
     try {
       const updatedTask = await getTaskById(taskId);
       const approverProfile = await getUserProfile(approvedBy);
+      const approverName = approverProfile?.fullName || approverProfile?.email || "Yönetici";
       
+      // Atanan kişileri bul
+      const assignments = await getTaskAssignments(taskId);
+      const assignedUserIds = assignments
+        .filter(a => a.status === "accepted") // Sadece kabul edilen atamalar
+        .map(a => a.assignedTo);
+      
+      // Bildirim gönderilecek kullanıcıları topla
+      const notificationUserIds = new Set<string>();
+      
+      // Onay isteyen kişiye bildirim gönder
       if (updatedTask && updatedTask.approvalRequestedBy) {
-        // Aynı türde ve aynı görev için okunmamış bildirim var mı kontrol et
-        const { getNotifications } = await import("./notificationService");
-        const existingNotifications = await getNotifications(updatedTask.approvalRequestedBy, { unreadOnly: true });
-        const duplicateExists = existingNotifications.some(
-          n => n.type === "task_approval" && 
-               n.relatedId === taskId && 
-               n.metadata?.action === "approved"
-        );
+        notificationUserIds.add(updatedTask.approvalRequestedBy);
+      }
+      
+      // Atanan kişilere bildirim gönder
+      assignedUserIds.forEach(userId => {
+        if (userId !== updatedTask?.approvalRequestedBy) {
+          notificationUserIds.add(userId);
+        }
+      });
+      
+      // Her kullanıcıya bildirim gönder
+      const { getNotifications } = await import("./notificationService");
+      
+      for (const userId of notificationUserIds) {
+        try {
+          // Duplicate kontrolü
+          const existingNotifications = await getNotifications(userId, { unreadOnly: true });
+          const duplicateExists = existingNotifications.some(
+            n => n.type === "task_approval" && 
+                 n.relatedId === taskId && 
+                 n.metadata?.action === "approved"
+          );
 
-        if (!duplicateExists) {
-          await createNotification({
-            userId: updatedTask.approvalRequestedBy,
-            type: "task_approval",
-            title: "Görev onaylandı",
-            message: `${approverProfile?.fullName || approverProfile?.email || "Yönetici"} "${updatedTask.title}" görevini onayladı ve tamamlandı olarak işaretlendi.`,
-            read: false,
-            relatedId: taskId,
-            metadata: { action: "approved" },
-          });
+          if (!duplicateExists) {
+            await createNotification({
+              userId: userId,
+              type: "task_approval",
+              title: "Görev onaylandı",
+              message: `${approverName} "${updatedTask?.title || "görev"}" görevini onayladı ve tamamlandı olarak işaretlendi.`,
+              read: false,
+              relatedId: taskId,
+              metadata: { action: "approved" },
+            });
+          }
+        } catch (userNotifError) {
+          console.error(`Error sending notification to user ${userId}:`, userNotifError);
         }
       }
     } catch (notifError) {

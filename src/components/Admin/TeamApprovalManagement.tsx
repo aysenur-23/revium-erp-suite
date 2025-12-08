@@ -12,6 +12,8 @@ import {
   rejectTeamRequest,
   TeamApprovalRequest,
 } from "@/services/firebase/teamApprovalService";
+import { collection, onSnapshot, Unsubscribe } from "firebase/firestore";
+import { firestore } from "@/lib/firebase";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +37,31 @@ export const TeamApprovalManagement = () => {
 
   useEffect(() => {
     fetchRequests();
-  }, [user]);
+    
+    // Dinamik güncelleme için users collection'ını dinle
+    if (!user?.id) return;
+    
+    let unsubscribe: Unsubscribe | null = null;
+    let isMounted = true;
+    
+    // Users collection değiştiğinde talepleri yeniden yükle
+    unsubscribe = onSnapshot(
+      collection(firestore, "users"),
+      () => {
+        if (isMounted) {
+          fetchRequests();
+        }
+      },
+      (error) => {
+        console.error("Users snapshot error:", error);
+      }
+    );
+    
+    return () => {
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+    };
+  }, [user, isAdmin]);
 
   const fetchRequests = async () => {
     if (!user?.id) return;

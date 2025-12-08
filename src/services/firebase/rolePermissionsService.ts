@@ -12,6 +12,8 @@ import {
   Timestamp,
   setDoc,
   writeBatch,
+  onSnapshot,
+  Unsubscribe,
 } from "firebase/firestore";
 
 export interface SubPermissions {
@@ -41,6 +43,30 @@ export interface RoleDefinition {
 
 const ROLE_PERMISSIONS_COLLECTION = "role_permissions";
 const ROLES_COLLECTION = "roles";
+
+// Permission cache for real-time updates
+const permissionCache = new Map<string, RolePermission | null>();
+const permissionListeners = new Map<string, Unsubscribe>();
+const cacheCallbacks = new Set<() => void>();
+
+/**
+ * Clear permission cache
+ */
+export const clearPermissionCache = (): void => {
+  permissionCache.clear();
+  // Notify all callbacks
+  cacheCallbacks.forEach(callback => callback());
+};
+
+/**
+ * Subscribe to permission cache changes
+ */
+export const onPermissionCacheChange = (callback: () => void): (() => void) => {
+  cacheCallbacks.add(callback);
+  return () => {
+    cacheCallbacks.delete(callback);
+  };
+};
 
 const RESOURCES = [
   "tasks",
@@ -591,11 +617,16 @@ export const getRolePermissions = async (): Promise<RolePermission[]> => {
 
 /**
  * Get permission for a specific role and resource
+ * Uses cache and real-time listener for dynamic updates
+ * IMPORTANT: Always returns the latest value from cache (updated by real-time listener)
  */
 export const getPermission = async (
   role: string,
-  resource: string
+  resource: string,
+  useCache: boolean = true
 ): Promise<RolePermission | null> => {
+  const cacheKey = `${role}:${resource}`;
+  
   try {
     const permissionsRef = collection(db, ROLE_PERMISSIONS_COLLECTION);
     const q = query(
@@ -603,8 +634,49 @@ export const getPermission = async (
       where("role", "==", role),
       where("resource", "==", resource)
     );
-    const snapshot = await getDocs(q);
     
+    // Set up real-time listener if not already set
+    if (!permissionListeners.has(cacheKey)) {
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        if (snapshot.empty) {
+          permissionCache.set(cacheKey, null);
+        } else {
+          const docSnap = snapshot.docs[0];
+          const permission = {
+            id: docSnap.id,
+            ...docSnap.data(),
+          } as RolePermission;
+          permissionCache.set(cacheKey, permission);
+        }
+        // Notify all callbacks about cache change
+        cacheCallbacks.forEach(callback => callback());
+      }, (error) => {
+        console.error(`Error listening to permission ${cacheKey}:`, error);
+      });
+      
+      permissionListeners.set(cacheKey, unsubscribe);
+      
+      // Get initial value and cache it
+      const initialSnapshot = await getDocs(q);
+      if (initialSnapshot.empty) {
+        permissionCache.set(cacheKey, null);
+      } else {
+        const docSnap = initialSnapshot.docs[0];
+        const permission = {
+          id: docSnap.id,
+          ...docSnap.data(),
+        } as RolePermission;
+        permissionCache.set(cacheKey, permission);
+      }
+    }
+    
+    // Return cached value (always up-to-date thanks to real-time listener)
+    if (useCache && permissionCache.has(cacheKey)) {
+      return permissionCache.get(cacheKey) || null;
+    }
+    
+    // Fallback: Get value directly if cache is disabled
+    const snapshot = await getDocs(q);
     if (snapshot.empty) {
       return null;
     }
@@ -618,6 +690,16 @@ export const getPermission = async (
     console.error("Error getting permission:", error);
     throw new Error(error.message || "Yetki yüklenemedi");
   }
+};
+
+/**
+ * Cleanup all permission listeners
+ */
+export const cleanupPermissionListeners = (): void => {
+  permissionListeners.forEach(unsubscribe => unsubscribe());
+  permissionListeners.clear();
+  permissionCache.clear();
+  cacheCallbacks.clear();
 };
 
 /**
@@ -716,6 +798,15 @@ export const updatePermission = async (
   try {
     const permissionRef = doc(db, ROLE_PERMISSIONS_COLLECTION, permissionId);
     
+    // Get current permission to find cache key
+    const currentPermission = await getDoc(permissionRef);
+    if (currentPermission.exists()) {
+      const data = currentPermission.data() as RolePermission;
+      const cacheKey = `${data.role}:${data.resource}`;
+      // Clear cache for this permission
+      permissionCache.delete(cacheKey);
+    }
+    
     // undefined değerleri kaldır (Firestore undefined kabul etmez)
     const cleanUpdates = Object.fromEntries(
       Object.entries(updates).filter(([_, value]) => value !== undefined)
@@ -725,6 +816,8 @@ export const updatePermission = async (
       ...cleanUpdates,
       updatedAt: Timestamp.now(),
     });
+    
+    // Cache will be updated by real-time listener automatically
   } catch (error: any) {
     console.error("Error updating permission:", error);
     throw new Error(error.message || "Yetki güncellenemedi");

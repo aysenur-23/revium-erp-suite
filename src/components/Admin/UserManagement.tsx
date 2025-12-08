@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { Shield, User as UserIcon, Trash2, AlertTriangle } from "lucide-react";
 import { getAllUsers, updateFirebaseUserProfile, UserProfile, deleteUser } from "@/services/firebase/authService";
 import { getRoles, RoleDefinition } from "@/services/firebase/rolePermissionsService";
+import { getDepartments, updateDepartment } from "@/services/firebase/departmentService";
 import { Timestamp } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatPhoneForDisplay } from "@/utils/phoneNormalizer";
@@ -183,6 +184,54 @@ export const UserManagement = () => {
       await updateFirebaseUserProfile(selectedUser.id, {
         role: updatedRoles,
       });
+
+      // Eğer team_leader rolü atanıyorsa, kullanıcıyı bir departmanın manager'ı olarak ata
+      if (newRole === "team_leader") {
+        try {
+          const departments = await getDepartments();
+          // Kullanıcının zaten bir departmanın manager'ı olup olmadığını kontrol et
+          const isAlreadyManager = departments.some(d => d.managerId === selectedUser.id);
+          
+          if (!isAlreadyManager) {
+            // Manager'ı olmayan ilk departmanı bul
+            const departmentWithoutManager = departments.find(d => !d.managerId);
+            
+            if (departmentWithoutManager) {
+              // Kullanıcıyı bu departmanın manager'ı olarak ata
+              await updateDepartment(departmentWithoutManager.id, {
+                managerId: selectedUser.id,
+              }, user?.id || null);
+              toast.success(`${selectedUser.full_name || selectedUser.email} kullanıcısı "${departmentWithoutManager.name}" departmanının lideri olarak atandı`);
+            } else {
+              // Hiç boş departman yoksa uyarı ver
+              toast.warning("Kullanıcıya team_leader rolü atandı, ancak boş departman bulunamadı. Lütfen departman yönetiminden manuel olarak atayın.");
+            }
+          }
+        } catch (deptError: any) {
+          console.error("Departman atama hatası:", deptError);
+          // Departman atama hatası rol güncellemesini engellemez, sadece uyarı ver
+          toast.warning("Rol güncellendi, ancak departman ataması yapılamadı. Lütfen departman yönetiminden manuel olarak atayın.");
+        }
+      } else if (oldRole === "team_leader" && newRole !== "team_leader") {
+        // Eğer team_leader rolü kaldırılıyorsa, kullanıcıyı tüm departmanlardan manager olarak kaldır
+        try {
+          const departments = await getDepartments();
+          const managedDepartments = departments.filter(d => d.managerId === selectedUser.id);
+          
+          for (const dept of managedDepartments) {
+            await updateDepartment(dept.id, {
+              managerId: null,
+            }, user?.id || null);
+          }
+          
+          if (managedDepartments.length > 0) {
+            toast.success(`${selectedUser.full_name || selectedUser.email} kullanıcısı ${managedDepartments.length} departmandan manager olarak kaldırıldı`);
+          }
+        } catch (deptError: any) {
+          console.error("Departman manager kaldırma hatası:", deptError);
+          // Hata durumunda sessizce devam et
+        }
+      }
 
       // Rol değişikliği bildirimi gönder
       try {

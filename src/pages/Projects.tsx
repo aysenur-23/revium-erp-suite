@@ -10,8 +10,9 @@ import { getProjects, createProject, updateProject, deleteProject, Project } fro
 import { useAuth } from "@/contexts/AuthContext";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { canCreateProject } from "@/utils/permissions";
+import { canCreateProject, canCreateTask, canDeleteProject } from "@/utils/permissions";
 import { getDepartments } from "@/services/firebase/departmentService";
+import { onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 import { UserProfile } from "@/services/firebase/authService";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
@@ -33,7 +34,7 @@ import { Lock } from "lucide-react";
 import { LoadingState } from "@/components/ui/loading-state";
 
 const Projects = () => {
-  const { user, isSuperAdmin, isAdmin } = useAuth();
+  const { user, isSuperAdmin, isAdmin, isTeamLeader } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -52,34 +53,45 @@ const Projects = () => {
   });
   const [activeProjectForm, setActiveProjectForm] = useState<string | null>(null);
 
+  const checkCreatePermission = async () => {
+    if (!user) {
+      setCanCreate(false);
+      return;
+    }
+    try {
+      const departments = await getDepartments();
+      const userProfile: UserProfile = {
+        id: user.id,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        fullName: user.fullName,
+        displayName: user.fullName,
+        phone: user.phone,
+        dateOfBirth: user.dateOfBirth,
+        role: user.roles,
+        createdAt: null,
+        updatedAt: null,
+      };
+      const hasPermission = await canCreateProject(userProfile, departments);
+      setCanCreate(hasPermission);
+    } catch (error) {
+      console.error("Error checking create permission:", error);
+      setCanCreate(false);
+    }
+  };
+
   useEffect(() => {
-    const checkCreatePermission = async () => {
-      if (!user) {
-        setCanCreate(false);
-        return;
-      }
-      try {
-        const departments = await getDepartments();
-        const userProfile: UserProfile = {
-          id: user.id,
-          email: user.email,
-          emailVerified: user.emailVerified,
-          fullName: user.fullName,
-          displayName: user.fullName,
-          phone: user.phone,
-          dateOfBirth: user.dateOfBirth,
-          role: user.roles,
-          createdAt: null,
-          updatedAt: null,
-        };
-        const hasPermission = await canCreateProject(userProfile, departments);
-        setCanCreate(hasPermission);
-      } catch (error) {
-        console.error("Error checking create permission:", error);
-        setCanCreate(false);
-      }
-    };
     checkCreatePermission();
+  }, [user]);
+
+  // Listen to permission changes in real-time
+  useEffect(() => {
+    if (!user) return;
+    const unsubscribe = onPermissionCacheChange(() => {
+      // Re-check permissions when they change
+      checkCreatePermission();
+    });
+    return () => unsubscribe();
   }, [user]);
 
   useEffect(() => {
@@ -91,14 +103,22 @@ const Projects = () => {
       setLoading(true);
       const projectsData = await getProjects();
       
-      // Gizli projeleri filtrele: Sadece üst yönetici, oluşturan ve projede görevi olanlar görebilir
+      // Gizli projeleri filtrele: Sadece üst yönetici, yönetici, oluşturan ve projede görevi olanlar görebilir
+      // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir
       const filteredProjects = await Promise.all(
         projectsData.map(async (project) => {
           if (!project.isPrivate) return project; // Gizli olmayan projeler herkes görebilir
           if (isSuperAdmin) return project; // Üst yöneticiler tüm projeleri görebilir
+          if (isAdmin) return project; // Yöneticiler tüm projeleri görebilir
           if (user?.id && project.createdBy === user.id) return project; // Oluşturan görebilir
           
-          // Projede görevi olan kullanıcılar görebilir
+          // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
+          const isTeamLeader = user?.roles?.includes("team_leader");
+          if (isTeamLeader) {
+            return null; // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
+          }
+          
+          // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
           if (user?.id) {
             try {
               const { getTasks } = await import("@/services/firebase/taskService");
@@ -401,7 +421,12 @@ const Projects = () => {
                   {searchTerm ? "Arama sonucu bulunamadı" : "Henüz proje yok"}
                 </div>
               ) : (
-                filteredProjects.map((project) => (
+                filteredProjects.map((project) => {
+                  // Silme yetkisi kontrolü: Ekip lideri ve yöneticiler tüm projeleri silebilir
+                  // Gizli projelerde ekip lideri sadece kendi oluşturduklarını görebilir (zaten filtreleme yapıldı)
+                  const canDelete = isSuperAdmin || isAdmin || isTeamLeader || project.createdBy === user?.id;
+                  
+                  return (
                   <div
                     key={project.id}
                     className="flex flex-col gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
@@ -433,15 +458,36 @@ const Projects = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
-                            if (!canCreate && !isAdmin) {
-                              toast.error("Görev ekleme yetkiniz yok. Sadece yönetici veya ekip lideri ekleyebilir.");
-                              return;
+                            // Double-check permission before opening form
+                            if (!user) return;
+                            try {
+                              const departments = await getDepartments();
+                              const userProfile: UserProfile = {
+                                id: user.id,
+                                email: user.email,
+                                emailVerified: user.emailVerified,
+                                fullName: user.fullName,
+                                displayName: user.fullName,
+                                phone: user.phone,
+                                dateOfBirth: user.dateOfBirth,
+                                role: user.roles,
+                                createdAt: null,
+                                updatedAt: null,
+                              };
+                              const hasTaskPermission = await canCreateTask(userProfile, departments);
+                              if (!hasTaskPermission && !isAdmin) {
+                                toast.error("Görev ekleme yetkiniz yok");
+                                return;
+                              }
+                              setActiveProjectForm((prev) =>
+                                prev === project.id ? null : project.id
+                              );
+                            } catch (error) {
+                              console.error("Permission check error:", error);
+                              toast.error("Yetki kontrolü yapılamadı");
                             }
-                            setActiveProjectForm((prev) =>
-                              prev === project.id ? null : project.id
-                            );
                           }}
                           disabled={!canCreate && !isAdmin}
                         >
@@ -467,16 +513,18 @@ const Projects = () => {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openDeleteDialog(project);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {canDelete && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDeleteDialog(project);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                     {activeProjectForm === project.id && (
@@ -513,7 +561,8 @@ const Projects = () => {
                       </Dialog>
                     )}
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </CardContent>

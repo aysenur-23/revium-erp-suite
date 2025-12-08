@@ -47,17 +47,18 @@ service cloud.firestore {
       }
 
       // Update: 
-      // 1. Oluşturan ve Admin tam yetkili
+      // 1. Oluşturan, Admin ve Team Leader tam yetkili
       // 2. Diğer kullanıcılar sadece durum, onay ve atama ile ilgili alanları güncelleyebilir
       allow update: if request.auth != null && (
         resource.data.createdBy == request.auth.uid || 
         isAdmin() ||
+        isTeamLeader() ||
         isStatusOrApprovalUpdate()
       );
       
-      // Silme için: sadece oluşturan veya admin
+      // Silme için: oluşturan, admin veya ekip lideri
       allow delete: if request.auth != null &&
-        (resource.data.createdBy == request.auth.uid || isAdmin());
+        (resource.data.createdBy == request.auth.uid || isAdmin() || isTeamLeader());
       
       match /assignments/{assignmentId} {
         allow read: if request.auth != null;
@@ -113,6 +114,7 @@ service cloud.firestore {
       allow update: if request.auth != null && (
         resource.data.createdBy == request.auth.uid || 
         isAdmin() ||
+        isTeamLeader() ||
         hasRole(request.auth.uid, ['manager']) ||
         isStatusOrApprovalUpdate()
       );
@@ -128,7 +130,8 @@ service cloud.firestore {
         allow create: if request.auth != null;
         allow update, delete: if request.auth != null && (
           get(/databases/$(database)/documents/orders/$(orderId)).data.createdBy == request.auth.uid || 
-          isAdmin()
+          isAdmin() ||
+          isTeamLeader()
         );
       }
     }
@@ -137,7 +140,7 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
       allow update, delete: if request.auth != null &&
-        (resource.data.createdBy == request.auth.uid || isAdmin());
+        (resource.data.createdBy == request.auth.uid || isAdmin() || isTeamLeader());
     }
     
     // Products collection - Herkes görebilir, yazma yetkileri sınırlı
@@ -298,7 +301,8 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
       allow update, delete: if request.auth != null && (
         resource.data.createdBy == request.auth.uid || 
-        isAdmin()
+        isAdmin() ||
+        isTeamLeader()
       );
     }
     

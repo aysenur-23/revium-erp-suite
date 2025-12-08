@@ -7,11 +7,14 @@ import { toast } from "sonner";
 import { Check, X, ListTodo, Loader2, Clock, CheckCircle2, XCircle, Eye, AlertCircle, Users, CalendarDays, Folder, ChevronDown, ChevronUp, FileText, CircleDot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { getTasks, approveTask, rejectTaskApproval, Task, getTaskAssignments } from "@/services/firebase/taskService";
+import { getTasks, approveTask, rejectTaskApproval, Task, getTaskAssignments, getTaskById, subscribeToTasks } from "@/services/firebase/taskService";
 import { getUserProfile, getAllUsers } from "@/services/firebase/authService";
 import { getDepartments } from "@/services/firebase/departmentService";
-import { getProjects, Project } from "@/services/firebase/projectService";
+import { getProjects, Project, getProjectById } from "@/services/firebase/projectService";
 import { getAuditLogs, AuditLog } from "@/services/firebase/auditLogsService";
+import { getCustomerById } from "@/services/firebase/customerService";
+import { getOrderById } from "@/services/firebase/orderService";
+import { getProductById } from "@/services/firebase/productService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -110,9 +113,44 @@ export const PendingTaskApprovals = () => {
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [userLogs, setUserLogs] = useState<Record<string, AuditLog[]>>({});
   const [expandedTaskLogs, setExpandedTaskLogs] = useState<Set<string>>(new Set());
+  const [entityNames, setEntityNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchPendingTasks();
+  }, [user, isAdmin]);
+
+  // Dinamik güncelleme için real-time listener
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    let unsubscribeTasks: (() => void) | null = null;
+    let isMounted = true;
+
+    // Tasks için real-time listener - tüm görevleri dinle
+    unsubscribeTasks = subscribeToTasks({}, (tasks) => {
+      if (!isMounted) return;
+      // Sadece onay durumlarındaki görevleri filtrele ve güncelle
+      const pending = tasks.filter(t => t.approvalStatus === "pending");
+      const approved = tasks.filter(t => t.approvalStatus === "approved");
+      const rejected = tasks.filter(t => t.approvalStatus === "rejected");
+      
+      // Ekip lideri için filtreleme yap
+      if (!isAdmin) {
+        // fetchPendingTasks içindeki filtreleme mantığını burada da uygula
+        // Şimdilik basit bir yaklaşım: fetchPendingTasks'ı çağır
+        fetchPendingTasks();
+      } else {
+        // Admin için direkt güncelle
+        setPendingTasks(pending);
+        setApprovedTasks(approved);
+        setRejectedTasks(rejected);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      if (unsubscribeTasks) unsubscribeTasks();
+    };
   }, [user, isAdmin]);
 
   const fetchPendingTasks = async () => {
@@ -287,6 +325,154 @@ export const PendingTaskApprovals = () => {
       );
       
       setUserLogs(logsMap);
+
+      // Entity isimlerini topla ve çek
+      const entityMap: Record<string, Set<string>> = {
+        tasks: new Set(),
+        projects: new Set(),
+        customers: new Set(),
+        orders: new Set(),
+        products: new Set(),
+      };
+      
+      const userIds = new Set<string>(); // Atanan kullanıcılar için
+      
+      Object.values(logsMap).flat().forEach(log => {
+        if (log.recordId && entityMap[log.tableName]) {
+          entityMap[log.tableName].add(log.recordId);
+        }
+        // task_assignments için taskId ve assignedTo'yu al
+        if (log.tableName === "task_assignments") {
+          if (log.newData?.taskId) {
+            entityMap.tasks.add(log.newData.taskId);
+          }
+          if (log.newData?.assignedTo) {
+            userIds.add(log.newData.assignedTo);
+          }
+        }
+      });
+      
+      // Entity adlarını çek
+      const names: Record<string, string> = {};
+      
+      // Görevler - proje bilgisi ile birlikte
+      if (entityMap.tasks.size > 0) {
+        const projectIds = new Set<string>();
+        await Promise.all(
+          Array.from(entityMap.tasks).map(async (id) => {
+            try {
+              const task = await getTaskById(id);
+              if (task?.title) {
+                names[`tasks_${id}`] = task.title;
+                // Proje ID'sini de kaydet - taskId -> projectId mapping
+                if (task.projectId) {
+                  projectIds.add(task.projectId);
+                  names[`task_project_${id}`] = task.projectId; // Mapping için
+                }
+              }
+            } catch (error) {
+              // Sessizce devam et
+            }
+          })
+        );
+        // Görevlerin projelerini de çek
+        if (projectIds.size > 0) {
+          await Promise.all(
+            Array.from(projectIds).map(async (projectId) => {
+              try {
+                const project = await getProjectById(projectId);
+                if (project?.name) {
+                  names[`projects_${projectId}`] = project.name;
+                }
+              } catch (error) {
+                // Sessizce devam et
+              }
+            })
+          );
+        }
+      }
+      
+      // Projeler
+      if (entityMap.projects.size > 0) {
+        await Promise.all(
+          Array.from(entityMap.projects).map(async (id) => {
+            try {
+              const project = await getProjectById(id);
+              if (project?.name) {
+                names[`projects_${id}`] = project.name;
+              }
+            } catch (error) {
+              // Sessizce devam et
+            }
+          })
+        );
+      }
+      
+      // Müşteriler
+      if (entityMap.customers.size > 0) {
+        await Promise.all(
+          Array.from(entityMap.customers).map(async (id) => {
+            try {
+              const customer = await getCustomerById(id);
+              if (customer?.name) {
+                names[`customers_${id}`] = customer.name;
+              }
+            } catch (error) {
+              // Sessizce devam et
+            }
+          })
+        );
+      }
+      
+      // Siparişler
+      if (entityMap.orders.size > 0) {
+        await Promise.all(
+          Array.from(entityMap.orders).map(async (id) => {
+            try {
+              const order = await getOrderById(id);
+              if (order?.orderNumber) {
+                names[`orders_${id}`] = `Sipariş #${order.orderNumber}`;
+              } else if (order?.customerName) {
+                names[`orders_${id}`] = order.customerName;
+              }
+            } catch (error) {
+              // Sessizce devam et
+            }
+          })
+        );
+      }
+      
+      // Ürünler
+      if (entityMap.products.size > 0) {
+        await Promise.all(
+          Array.from(entityMap.products).map(async (id) => {
+            try {
+              const product = await getProductById(id);
+              if (product?.name) {
+                names[`products_${id}`] = product.name;
+              }
+            } catch (error) {
+              // Sessizce devam et
+            }
+          })
+        );
+      }
+      
+      // Kullanıcı adlarını çek (task_assignments için)
+      if (userIds.size > 0) {
+        try {
+          const allUsers = await getAllUsers();
+          allUsers.forEach(user => {
+            if (userIds.has(user.id)) {
+              names[`users_${user.id}`] = user.fullName || user.displayName || user.email || "Bilinmeyen";
+            }
+          });
+        } catch (error) {
+          // Sessizce devam et
+        }
+      }
+      
+      setEntityNames(names);
 
     } catch (error: any) {
       console.error("Fetch tasks error:", error);
@@ -524,22 +710,34 @@ export const PendingTaskApprovals = () => {
               </div>
             )}
             {(approverName || rejecterName || task.rejectionReason) && (
-              <div className="flex flex-col gap-1 mt-4 text-sm">
+              <div className="flex flex-col gap-2 mt-4 p-3 bg-muted/30 rounded-lg border border-border">
                 {approverName && approvalDate && (
-                  <div className="flex items-center gap-2 text-green-700">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>Onaylayan: <span className="font-medium">{approverName}</span> - {approvalDate}</span>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <span className="text-sm font-semibold text-emerald-700">Onaylayan Kişi:</span>
+                      <div className="flex flex-col gap-0.5 mt-0.5">
+                        <span className="text-sm font-medium text-foreground">{approverName}</span>
+                        <span className="text-xs text-muted-foreground">{approvalDate}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
                 {rejecterName && rejectionDate && (
-                  <div className="flex items-center gap-2 text-red-700">
-                    <XCircle className="h-3.5 w-3.5" />
-                    <span>Reddeden: <span className="font-medium">{rejecterName}</span> - {rejectionDate}</span>
+                  <div className="flex items-start gap-2">
+                    <XCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <span className="text-sm font-semibold text-red-700">Reddeden Kişi:</span>
+                      <div className="flex flex-col gap-0.5 mt-0.5">
+                        <span className="text-sm font-medium text-foreground">{rejecterName}</span>
+                        <span className="text-xs text-muted-foreground">{rejectionDate}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
                 {task.rejectionReason && (
-                  <div className="text-red-600 italic mt-1">
-                    Red Nedeni: {task.rejectionReason}
+                  <div className="text-sm text-red-700 font-medium mt-1 pt-2 border-t border-border">
+                    <span className="font-semibold">Red Nedeni:</span> {task.rejectionReason}
                   </div>
                 )}
               </div>
@@ -632,22 +830,103 @@ export const PendingTaskApprovals = () => {
                               <div key={log.id} className="flex items-start gap-2 text-xs">
                                 <div className={`w-2 h-2 rounded-full ${actionMeta.color} mt-1.5 flex-shrink-0`} />
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-medium">{actionMeta.label}</span>
-                                    {log.tableName && (
-                                      <span className="text-muted-foreground">
-                                        {log.tableName === "tasks" ? "Görev" : 
-                                         log.tableName === "profiles" ? "Profil" :
-                                         log.tableName === "departments" ? "Departman" :
-                                         log.tableName}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {log.tableName && log.recordId && (
-                                    <p className="text-muted-foreground mt-0.5 line-clamp-1">
-                                      {log.tableName === "tasks" ? "Görev" : log.tableName === "profiles" ? "Profil" : log.tableName} - {log.recordId.substring(0, 8)}
-                                    </p>
-                                  )}
+                                  <p className="font-medium">
+                                    {(() => {
+                                      const userName = log.userName || log.userEmail || "Sistem";
+                                      const actionVerb = log.action === "CREATE" ? "oluşturdu" : 
+                                                        log.action === "UPDATE" ? "güncelledi" : 
+                                                        log.action === "DELETE" ? "sildi" : "yaptı";
+                                      
+                                      // Giriş logları
+                                      if (log.tableName === "user_logins") {
+                                        return `${userName} Giriş yaptı`;
+                                      }
+                                      
+                                      // Görev atama logları - özel format
+                                      if (log.tableName === "task_assignments" && log.action === "CREATE") {
+                                        const taskId = log.newData?.taskId;
+                                        const assignedToId = log.newData?.assignedTo;
+                                        const taskName = taskId && entityNames[`tasks_${taskId}`] 
+                                          ? entityNames[`tasks_${taskId}`] 
+                                          : (log.newData?.taskTitle || "görev");
+                                        const assignedUserName = assignedToId && entityNames[`users_${assignedToId}`]
+                                          ? entityNames[`users_${assignedToId}`]
+                                          : "bir kişiyi";
+                                        
+                                        // Proje bilgisini kontrol et - taskId'den projectId'yi bul
+                                        if (taskId && entityNames[`task_project_${taskId}`]) {
+                                          const projectId = entityNames[`task_project_${taskId}`];
+                                          if (entityNames[`projects_${projectId}`]) {
+                                            const projectName = entityNames[`projects_${projectId}`];
+                                            return `${userName} "${projectName}" projesindeki "${taskName}" görevini oluşturdu ve ${assignedUserName} kişisini göreve atadı`;
+                                          }
+                                        }
+                                        
+                                        return `${userName} "${taskName}" görevini oluşturdu ve ${assignedUserName} kişisini göreve atadı`;
+                                      }
+                                      
+                                      // Görev logları - proje bilgisi ile
+                                      if (log.tableName === "tasks" && log.recordId) {
+                                        const taskName = entityNames[`tasks_${log.recordId}`] || 
+                                                        log.newData?.title || 
+                                                        log.oldData?.title || 
+                                                        "görev";
+                                        
+                                        // Proje bilgisini kontrol et
+                                        const projectId = log.newData?.projectId || log.oldData?.projectId;
+                                        if (projectId && entityNames[`projects_${projectId}`]) {
+                                          const projectName = entityNames[`projects_${projectId}`];
+                                          return `${userName} "${projectName}" projesindeki "${taskName}" görevini ${actionVerb}`;
+                                        }
+                                        return `${userName} "${taskName}" görevini ${actionVerb}`;
+                                      }
+                                      
+                                      // Müşteri logları
+                                      if (log.tableName === "customers" && log.recordId) {
+                                        const customerName = entityNames[`customers_${log.recordId}`] || 
+                                                           log.newData?.name || 
+                                                           log.oldData?.name || 
+                                                           "müşteri";
+                                        return `${userName} "${customerName}" müşterisini ${actionVerb}`;
+                                      }
+                                      
+                                      // Sipariş logları
+                                      if (log.tableName === "orders" && log.recordId) {
+                                        const orderName = entityNames[`orders_${log.recordId}`] || 
+                                                         (log.newData?.orderNumber ? `Sipariş #${log.newData.orderNumber}` : null) ||
+                                                         (log.oldData?.orderNumber ? `Sipariş #${log.oldData.orderNumber}` : null) ||
+                                                         "sipariş";
+                                        return `${userName} "${orderName}" siparişini ${actionVerb}`;
+                                      }
+                                      
+                                      // Ürün logları
+                                      if (log.tableName === "products" && log.recordId) {
+                                        const productName = entityNames[`products_${log.recordId}`] || 
+                                                          log.newData?.name || 
+                                                          log.oldData?.name || 
+                                                          "ürün";
+                                        return `${userName} "${productName}" ürününü ${actionVerb}`;
+                                      }
+                                      
+                                      // Proje logları
+                                      if (log.tableName === "projects" && log.recordId) {
+                                        const projectName = entityNames[`projects_${log.recordId}`] || 
+                                                          log.newData?.name || 
+                                                          log.oldData?.name || 
+                                                          "proje";
+                                        return `${userName} "${projectName}" projesini ${actionVerb}`;
+                                      }
+                                      
+                                      // Diğer loglar - entity adı ile
+                                      if (log.recordId && entityNames[`${log.tableName}_${log.recordId}`]) {
+                                        const entityName = entityNames[`${log.tableName}_${log.recordId}`];
+                                        return `${userName} "${entityName}" kaydını ${actionVerb}`;
+                                      }
+                                      
+                                      // Fallback
+                                      return `${userName} ${actionMeta.label} yaptı`;
+                                    })()}
+                                  </p>
                                   <p className="text-muted-foreground mt-0.5">
                                     {logDate.toLocaleDateString("tr-TR", {
                                       day: "2-digit",

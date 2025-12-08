@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { UserMultiSelect } from "@/components/Tasks/UserMultiSelect";
 import { canCreateTask, canCreateProject } from "@/utils/permissions";
 import { getDepartments } from "@/services/firebase/departmentService";
+import { onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 import { UserProfile } from "@/services/firebase/authService";
 import {
   addChecklistItem,
@@ -133,41 +134,52 @@ export const TaskInlineForm = ({
     [isEdit]
   );
 
+  const checkPermissions = async () => {
+    if (!user) {
+      setCanCreate(false);
+      setCanSelectProject(false);
+      return;
+    }
+    try {
+      const departments = await getDepartments();
+      const userProfile: UserProfile = {
+        id: user.id,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        fullName: user.fullName,
+        displayName: user.fullName,
+        phone: user.phone,
+        dateOfBirth: user.dateOfBirth,
+        role: user.roles,
+        createdAt: null,
+        updatedAt: null,
+      };
+      const [hasTaskPermission, hasProjectPermission] = await Promise.all([
+        canCreateTask(userProfile, departments),
+        canCreateProject(userProfile, departments),
+      ]);
+      setCanCreate(hasTaskPermission);
+      setCanSelectProject(hasTaskPermission || hasProjectPermission || isAdmin);
+    } catch (error) {
+      console.error("Permission check error:", error);
+      setCanCreate(false);
+      setCanSelectProject(false);
+    }
+  };
+
   // Yetki kontrolleri
   useEffect(() => {
-    const checkPermissions = async () => {
-      if (!user) {
-        setCanCreate(false);
-        setCanSelectProject(false);
-        return;
-      }
-      try {
-        const departments = await getDepartments();
-        const userProfile: UserProfile = {
-          id: user.id,
-          email: user.email,
-          emailVerified: user.emailVerified,
-          fullName: user.fullName,
-          displayName: user.fullName,
-          phone: user.phone,
-          dateOfBirth: user.dateOfBirth,
-          role: user.roles,
-          createdAt: null,
-          updatedAt: null,
-        };
-        const [hasTaskPermission, hasProjectPermission] = await Promise.all([
-          canCreateTask(userProfile, departments),
-          canCreateProject(userProfile, departments),
-        ]);
-        setCanCreate(hasTaskPermission);
-        setCanSelectProject(hasTaskPermission || hasProjectPermission || isAdmin);
-      } catch (error) {
-        console.error("Permission check error:", error);
-        setCanCreate(false);
-        setCanSelectProject(false);
-      }
-    };
     checkPermissions();
+  }, [user, isAdmin]);
+
+  // Listen to permission changes in real-time
+  useEffect(() => {
+    if (!user) return;
+    const unsubscribe = onPermissionCacheChange(() => {
+      // Re-check permissions when they change
+      checkPermissions();
+    });
+    return () => unsubscribe();
   }, [user, isAdmin]);
 
   const isRestrictedUser = isEdit && !isAdmin && user?.id !== taskCreatorId;
@@ -276,8 +288,13 @@ export const TaskInlineForm = ({
               return;
             }
             // Gizli proje kontrolü: Eğer gizli projeyse ve kullanıcı yetkili değilse, boş liste göster
+            // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir
             if (currentProject.isPrivate) {
               if (isSuperAdmin) {
+                setProjects([currentProject]);
+                return;
+              }
+              if (isAdmin) {
                 setProjects([currentProject]);
                 return;
               }
@@ -285,7 +302,14 @@ export const TaskInlineForm = ({
                 setProjects([currentProject]);
                 return;
               }
-              // Projede görevi olan kullanıcılar görebilir
+              // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
+              const isTeamLeader = user?.roles?.includes("team_leader");
+              if (isTeamLeader) {
+                // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
+                setProjects([]);
+                return;
+              }
+              // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
               if (user?.id) {
                 try {
                   const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");
@@ -360,9 +384,16 @@ export const TaskInlineForm = ({
             
             // Gizli projeler için yetki kontrolü
             if (isSuperAdmin) return project; // Üst yöneticiler tüm projeleri görebilir
+            if (isAdmin) return project; // Yöneticiler tüm projeleri görebilir
             if (user?.id && project.createdBy === user.id) return project; // Oluşturan görebilir
             
-            // Projede görevi olan kullanıcılar görebilir
+            // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
+            const isTeamLeader = user?.roles?.includes("team_leader");
+            if (isTeamLeader) {
+              return null; // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
+            }
+            
+            // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
             if (user?.id) {
               try {
                 // Projedeki görevleri kontrol etmeden önce, kullanıcının bu projeye atanmış olup olmadığını kontrol et

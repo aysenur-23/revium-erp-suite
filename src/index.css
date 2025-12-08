@@ -169,6 +169,45 @@ All colors MUST be HSL.
     opacity: 0.6 !important;
   }
 
+  /* Task menu trigger button - prevent green color and visibility issues */
+  /* Sadece görevler sayfasındaki 3 nokta menüsü için */
+  button.task-menu-trigger,
+  button.task-menu-trigger:hover,
+  button.task-menu-trigger:focus,
+  button.task-menu-trigger:active,
+  button.task-menu-trigger[data-state],
+  button.task-menu-trigger[data-state="open"],
+  button.task-menu-trigger[data-state="closed"] {
+    background-color: transparent !important;
+    border-color: transparent !important;
+    visibility: visible !important;
+    display: inline-flex !important;
+  }
+
+  button.task-menu-trigger:hover:not([data-menu-open="true"]),
+  button.task-menu-trigger:focus:not([data-menu-open="true"]),
+  button.task-menu-trigger:active:not([data-menu-open="true"]) {
+    background-color: hsl(var(--muted) / 0.8) !important;
+    border-color: hsl(var(--border)) !important;
+  }
+
+  button.task-menu-trigger[data-menu-open="true"],
+  button.task-menu-trigger[data-state="open"] {
+    background-color: hsl(var(--muted) / 0.8) !important;
+    border-color: hsl(var(--border)) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: inline-flex !important;
+  }
+
+  button.task-menu-trigger[data-menu-open="true"] svg,
+  button.task-menu-trigger[data-state="open"] svg,
+  button.task-menu-trigger svg {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+  }
+
   /* Safe area support for iOS */
   @supports (padding: max(0px)) {
     body {

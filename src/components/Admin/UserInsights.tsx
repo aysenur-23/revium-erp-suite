@@ -11,15 +11,16 @@ import { getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { getTasks, getTaskAssignments, TaskAssignment, Task as FirebaseTask } from "@/services/firebase/taskService";
 import { getAuditLogs, getTeamMemberLogs, AuditLog } from "@/services/firebase/auditLogsService";
 import { Timestamp } from "firebase/firestore";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { Loader2, Filter, UserCheck, ClipboardList, Download, Users, CheckCircle2, XCircle, FileText } from "lucide-react";
+import { Loader2, Filter, UserCheck, ClipboardList, Download, Users, CheckCircle2, XCircle, FileText, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { generateUserStatsPDF } from "@/services/pdfGenerator";
 import { useAuth } from "@/contexts/AuthContext";
 import { isAdmin, isMainAdmin } from "@/utils/permissions";
 import { getDepartments } from "@/services/firebase/departmentService";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 interface AssignmentWithTask extends TaskAssignment {
   taskId: string;
@@ -109,6 +110,25 @@ export const UserInsights = () => {
   const [rejectionSearch, setRejectionSearch] = useState("");
   const [logActionFilter, setLogActionFilter] = useState<string>("all");
   const [logSearch, setLogSearch] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<{
+    userName: string;
+    userEmail: string;
+    total: number;
+    accepted: number;
+    rejected: number;
+    pending: number;
+    completed: number;
+    active: number;
+    assignments: Array<{
+      taskTitle: string;
+      status: string;
+      assignedAt: Date;
+      completedAt: Date | null;
+    }>;
+  } | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -136,8 +156,8 @@ export const UserInsights = () => {
           updatedAt: null,
         };
         
-        const admin = isAdmin(userProfile);
-        const mainAdmin = isMainAdmin(userProfile);
+        const admin = await isAdmin(userProfile);
+        const mainAdmin = await isMainAdmin(userProfile);
         const teamLeader = departments.some((dept) => dept.managerId === user.id);
         
         setIsUserAdmin(admin);
@@ -322,46 +342,105 @@ export const UserInsights = () => {
       .sort((a, b) => b.stats.total - a.stats.total);
   }, [users, analyticsByUser]);
   
-  const handleExportPDF = async (userId: string) => {
+  const prepareUserStats = (userId: string) => {
+    const user = users.find((u) => u.id === userId);
+    if (!user) {
+      return null;
+    }
+    
+    const userAssignments = assignments.filter((a) => a.assignedTo === userId);
+    const userStats = analyticsByUser[userId] || defaultStats;
+    
+    // onlyInMyTasks görevlerini de dahil et
+    const onlyMyTasksCount = tasks.filter(t => t.onlyInMyTasks && t.createdBy === userId).length;
+    const onlyMyTasksActive = tasks.filter(t => 
+      t.onlyInMyTasks && 
+      t.createdBy === userId && 
+      t.status !== "completed" && 
+      t.status !== "cancelled"
+    ).length;
+    
+    return {
+      userName: user.fullName || user.displayName || user.email,
+      userEmail: user.email,
+      total: userStats.total + onlyMyTasksCount,
+      accepted: userStats.accepted + onlyMyTasksCount,
+      rejected: userStats.rejected,
+      pending: userStats.pending,
+      completed: userStats.completed,
+      active: userStats.active + onlyMyTasksActive,
+      assignments: userAssignments.map(a => ({
+        taskTitle: a.taskTitle,
+        status: a.status,
+        assignedAt: a.assignedAt instanceof Timestamp ? a.assignedAt.toDate() : (typeof a.assignedAt === 'string' ? new Date(a.assignedAt) : new Date()),
+        completedAt: a.completedAt instanceof Timestamp ? a.completedAt.toDate() : (a.completedAt ? (typeof a.completedAt === 'string' ? new Date(a.completedAt) : new Date(a.completedAt)) : null),
+      })),
+    };
+  };
+
+  const handlePreviewPDF = async (userId: string) => {
+    setLoadingPreview(true);
     try {
-      const user = users.find((u) => u.id === userId);
-      if (!user) {
+      const stats = prepareUserStats(userId);
+      if (!stats) {
+        toast.error("Kullanıcı bulunamadı");
+        return;
+      }
+      setPreviewData(stats);
+      setPreviewOpen(true);
+    } catch (error: any) {
+      toast.error("Rapor yüklenemedi: " + error.message);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const handleExportPDF = async (userId: string) => {
+    setGeneratingPdfId(userId);
+    try {
+      const stats = prepareUserStats(userId);
+      if (!stats) {
         toast.error("Kullanıcı bulunamadı");
         return;
       }
       
-      const userAssignments = assignments.filter((a) => a.assignedTo === userId);
-      const userStats = analyticsByUser[userId] || defaultStats;
-      
-      // onlyInMyTasks görevlerini de dahil et
-      const onlyMyTasksCount = tasks.filter(t => t.onlyInMyTasks && t.createdBy === userId).length;
-      const onlyMyTasksActive = tasks.filter(t => 
-        t.onlyInMyTasks && 
-        t.createdBy === userId && 
-        t.status !== "completed" && 
-        t.status !== "cancelled"
-      ).length;
-      
-      await generateUserStatsPDF({
-        userName: user.fullName || user.displayName || user.email,
-        userEmail: user.email,
-        total: userStats.total + onlyMyTasksCount,
-        accepted: userStats.accepted + onlyMyTasksCount,
-        rejected: userStats.rejected,
-        pending: userStats.pending,
-        completed: userStats.completed,
-        active: userStats.active + onlyMyTasksActive,
-        assignments: userAssignments.map(a => ({
-          taskTitle: a.taskTitle,
-          status: a.status,
-          assignedAt: a.assignedAt instanceof Timestamp ? a.assignedAt.toDate() : (typeof a.assignedAt === 'string' ? new Date(a.assignedAt) : new Date()),
-          completedAt: a.completedAt instanceof Timestamp ? a.completedAt.toDate() : (a.completedAt ? (typeof a.completedAt === 'string' ? new Date(a.completedAt) : new Date(a.completedAt)) : null),
-        })),
-      });
-      toast.success("PDF başarıyla oluşturuldu");
+      const pdfBlob = await generateUserStatsPDF(stats);
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `kullanici-istatistikleri-${stats.userName}-${new Date().toISOString().split("T")[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("PDF başarıyla indirildi");
     } catch (error: any) {
       console.error("PDF export error:", error);
       toast.error(error?.message || "PDF oluşturulurken hata oluştu");
+    } finally {
+      setGeneratingPdfId(null);
+    }
+  };
+
+  const handleDownloadFromPreview = async () => {
+    if (!previewData) return;
+    setGeneratingPdfId("preview");
+    try {
+      const pdfBlob = await generateUserStatsPDF(previewData);
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `kullanici-istatistikleri-${previewData.userName}-${new Date().toISOString().split("T")[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("PDF başarıyla indirildi");
+    } catch (error: any) {
+      console.error("PDF export error:", error);
+      toast.error("PDF oluşturulurken hata oluştu: " + error.message);
+    } finally {
+      setGeneratingPdfId(null);
     }
   };
   
@@ -581,10 +660,34 @@ export const UserInsights = () => {
               Kullanıcı Görev Özeti
             </div>
             {selectedUser !== "all" && (
-              <Button size="sm" variant="outline" onClick={() => handleExportPDF(selectedUser)}>
-                <Download className="h-4 w-4 mr-2" />
-                PDF İndir
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => handlePreviewPDF(selectedUser)}
+                  disabled={loadingPreview}
+                >
+                  {loadingPreview ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Eye className="h-4 w-4 mr-2" />
+                  )}
+                  Ön İzleme
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => handleExportPDF(selectedUser)}
+                  disabled={generatingPdfId === selectedUser}
+                >
+                  {generatingPdfId === selectedUser ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  PDF İndir
+                </Button>
+              </div>
             )}
           </CardTitle>
         </CardHeader>
@@ -874,6 +977,244 @@ export const UserInsights = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Rapor Önizleme Modal */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="w-full max-w-[98vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0">
+          <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Kullanıcı Performans Raporu - {previewData?.userName || previewData?.userEmail}
+            </DialogTitle>
+            <DialogDescription>
+              {previewData?.userEmail} - {new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })}
+            </DialogDescription>
+          </DialogHeader>
+
+          {previewData && (
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 min-h-0">
+              {/* İstatistik Kartları */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-blue-700">Toplam Görev</p>
+                        <p className="text-2xl font-bold text-blue-900 mt-1">{previewData.total}</p>
+                      </div>
+                      <FileText className="h-8 w-8 text-blue-600" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-green-50 to-green-100/50 border-green-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-green-700">Tamamlanan</p>
+                        <p className="text-2xl font-bold text-green-900 mt-1">{previewData.completed}</p>
+                        <p className="text-xs text-green-600 mt-1">
+                          {previewData.total > 0 
+                            ? `%${Math.round((previewData.completed / previewData.total) * 100)}`
+                            : "%0"}
+                        </p>
+                      </div>
+                      <CheckCircle2 className="h-8 w-8 text-green-600" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100/50 border-yellow-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-yellow-700">Aktif Görevler</p>
+                        <p className="text-2xl font-bold text-yellow-900 mt-1">{previewData.active}</p>
+                      </div>
+                      <Users className="h-8 w-8 text-yellow-600" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Detaylı İstatistikler */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Detaylı İstatistikler</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Metrik</TableHead>
+                        <TableHead className="text-center">Değer</TableHead>
+                        <TableHead className="text-center">Oran</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-medium">Toplam Görev</TableCell>
+                        <TableCell className="text-center">{previewData.total}</TableCell>
+                        <TableCell className="text-center">%100</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Tamamlanan</TableCell>
+                        <TableCell className="text-center">{previewData.completed}</TableCell>
+                        <TableCell className="text-center">
+                          {previewData.total > 0 
+                            ? `%${Math.round((previewData.completed / previewData.total) * 100)}`
+                            : "%0"}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Kabul Edilen</TableCell>
+                        <TableCell className="text-center">{previewData.accepted}</TableCell>
+                        <TableCell className="text-center">
+                          {previewData.total > 0 
+                            ? `%${Math.round((previewData.accepted / previewData.total) * 100)}`
+                            : "%0"}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Beklemede</TableCell>
+                        <TableCell className="text-center">{previewData.pending}</TableCell>
+                        <TableCell className="text-center">
+                          {previewData.total > 0 
+                            ? `%${Math.round((previewData.pending / previewData.total) * 100)}`
+                            : "%0"}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Reddedilen</TableCell>
+                        <TableCell className="text-center">{previewData.rejected}</TableCell>
+                        <TableCell className="text-center">
+                          {previewData.total > 0 
+                            ? `%${Math.round((previewData.rejected / previewData.total) * 100)}`
+                            : "%0"}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Aktif Görevler</TableCell>
+                        <TableCell className="text-center">{previewData.active}</TableCell>
+                        <TableCell className="text-center">
+                          {previewData.total > 0 
+                            ? `%${Math.round((previewData.active / previewData.total) * 100)}`
+                            : "%0"}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              {/* Görev Detayları */}
+              {previewData.assignments.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Görev Detayları</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Görev Başlığı</TableHead>
+                            <TableHead className="text-center">Durum</TableHead>
+                            <TableHead className="text-center">Atanma Tarihi</TableHead>
+                            <TableHead className="text-center">Tamamlanma Tarihi</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {previewData.assignments.map((assignment, index) => {
+                            const statusLabels: Record<string, string> = {
+                              "pending": "Beklemede",
+                              "accepted": "Kabul Edildi",
+                              "rejected": "Reddedildi",
+                              "completed": "Tamamlandı",
+                              "in_progress": "Devam Ediyor",
+                            };
+
+                            const assignedDate = assignment.assignedAt instanceof Date
+                              ? assignment.assignedAt
+                              : new Date(assignment.assignedAt);
+                            const completedDate = assignment.completedAt
+                              ? (assignment.completedAt instanceof Date
+                                ? assignment.completedAt
+                                : new Date(assignment.completedAt))
+                              : null;
+
+                            return (
+                              <TableRow key={index}>
+                                <TableCell className="font-medium">{assignment.taskTitle}</TableCell>
+                                <TableCell className="text-center">
+                                  <Badge 
+                                    variant={
+                                      assignment.status === "completed" ? "default" :
+                                      assignment.status === "accepted" || assignment.status === "in_progress" ? "secondary" :
+                                      assignment.status === "rejected" ? "destructive" : "outline"
+                                    }
+                                  >
+                                    {statusLabels[assignment.status] || assignment.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {format(assignedDate, "dd.MM.yyyy", { locale: tr })}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {completedDate ? format(completedDate, "dd.MM.yyyy", { locale: tr }) : "-"}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Özet */}
+              <Card className="bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20">
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">
+                    <strong>{previewData.userName}</strong> kullanıcısı toplam{" "}
+                    <strong>{previewData.total}</strong> görev almış,{" "}
+                    <strong>{previewData.completed}</strong> görevi tamamlamıştır.{" "}
+                    Tamamlanma oranı:{" "}
+                    <strong>
+                      %{previewData.total > 0 
+                        ? Math.round((previewData.completed / previewData.total) * 100)
+                        : 0}
+                    </strong>
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          <DialogFooter className="flex-shrink-0 px-6 pb-6 pt-4 border-t">
+            <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+              Kapat
+            </Button>
+            <Button 
+              onClick={handleDownloadFromPreview}
+              disabled={!previewData || generatingPdfId === "preview"}
+            >
+              {generatingPdfId === "preview" ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  İndiriliyor...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  PDF İndir
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -109,7 +109,7 @@ const Customers = () => {
     if (!selectedCustomer) return;
 
     try {
-      await deleteCustomer(selectedCustomer.id);
+      await deleteCustomer(selectedCustomer.id, user?.id);
       toast.success("Müşteri silindi");
       fetchCustomers();
       setDeleteDialogOpen(false);

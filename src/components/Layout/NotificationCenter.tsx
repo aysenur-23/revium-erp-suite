@@ -118,6 +118,59 @@ export const NotificationCenter = () => {
   useEffect(() => {
     if (!user?.id) return;
 
+    // Gösterilen bildirimleri takip etmek için localStorage key
+    const shownNotificationsKey = `shown_notifications_${user.id}`;
+    
+    // Cache for shown notifications to avoid repeated localStorage reads
+    let shownNotificationsCache: Set<string> | null = null;
+    let cacheInitialized = false;
+    
+    // Gösterilen bildirim ID'lerini al (cached)
+    const getShownNotifications = (): Set<string> => {
+      if (!cacheInitialized) {
+        try {
+          const stored = localStorage.getItem(shownNotificationsKey);
+          shownNotificationsCache = stored ? new Set(JSON.parse(stored)) : new Set();
+          cacheInitialized = true;
+        } catch {
+          shownNotificationsCache = new Set();
+          cacheInitialized = true;
+        }
+      }
+      return shownNotificationsCache || new Set();
+    };
+    
+    // Batch localStorage writes to improve performance
+    let pendingWrites: Set<string> = new Set();
+    let writeTimeout: NodeJS.Timeout | null = null;
+    
+    // Gösterilen bildirim ID'sini kaydet (debounced)
+    const markAsShown = (notificationId: string) => {
+      const shown = getShownNotifications();
+      shown.add(notificationId);
+      pendingWrites.add(notificationId);
+      
+      // Clear existing timeout
+      if (writeTimeout) {
+        clearTimeout(writeTimeout);
+      }
+      
+      // Batch write after 500ms of inactivity
+      writeTimeout = setTimeout(() => {
+        try {
+          const allShown = getShownNotifications();
+          // Limit cache size to prevent localStorage bloat (keep last 1000)
+          const shownArray = Array.from(allShown);
+          const limitedArray = shownArray.slice(-1000);
+          localStorage.setItem(shownNotificationsKey, JSON.stringify(limitedArray));
+          shownNotificationsCache = new Set(limitedArray);
+          pendingWrites.clear();
+        } catch (error) {
+          // Silently handle localStorage errors
+        }
+      }, 500);
+    };
+
     // Gerçek zamanlı dinleme başlat
     const unsubscribe = subscribeToNotifications(user.id, { limit: 10 }, (firebaseNotifications) => {
       try {
@@ -128,10 +181,24 @@ export const NotificationCenter = () => {
           const newNotifications = mappedNotifications.filter((n) => 
             !n.read && !prev.find(old => old.id === n.id)
           );
+          
+          const shownNotifications = getShownNotifications();
+          
           newNotifications.forEach((notification) => {
-            toast.info(notification.title, {
-              description: notification.message || undefined,
-            });
+            // Sadece görev atama bildirimleri sürekli gösterilsin
+            const isTaskAssignment = notification.type === "task_assigned";
+            
+            // Eğer görev atama bildirimi ise veya daha önce gösterilmemişse toast göster
+            if (isTaskAssignment || !shownNotifications.has(notification.id)) {
+              toast.info(notification.title, {
+                description: notification.message || undefined,
+              });
+              
+              // Görev atama bildirimi değilse, gösterildi olarak işaretle
+              if (!isTaskAssignment) {
+                markAsShown(notification.id);
+              }
+            }
           });
           return mappedNotifications;
         });
@@ -144,6 +211,20 @@ export const NotificationCenter = () => {
     // Cleanup: Component unmount olduğunda unsubscribe et
     return () => {
       unsubscribe();
+      if (writeTimeout) {
+        clearTimeout(writeTimeout);
+      }
+      // Final write before cleanup
+      if (pendingWrites.size > 0) {
+        try {
+          const allShown = getShownNotifications();
+          const shownArray = Array.from(allShown);
+          const limitedArray = shownArray.slice(-1000);
+          localStorage.setItem(shownNotificationsKey, JSON.stringify(limitedArray));
+        } catch (error) {
+          // Silently handle
+        }
+      }
     };
   }, [user]);
 

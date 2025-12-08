@@ -265,8 +265,13 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
           try {
             const currentProject = await getProjectById(propProjectId);
             // Gizli proje kontrolü: Eğer gizli projeyse ve kullanıcı yetkili değilse, boş liste göster
+            // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir
             if (currentProject.isPrivate) {
-              if (isAdmin || isSuperAdmin) {
+              if (isSuperAdmin) {
+                setProjects([currentProject]);
+                return;
+              }
+              if (isAdmin) {
                 setProjects([currentProject]);
                 return;
               }
@@ -274,7 +279,14 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                 setProjects([currentProject]);
                 return;
               }
-              // Projede görevi olan kullanıcılar görebilir
+              // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
+              const isTeamLeader = user?.roles?.includes("team_leader");
+              if (isTeamLeader) {
+                // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
+                setProjects([]);
+                return;
+              }
+              // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
               if (user?.id) {
                 try {
                   const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");
@@ -346,9 +358,16 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
             
             if (!project.isPrivate) return project; // Gizli olmayan projeler herkes görebilir
             if (isSuperAdmin) return project; // Üst yöneticiler tüm projeleri görebilir
+            if (isAdmin) return project; // Yöneticiler tüm projeleri görebilir
             if (user?.id && project.createdBy === user.id) return project; // Oluşturan görebilir
             
-            // Projede görevi olan kullanıcılar görebilir
+            // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
+            const isTeamLeader = user?.roles?.includes("team_leader");
+            if (isTeamLeader) {
+              return null; // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
+            }
+            
+            // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
             if (user?.id) {
               try {
                 const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");

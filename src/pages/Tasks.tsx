@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +28,7 @@ import {
 import { getRequests, Request as UserRequest } from "@/services/firebase/requestService";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { Timestamp } from "firebase/firestore";
-import { CheckCircle2, Clock, AlertCircle, Users, Trash2, Loader2, X, Flame, CalendarDays, Plus, Archive, Lock, CheckSquare, MoreVertical, CircleDot, Send } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Users, Trash2, Loader2, X, Flame, CalendarDays, Plus, Archive, Lock, CheckSquare, MoreVertical, CircleDot, Send, Edit } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TaskDetailModal } from "@/components/Tasks/TaskDetailModal";
@@ -38,6 +38,7 @@ import { TaskBoard } from "@/components/Tasks/TaskBoard";
 import { addDays, isAfter, isBefore, startOfDay } from "date-fns";
 import { canCreateTask } from "@/utils/permissions";
 import { getDepartments } from "@/services/firebase/departmentService";
+import { onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { getProjectById, getProjects, Project } from "@/services/firebase/projectService";
 import { ArrowLeft, Folder } from "lucide-react";
@@ -137,7 +138,7 @@ const taskStatusWorkflow: StatusItem[] = [
 ];
 
 const Tasks = () => {
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, isAdmin, isTeamLeader } = useAuth();
   const { projectId } = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -159,12 +160,43 @@ const Tasks = () => {
   const [cachedProjects, setCachedProjects] = useState<Project[]>([]);
   const [usersCacheTimestamp, setUsersCacheTimestamp] = useState<number>(0);
   const [projectsCacheTimestamp, setProjectsCacheTimestamp] = useState<number>(0);
+  // Assignment cache - taskId -> assignments mapping (ref kullanarak re-render'ı önle)
+  const assignmentsCacheRef = useRef<Map<string, FirebaseTaskAssignment[]>>(new Map());
+  const assignmentsCacheTimestampRef = useRef<number>(0);
+  // Filterable projects cache (ref kullanarak re-render'ı önle)
+  const filterableProjectsCacheRef = useRef<Project[]>([]);
+  const filterableProjectsCacheTimestampRef = useRef<number>(0);
+  // Project task checks cache - projectId -> boolean (kullanıcının projede görevi var mı)
+  const projectTaskChecksCacheRef = useRef<Map<string, boolean>>(new Map());
   const [selectedTaskInitialStatus, setSelectedTaskInitialStatus] = useState<"pending" | "in_progress" | "completed">("pending");
   const [inlineFormVisible, setInlineFormVisible] = useState(false);
   const [inlineFormMode, setInlineFormMode] = useState<"create" | "edit">("create");
   const [inlineFormTaskId, setInlineFormTaskId] = useState<string | null>(null);
   const [inlineFormDefaultStatus, setInlineFormDefaultStatus] = useState<"pending" | "in_progress" | "completed">("pending");
-  const openTaskDetail = (taskId: string, initialStatus?: string) => {
+  
+  const openInlineForm = useCallback((
+    mode: "create" | "edit",
+    taskId?: string | null,
+    status: "pending" | "in_progress" | "completed" = "pending"
+  ) => {
+    setInlineFormMode(mode);
+    setInlineFormTaskId(taskId || null);
+    setInlineFormDefaultStatus(status);
+    setInlineFormVisible(true);
+  }, []);
+  
+  const closeInlineForm = useCallback(() => {
+    setInlineFormVisible(false);
+    setInlineFormTaskId(null);
+  }, []);
+  
+  const scrollToInlineForm = useCallback(() => {
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }, []);
+  
+  const openTaskDetail = useCallback((taskId: string, initialStatus?: string) => {
     if (taskId === "new") {
       const normalizedStatus: "pending" | "in_progress" | "completed" =
         initialStatus && ["pending", "in_progress", "completed"].includes(initialStatus)
@@ -176,34 +208,17 @@ const Tasks = () => {
     
     // Eski modal yerine inline form kullan
     openInlineForm("edit", taskId);
-  };
-  const scrollToInlineForm = () => {
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-  };
-  const openInlineForm = (
-    mode: "create" | "edit",
-    taskId?: string | null,
-    status: "pending" | "in_progress" | "completed" = "pending"
-  ) => {
-    setInlineFormMode(mode);
-    setInlineFormTaskId(taskId || null);
-    setInlineFormDefaultStatus(status);
-    setInlineFormVisible(true);
-  };
-  const closeInlineForm = () => {
-    setInlineFormVisible(false);
-    setInlineFormTaskId(null);
-  };
-  const handleInlineSuccess = async () => {
+  }, [openInlineForm]);
+  
+  const handleInlineSuccess = useCallback(async () => {
     // Real-time subscribe otomatik güncelleyecek
     closeInlineForm();
-  };
+  }, [closeInlineForm]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("created_at");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [openDropdownMenuId, setOpenDropdownMenuId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "board">(
     viewFromUrl === "board" ? "board" : "board"
   );
@@ -239,7 +254,7 @@ const Tasks = () => {
         openTaskDetail(taskIdFromUrl, task.status);
       }
     }
-  }, [taskIdFromUrl, allTasks]);
+  }, [taskIdFromUrl, allTasks, openTaskDetail]);
 
   // URL'den view parametresini oku ve viewMode'u ayarla
   useEffect(() => {
@@ -293,9 +308,9 @@ const Tasks = () => {
       try {
         // Kullanıcıları ve projeleri cache'den al veya yeniden yükle (cache 5 dakika geçerli)
         const now = Date.now();
-        const CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
-        const shouldRefreshUsers = !cachedUsers.length || (now - usersCacheTimestamp) > CACHE_DURATION;
-        const shouldRefreshProjects = !cachedProjects.length || (now - projectsCacheTimestamp) > CACHE_DURATION;
+        const USERS_PROJECTS_CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
+        const shouldRefreshUsers = !cachedUsers.length || (now - usersCacheTimestamp) > USERS_PROJECTS_CACHE_DURATION;
+        const shouldRefreshProjects = !cachedProjects.length || (now - projectsCacheTimestamp) > USERS_PROJECTS_CACHE_DURATION;
         
         // Cache'den veya API'den al
         let allUsers = cachedUsers;
@@ -324,86 +339,139 @@ const Tasks = () => {
         });
         setProjects(projectsMap);
 
-        // Filtrelenebilir projeleri belirle (gizli projeler için yetki kontrolü)
-        const filterableProjectsList = await Promise.allSettled(
-          (Array.isArray(allProjectsData) ? allProjectsData : []).map(async (project) => {
-            if (!project?.id) return null;
-            
-            try {
-              // Otomatik oluşturulan "Gizli Görevler" projesini filtrele
-              if (project.name?.toLowerCase() === "gizli görevler") {
+        // Filtrelenebilir projeleri belirle (gizli projeler için yetki kontrolü) - Cache kullan
+        const FILTERABLE_PROJECTS_CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
+        const shouldRefreshFilterableProjects = !filterableProjectsCacheRef.current.length || 
+          (now - filterableProjectsCacheTimestampRef.current) > FILTERABLE_PROJECTS_CACHE_DURATION;
+        
+        let validProjects: Project[] = [];
+        
+        if (shouldRefreshFilterableProjects) {
+          const filterableProjectsList = await Promise.allSettled(
+            (Array.isArray(allProjectsData) ? allProjectsData : []).map(async (project) => {
+              if (!project?.id) return null;
+              
+              try {
+                // Otomatik oluşturulan "Gizli Görevler" projesini filtrele
+                if (project.name?.toLowerCase() === "gizli görevler") {
+                  return null;
+                }
+                
+                // Gizli olmayan projeler herkes görebilir
+                if (!project.isPrivate) return project;
+                
+                // Üst yöneticiler tüm projeleri görebilir
+                if (isSuperAdmin) return project;
+                
+                // Yöneticiler tüm projeleri görebilir
+                const userIsAdmin = user?.roles?.includes("admin");
+                if (userIsAdmin) return project;
+                
+                // Oluşturan görebilir
+                if (user?.id && project.createdBy === user.id) return project;
+                
+                // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz
+                const isTeamLeader = user?.roles?.includes("team_leader");
+                if (isTeamLeader) {
+                  return null;
+                }
+                
+                // Projede görevi olan kullanıcılar görebilir - Cache kullan
+                if (user?.id) {
+                  // Cache'den kontrol et
+                  const cachedCheck = projectTaskChecksCacheRef.current.get(project.id);
+                  if (cachedCheck !== undefined) {
+                    return cachedCheck ? project : null;
+                  }
+                  
+                  try {
+                    // Sadece görevlerin varlığını kontrol et - assignments kontrolünü atla (performans için)
+                    const projectTasks = await getTasks({ projectId: project.id });
+                    const hasTaskInProject = Array.isArray(projectTasks) && projectTasks.some((task) => {
+                      if (!task) return false;
+                      if (task.createdBy === user.id) return true;
+                      if (Array.isArray(task.assignedUsers) && task.assignedUsers.includes(user.id)) return true;
+                      return false;
+                    });
+                    
+                    // Cache'e kaydet
+                    projectTaskChecksCacheRef.current.set(project.id, hasTaskInProject);
+                    
+                    if (hasTaskInProject) return project;
+                  } catch {
+                    // Hata durumunda projeyi gösterme
+                    projectTaskChecksCacheRef.current.set(project.id, false);
+                  }
+                }
+                
+                return null;
+              } catch (error) {
+                console.error(`Error processing project ${project.id}:`, error);
                 return null;
               }
-              
-              // Gizli olmayan projeler herkes görebilir
-              if (!project.isPrivate) return project;
-              
-              // Üst yöneticiler tüm projeleri görebilir
-              if (isSuperAdmin) return project;
-              
-              // Oluşturan görebilir
-              if (user?.id && project.createdBy === user.id) return project;
-              
-              // Projede görevi olan kullanıcılar görebilir
-              if (user?.id) {
-                try {
-                  const projectTasks = await getTasks({ projectId: project.id });
-                  const hasTaskInProject = Array.isArray(projectTasks) && projectTasks.some((task) => {
-                    if (!task) return false;
-                    if (task.createdBy === user.id) return true;
-                    if (Array.isArray(task.assignedUsers) && task.assignedUsers.includes(user.id)) return true;
-                    return false;
-                  });
-                  
-                  if (hasTaskInProject) return project;
-                  
-                  // Daha detaylı kontrol için assignments'ları da kontrol et
-                  for (const task of projectTasks) {
-                    if (!task?.id) continue;
-                    try {
-                      const assignments = await getTaskAssignments(task.id);
-                      const isAssigned = Array.isArray(assignments) && assignments.some(a => a?.assignedTo === user?.id);
-                      if (isAssigned) return project;
-                    } catch {
-                      // Hata durumunda devam et
-                    }
-                  }
-                } catch {
-                  // Hata durumunda projeyi gösterme
-                }
-              }
-              
-              return null;
-            } catch (error) {
-              console.error(`Error processing project ${project.id}:`, error);
-              return null;
-            }
-          })
-        );
-        
-        // Promise.allSettled sonuçlarını işle
-        const validProjects = filterableProjectsList
-          .filter((result): result is PromiseFulfilledResult<Project | null> => result.status === 'fulfilled')
-          .map(result => result.value)
-          .filter((p): p is Project => p !== null);
+            })
+          );
+          
+          // Promise.allSettled sonuçlarını işle
+          validProjects = filterableProjectsList
+            .filter((result): result is PromiseFulfilledResult<Project | null> => result.status === 'fulfilled')
+            .map(result => result.value)
+            .filter((p): p is Project => p !== null);
+          
+          // Cache'e kaydet
+          filterableProjectsCacheRef.current = validProjects;
+          filterableProjectsCacheTimestampRef.current = now;
+        } else {
+          // Cache'den al
+          validProjects = filterableProjectsCacheRef.current;
+        }
         
         setFilterableProjects(validProjects);
 
         setUserRequests(myRequestsData);
 
-        // Her görev için assignments'ları al
-        const tasksWithAssignments = await Promise.all(
-          (Array.isArray(firebaseTasks) ? firebaseTasks : []).map(async (firebaseTask) => {
-            if (!firebaseTask?.id) return null;
-            try {
-              const assignments = await getTaskAssignments(firebaseTask.id);
-              return { firebaseTask, assignments: Array.isArray(assignments) ? assignments : [] };
-            } catch (error) {
-              console.error(`Error fetching assignments for task ${firebaseTask.id}:`, error);
-              return { firebaseTask, assignments: [] };
+        // Her görev için assignments'ları al - Cache kullan ve sadece yeni/değişen görevler için al
+        const ASSIGNMENTS_CACHE_DURATION = 2 * 60 * 1000; // 2 dakika
+        const validFirebaseTasks = (Array.isArray(firebaseTasks) ? firebaseTasks : []).filter(t => t?.id);
+        
+        // Hangi görevler için assignment alınması gerektiğini belirle
+        const tasksNeedingAssignments = validFirebaseTasks.filter((firebaseTask) => {
+          const cached = assignmentsCacheRef.current.get(firebaseTask.id);
+          const cacheAge = now - assignmentsCacheTimestampRef.current;
+          // Cache yoksa veya cache eskiyse veya görev güncellenmişse assignment al
+          return !cached || cacheAge > ASSIGNMENTS_CACHE_DURATION || 
+            (firebaseTask.updatedAt && cached && firebaseTask.updatedAt.toMillis() > assignmentsCacheTimestampRef.current);
+        });
+        
+        // Sadece gerekli görevler için assignment'ları al (batch)
+        if (tasksNeedingAssignments.length > 0) {
+          const newAssignments = await Promise.all(
+            tasksNeedingAssignments.map(async (firebaseTask) => {
+              if (!firebaseTask?.id) return null;
+              try {
+                const assignments = await getTaskAssignments(firebaseTask.id);
+                return { taskId: firebaseTask.id, assignments: Array.isArray(assignments) ? assignments : [] };
+              } catch (error) {
+                console.error(`Error fetching assignments for task ${firebaseTask.id}:`, error);
+                return { taskId: firebaseTask.id, assignments: [] };
+              }
+            })
+          );
+          
+          // Cache'i güncelle
+          newAssignments.forEach((item) => {
+            if (item) {
+              assignmentsCacheRef.current.set(item.taskId, item.assignments);
             }
-          })
-        );
+          });
+          assignmentsCacheTimestampRef.current = now;
+        }
+        
+        // Tüm görevler için assignment'ları cache'den al
+        const tasksWithAssignments = validFirebaseTasks.map((firebaseTask) => {
+          const assignments = assignmentsCacheRef.current.get(firebaseTask.id) || [];
+          return { firebaseTask, assignments };
+        });
         
         // Null değerleri filtrele
         const validTasksWithAssignments = tasksWithAssignments.filter((t): t is { firebaseTask: FirebaseTask; assignments: FirebaseTaskAssignment[] } => t !== null);
@@ -479,6 +547,7 @@ const Tasks = () => {
     };
   }, [user, projectId, taskTypeFromUrl, filterFromUrl, isSuperAdmin]);
 
+
   const fetchProject = async () => {
     if (!projectId) return;
     try {
@@ -517,6 +586,16 @@ const Tasks = () => {
       setCanCreate(false);
     }
   };
+
+  // Listen to permission changes in real-time
+  useEffect(() => {
+    if (!user) return;
+    const unsubscribe = onPermissionCacheChange(() => {
+      // Re-check permissions when they change
+      checkCreatePermission();
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   const fetchTasks = async () => {
     if (!user) return;
@@ -568,10 +647,20 @@ const Tasks = () => {
             // Üst yöneticiler tüm projeleri görebilir
             if (isSuperAdmin) return project;
             
+            // Yöneticiler tüm projeleri görebilir
+            const userIsAdmin = user?.roles?.includes("admin");
+            if (userIsAdmin) return project;
+            
             // Oluşturan görebilir
             if (user?.id && project.createdBy === user.id) return project;
             
-            // Projede görevi olan kullanıcılar görebilir
+            // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
+            const isTeamLeader = user?.roles?.includes("team_leader");
+            if (isTeamLeader) {
+              return null; // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
+            }
+            
+            // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
             if (user?.id) {
               try {
                 const projectTasks = await getTasks({ projectId: project.id });
@@ -1242,45 +1331,35 @@ const Tasks = () => {
   const filteredAndSortedMyTasks = useMemo(() => {
     // İstatistiklerin baz aldığı görev setini kullan (tasksForStatsAndDisplay)
     // Ama sadece "Benim Görevlerim" sekmesi için
-    let tasksToFilter: any[] = [];
-    if (activeListTab === "my-tasks") {
-      // tasksForStatsAndDisplay zaten statFilter uygulanmış durumda
-      // İstatistiklerin kullandığı görev setini doğrudan kullan
-      tasksToFilter = tasksForStatsAndDisplay;
-    } else {
-      // Diğer sekmeler için boş döndür
+    if (activeListTab !== "my-tasks") {
       return [];
     }
     
     // İstatistiklerin kullandığı filtrelemeyi koru, sadece ek filtreleri uygula (arama, durum, odak, proje)
     // Liste görünümü için sıralama uygula, pano görünümü için sıralama gerekmez
-    const filtered = filterTasks(tasksToFilter);
+    const filtered = filterTasks(tasksForStatsAndDisplay);
     return viewMode === "list" ? sortTasks(filtered) : filtered;
-  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, viewMode, activeListTab, projectFilter, projectId, taskTypeFromUrl]);
+  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, viewMode, activeListTab, projectFilter]);
 
   const filteredAndSortedCreatedTasks = useMemo(() => {
     if (viewMode !== "list") return [];
     return sortTasks(filterTasks(createdTasks));
-  }, [createdTasks, searchTerm, statusFilter, focusFilter, sortBy, viewMode, statFilter]);
+  }, [createdTasks, searchTerm, statusFilter, focusFilter, sortBy, viewMode]);
 
   const filteredAndSortedAllTasks = useMemo(() => {
     // İstatistiklerin baz aldığı görev setini kullan (tasksForStatsAndDisplay)
     // "Tüm Görevler" sekmesi veya proje detay sayfası için
-    let tasksToFilter: any[] = [];
-    if (activeListTab === "all" || (!activeListTab && taskTypeFromUrl !== 'general')) {
-      // tasksForStatsAndDisplay zaten statFilter uygulanmış durumda
-      // İstatistiklerin kullandığı görev setini doğrudan kullan
-      tasksToFilter = tasksForStatsAndDisplay;
-    } else {
-      // Diğer sekmeler için boş döndür
+    if (activeListTab !== "all" && (activeListTab || taskTypeFromUrl === 'general')) {
       return [];
     }
     
     // İstatistiklerin kullandığı filtrelemeyi koru, sadece ek filtreleri uygula (arama, durum, odak, proje)
-    // Liste görünümü için sıralama uygula, pano görünümü için sıralama gerekmez
-    const filtered = filterTasks(tasksToFilter);
+    // Liste görünümü için tüm filtreleri uygula, pano görünümü için sadece proje filtresini uygula
+    const filtered = viewMode === "board" 
+      ? filterTasks(tasksForStatsAndDisplay, false, true) // Pano görünümünde sadece proje filtresi
+      : filterTasks(tasksForStatsAndDisplay); // Liste görünümünde tüm filtreler
     return viewMode === "list" ? sortTasks(filtered) : filtered;
-  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, viewMode, activeListTab, projectId, taskTypeFromUrl, projectFilter]);
+  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, viewMode, activeListTab, taskTypeFromUrl, projectFilter]);
 
   // Arşiv artık ayrı sayfada, burada kullanılmıyor
 
@@ -1301,22 +1380,22 @@ const Tasks = () => {
     
     // listData'dan görevleri al (zaten filtrelenmiş ve sıralanmış)
     // Arşivlenmiş görevleri board'dan çıkar (arşiv ayrı sayfada gösteriliyor)
+    // allFirebaseTasks Map'e çevirerek daha hızlı lookup yap
+    const firebaseTasksMap = new Map(allFirebaseTasks.map(t => [t.id, t]));
     let tasksToShow = listData.filter((task) => {
       // Task objesinde isArchived veya is_archived property'si varsa kontrol et
       // Ayrıca allFirebaseTasks'tan da kontrol et
-      const firebaseTask = allFirebaseTasks.find((t) => t.id === task.id);
+      const firebaseTask = firebaseTasksMap.get(task.id);
       const isArchived = task.isArchived === true || task.is_archived === true || firebaseTask?.isArchived === true;
       return !isArchived;
     });
     
     // Pano formatına çevir (assignment'ı kaldır)
-    const map = new Map<string, any>();
-    (Array.isArray(tasksToShow) ? tasksToShow : []).forEach((task) => {
+    return tasksToShow.map((task) => {
       const { assignment, ...taskWithoutAssignment } = task;
-      map.set(task.id, taskWithoutAssignment);
+      return taskWithoutAssignment;
     });
-    return Array.from(map.values());
-  }, [listData, activeListTab, allFirebaseTasks]);
+  }, [listData, allFirebaseTasks]);
 
   // İstatistikler aktif sekmeye göre hesaplanmalı
   // İstatistikler, görevlerin gösterildiği aynı filtrelemeye sahip olmalı
@@ -1627,7 +1706,34 @@ const Tasks = () => {
             {canCreate && (
             <Button 
               className="gap-1.5 sm:gap-2 flex-1 sm:flex-initial min-h-[44px] sm:min-h-10 text-xs sm:text-sm" 
-                onClick={() => openInlineForm("create")}
+                onClick={async () => {
+                  // Double-check permission before opening form
+                  if (!user) return;
+                  try {
+                    const departments = await getDepartments();
+                    const userProfile: UserProfile = {
+                      id: user.id,
+                      email: user.email,
+                      emailVerified: user.emailVerified,
+                      fullName: user.fullName,
+                      displayName: user.fullName,
+                      phone: user.phone,
+                      dateOfBirth: user.dateOfBirth,
+                      role: user.roles,
+                      createdAt: Timestamp.now(),
+                      updatedAt: Timestamp.now(),
+                    };
+                    const hasPermission = await canCreateTask(userProfile, departments);
+                    if (!hasPermission) {
+                      toast.error("Görev oluşturma yetkiniz yok");
+                      return;
+                    }
+                    openInlineForm("create");
+                  } catch (error) {
+                    console.error("Permission check error:", error);
+                    toast.error("Yetki kontrolü yapılamadı");
+                  }
+                }}
             >
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Yeni Görev</span>
@@ -1887,9 +1993,9 @@ const Tasks = () => {
               className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:border-primary/50 border-2"
               onClick={stat.onClick}
             >
-              <CardContent className="pt-3 pb-3 px-3 sm:pt-4 sm:pb-4 sm:px-4 md:pt-6 md:pb-6 md:px-6">
-                <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground mb-1.5 sm:mb-2 md:mb-3 truncate">{stat.label}</p>
-                <div className="text-xl sm:text-2xl md:text-3xl xl:text-4xl font-bold mb-1 sm:mb-2">{stat.value}</div>
+              <CardContent className="pt-2 pb-2 px-2.5 sm:pt-3 sm:pb-3 sm:px-3 md:pt-4 md:pb-4 md:px-4">
+                <p className="text-[10px] sm:text-xs text-muted-foreground mb-1 sm:mb-1.5 truncate">{stat.label}</p>
+                <div className="text-lg sm:text-xl md:text-2xl font-bold mb-0.5 sm:mb-1">{stat.value}</div>
                 <p className={`text-[10px] sm:text-xs font-medium ${stat.badgeClass} line-clamp-2 hidden sm:block`}>{stat.sub}</p>
               </CardContent>
             </Card>
@@ -2089,42 +2195,120 @@ const Tasks = () => {
                   return (
                     <div
                       key={task.id}
-                      className="p-4 sm:p-6 rounded-xl border-2 border-border hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 shadow-sm hover:shadow-md relative"
+                      className="p-4 sm:p-6 rounded-xl border-2 border-border hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 shadow-sm hover:shadow-md relative group"
                     >
                       {/* 3 Nokta Menü - Sağ Üst Köşe */}
-                      {(isSuperAdmin || task.createdBy === user?.id) && (
-                        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-10">
-                          <DropdownMenu>
+                      {(isSuperAdmin || isAdmin || isTeamLeader || task.createdBy === user?.id) && (
+                        <div 
+                          className="absolute top-2 right-2 sm:top-4 sm:right-4 z-[9999]"
+                          style={{
+                            visibility: 'visible',
+                            display: 'block',
+                            zIndex: 9999,
+                          }}
+                        >
+                          <DropdownMenu 
+                            open={openDropdownMenuId === task.id} 
+                            onOpenChange={(open) => {
+                              if (open) {
+                                setOpenDropdownMenuId(task.id);
+                              } else {
+                                setOpenDropdownMenuId(null);
+                              }
+                            }}
+                          >
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 opacity-70 hover:opacity-100"
+                              <button
+                                type="button"
+                                id={`task-menu-trigger-${task.id}`}
+                                data-menu-open={openDropdownMenuId === task.id ? "true" : "false"}
+                                className={cn(
+                                  "task-menu-trigger",
+                                  "inline-flex items-center justify-center",
+                                  "h-8 w-8 sm:h-9 sm:w-9 rounded-lg",
+                                  "transition-colors duration-200",
+                                  "border",
+                                  openDropdownMenuId === task.id 
+                                    ? "border-border bg-muted/80 opacity-100" 
+                                    : "border-transparent bg-transparent opacity-70 hover:opacity-100",
+                                  "hover:bg-muted/80 hover:border-border",
+                                  "focus:bg-muted/80 focus:border-border focus:outline-none focus:ring-0",
+                                  "active:bg-muted/80 active:border-border"
+                                )}
+                                style={{
+                                  WebkitTapHighlightColor: 'transparent',
+                                  backgroundColor: openDropdownMenuId === task.id ? 'hsl(var(--muted) / 0.8)' : 'transparent',
+                                  borderColor: openDropdownMenuId === task.id ? 'hsl(var(--border))' : 'transparent',
+                                  opacity: openDropdownMenuId === task.id ? 1 : 0.7,
+                                  visibility: 'visible',
+                                  display: 'inline-flex',
+                                  pointerEvents: 'auto',
+                                  position: 'relative',
+                                  zIndex: 9999,
+                                } as React.CSSProperties}
+                                onMouseEnter={(e) => {
+                                  const btn = e.currentTarget;
+                                  if (openDropdownMenuId !== task.id) {
+                                    btn.style.opacity = '1';
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  const btn = e.currentTarget;
+                                  if (openDropdownMenuId !== task.id) {
+                                    btn.style.opacity = '0.7';
+                                  }
+                                }}
                               >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
+                                <MoreVertical 
+                                  className="h-4 w-4 sm:h-[18px] sm:w-[18px] stroke-[2.5] text-foreground" 
+                                  style={{
+                                    opacity: 1,
+                                    visibility: 'visible',
+                                    display: 'block',
+                                  }}
+                                />
+                              </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuContent 
+                              align="end" 
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-44 rounded-lg shadow-lg border border-border bg-popover p-1.5 z-[10000]"
+                              onCloseAutoFocus={(e) => e.preventDefault()}
+                            >
                               <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleArchiveTask(task.id);
+                                  setOpenDropdownMenuId(null);
+                                  openInlineForm("edit", task.id, task.status as "pending" | "in_progress" | "completed");
+                                  scrollToInlineForm();
                                 }}
-                                className="cursor-pointer"
+                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
                               >
-                                <Archive className="h-4 w-4 mr-2" />
-                                Arşivle
+                                <Edit className="h-4 w-4 mr-2.5 stroke-[2]" />
+                                Düzenle
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  setOpenDropdownMenuId(null);
+                                  handleArchiveTask(task.id);
+                                }}
+                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+                              >
+                                <Archive className="h-4 w-4 mr-2.5 stroke-[2]" />
+                                {task.isArchived || task.is_archived ? "Arşivden Çıkar" : "Arşivle"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdownMenuId(null);
                                   if (confirm(`"${task.title}" görevini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
                                     handleDeleteTask(task.id);
                                   }
                                 }}
-                                className="cursor-pointer text-destructive focus:text-destructive"
+                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium text-destructive focus:text-destructive hover:bg-destructive/10 focus:bg-destructive/10 transition-colors"
                               >
-                                <Trash2 className="h-4 w-4 mr-2" />
+                                <Trash2 className="h-4 w-4 mr-2.5 stroke-[2]" />
                                 Sil
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -2230,18 +2414,6 @@ const Tasks = () => {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {task.createdBy === user?.id && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openInlineForm("edit", task.id);
-                              }}
-                            >
-                              Mini Düzenle
-                            </Button>
-                          )}
                           {/* "Oluşturduklarım" sekmesi kaldırıldı */}
                           {false && (
                             <AlertDialog>
@@ -2447,3 +2619,4 @@ const Tasks = () => {
 };
 
 export default Tasks;
+

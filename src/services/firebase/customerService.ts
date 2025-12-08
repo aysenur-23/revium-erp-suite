@@ -157,9 +157,17 @@ export const updateCustomer = async (
 /**
  * Müşteriyi sil
  */
-export const deleteCustomer = async (customerId: string): Promise<void> => {
+export const deleteCustomer = async (customerId: string, userId?: string): Promise<void> => {
   try {
+    // Eski veriyi al
+    const oldCustomer = await getCustomerById(customerId);
+    
     await deleteDoc(doc(firestore, "customers", customerId));
+    
+    // Audit log
+    if (userId) {
+      await logAudit("DELETE", "customers", customerId, userId, oldCustomer, null);
+    }
   } catch (error) {
     console.error("Delete customer error:", error);
     throw error;
