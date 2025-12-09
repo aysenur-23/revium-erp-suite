@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   getTasks,
   subscribeToTasks,
@@ -28,21 +29,25 @@ import {
 import { getRequests, Request as UserRequest } from "@/services/firebase/requestService";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { Timestamp } from "firebase/firestore";
-import { CheckCircle2, Clock, AlertCircle, Users, Trash2, Loader2, X, Flame, CalendarDays, Plus, Archive, Lock, CheckSquare, MoreVertical, CircleDot, Send, Edit } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Users, Trash2, Loader2, X, Flame, CalendarDays, Plus, Archive, Lock, CheckSquare, MoreVertical, CircleDot, Send, Edit, Check, Square, BarChart3, ChevronUp, ChevronLeft, Bell, Filter, Zap, LayoutGrid, ArrowLeft, Folder, ChevronDown, Home, ChevronRight, List, RefreshCw } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { TaskDetailModal } from "@/components/Tasks/TaskDetailModal";
 import { TaskInlineForm } from "@/components/Tasks/TaskInlineForm";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskBoard } from "@/components/Tasks/TaskBoard";
 import { addDays, isAfter, isBefore, startOfDay } from "date-fns";
-import { canCreateTask } from "@/utils/permissions";
+import { canCreateTask, canCreateProject, canDeleteProject } from "@/utils/permissions";
 import { getDepartments } from "@/services/firebase/departmentService";
 import { onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { getProjectById, getProjects, Project } from "@/services/firebase/projectService";
-import { ArrowLeft, Folder } from "lucide-react";
+import { getProjectById, getProjects, createProject, deleteProject, Project } from "@/services/firebase/projectService";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
+// PieChart kaldırıldı - artık kullanılmıyor
 
 interface Task {
   id: string;
@@ -139,13 +144,15 @@ const taskStatusWorkflow: StatusItem[] = [
 
 const Tasks = () => {
   const { user, isSuperAdmin, isAdmin, isTeamLeader } = useAuth();
+  const { canRead } = usePermissions();
   const { projectId } = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const taskIdFromUrl = searchParams.get('taskId');
   const taskTypeFromUrl = searchParams.get('type');
   const filterFromUrl = searchParams.get('filter');
   const viewFromUrl = searchParams.get('view');
+  const projectFromUrl = searchParams.get('project');
 
   const [myTasks, setMyTasks] = useState<(Task & { assignment: TaskAssignment; assignedUsers?: Profile[] })[]>([]);
   const [createdTasks, setCreatedTasks] = useState<(Task & { assignedUsers?: Profile[] })[]>([]);
@@ -154,7 +161,43 @@ const Tasks = () => {
   const [allTasks, setAllTasks] = useState<(Task & { assignedUsers?: Profile[] })[]>([]);
   const [allFirebaseTasks, setAllFirebaseTasks] = useState<FirebaseTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // Optimistic updates için state
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, { status: string; timestamp: number }>>(new Map());
+  // Toplu işlemler için state
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  // Advanced search için state
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
+  const [advancedSearchFilters, setAdvancedSearchFilters] = useState({
+    title: "",
+    description: "",
+    status: "all",
+    priority: "all",
+    projectId: "all",
+    assignedTo: "all",
+    dueDateFrom: "",
+    dueDateTo: "",
+  });
+  // Performans optimizasyonu: Liste görünümü için görünen öğe sayısı
+  const [visibleItemsCount, setVisibleItemsCount] = useState(50);
+  const listContainerRef = useRef<HTMLDivElement>(null);
+  // Mini dashboard için state
+  const [statsExpanded, setStatsExpanded] = useState(false); // Başlangıçta kapalı
+  // Browser notifications için state
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+  const previousTaskStatusesRef = useRef<Map<string, string>>(new Map());
+  // Undo özelliği için state
+  const [deletedTasks, setDeletedTasks] = useState<Array<{ task: any; timestamp: number }>>([]);
+  const undoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Filtreler için collapsible state
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
+  const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
+  // Uyarılar için state
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [pendingAssignmentsCount, setPendingAssignmentsCount] = useState(0);
+  const [upcomingDeadlinesCount, setUpcomingDeadlinesCount] = useState(0);
   // Cache için state'ler
   const [cachedUsers, setCachedUsers] = useState<UserProfile[]>([]);
   const [cachedProjects, setCachedProjects] = useState<Project[]>([]);
@@ -215,37 +258,83 @@ const Tasks = () => {
     closeInlineForm();
   }, [closeInlineForm]);
   const [searchTerm, setSearchTerm] = useState("");
+  // Arama geçmişi ve favori filtreler için state
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [favoriteFilters, setFavoriteFilters] = useState<Array<{ name: string; filters: any }>>([]);
+  const [recentlyViewedTasks, setRecentlyViewedTasks] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("created_at");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [openDropdownMenuId, setOpenDropdownMenuId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "board">(
-    viewFromUrl === "board" ? "board" : "board"
+    viewFromUrl === "list" ? "list" : (viewFromUrl === "board" ? "board" : "list")
   );
   const [focusFilter, setFocusFilter] = useState<"all" | "due_soon" | "overdue" | "high_priority">("all");
-  // "all" ve "my-tasks" sekmeleri kullanılıyor (arşiv ayrı sayfada)
-  const [activeListTab, setActiveListTab] = useState<"all" | "my-tasks" | "archived">(
-    filterFromUrl === "my-tasks" ? "my-tasks" : "all"
+  // Filtre tipi: all, my-tasks, general, pool, archive
+  const [activeFilter, setActiveFilter] = useState<"all" | "my-tasks" | "general" | "pool" | "archive">(
+    filterFromUrl === "my-tasks" ? "my-tasks" : 
+    filterFromUrl === "general" ? "general" :
+    filterFromUrl === "pool" ? "pool" :
+    filterFromUrl === "archive" ? "archive" : "all"
   );
-  const [statFilter, setStatFilter] = useState<"all" | "active" | "completed" | "risky" | "pending_approval" | null>(null);
+  // Seçili proje: "all", "general", veya proje ID'si
+  const [selectedProject, setSelectedProject] = useState<string>(
+    projectFromUrl || (projectId ? projectId : (taskTypeFromUrl === 'general' ? "general" : "all"))
+  );
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectingAssignment, setRejectingAssignment] = useState<TaskAssignment | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejecting, setRejecting] = useState(false);
   const [canCreate, setCanCreate] = useState(false);
+  const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
+  const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectDescription, setNewProjectDescription] = useState("");
+  const [canCreateProjectState, setCanCreateProjectState] = useState(false);
+  const [canDeleteProjectState, setCanDeleteProjectState] = useState(false);
+  const [canAccessTeamManagement, setCanAccessTeamManagement] = useState(false);
   const [project, setProject] = useState<any>(null);
   const [projects, setProjects] = useState<Map<string, Project>>(new Map());
   const [filterableProjects, setFilterableProjects] = useState<Project[]>([]);
+  // En son işlem yapılan projeyi takip et
+  const lastUsedProjectRef = useRef<string | null>(null);
+  // Proje dropdown için state
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const [projectSearchQuery, setProjectSearchQuery] = useState("");
 
   useEffect(() => {
     // URL'deki filter parametresine göre sekme değiştir
     if (filterFromUrl === "my-tasks") {
-      setActiveListTab("my-tasks");
+      setActiveFilter("my-tasks");
+    } else if (filterFromUrl === "general") {
+      setActiveFilter("general");
+    } else if (filterFromUrl === "pool") {
+      setActiveFilter("pool");
+    } else if (filterFromUrl === "archive") {
+      setActiveFilter("archive");
     } else {
-      setActiveListTab("all");
+      setActiveFilter("all");
     }
   }, [filterFromUrl]);
+
+  // URL'deki project parametresine göre seçili projeyi ayarla
+  useEffect(() => {
+    if (projectFromUrl) {
+      setSelectedProject(projectFromUrl);
+      setProjectFilter(projectFromUrl === "general" ? "general" : projectFromUrl);
+    } else if (projectId) {
+      setSelectedProject(projectId);
+      setProjectFilter(projectId);
+    } else if (taskTypeFromUrl === 'general') {
+      setSelectedProject("general");
+      setProjectFilter("general");
+    } else {
+      setSelectedProject("all");
+      setProjectFilter("all");
+    }
+  }, [projectFromUrl, projectId, taskTypeFromUrl]);
 
   useEffect(() => {
     if (taskIdFromUrl && allTasks.length > 0) {
@@ -256,6 +345,11 @@ const Tasks = () => {
     }
   }, [taskIdFromUrl, allTasks, openTaskDetail]);
 
+  // Klavye kısayolları ve navigasyon
+  const [focusedTaskIndex, setFocusedTaskIndex] = useState<number>(-1);
+  const taskRefs = useRef<(HTMLElement | null)[]>([]);
+
+
   // URL'den view parametresini oku ve viewMode'u ayarla
   useEffect(() => {
     if (viewFromUrl === "board") {
@@ -265,6 +359,65 @@ const Tasks = () => {
     }
     // viewFromUrl yoksa varsayılan olarak board kalır
   }, [viewFromUrl]);
+
+  // View mode değiştiğinde URL'i güncelle
+  useEffect(() => {
+    const newParams = new URLSearchParams(searchParams);
+    const currentView = newParams.get("view");
+    const newView = viewMode === "board" ? "board" : "list";
+    
+    // Sadece değişiklik varsa güncelle (sonsuz döngüyü önle)
+    if (currentView !== newView) {
+      if (newView === "list") {
+        // Liste varsayılan olduğu için URL'den kaldır
+        newParams.delete("view");
+      } else {
+        newParams.set("view", newView);
+      }
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [viewMode, searchParams, setSearchParams]);
+
+  // Seçili proje değiştiğinde URL'i güncelle
+  useEffect(() => {
+    const newParams = new URLSearchParams(searchParams);
+    const currentProject = newParams.get("project");
+    const newProject = selectedProject === "all" ? null : selectedProject;
+    
+    // Sadece değişiklik varsa güncelle (sonsuz döngüyü önle)
+    if (currentProject !== newProject) {
+      if (newProject === null) {
+        newParams.delete("project");
+      } else {
+        newParams.set("project", newProject);
+      }
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [selectedProject, searchParams, setSearchParams]);
+
+  // Filtre değiştiğinde URL'i güncelle
+  useEffect(() => {
+    const newParams = new URLSearchParams(searchParams);
+    const currentFilter = newParams.get("filter");
+    const newFilter = activeFilter === "all" ? null : activeFilter;
+    
+    // Sadece değişiklik varsa güncelle (sonsuz döngüyü önle)
+    if (currentFilter !== newFilter) {
+      if (newFilter === null) {
+        newParams.delete("filter");
+      } else {
+        newParams.set("filter", newFilter);
+      }
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [activeFilter, searchParams, setSearchParams]);
+
+  // Browser notifications izni kontrolü
+  useEffect(() => {
+    if ("Notification" in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -347,37 +500,37 @@ const Tasks = () => {
         let validProjects: Project[] = [];
         
         if (shouldRefreshFilterableProjects) {
-          const filterableProjectsList = await Promise.allSettled(
-            (Array.isArray(allProjectsData) ? allProjectsData : []).map(async (project) => {
-              if (!project?.id) return null;
+        const filterableProjectsList = await Promise.allSettled(
+          (Array.isArray(allProjectsData) ? allProjectsData : []).map(async (project) => {
+            if (!project?.id) return null;
+            
+            try {
+              // Otomatik oluşturulan "Gizli Görevler" projesini filtrele
+              if (project.name?.toLowerCase() === "gizli görevler") {
+                return null;
+              }
               
-              try {
-                // Otomatik oluşturulan "Gizli Görevler" projesini filtrele
-                if (project.name?.toLowerCase() === "gizli görevler") {
-                  return null;
-                }
-                
-                // Gizli olmayan projeler herkes görebilir
-                if (!project.isPrivate) return project;
-                
-                // Üst yöneticiler tüm projeleri görebilir
-                if (isSuperAdmin) return project;
-                
+              // Gizli olmayan projeler herkes görebilir
+              if (!project.isPrivate) return project;
+              
+              // Üst yöneticiler tüm projeleri görebilir
+              if (isSuperAdmin) return project;
+              
                 // Yöneticiler tüm projeleri görebilir
-                const userIsAdmin = user?.roles?.includes("admin");
-                if (userIsAdmin) return project;
-                
-                // Oluşturan görebilir
-                if (user?.id && project.createdBy === user.id) return project;
-                
+              const userIsAdmin = user?.roles?.includes("admin");
+              if (userIsAdmin) return project;
+              
+              // Oluşturan görebilir
+              if (user?.id && project.createdBy === user.id) return project;
+              
                 // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz
-                const isTeamLeader = user?.roles?.includes("team_leader");
-                if (isTeamLeader) {
+              const isTeamLeader = user?.roles?.includes("team_leader");
+              if (isTeamLeader) {
                   return null;
-                }
-                
+              }
+              
                 // Projede görevi olan kullanıcılar görebilir - Cache kullan
-                if (user?.id) {
+              if (user?.id) {
                   // Cache'den kontrol et
                   const cachedCheck = projectTaskChecksCacheRef.current.get(project.id);
                   if (cachedCheck !== undefined) {
@@ -386,38 +539,38 @@ const Tasks = () => {
                   
                   try {
                     // Sadece görevlerin varlığını kontrol et - assignments kontrolünü atla (performans için)
-                    const projectTasks = await getTasks({ projectId: project.id });
-                    const hasTaskInProject = Array.isArray(projectTasks) && projectTasks.some((task) => {
-                      if (!task) return false;
-                      if (task.createdBy === user.id) return true;
-                      if (Array.isArray(task.assignedUsers) && task.assignedUsers.includes(user.id)) return true;
-                      return false;
-                    });
-                    
+                  const projectTasks = await getTasks({ projectId: project.id });
+                  const hasTaskInProject = Array.isArray(projectTasks) && projectTasks.some((task) => {
+                    if (!task) return false;
+                    if (task.createdBy === user.id) return true;
+                    if (Array.isArray(task.assignedUsers) && task.assignedUsers.includes(user.id)) return true;
+                    return false;
+                  });
+                  
                     // Cache'e kaydet
                     projectTaskChecksCacheRef.current.set(project.id, hasTaskInProject);
                     
                     if (hasTaskInProject) return project;
-                  } catch {
-                    // Hata durumunda projeyi gösterme
+                } catch {
+                  // Hata durumunda projeyi gösterme
                     projectTaskChecksCacheRef.current.set(project.id, false);
-                  }
                 }
-                
-                return null;
-              } catch (error) {
-                console.error(`Error processing project ${project.id}:`, error);
-                return null;
               }
-            })
-          );
-          
-          // Promise.allSettled sonuçlarını işle
+              
+              return null;
+            } catch (error) {
+              console.error(`Error processing project ${project.id}:`, error);
+              return null;
+            }
+          })
+        );
+        
+        // Promise.allSettled sonuçlarını işle
           validProjects = filterableProjectsList
-            .filter((result): result is PromiseFulfilledResult<Project | null> => result.status === 'fulfilled')
-            .map(result => result.value)
-            .filter((p): p is Project => p !== null);
-          
+          .filter((result): result is PromiseFulfilledResult<Project | null> => result.status === 'fulfilled')
+          .map(result => result.value)
+          .filter((p): p is Project => p !== null);
+        
           // Cache'e kaydet
           filterableProjectsCacheRef.current = validProjects;
           filterableProjectsCacheTimestampRef.current = now;
@@ -426,7 +579,20 @@ const Tasks = () => {
           validProjects = filterableProjectsCacheRef.current;
         }
         
-        setFilterableProjects(validProjects);
+        // En son kullanılan projeyi localStorage'dan al
+        const lastUsedProjectId = localStorage.getItem('lastUsedProjectId');
+        if (lastUsedProjectId) {
+          lastUsedProjectRef.current = lastUsedProjectId;
+        }
+        
+        // Projeleri en son kullanılan projeye göre sırala
+        const sortedProjects = [...validProjects].sort((a, b) => {
+          if (a.id === lastUsedProjectRef.current) return -1;
+          if (b.id === lastUsedProjectRef.current) return 1;
+          return 0;
+        });
+        
+        setFilterableProjects(sortedProjects);
 
         setUserRequests(myRequestsData);
 
@@ -447,16 +613,16 @@ const Tasks = () => {
         if (tasksNeedingAssignments.length > 0) {
           const newAssignments = await Promise.all(
             tasksNeedingAssignments.map(async (firebaseTask) => {
-              if (!firebaseTask?.id) return null;
-              try {
-                const assignments = await getTaskAssignments(firebaseTask.id);
+            if (!firebaseTask?.id) return null;
+            try {
+              const assignments = await getTaskAssignments(firebaseTask.id);
                 return { taskId: firebaseTask.id, assignments: Array.isArray(assignments) ? assignments : [] };
-              } catch (error) {
-                console.error(`Error fetching assignments for task ${firebaseTask.id}:`, error);
+            } catch (error) {
+              console.error(`Error fetching assignments for task ${firebaseTask.id}:`, error);
                 return { taskId: firebaseTask.id, assignments: [] };
-              }
-            })
-          );
+            }
+          })
+        );
           
           // Cache'i güncelle
           newAssignments.forEach((item) => {
@@ -529,14 +695,17 @@ const Tasks = () => {
           }
         });
 
+        // Firebase'den gelen görevler zaten silinmemiş görevler (deleteDoc ile silinenler Firestore'dan kaldırılıyor)
+        setAllFirebaseTasks(firebaseTasks);
         setMyTasks(myTasksList);
         setCreatedTasks(createdTasksList);
         setArchivedTasks(archivedTasksList);
         setAllTasks(allTasksList);
-        setAllFirebaseTasks(firebaseTasks);
         setLoading(false);
       } catch (error: any) {
         console.error("Real-time tasks update error:", error);
+        const errorMessage = error.message || "Görevler güncellenirken hata oluştu";
+        setError(errorMessage);
         setLoading(false);
       }
     });
@@ -558,6 +727,24 @@ const Tasks = () => {
       toast.error(error.message || "Proje yüklenirken hata oluştu");
     }
   };
+
+  // Check permissions for team management access
+  useEffect(() => {
+    const checkTeamManagementPermission = async () => {
+      if (!user) {
+        setCanAccessTeamManagement(false);
+        return;
+      }
+      try {
+        const canReadDepts = await canRead("departments");
+        setCanAccessTeamManagement(canReadDepts || isTeamLeader);
+      } catch (error) {
+        console.error("Error checking team management permission:", error);
+        setCanAccessTeamManagement(false);
+      }
+    };
+    checkTeamManagementPermission();
+  }, [user, isTeamLeader, canRead]);
 
   const checkCreatePermission = async () => {
     if (!user) {
@@ -596,6 +783,52 @@ const Tasks = () => {
     });
     return () => unsubscribe();
   }, [user]);
+
+  // Proje oluşturma ve silme yetkilerini kontrol et
+  useEffect(() => {
+    const checkProjectPermissions = async () => {
+      if (!user) {
+        setCanCreateProjectState(false);
+        setCanDeleteProjectState(false);
+        return;
+      }
+      try {
+        const departments = await getDepartments();
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
+          role: user.roles,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        };
+        const canCreate = await canCreateProject(userProfile, departments);
+        // canDeleteProject için bir dummy project objesi oluştur (sadece yetki kontrolü için)
+        const dummyProject: Project = {
+          id: "",
+          name: "",
+          description: null,
+          status: "active",
+          isPrivate: false,
+          createdBy: user.id,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        };
+        const canDelete = await canDeleteProject(dummyProject, userProfile);
+        setCanCreateProjectState(canCreate || isAdmin || isTeamLeader);
+        setCanDeleteProjectState(canDelete || isAdmin || isTeamLeader);
+      } catch (error) {
+        console.error("Error checking project permissions:", error);
+        setCanCreateProjectState(false);
+        setCanDeleteProjectState(false);
+      }
+    };
+    checkProjectPermissions();
+  }, [user, isAdmin, isTeamLeader]);
 
   const fetchTasks = async () => {
     if (!user) return;
@@ -1060,35 +1293,139 @@ const Tasks = () => {
       setCreatedTasks([]);
     } catch (error: any) {
       console.error("Fetch tasks error:", error);
-      toast.error(error.message || "Görevler yüklenirken hata oluştu");
+      const errorMessage = error.message || "Görevler yüklenirken hata oluştu";
+      setError(errorMessage);
+      setLoading(false);
+      
+      // Offline durumu kontrolü
+      const isOffline = !navigator.onLine;
+      if (isOffline) {
+        toast.error("İnternet bağlantınız yok. Lütfen bağlantınızı kontrol edin.", {
+          action: {
+            label: "Cache'den Göster",
+            onClick: () => {
+              // Cache'den görevleri göster (zaten allTasks state'inde var)
+              toast.info("Cache'den görevler gösteriliyor");
+            }
+          },
+          duration: 5000,
+        });
+      } else {
+        toast.error(errorMessage, {
+          action: {
+            label: "Tekrar Dene",
+            onClick: () => {
+              setError(null);
+              fetchTasks();
+            }
+          },
+          duration: 5000,
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteTask = async (taskId: string) => {
+    if (!taskId || taskId.trim() === "") {
+      toast.error("Geçersiz görev ID");
+      return;
+    }
+    if (!user?.id) {
+      toast.error("Kullanıcı bilgisi bulunamadı");
+      return;
+    }
     setDeletingId(taskId);
     try {
-      await deleteTask(taskId);
+      await deleteTask(taskId, user.id);
       toast.success("Görev başarıyla silindi");
       // Real-time subscribe otomatik güncelleyecek
     } catch (error: any) {
       console.error("Delete task error:", error);
-      toast.error(error.message || "Görev silinirken hata oluştu");
+      toast.error(error?.message || "Görev silinirken hata oluştu", {
+        action: {
+          label: "Tekrar Dene",
+          onClick: () => handleDeleteTask(taskId),
+        },
+      });
     } finally {
       setDeletingId(null);
     }
   };
 
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) {
+      toast.error("Proje adı gereklidir");
+      return;
+    }
+    if (!user?.id) {
+      toast.error("Kullanıcı bilgisi bulunamadı");
+      return;
+    }
+    try {
+      await createProject({
+        name: newProjectName.trim(),
+        description: newProjectDescription.trim() || null,
+        status: "active",
+        isPrivate: false,
+        createdBy: user.id,
+      });
+      toast.success("Proje oluşturuldu");
+      setCreateProjectDialogOpen(false);
+      setNewProjectName("");
+      setNewProjectDescription("");
+      // Projeleri yeniden yükle
+      const projects = await getProjects({ status: "active" });
+      setFilterableProjects(projects);
+    } catch (error: any) {
+      console.error("Create project error:", error);
+      toast.error(error.message || "Proje oluşturulurken hata oluştu");
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!projectToDelete || !user?.id) return;
+    try {
+      await deleteProject(projectToDelete.id, user.id);
+      toast.success("Proje silindi");
+      setDeleteProjectDialogOpen(false);
+      setProjectToDelete(null);
+      // Eğer silinen proje seçiliyse, "Tüm Projeler"e geç
+      if (selectedProject === projectToDelete.id) {
+        setSelectedProject("all");
+        setProjectFilter("all");
+      }
+      // Projeleri yeniden yükle
+      const projects = await getProjects({ status: "active" });
+      setFilterableProjects(projects);
+    } catch (error: any) {
+      console.error("Delete project error:", error);
+      toast.error(error.message || "Proje silinirken hata oluştu");
+    }
+  };
+
   const handleArchiveTask = async (taskId: string) => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      toast.error("Kullanıcı bilgisi bulunamadı");
+      return;
+    }
+    if (!taskId || taskId.trim() === "") {
+      toast.error("Geçersiz görev ID");
+      return;
+    }
     try {
       await archiveTask(taskId, user.id);
       toast.success("Görev arşivlendi");
       // Real-time subscribe otomatik güncelleyecek
     } catch (error: any) {
       console.error("Archive task error:", error);
-      toast.error(error.message || "Görev arşivlenirken hata oluştu");
+      toast.error(error?.message || "Görev arşivlenirken hata oluştu", {
+        action: {
+          label: "Tekrar Dene",
+          onClick: () => handleArchiveTask(taskId),
+        },
+      });
     }
   };
 
@@ -1116,15 +1453,43 @@ const Tasks = () => {
     }
   };
 
+  // Standardize edilmiş durum renkleri ve ikonları
   const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <CheckCircle2 className="h-5 w-5 text-success" />;
-      case "in_progress":
-        return <Clock className="h-5 w-5 text-warning" />;
-      default:
-        return <AlertCircle className="h-5 w-5 text-muted-foreground" />;
-    }
+    const statusConfig: Record<string, { icon: typeof CheckCircle2; color: string; bgColor: string }> = {
+      pending: { 
+        icon: CircleDot, 
+        color: "text-amber-500", 
+        bgColor: "bg-amber-50 border-amber-200" 
+      },
+      in_progress: { 
+        icon: Clock, 
+        color: "text-blue-500", 
+        bgColor: "bg-blue-50 border-blue-200" 
+      },
+      completed: { 
+        icon: CheckCircle2, 
+        color: "text-emerald-600", 
+        bgColor: "bg-emerald-50 border-emerald-200" 
+      },
+      approved: { 
+        icon: CheckCircle2, 
+        color: "text-green-600", 
+        bgColor: "bg-green-50 border-green-200" 
+      },
+    };
+    
+    const config = statusConfig[status] || { 
+      icon: AlertCircle, 
+      color: "text-muted-foreground", 
+      bgColor: "bg-muted border-border" 
+    };
+    const Icon = config.icon;
+    
+    return (
+      <div className={cn("rounded-full p-1.5 border", config.bgColor)} aria-label={getStatusLabel(status)}>
+        <Icon className={cn("h-4 w-4", config.color)} />
+      </div>
+    );
   };
 
   const getStatusLabel = (status: string) => {
@@ -1198,65 +1563,41 @@ const Tasks = () => {
       .slice(0, 2);
   };
 
-  const filterTasks = (tasks: any[], skipFocusFilter: boolean = false, skipOtherFilters: boolean = false) => {
+  const filterTasks = (tasks: any[]) => {
+    if (!Array.isArray(tasks)) {
+      return [];
+    }
     return tasks.filter(task => {
-      // Panoda sadece proje filtresi uygulanır, diğer filtreler atlanır
-      if (skipOtherFilters) {
-        // Proje filtresi
-        let matchesProject = true;
-        if (projectId) {
-          // Proje detay sayfasındaysak, sadece o projeye ait görevler gösterilmeli
-          matchesProject = task.projectId === projectId;
-        } else {
-          // Proje detay sayfasında değilsek, proje filtresine göre filtrele
-          if (projectFilter === "all") {
-            matchesProject = true;
-          } else if (projectFilter === "general") {
-            matchesProject = task.projectId === "general";
-          } else {
-            matchesProject = task.projectId === projectFilter;
-          }
-        }
-        return matchesProject;
-      }
+      if (!task) return false;
       
-      const searchLower = searchTerm.toLocaleLowerCase('tr-TR');
-      const taskTitle = task.title?.toLocaleLowerCase('tr-TR') || "";
-      const taskDesc = task.description?.toLocaleLowerCase('tr-TR') || "";
+      const searchLower = (searchTerm || "").toLocaleLowerCase('tr-TR');
+      const taskTitle = (task.title || "").toLocaleLowerCase('tr-TR');
+      const taskDesc = (task.description || "").toLocaleLowerCase('tr-TR');
       
-      const matchesSearch = taskTitle.includes(searchLower) || taskDesc.includes(searchLower);
+      const matchesSearch = !searchTerm || searchTerm.trim() === "" || taskTitle.includes(searchLower) || taskDesc.includes(searchLower);
       const matchesStatus = statusFilter === "all" || task.status === statusFilter;
-      const matchesFocus = skipFocusFilter ? true : (
+      const matchesFocus = (
         focusFilter === "all" ||
         (focusFilter === "due_soon" && isTaskDueSoon(task)) ||
         (focusFilter === "overdue" && isTaskOverdue(task)) ||
-        (focusFilter === "high_priority" && task.priority >= 4)
+        (focusFilter === "high_priority" && (task.priority || 0) >= 4)
       );
       
-      // Proje filtresi
-      // Eğer proje detay sayfasındaysak (projectId varsa), zaten o projeye ait görevler gösteriliyor
-      // Bu durumda proje filtresi sadece ekstra bir filtreleme sağlar
-      // Eğer proje detay sayfasında değilsek, proje filtresine göre filtrele
+      // Proje filtresi - selectedProject state'ine göre
       let matchesProject = true;
-      if (projectId) {
-        // Proje detay sayfasındaysak, sadece o projeye ait görevler gösterilmeli
-        matchesProject = task.projectId === projectId;
-      } else if (taskTypeFromUrl === 'general') {
-        // "Genel Görevler" sayfasındaysak, sadece "general" projesine ait görevler gösterilmeli
-        matchesProject = task.projectId === "general";
-      } else {
-        // Proje detay sayfasında değilsek ve "Genel Görevler" sayfasında değilsek, proje filtresine göre filtrele
-        if (projectFilter === "all") {
+      if (selectedProject === "all") {
           matchesProject = true;
-        } else if (projectFilter === "general") {
-          matchesProject = task.projectId === "general";
+      } else if (selectedProject === "general") {
+        matchesProject = task.projectId === "general" || !task.projectId;
         } else {
-          matchesProject = task.projectId === projectFilter;
-        }
+        matchesProject = task.projectId === selectedProject;
       }
       
-      // İstatistik filtrelemesi artık filteredAndSortedMyTasks, filteredAndSortedAllTasks ve filteredAndSortedArchivedTasks içinde uygulanıyor
-      // Burada sadece diğer filtreleri uyguluyoruz
+      // activeFilter kontrolleri kaldırıldı çünkü:
+      // - pool, archive, my-tasks filtreleri zaten tasksForStatsAndDisplay içinde uygulanmış
+      // - general filtresi zaten selectedProject === "general" ile uygulanmış
+      // Burada sadece arama, durum, odak ve proje filtrelerini uyguluyoruz
+      // Hem liste hem pano görünümünde aynı filtreler uygulanır
       return matchesSearch && matchesStatus && matchesFocus && matchesProject;
     });
   };
@@ -1266,226 +1607,235 @@ const Tasks = () => {
       return [];
     }
     return [...tasks].sort((a, b) => {
+      if (!a || !b) return 0;
+      
       if (sortBy === "priority") {
-        return b.priority - a.priority;
+        const aPriority = a.priority || 0;
+        const bPriority = b.priority || 0;
+        return bPriority - aPriority;
       }
       if (sortBy === "due_date") {
         if (!a.due_date) return 1;
         if (!b.due_date) return -1;
-        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+        const aDate = new Date(a.due_date).getTime();
+        const bDate = new Date(b.due_date).getTime();
+        if (isNaN(aDate)) return 1;
+        if (isNaN(bDate)) return -1;
+        return aDate - bDate;
       }
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      // created_at sıralaması
+      const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+      if (isNaN(aCreated)) return 1;
+      if (isNaN(bCreated)) return -1;
+      return bCreated - aCreated;
     });
   };
 
   // İstatistiklerin baz aldığı görev setini hesapla (tüm görevler ve panoda kullanılacak)
   // Bu görev seti, istatistiklerin hesaplandığı ve görevlerin gösterildiği aynı kaynak olmalı
   const tasksForStatsAndDisplay = useMemo(() => {
-    // Aktif sekmeye göre görev listesini belirle (sadece sekme bazlı filtreleme)
+    // Filtre tipine göre görev listesini belirle
     let tasks: any[] = [];
-    if (activeListTab === "archived") {
-      tasks = archivedTasks;
-    } else if (activeListTab === "my-tasks") {
-      // "Benim Görevlerim" sekmesinde görevleri kullan
-      tasks = myTasks.map((task) => {
+    if (activeFilter === "archive") {
+      tasks = Array.isArray(archivedTasks) ? archivedTasks.filter(t => t) : [];
+    } else if (activeFilter === "my-tasks") {
+      // "Benim Görevlerim" filtresinde görevleri kullan
+      tasks = (Array.isArray(myTasks) ? myTasks : [])
+        .filter(t => t)
+        .map((task) => {
+          if (!task) return null;
         const { assignment, ...taskWithoutAssignment } = task;
         return taskWithoutAssignment;
+        })
+        .filter((t): t is Task & { assignedUsers?: Profile[] } => t !== null);
+    } else if (activeFilter === "pool") {
+      // Görev havuzunda sadece isInPool=true olan görevler
+      tasks = (Array.isArray(allTasks) ? allTasks : [])
+        .filter(task => {
+          if (!task?.id) return false;
+          const firebaseTask = (Array.isArray(allFirebaseTasks) ? allFirebaseTasks : []).find(t => t?.id === task.id);
+          return firebaseTask?.isInPool === true && !firebaseTask?.onlyInMyTasks;
       });
     } else {
-      // "Tüm Görevler" sekmesi veya proje detay sayfası
-      // Eğer "Genel Görevler" sayfasındaysak, myTasks kullan
-      // Eğer proje detay sayfasındaysak, allTasks kullan (o projeye ait tüm görevler)
-      if (taskTypeFromUrl === 'general') {
-        tasks = myTasks.map((task) => {
-          const { assignment, ...taskWithoutAssignment } = task;
-          return taskWithoutAssignment;
+      // all veya general
+      tasks = Array.isArray(allTasks) ? allTasks.filter(t => t) : [];
+    }
+    
+    // Silinmiş görevleri filtrele: allFirebaseTasks içinde olmayan görevler silinmiş demektir
+    // Firebase'de deleteDoc ile silinen görevler Firestore'dan kaldırılıyor, bu yüzden allFirebaseTasks'ta olmayan görevler silinmiş demektir
+    // allFirebaseTasks boş olsa bile (henüz yüklenmemiş), görevleri filtrelemeye çalışalım
+    // Eğer allFirebaseTasks yüklenmişse ve görev içinde yoksa, silinmiş demektir
+    if (Array.isArray(allFirebaseTasks)) {
+      if (allFirebaseTasks.length > 0) {
+        // allFirebaseTasks yüklenmiş, silinmiş görevleri filtrele
+        const firebaseTaskIds = new Set(allFirebaseTasks.map(t => t?.id).filter((id): id is string => !!id));
+        tasks = tasks.filter((task: any) => {
+          if (!task?.id) return false;
+          // Eğer görev allFirebaseTasks içinde yoksa, silinmiş demektir
+          return firebaseTaskIds.has(task.id);
         });
-      } else if (projectId) {
-        // Proje detay sayfasında, allTasks o projeye ait tüm görevleri içeriyor
-        tasks = allTasks;
+      }
+      // allFirebaseTasks boşsa (henüz yüklenmemiş), görevleri olduğu gibi bırak
+      // Çünkü henüz yüklenmediği için silinmiş görevleri filtreleyemeyiz
+    }
+    
+    // Proje filtresi uygula (selectedProject state'ine göre)
+    if (selectedProject && selectedProject !== "all") {
+      if (selectedProject === "general") {
+        tasks = tasks.filter((task: any) => task && (task.projectId === "general" || !task.projectId));
       } else {
-        // Normal "Tüm Görevler" sayfasında
-        tasks = allTasks;
+        tasks = tasks.filter((task: any) => task && task.projectId === selectedProject);
       }
     }
     
-    // Eğer statFilter seçiliyse, önce o filtreyi uygula
-    if (statFilter && statFilter !== "all") {
-      tasks = tasks.filter((task: any) => {
-        if (statFilter === "active") {
-          return task.status !== "completed";
-        } else if (statFilter === "completed") {
-          return task.status === "completed";
-        } else if (statFilter === "risky") {
-          return isTaskDueSoon(task) || isTaskOverdue(task);
-        } else if (statFilter === "pending_approval") {
-          return task.approvalStatus === "pending";
-        }
-        return true;
-      });
-    }
-    
     return tasks;
-  }, [allTasks, myTasks, archivedTasks, activeListTab, projectId, taskTypeFromUrl, statFilter]);
+  }, [allTasks, myTasks, archivedTasks, activeFilter, allFirebaseTasks, selectedProject]);
 
   const filteredAndSortedMyTasks = useMemo(() => {
     // İstatistiklerin baz aldığı görev setini kullan (tasksForStatsAndDisplay)
-    // Ama sadece "Benim Görevlerim" sekmesi için
-    if (activeListTab !== "my-tasks") {
+    // Ama sadece "Benim Görevlerim" filtresi için
+    if (activeFilter !== "my-tasks") {
       return [];
     }
     
     // İstatistiklerin kullandığı filtrelemeyi koru, sadece ek filtreleri uygula (arama, durum, odak, proje)
-    // Liste görünümü için sıralama uygula, pano görünümü için sıralama gerekmez
+    // Hem liste hem pano görünümünde aynı filtreleri ve sıralamayı uygula
     const filtered = filterTasks(tasksForStatsAndDisplay);
-    return viewMode === "list" ? sortTasks(filtered) : filtered;
-  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, viewMode, activeListTab, projectFilter]);
-
-  const filteredAndSortedCreatedTasks = useMemo(() => {
-    if (viewMode !== "list") return [];
-    return sortTasks(filterTasks(createdTasks));
-  }, [createdTasks, searchTerm, statusFilter, focusFilter, sortBy, viewMode]);
+    return sortTasks(filtered);
+  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject]);
 
   const filteredAndSortedAllTasks = useMemo(() => {
     // İstatistiklerin baz aldığı görev setini kullan (tasksForStatsAndDisplay)
     // "Tüm Görevler" sekmesi veya proje detay sayfası için
-    if (activeListTab !== "all" && (activeListTab || taskTypeFromUrl === 'general')) {
+    if (activeFilter === "my-tasks" || activeFilter === "archive") {
       return [];
     }
     
     // İstatistiklerin kullandığı filtrelemeyi koru, sadece ek filtreleri uygula (arama, durum, odak, proje)
-    // Liste görünümü için tüm filtreleri uygula, pano görünümü için sadece proje filtresini uygula
-    const filtered = viewMode === "board" 
-      ? filterTasks(tasksForStatsAndDisplay, false, true) // Pano görünümünde sadece proje filtresi
-      : filterTasks(tasksForStatsAndDisplay); // Liste görünümünde tüm filtreler
-    return viewMode === "list" ? sortTasks(filtered) : filtered;
-  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, viewMode, activeListTab, taskTypeFromUrl, projectFilter]);
+    // Hem liste hem pano görünümünde aynı filtreleri ve sıralamayı uygula
+    const filtered = filterTasks(tasksForStatsAndDisplay);
+    return sortTasks(filtered);
+  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject]);
 
-  // Arşiv artık ayrı sayfada, burada kullanılmıyor
+  // Arşivlenmiş görevler için filtrelenmiş ve sıralanmış liste
+  const filteredAndSortedArchivedTasks = useMemo(() => {
+    if (activeFilter !== "archive") {
+      return [];
+    }
+    // İstatistiklerin baz aldığı görev setini kullan (tasksForStatsAndDisplay)
+    // Hem liste hem pano görünümünde aynı filtreleri ve sıralamayı uygula
+    const filtered = filterTasks(tasksForStatsAndDisplay);
+    return sortTasks(filtered);
+  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject]);
 
-  // Görevler "Tüm Görevler" ve "Benim Görevlerim" sekmelerinde gözüküyor
-  // Proje detay sayfasındayken "Tüm Görevler" sekmesi o projeye ait tüm görevleri gösterir (allTasks kullanır)
-  // "Genel Görevler" sayfasındayken "Tüm Görevler" sekmesi yerine "Benim Görevlerim" gösterilir
+  // Filtre tipine göre görev listesini belirle
   const listData = useMemo(() => {
-    return activeListTab === "my-tasks"
-      ? filteredAndSortedMyTasks
-      : taskTypeFromUrl === 'general'
-      ? filteredAndSortedMyTasks // "Genel Görevler" sayfasında "Tüm Görevler" yerine "Benim Görevlerim" göster
-      : filteredAndSortedAllTasks; // Proje detay sayfasında veya normal "Tüm Görevler" sayfasında allTasks kullan
-  }, [activeListTab, filteredAndSortedMyTasks, filteredAndSortedAllTasks, projectId, taskTypeFromUrl]);
+    if (activeFilter === "my-tasks") {
+      return filteredAndSortedMyTasks;
+    } else if (activeFilter === "archive") {
+      return filteredAndSortedArchivedTasks;
+    } else {
+      // all, general, pool için filteredAndSortedAllTasks kullan
+      return filteredAndSortedAllTasks;
+    }
+  }, [activeFilter, filteredAndSortedMyTasks, filteredAndSortedAllTasks, filteredAndSortedArchivedTasks]);
 
-    const boardTasks = useMemo(() => {
-    // Listeyi baz alarak panoyu senkronize et
-    // listData zaten tüm filtreleri (arama, durum, odak, proje, statFilter) uygulamış durumda
+  // Liste değiştiğinde visible items count'u sıfırla (listData tanımından sonra taşındı)
+
+  // Görev durumu değişikliklerinde browser notification gönder
+  useEffect(() => {
+    if (notificationPermission === "granted" && user && allTasks.length > 0) {
+      allTasks.forEach((task) => {
+        const previousStatus = previousTaskStatusesRef.current.get(task.id);
+        if (previousStatus && previousStatus !== task.status && task.status) {
+          // Durum değişti, bildirim gönder
+          const statusNames: Record<string, string> = {
+            pending: "Yapılacak",
+            in_progress: "Devam Ediyor",
+            completed: "Tamamlandı",
+          };
+          try {
+            new Notification("Görev Durumu Güncellendi", {
+              body: `${task.title} görevi "${statusNames[task.status] || task.status}" durumuna güncellendi`,
+              icon: "/favicon.ico",
+              tag: `task-${task.id}`,
+              badge: "/favicon.ico",
+            });
+          } catch (error) {
+            console.error("Browser notification error:", error);
+          }
+        }
+        previousTaskStatusesRef.current.set(task.id, task.status);
+      });
+    }
+  }, [allTasks, notificationPermission, user]);
+
+  const boardTasks = useMemo(() => {
+    // listData zaten tüm filtreleri (arama, durum, odak, proje) ve sıralamayı uygulamış durumda
+    // Direkt olarak listData'yı kullan, çünkü artık viewMode'dan bağımsız olarak aynı filtreler uygulanıyor
     
-    // listData'dan görevleri al (zaten filtrelenmiş ve sıralanmış)
-    // Arşivlenmiş görevleri board'dan çıkar (arşiv ayrı sayfada gösteriliyor)
-    // allFirebaseTasks Map'e çevirerek daha hızlı lookup yap
-    const firebaseTasksMap = new Map(allFirebaseTasks.map(t => [t.id, t]));
-    let tasksToShow = listData.filter((task) => {
-      // Task objesinde isArchived veya is_archived property'si varsa kontrol et
-      // Ayrıca allFirebaseTasks'tan da kontrol et
-      const firebaseTask = firebaseTasksMap.get(task.id);
-      const isArchived = task.isArchived === true || task.is_archived === true || firebaseTask?.isArchived === true;
-      return !isArchived;
-    });
+    if (!Array.isArray(listData) || listData.length === 0) {
+      return [];
+    }
     
-    // Pano formatına çevir (assignment'ı kaldır)
-    return tasksToShow.map((task) => {
-      const { assignment, ...taskWithoutAssignment } = task;
-      return taskWithoutAssignment;
-    });
+    // listData zaten filtrelenmiş ve sıralanmış, TaskBoard'un beklediği formata çevir
+    const boardTasksResult = listData
+      .filter((task) => {
+        // Null/undefined görevleri filtrele
+        if (!task || !task.id) return false;
+        // Silinmiş görevleri filtrele (allFirebaseTasks içinde olmayan görevler silinmiş demektir)
+        if (Array.isArray(allFirebaseTasks) && allFirebaseTasks.length > 0) {
+          const firebaseTaskIds = new Set(allFirebaseTasks.map(t => t?.id).filter((id): id is string => !!id));
+          if (!firebaseTaskIds.has(task.id)) {
+            return false; // Silinmiş görev
+          }
+        }
+        return true;
+      })
+      .map((task) => {
+        // assignment'ı kaldır ve TaskBoard formatına çevir
+        const { assignment, assignedUsers, ...taskWithoutAssignment } = task;
+        
+        // TaskBoard'un beklediği formata çevir (assignments array'i oluştur)
+        const boardTask: any = {
+          id: task.id,
+          title: task.title || "",
+          description: task.description || null,
+          status: task.status || "pending",
+          priority: task.priority || 0,
+          due_date: task.due_date || null,
+          created_at: task.created_at || new Date().toISOString(),
+          projectId: task.projectId || null,
+          isArchived: task.isArchived || false,
+          is_archived: task.is_archived || false,
+          approvalStatus: task.approvalStatus || undefined,
+          createdBy: task.createdBy || null,
+          created_by: task.createdBy || null,
+          assignments: Array.isArray(assignedUsers) ? assignedUsers
+            .filter((u: any) => u && u.id)
+            .map((u: any) => ({
+              assigned_to: u.id,
+              assigned_to_name: u.full_name || u.email || "Kullanıcı",
+              assigned_to_email: u.email || "",
+            })) : [],
+          attachments: 0,
+          production_order_id: null, // Production order ID burada yok, sadece bilgiler var
+          production_order_number: task.production_order_number || null,
+          production_order_customer: task.production_order_customer || null,
+          production_order_priority: task.production_order_priority || null,
+          production_order_due_date: task.production_order_due_date || null,
+          production_order_status: null,
+          labels: [], // Labels boş array olarak başlat
+        };
+        
+        return boardTask;
+      });
+    
+    return boardTasksResult;
   }, [listData, allFirebaseTasks]);
 
-  // İstatistikler aktif sekmeye göre hesaplanmalı
-  // İstatistikler, görevlerin gösterildiği aynı filtrelemeye sahip olmalı
-  // Ancak statFilter hariç - istatistikler her zaman tüm görevler üzerinden hesaplanmalı
-  const stats = useMemo(() => {
-    // tasksForStatsAndDisplay kullan ama statFilter'ı kaldır
-    // İstatistikler her zaman tüm görevler üzerinden hesaplanmalı (statFilter hariç)
-    let tasksForStats: any[] = [];
-    
-    // Aktif sekmeye göre görev listesini belirle (statFilter hariç)
-    if (activeListTab === "archived") {
-      tasksForStats = archivedTasks;
-    } else if (activeListTab === "my-tasks") {
-      tasksForStats = myTasks.map((task) => {
-        const { assignment, ...taskWithoutAssignment } = task;
-        return taskWithoutAssignment;
-      });
-    } else {
-      if (taskTypeFromUrl === 'general') {
-        tasksForStats = myTasks.map((task) => {
-          const { assignment, ...taskWithoutAssignment } = task;
-          return taskWithoutAssignment;
-        });
-      } else if (projectId) {
-        tasksForStats = allTasks;
-      } else {
-        tasksForStats = allTasks;
-      }
-    }
-    
-    // Proje filtresi uygula (eğer varsa)
-    if (projectFilter && projectFilter !== "all") {
-      if (projectFilter === "general") {
-        tasksForStats = tasksForStats.filter((task: any) => task.projectId === "general" || !task.projectId);
-      } else {
-        tasksForStats = tasksForStats.filter((task: any) => task.projectId === projectFilter);
-      }
-    }
-    
-    // İstatistikleri hesapla (statFilter hariç - tüm görevler üzerinden)
-    const total = tasksForStats.length;
-    const active = tasksForStats.filter((task: Task) => task.status !== "completed").length;
-    const completed = tasksForStats.filter((task: Task) => task.status === "completed").length;
-    const dueSoon = tasksForStats.filter((task: Task) => isTaskDueSoon(task)).length;
-    const overdue = tasksForStats.filter((task: Task) => isTaskOverdue(task)).length;
-    const pendingApproval = tasksForStats.filter((task: any) => task.approvalStatus === "pending").length;
-    return { total, active, completed, dueSoon, overdue, pendingApproval };
-  }, [allTasks, myTasks, archivedTasks, activeListTab, projectId, taskTypeFromUrl, projectFilter]);
-
-  // Quick filters için de stats ile aynı görev setini kullan (statFilter hariç)
-  const quickFilters = useMemo(() => {
-    // İstatistiklerle aynı görev setini kullan (statFilter hariç)
-    let tasksForQuickFilters: any[] = [];
-    
-    if (activeListTab === "archived") {
-      tasksForQuickFilters = archivedTasks;
-    } else if (activeListTab === "my-tasks") {
-      tasksForQuickFilters = myTasks.map((task) => {
-        const { assignment, ...taskWithoutAssignment } = task;
-        return taskWithoutAssignment;
-      });
-    } else {
-      if (taskTypeFromUrl === 'general') {
-        tasksForQuickFilters = myTasks.map((task) => {
-          const { assignment, ...taskWithoutAssignment } = task;
-          return taskWithoutAssignment;
-        });
-      } else if (projectId) {
-        tasksForQuickFilters = allTasks;
-      } else {
-        tasksForQuickFilters = allTasks;
-      }
-    }
-    
-    // Proje filtresi uygula (eğer varsa)
-    if (projectFilter && projectFilter !== "all") {
-      if (projectFilter === "general") {
-        tasksForQuickFilters = tasksForQuickFilters.filter((task: any) => task.projectId === "general" || !task.projectId);
-      } else {
-        tasksForQuickFilters = tasksForQuickFilters.filter((task: any) => task.projectId === projectFilter);
-      }
-    }
-    
-    return [
-      { id: "all", label: "Tümü", description: "Tüm görevleri göster", count: tasksForQuickFilters.length },
-      { id: "due_soon", label: "Yaklaşan", description: "3 gün içinde termin", count: tasksForQuickFilters.filter((task: Task) => isTaskDueSoon(task)).length },
-      { id: "overdue", label: "Geciken", description: "Termin geçmiş görevler", count: tasksForQuickFilters.filter((task: Task) => isTaskOverdue(task)).length },
-      { id: "high_priority", label: "Öncelikli", description: "Öncelik 4+", count: tasksForQuickFilters.filter((task: Task) => task.priority >= 4).length },
-  ] as const;
-  }, [allTasks, myTasks, archivedTasks, activeListTab, projectId, taskTypeFromUrl, projectFilter]);
+  // quickFilters kaldırıldı - artık kullanılmıyor (öncelikli filtre istatistiklerde)
 
   // Mevcut durumun index'ini bul
   const getCurrentStatusIndex = (status: string, approvalStatus?: "pending" | "approved" | "rejected") => {
@@ -1510,16 +1860,73 @@ const Tasks = () => {
     return taskStatusWorkflow[currentIndex + 1];
   };
 
-  const handleStatusChange = async (taskId: string, status: string) => {
-    if (!user) return;
+  // Proje seçildiğinde sıralamayı güncelle (sadece proje değiştiğinde)
+  useEffect(() => {
+    if (selectedProject && selectedProject !== "all" && selectedProject !== "general" && filterableProjects.length > 0) {
+      const lastUsedProjectId = localStorage.getItem('lastUsedProjectId');
+      if (lastUsedProjectId && lastUsedProjectId !== selectedProject) {
+        // En son kullanılan projeyi güncelle
+        lastUsedProjectRef.current = selectedProject;
+        localStorage.setItem('lastUsedProjectId', selectedProject);
+        
+        // Projeleri yeniden sırala
+        const sortedProjects = [...filterableProjects].sort((a, b) => {
+          if (a.id === selectedProject) return -1;
+          if (b.id === selectedProject) return 1;
+          return 0;
+        });
+        setFilterableProjects(sortedProjects);
+      }
+    }
+  }, [selectedProject]);
 
-    try {
-      // Yetki kontrolü: Sadece atanan kullanıcılar ve adminler durum değiştirebilir
-      const task = allTasks.find(t => t.id === taskId);
+  // Dropdown kapandığında arama sorgusunu temizle
+  useEffect(() => {
+    if (!projectDropdownOpen) {
+      setProjectSearchQuery("");
+    }
+  }, [projectDropdownOpen]);
+
+  const handleStatusChange = async (taskId: string, status: string) => {
+    if (!user?.id) {
+      toast.error("Kullanıcı bilgisi bulunamadı");
+      return;
+    }
+    if (!taskId || taskId.trim() === "" || !status || status.trim() === "") {
+      toast.error("Geçersiz görev veya durum");
+      return;
+    }
+
+    // Optimistic update: UI'ı hemen güncelle
+    const task = Array.isArray(allTasks) ? allTasks.find(t => t?.id === taskId) : null;
       if (!task) {
         toast.error("Görev bulunamadı");
         return;
       }
+
+    const previousStatus = task.status || "pending";
+    
+    // Optimistic update state'ini güncelle
+    setOptimisticUpdates(prev => {
+      const newMap = new Map(prev);
+      newMap.set(taskId, { status, timestamp: Date.now() });
+      return newMap;
+    });
+
+    // Optimistic update: Local state'i güncelle
+    const updateTaskInState = (taskList: any[]) => {
+      return taskList.map(t => 
+        t.id === taskId ? { ...t, status } : t
+      );
+    };
+    
+    setAllTasks(prev => updateTaskInState(prev));
+    setMyTasks(prev => updateTaskInState(prev));
+    setCreatedTasks(prev => updateTaskInState(prev));
+    setArchivedTasks(prev => updateTaskInState(prev));
+
+    try {
+      // Yetki kontrolü: Sadece atanan kullanıcılar ve adminler durum değiştirebilir
 
       // Alt yetki kontrolü - durum değiştirme
       try {
@@ -1540,7 +1947,7 @@ const Tasks = () => {
         if (!hasPermission && !isSuperAdmin && task.createdBy !== user.id) {
           // Görevin atanan kullanıcılarını kontrol et
           const taskAssignments = await getTaskAssignments(taskId);
-          const assignedUserIds = taskAssignments.map(a => a.assignedTo);
+          const assignedUserIds = Array.isArray(taskAssignments) ? taskAssignments.map(a => a?.assignedTo).filter((id): id is string => !!id) : [];
           const isAssigned = assignedUserIds.includes(user.id);
           
           if (!isAssigned) {
@@ -1557,7 +1964,7 @@ const Tasks = () => {
       if (!isSuperAdmin) {
         // Görevin atanan kullanıcılarını kontrol et
         const taskAssignments = await getTaskAssignments(taskId);
-        const assignedUserIds = taskAssignments.map(a => a.assignedTo);
+        const assignedUserIds = Array.isArray(taskAssignments) ? taskAssignments.map(a => a?.assignedTo).filter((id): id is string => !!id) : [];
         const isAssigned = assignedUserIds.includes(user.id);
         
         if (!isAssigned) {
@@ -1581,11 +1988,47 @@ const Tasks = () => {
       };
       toast.success(`Görev durumu "${statusNames[status] || status}" olarak güncellendi`);
       
+      // Optimistic update'i temizle (başarılı oldu)
+      setOptimisticUpdates(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(taskId);
+        return newMap;
+      });
+      
       // subscribeToTasks zaten real-time güncellemeleri dinliyor, 
       // bu yüzden fetchTasks() çağrısına gerek yok
     } catch (error: any) {
       console.error("Update task status error:", error);
-      toast.error(error.message || "Durum güncellenemedi");
+      
+      // Rollback: Hata durumunda önceki duruma geri dön
+      const rollbackTaskInState = (taskList: any[]) => {
+        return taskList.map(t => 
+          t.id === taskId ? { ...t, status: previousStatus } : t
+        );
+      };
+      
+      setAllTasks(prev => rollbackTaskInState(prev));
+      setMyTasks(prev => rollbackTaskInState(prev));
+      setCreatedTasks(prev => rollbackTaskInState(prev));
+      setArchivedTasks(prev => rollbackTaskInState(prev));
+      
+      // Optimistic update'i temizle
+      setOptimisticUpdates(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(taskId);
+        return newMap;
+      });
+      
+      const errorMessage = error.message || "Durum güncellenemedi";
+      toast.error(errorMessage, {
+        action: {
+          label: "Tekrar Dene",
+          onClick: () => {
+            handleStatusChange(taskId, status);
+          }
+        },
+        duration: 5000,
+      });
     }
   };
 
@@ -1657,11 +2100,67 @@ const Tasks = () => {
     }
   };
 
+  // Sayfa başlığı için aktif filtreyi belirle
+  const getPageTitle = () => {
+    if (activeFilter === "my-tasks") return "Benim Görevlerim";
+    if (activeFilter === "general") return "Genel Görevler";
+    if (activeFilter === "pool") return "Görev Havuzu";
+    if (activeFilter === "archive") return "Arşiv";
+    if (selectedProject && selectedProject !== "all" && selectedProject !== "general") {
+      const project = filterableProjects.find(p => p.id === selectedProject);
+      return project?.name || "Görevler";
+    }
+    return "Görevler";
+  };
+
+  // Breadcrumb için proje adını al
+  const getProjectName = () => {
+    if (selectedProject && selectedProject !== "all" && selectedProject !== "general") {
+      const project = filterableProjects.find(p => p.id === selectedProject);
+      return project?.name || null;
+    }
+    return null;
+  };
+
   if (loading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="space-y-4">
+          {/* Skeleton: Başlık ve Breadcrumb */}
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-6 w-64" />
+          </div>
+          
+          {/* Skeleton: Filtre Card */}
+          <Card className="border">
+            <CardContent className="p-3">
+              <div className="space-y-3">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-7 w-full" />
+                <Skeleton className="h-7 w-full" />
+                <Skeleton className="h-7 w-full" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Skeleton: Görev Kartları */}
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Card key={i} className="border">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
+                    <Skeleton className="h-7 w-7 rounded" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </MainLayout>
     );
@@ -1670,78 +2169,657 @@ const Tasks = () => {
   return (
     <MainLayout disableScroll={false}>
       <div className={cn(
-        "space-y-2 sm:space-y-3 md:space-y-4",
+        "space-y-2",
         viewMode === "board" ? "pb-0" : "pb-8"
       )}>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-4 flex-shrink-0">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-              {projectId && (
+        {/* Hata Durumu */}
+        {error && (
+          <Card className="border-destructive bg-destructive/5">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-destructive mb-1">Hata Oluştu</h3>
+                  <p className="text-sm text-muted-foreground mb-3">{error}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setError(null);
+                      setLoading(true);
+                      fetchTasks();
+                    }}
+                    className="h-8"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Tekrar Dene
+                  </Button>
+                </div>
                 <Button
                   variant="ghost"
-                  size="icon"
-                  onClick={() => window.history.back()}
-                  className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0"
+                  size="sm"
+                  onClick={() => setError(null)}
+                  className="h-8 w-8 p-0"
                 >
-                  <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <X className="h-4 w-4" />
                 </Button>
-              )}
-              <div className="min-w-0 flex-1">
-                <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-foreground truncate">
-                  {project ? `${project.name} - Görevler` : "Görevler"}
-                </h1>
-              <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
-                  {project ? "Proje görevleri" : "Görev takibi ve yönetimi"}
-                </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            <Tabs value={viewMode} onValueChange={(value) => {
-              setViewMode(value as "list" | "board");
-            }}>
-              <TabsList className="h-9 sm:h-10">
-                <TabsTrigger value="list" className="text-xs sm:text-sm min-h-[44px] sm:min-h-0">Liste</TabsTrigger>
-                <TabsTrigger value="board" className="text-xs sm:text-sm min-h-[44px] sm:min-h-0">Pano</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            {canCreate && (
-            <Button 
-              className="gap-1.5 sm:gap-2 flex-1 sm:flex-initial min-h-[44px] sm:min-h-10 text-xs sm:text-sm" 
-                onClick={async () => {
-                  // Double-check permission before opening form
-                  if (!user) return;
-                  try {
-                    const departments = await getDepartments();
-                    const userProfile: UserProfile = {
-                      id: user.id,
-                      email: user.email,
-                      emailVerified: user.emailVerified,
-                      fullName: user.fullName,
-                      displayName: user.fullName,
-                      phone: user.phone,
-                      dateOfBirth: user.dateOfBirth,
-                      role: user.roles,
-                      createdAt: Timestamp.now(),
-                      updatedAt: Timestamp.now(),
-                    };
-                    const hasPermission = await canCreateTask(userProfile, departments);
-                    if (!hasPermission) {
-                      toast.error("Görev oluşturma yetkiniz yok");
-                      return;
-                    }
-                    openInlineForm("create");
-                  } catch (error) {
-                    console.error("Permission check error:", error);
-                    toast.error("Yetki kontrolü yapılamadı");
-                  }
-                }}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Sayfa Başlığı - Sade */}
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl sm:text-2xl font-semibold text-foreground" id="page-title">
+            {getPageTitle()}
+          </h1>
+          {/* İstatistikler Açılma Butonu */}
+          {!statsExpanded ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setStatsExpanded(true)}
+              className="h-7 px-2 gap-1 text-xs"
+              aria-label="İstatistikleri göster"
             >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Yeni Görev</span>
-              <span className="sm:hidden">Yeni</span>
+              <ChevronLeft className="h-3.5 w-3.5" />
             </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setStatsExpanded(false)}
+              className="h-7 px-2 gap-1 text-xs"
+              aria-label="İstatistikleri gizle"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+
+        {/* Uyarılar Banner - Kompakt */}
+        {(pendingApprovalsCount > 0 || pendingAssignmentsCount > 0 || upcomingDeadlinesCount > 0) && (
+          <div className="flex flex-wrap items-center gap-2 text-xs px-2 py-1.5 bg-amber-50/30 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-800/30 rounded-md">
+            {pendingApprovalsCount > 0 && (
+              <Badge variant="outline" className="text-xs h-5 px-1.5 bg-amber-100/50 dark:bg-amber-900/50 border-amber-300/50 dark:border-amber-700/50">
+                {pendingApprovalsCount} onay
+              </Badge>
+            )}
+            {pendingAssignmentsCount > 0 && (
+              <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-100/50 dark:bg-blue-900/50 border-blue-300/50 dark:border-blue-700/50">
+                {pendingAssignmentsCount} atama
+              </Badge>
+            )}
+            {upcomingDeadlinesCount > 0 && (
+              <Badge variant="outline" className="text-xs h-5 px-1.5 bg-orange-100/50 dark:bg-orange-900/50 border-orange-300/50 dark:border-orange-700/50">
+                {upcomingDeadlinesCount} deadline
+              </Badge>
             )}
           </div>
-        </div>
+        )}
+
+        {/* İstatistikler - Sade */}
+        {statsExpanded && (
+          <Card className="border shadow-sm">
+            <CardContent className="p-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {/* Tümü */}
+                <div 
+                  className="flex items-center gap-2 p-2 rounded border border-border/50 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setFocusFilter("all");
+                    setSelectedProject("all");
+                    setProjectFilter("all");
+                  }}
+                >
+                  <CheckSquare className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Tümü</p>
+                    <p className="text-lg font-semibold">{tasksForStatsAndDisplay.length}</p>
+                  </div>
+                </div>
+
+                {/* Aktif */}
+                <div 
+                  className="flex items-center gap-2 p-2 rounded border border-border/50 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setFocusFilter("all");
+                  }}
+                >
+                  <Clock className="h-4 w-4 text-blue-600" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Aktif</p>
+                    <p className="text-lg font-semibold text-blue-600">
+                      {tasksForStatsAndDisplay.filter((task: Task) => 
+                        task && 
+                        (task.status === "pending" || task.status === "in_progress") &&
+                        !task.isArchived && !task.is_archived
+                      ).length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Onay Bekleyen */}
+                <div 
+                  className="flex items-center gap-2 p-2 rounded border border-border/50 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => {
+                    setStatusFilter("completed");
+                  }}
+                >
+                  <AlertCircle className="h-4 w-4 text-orange-600" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Onay Bekleyen</p>
+                    <p className="text-lg font-semibold text-orange-600">
+                      {tasksForStatsAndDisplay.filter((task: Task) => 
+                        task && 
+                        task.status === "completed" && 
+                        task.approvalStatus === "pending"
+                      ).length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tamamlanan */}
+                <div 
+                  className="flex items-center gap-2 p-2 rounded border border-border/50 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => {
+                    setStatusFilter("completed");
+                    setFocusFilter("all");
+                  }}
+                >
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Tamamlanan</p>
+                    <p className="text-lg font-semibold text-emerald-600">
+                      {tasksForStatsAndDisplay.filter((task: Task) => task && task.status === "completed").length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Geciken */}
+                <div 
+                  className="flex items-center gap-2 p-2 rounded border border-border/50 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setFocusFilter("overdue");
+                  }}
+                >
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Geciken</p>
+                    <p className="text-lg font-semibold text-red-600">
+                      {tasksForStatsAndDisplay.filter((task: Task) => task && isTaskOverdue(task)).length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Yaklaşan */}
+                <div 
+                  className="flex items-center gap-2 p-2 rounded border border-border/50 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setFocusFilter("due_soon");
+                  }}
+                >
+                  <CalendarDays className="h-4 w-4 text-amber-600" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Yaklaşan</p>
+                    <p className="text-lg font-semibold text-amber-600">
+                      {tasksForStatsAndDisplay.filter((task: Task) => task && isTaskDueSoon(task)).length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Öncelikli */}
+                <div 
+                  className="flex items-center gap-2 p-2 rounded border border-border/50 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setFocusFilter("high_priority");
+                  }}
+                >
+                  <Flame className="h-4 w-4 text-purple-600" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Öncelikli</p>
+                    <p className="text-lg font-semibold text-purple-600">
+                      {tasksForStatsAndDisplay.filter((task: Task) => task && (task.priority || 0) >= 4).length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Toplu İşlemler Toolbar */}
+        {isMultiSelectMode && selectedTaskIds.size > 0 && (
+          <Card className="border bg-primary/5 flex-shrink-0">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-foreground">
+                    {selectedTaskIds.size} görev seçildi
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedTaskIds(new Set());
+                      setIsMultiSelectMode(false);
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    <X className="h-3.5 w-3.5 mr-1" />
+                    Seçimi Temizle
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (selectedTaskIds.size === 0) return;
+                      const status = prompt("Yeni durum seçin:\n1. pending (Yapılacak)\n2. in_progress (Devam Ediyor)\n3. completed (Tamamlandı)");
+                      if (!status || !["pending", "in_progress", "completed"].includes(status)) return;
+                      
+                      const tasksToUpdate = Array.from(selectedTaskIds);
+                      for (const taskId of tasksToUpdate) {
+                        try {
+                          await handleStatusChange(taskId, status);
+                        } catch (error) {
+                          console.error(`Failed to update task ${taskId}:`, error);
+                        }
+                      }
+                      setSelectedTaskIds(new Set());
+                      setIsMultiSelectMode(false);
+                      toast.success(`${tasksToUpdate.length} görev durumu güncellendi`);
+                    }}
+                    className="h-7 text-xs"
+                    disabled={selectedTaskIds.size === 0}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                    Durum Değiştir
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (selectedTaskIds.size === 0) return;
+                      if (!confirm(`${selectedTaskIds.size} görevi arşivlemek istediğinize emin misiniz?`)) return;
+                      
+                      const tasksToArchive = Array.from(selectedTaskIds);
+                      for (const taskId of tasksToArchive) {
+                        try {
+                          if (user) {
+                            await archiveTask(taskId, user.id);
+                          }
+                        } catch (error) {
+                          console.error(`Failed to archive task ${taskId}:`, error);
+                        }
+                      }
+                      setSelectedTaskIds(new Set());
+                      setIsMultiSelectMode(false);
+                      toast.success(`${tasksToArchive.length} görev arşivlendi`);
+                    }}
+                    className="h-7 text-xs"
+                    disabled={selectedTaskIds.size === 0}
+                  >
+                    <Archive className="h-3.5 w-3.5 mr-1" />
+                    Arşivle
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={async () => {
+                      if (selectedTaskIds.size === 0) return;
+                      if (!confirm(`${selectedTaskIds.size} görevi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) return;
+                      
+                      const tasksToDelete = Array.from(selectedTaskIds);
+                      for (const taskId of tasksToDelete) {
+                        try {
+                          await deleteTask(taskId);
+                        } catch (error) {
+                          console.error(`Failed to delete task ${taskId}:`, error);
+                        }
+                      }
+                      setSelectedTaskIds(new Set());
+                      setIsMultiSelectMode(false);
+                      toast.success(`${tasksToDelete.length} görev silindi`);
+                    }}
+                    className="h-7 text-xs"
+                    disabled={selectedTaskIds.size === 0}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Sil
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Kompakt Filtre Bar - Profesyonel Tek Satır Tasarım */}
+        <Card className="border shadow-sm my-0">
+          <CardContent className="p-1.5">
+            <div className="flex flex-col gap-1">
+              {/* Üst Satır: Proje Tabs ve Ana Aksiyonlar */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Temizle Butonu - Sadece aktif filtre varsa göster */}
+                {(statusFilter !== "all" || focusFilter !== "all" || selectedProject !== "all") && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => { 
+                      setStatusFilter("all"); 
+                      setSortBy("created_at"); 
+                      setFocusFilter("all"); 
+                      setSelectedProject("all");
+                      setProjectFilter("all");
+                    }} 
+                    className="h-7 text-xs px-2 gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Filtreleri temizle"
+                    title="Filtreleri Temizle"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Temizle</span>
+                  </Button>
+                )}
+                {/* Proje Seçimi - Arama Yapılabilen Dropdown */}
+                <Popover open={projectDropdownOpen} onOpenChange={setProjectDropdownOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={projectDropdownOpen}
+                      className="h-7 text-xs px-2.5 border-border/50 hover:border-primary/50 transition-colors min-w-[180px] justify-between"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="truncate">
+                          {selectedProject === "all" ? "Tüm Projeler" : 
+                           selectedProject === "general" ? "Genel Görevler" :
+                           filterableProjects.find(p => p.id === selectedProject)?.name || "Proje Seçin"}
+                        </span>
+                      </div>
+                      <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] sm:w-[400px] p-0" align="start" side="bottom" sideOffset={4}>
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Proje ara..."
+                        value={projectSearchQuery}
+                        onValueChange={setProjectSearchQuery}
+                        className="text-sm"
+                      />
+                      <CommandList className="max-h-[300px]">
+                        <CommandEmpty>
+                          {projectSearchQuery ? "Proje bulunamadı." : "Proje bulunamadı."}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="all"
+                            onSelect={() => {
+                              setSelectedProject("all");
+                              setProjectFilter("all");
+                              setProjectDropdownOpen(false);
+                              setProjectSearchQuery("");
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <CheckSquare className="h-4 w-4" />
+                              <span>Tüm Projeler</span>
+                              {selectedProject === "all" && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </div>
+                          </CommandItem>
+                          <CommandItem
+                            value="general"
+                            onSelect={() => {
+                              setSelectedProject("general");
+                              setProjectFilter("general");
+                              setActiveFilter("general");
+                              setProjectDropdownOpen(false);
+                              setProjectSearchQuery("");
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <Folder className="h-4 w-4" />
+                              <span>Genel Görevler</span>
+                              {selectedProject === "general" && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </div>
+                          </CommandItem>
+                        </CommandGroup>
+                        {filterableProjects.length > 0 && (
+                          <CommandGroup heading="Projeler">
+                            {filterableProjects
+                              .filter((project) => {
+                                if (!projectSearchQuery) return true;
+                                const query = projectSearchQuery.toLowerCase();
+                                return project.name?.toLowerCase().includes(query);
+                              })
+                              .map((project) => (
+                                <CommandItem
+                                  key={project.id}
+                                  value={project.id}
+                                  onSelect={() => {
+                                    setSelectedProject(project.id);
+                                    setProjectFilter(project.id);
+                                    setProjectDropdownOpen(false);
+                                    setProjectSearchQuery("");
+                                    // En son kullanılan projeyi localStorage'a kaydet
+                                    localStorage.setItem('lastUsedProjectId', project.id);
+                                    lastUsedProjectRef.current = project.id;
+                                    // Projeleri yeniden sırala
+                                    const sortedProjects = [...filterableProjects].sort((a, b) => {
+                                      if (a.id === project.id) return -1;
+                                      if (b.id === project.id) return 1;
+                                      return 0;
+                                    });
+                                    setFilterableProjects(sortedProjects);
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  <div className="flex items-center gap-2 w-full group">
+                                    {project.isPrivate && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                                    <span className="flex-1">{project.name}</span>
+                                    {project.id === lastUsedProjectRef.current && (
+                                      <Badge variant="outline" className="text-[9px] h-4 px-1">
+                                        Son
+                                      </Badge>
+                                    )}
+                                    {selectedProject === project.id && (
+                                      <Check className="ml-2 h-4 w-4" />
+                                    )}
+                                    {canDeleteProjectState && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          setProjectToDelete(project);
+                                          setDeleteProjectDialogOpen(true);
+                                          setProjectDropdownOpen(false);
+                                        }}
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        )}
+                        {/* Proje Ekle Seçeneği - Yöneticiler ve Ekip Liderleri için */}
+                        {canCreateProjectState && (
+                          <CommandGroup>
+                            <CommandItem
+                              value="create-project"
+                              onSelect={() => {
+                                setCreateProjectDialogOpen(true);
+                                setProjectDropdownOpen(false);
+                              }}
+                              className="cursor-pointer text-primary"
+                            >
+                              <div className="flex items-center gap-2 w-full">
+                                <Plus className="h-4 w-4" />
+                                <span>Proje Ekle</span>
+                              </div>
+                            </CommandItem>
+                          </CommandGroup>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Sağ Taraf: Kategori - İyileştirilmiş */}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {/* Kategori Filtresi - İyileştirilmiş */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-7 text-xs px-2.5 gap-1.5 border-border/50 hover:border-primary/50 transition-colors"
+                      >
+                        <Folder className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">
+                          {activeFilter === "all" && "Tümü"}
+                          {activeFilter === "my-tasks" && "Benim"}
+                          {activeFilter === "pool" && "Havuz"}
+                          {activeFilter === "archive" && "Arşiv"}
+                        </span>
+                        <span className="sm:hidden">
+                          {activeFilter === "all" && "Tümü"}
+                          {activeFilter === "my-tasks" && "Benim"}
+                          {activeFilter === "pool" && "Havuz"}
+                          {activeFilter === "archive" && "Arşiv"}
+                        </span>
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuItem 
+                        onClick={() => setActiveFilter("all")} 
+                        className={activeFilter === "all" ? "bg-accent font-medium" : ""}
+                      >
+                        <div className="flex items-center gap-2">
+                          <CheckSquare className="h-4 w-4" />
+                          <span>Tüm Görevler</span>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => setActiveFilter("my-tasks")} 
+                        className={activeFilter === "my-tasks" ? "bg-accent font-medium" : ""}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          <span>Benim Görevlerim</span>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => setActiveFilter("pool")} 
+                        className={activeFilter === "pool" ? "bg-accent font-medium" : ""}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Zap className="h-4 w-4" />
+                          <span>Görev Havuzu</span>
+                        </div>
+                      </DropdownMenuItem>
+                      {canAccessTeamManagement && (
+                        <DropdownMenuItem 
+                          onClick={() => setActiveFilter("archive")} 
+                          className={activeFilter === "archive" ? "bg-accent font-medium" : ""}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Archive className="h-4 w-4" />
+                            <span>Arşiv</span>
+                          </div>
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                {/* Sağ Taraf: Görünüm Toggle ve Yeni Görev Butonu */}
+                <div className="flex items-center gap-1.5 ml-auto">
+                  {/* Görünüm Toggle - Yazı Olarak */}
+                  <div className="flex items-center gap-0.5 border border-border/50 rounded-lg p-0.5 bg-muted/20">
+                    <Button
+                      variant={viewMode === "list" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("list")}
+                      className="h-7 text-xs px-2.5 transition-all font-medium"
+                      aria-label="Liste görünümü"
+                      title="Liste Görünümü"
+                    >
+                      Liste
+                    </Button>
+                    <Button
+                      variant={viewMode === "board" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("board")}
+                      className="h-7 text-xs px-2.5 transition-all font-medium"
+                      aria-label="Pano görünümü"
+                      title="Pano Görünümü"
+                    >
+                      Pano
+                    </Button>
+                  </div>
+
+                  {/* Yeni Görev Butonu */}
+                  {canCreate && (
+                    <Button 
+                      size="sm"
+                      className="h-7 text-xs px-2.5 gap-1.5 font-medium shadow-sm hover:shadow transition-all" 
+                      onClick={async () => {
+                        if (!user) return;
+                        try {
+                          const departments = await getDepartments();
+                          const userProfile: UserProfile = {
+                            id: user.id,
+                            email: user.email,
+                            emailVerified: user.emailVerified,
+                            fullName: user.fullName,
+                            displayName: user.fullName,
+                            phone: user.phone,
+                            dateOfBirth: user.dateOfBirth,
+                            role: user.roles,
+                            createdAt: Timestamp.now(),
+                            updatedAt: Timestamp.now(),
+                          };
+                          const hasPermission = await canCreateTask(userProfile, departments);
+                          if (!hasPermission) {
+                            toast.error("Görev oluşturma yetkiniz yok");
+                            return;
+                          }
+                          openInlineForm("create");
+                        } catch (error) {
+                          console.error("Permission check error:", error);
+                          toast.error("Yetki kontrolü yapılamadı");
+                        }
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Yeni Görev</span>
+                      <span className="sm:hidden">Yeni</span>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <Dialog open={inlineFormVisible} onOpenChange={setInlineFormVisible}>
           <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
@@ -1802,10 +2880,6 @@ const Tasks = () => {
                                 Son güncelleyen: {(currentTask as any).statusUpdatedBy 
                                   ? (usersMap[(currentTask as any).statusUpdatedBy] || (currentTask as any).statusUpdatedBy)
                                   : (user?.fullName || "-")}
-                                <br />
-                                <span className="text-[11px]">
-                                  {(currentTask as any).statusUpdatedAt ? formatDateSafe((currentTask as any).statusUpdatedAt as any) : ""}
-                                </span>
                               </div>
                             </div>
                           </CardHeader>
@@ -1911,7 +2985,7 @@ const Tasks = () => {
                       onCancel={closeInlineForm}
                       onSuccess={handleInlineSuccess}
                       className="border-0 shadow-none p-0"
-                      showOnlyInMyTasks={activeListTab === "my-tasks"}
+                      showOnlyInMyTasks={activeFilter === "my-tasks"}
                     />
                   </div>
                 </div>
@@ -1920,234 +2994,20 @@ const Tasks = () => {
           </DialogContent>
         </Dialog>
 
-        <div className="grid gap-3 sm:gap-4 md:gap-5 lg:gap-6 grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 flex-shrink-0">
-          {[
-            { 
-              label: "Toplam Görev", 
-              value: stats.total, 
-              sub: "Genel yük", 
-              badgeClass: "text-primary",
-              filterType: "all" as const,
-              onClick: () => {
-                setStatusFilter("all");
-                setFocusFilter("all");
-                setStatFilter("all");
-                setViewMode("list");
-              }
-            },
-            { 
-              label: "Aktif", 
-              value: stats.active, 
-              sub: "Devam eden süreçler", 
-              badgeClass: "text-amber-600",
-              filterType: "active" as const,
-              onClick: () => {
-                setStatusFilter("all");
-                setFocusFilter("all");
-                setStatFilter("active");
-                setViewMode("list");
-              }
-            },
-            { 
-              label: "Tamamlanan", 
-              value: stats.completed, 
-              sub: "Kapatılan işler", 
-              badgeClass: "text-emerald-600",
-              filterType: "completed" as const,
-              onClick: () => {
-                setStatusFilter("completed");
-                setFocusFilter("all");
-                setStatFilter("completed");
-                setViewMode("list");
-              }
-            },
-            { 
-              label: "Riskli (Yaklaşan/Geciken)", 
-              value: stats.dueSoon + stats.overdue, 
-              sub: `${stats.dueSoon} yaklaşan · ${stats.overdue} geciken`, 
-              badgeClass: "text-destructive",
-              filterType: "risky" as const,
-              onClick: () => {
-                setStatusFilter("all");
-                setFocusFilter("all");
-                setStatFilter("risky");
-                setViewMode("list");
-              }
-            },
-            { 
-              label: "Onay Bekleyen", 
-              value: stats.pendingApproval, 
-              sub: "Onay için bekleyen görevler", 
-              badgeClass: "text-yellow-600",
-              filterType: "pending_approval" as const,
-              onClick: () => {
-                setStatusFilter("all");
-                setFocusFilter("all");
-                setStatFilter("pending_approval");
-                setViewMode("list");
-              }
-            },
-          ].map((stat) => (
-            <Card 
-              key={stat.label} 
-              className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:border-primary/50 border-2"
-              onClick={stat.onClick}
-            >
-              <CardContent className="pt-2 pb-2 px-2.5 sm:pt-3 sm:pb-3 sm:px-3 md:pt-4 md:pb-4 md:px-4">
-                <p className="text-[10px] sm:text-xs text-muted-foreground mb-1 sm:mb-1.5 truncate">{stat.label}</p>
-                <div className="text-lg sm:text-xl md:text-2xl font-bold mb-0.5 sm:mb-1">{stat.value}</div>
-                <p className={`text-[10px] sm:text-xs font-medium ${stat.badgeClass} line-clamp-2 hidden sm:block`}>{stat.sub}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
+        {/* Liste veya Pano Görünümü - Aynı İçerik */}
         {viewMode === "list" ? (
-          <div className="space-y-2 sm:space-y-3 md:space-y-4">
-            <Card className="border-2 relative z-10 overflow-visible">
-              <CardContent className="p-3 sm:p-4 md:p-6 overflow-visible">
-                <div className="flex flex-wrap gap-2 sm:gap-3 md:gap-4">
-                  {quickFilters.map((filter) => (
-                    <Button
-                      key={filter.id}
-                      variant={focusFilter === filter.id ? "default" : "outline"}
-                      className="justify-between w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px] min-h-[44px] sm:min-h-10 text-xs sm:text-sm"
-                      onClick={() => setFocusFilter(filter.id)}
-                    >
-                      <span className="flex items-center gap-1.5 sm:gap-2">
-                        {filter.id === "high_priority" ? <Flame className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <CalendarDays className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
-                        <span className="truncate">{filter.label}</span>
-                      </span>
-                      <Badge variant={focusFilter === filter.id ? "secondary" : "outline"} className="text-[10px] sm:text-xs ml-1">{filter.count}</Badge>
-                    </Button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 relative z-10 overflow-visible">
-              <CardContent className="p-3 sm:p-4 md:p-6 overflow-visible">
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4">
-                  {/* Arama Kutusu */}
-                  <div className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] md:min-w-[250px]">
-                    <SearchInput
-                      placeholder="Görev ara..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-xs sm:text-sm"
-                    />
-                  </div>
-                  
-                  {/* Durum Filtresi */}
-                  <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-full h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-xs sm:text-sm">
-                        <SelectValue placeholder="Durum filtrele" />
-                      </SelectTrigger>
-                      <SelectContent className="z-[10003]">
-                        <SelectItem value="all">Tüm Durumlar</SelectItem>
-                        <SelectItem value="pending">Beklemede</SelectItem>
-                        <SelectItem value="in_progress">Devam Ediyor</SelectItem>
-                        <SelectItem value="completed">Tamamlandı</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {/* Sıralama */}
-                  <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
-                    <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger className="w-full h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-xs sm:text-sm">
-                        <SelectValue placeholder="Sırala" />
-                      </SelectTrigger>
-                      <SelectContent className="z-[10003]">
-                        <SelectItem value="created_at">Tarihe Göre</SelectItem>
-                        <SelectItem value="priority">Önceliğe Göre</SelectItem>
-                        <SelectItem value="due_date">Bitiş Tarihine Göre</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {/* Proje Filtresi - Sadece "Tüm Görevler" sekmesinde göster */}
-                  {activeListTab === "all" && (
-                    <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
-                      <Select value={projectFilter} onValueChange={setProjectFilter}>
-                        <SelectTrigger className="w-full h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-xs sm:text-sm">
-                          <SelectValue placeholder="Proje Seçiniz" />
-                        </SelectTrigger>
-                        <SelectContent className="z-[10003]">
-                          <SelectItem value="all">Tüm Projeler</SelectItem>
-                          <SelectItem value="general">Genel Görevler</SelectItem>
-                          {filterableProjects
-                            .filter(p => p.name?.toLowerCase() !== "genel görevler" && p.name?.toLowerCase() !== "genel")
-                            .map((project) => (
-                              <SelectItem key={project.id} value={project.id}>
-                                {project.isPrivate ? (
-                                  <span className="flex items-center gap-2">
-                                    <Lock className="h-3 w-3" />
-                                    {project.name}
-                                  </span>
-                                ) : (
-                                  project.name
-                                )}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  
-                  {/* Filtreleri Temizle */}
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => { 
-                      setSearchTerm(""); 
-                      setStatusFilter("all"); 
-                      setSortBy("created_at"); 
-                      setFocusFilter("all"); 
-                      setStatFilter(null); 
-                      setProjectFilter("all");
-                    }} 
-                    className="h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-xs sm:text-sm"
-                  >
-                    <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Temizle</span>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 relative z-0 overflow-visible">
-              <CardHeader className="pb-3 sm:pb-4 md:pb-6 px-3 sm:px-4 md:px-6 pt-3 sm:pt-4 md:pt-6">
-                <div className="space-y-3 sm:space-y-4 sm:flex sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-base sm:text-lg md:text-xl mb-1 sm:mb-2">
-                      {activeListTab === "archived"
-                        ? "Arşivlenmiş Görevler"
-                        : activeListTab === "my-tasks"
-                        ? "Benim Görevlerim"
-                        : "Tüm Görevler"}{" "}
-                      <span className="text-sm sm:text-base md:text-lg text-muted-foreground font-normal">({listData.length})</span>
-                    </CardTitle>
-                    <p className="text-xs sm:text-sm text-muted-foreground">
-                      {activeListTab === "my-tasks"
-                        ? "Bana atanan ve kabul ettiğim görevler"
-                        : "Tüm projelerdeki görevlerin listesi"}
-                    </p>
-                  </div>
-                  <Tabs value={activeListTab} onValueChange={(value) => setActiveListTab(value as "all" | "my-tasks")} className="w-full sm:w-auto">
-                    <TabsList className="w-full flex flex-col sm:flex-row h-auto">
-                      <TabsTrigger value="all" className="flex-1 min-h-[44px] sm:min-h-0 text-xs sm:text-sm">
-                        Tüm Görevler ({filteredAndSortedAllTasks.length})
-                      </TabsTrigger>
-                      <TabsTrigger value="my-tasks" className="flex-1 min-h-[44px] sm:min-h-0 text-xs sm:text-sm">
-                        Benim Görevlerim ({filteredAndSortedMyTasks.length})
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 sm:space-y-4 px-3 sm:px-4 md:px-6 pb-4 sm:pb-6 overflow-visible">
+          <div 
+            ref={listContainerRef}
+            className="space-y-2 overflow-visible"
+            onScroll={(e) => {
+              // Infinite scroll: Kullanıcı listenin sonuna yaklaştığında daha fazla öğe yükle
+              const target = e.currentTarget;
+              const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+              if (scrollBottom < 500 && visibleItemsCount < listData.length) {
+                setVisibleItemsCount(prev => Math.min(prev + 25, listData.length));
+              }
+            }}
+          >
                 {/* "Bana Atanan" sekmesi kaldırıldı - görevler sadece proje altında ve "Tüm Görevler" sekmesinde gözüküyor */}
                 {false && userRequests.length > 0 && (
                   <div className="mb-6">
@@ -2183,30 +3043,216 @@ const Tasks = () => {
                   </div>
                 )}
 
-                {(Array.isArray(listData) ? listData : []).map((task: any) => {
-                  const assignment = (task as Task & { assignment?: TaskAssignment }).assignment;
-                  // "Bana Atanan" sekmesi kaldırıldı - assignment durumları artık gösterilmiyor
-                  const isPendingAssignment = false;
-                  const isAcceptedAssignment = false;
-                  const isRejectedAssignment = false;
+                {(Array.isArray(listData) ? listData.slice(0, visibleItemsCount) : []).map((task: any) => {
                   const overdue = isTaskOverdue(task);
                   const dueSoon = isTaskDueSoon(task);
+                  const optimisticUpdate = optimisticUpdates.get(task.id);
+                  const displayStatus = optimisticUpdate ? optimisticUpdate.status : task.status;
+                  const isOptimistic = !!optimisticUpdate;
+                  const isSelected = selectedTaskIds.has(task.id);
+                  // Geciken görevler için daha belirgin görsel işaret
+                  const overdueClass = overdue ? "ring-2 ring-destructive/50 bg-destructive/5" : "";
+                  // Yaklaşan görevler için subtle uyarı
+                  const dueSoonClass = dueSoon && !overdue ? "bg-amber-50/50 dark:bg-amber-950/10" : "";
 
                   return (
-                    <div
+                    <article
                       key={task.id}
-                      className="p-4 sm:p-6 rounded-xl border-2 border-border hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 shadow-sm hover:shadow-md relative group"
+                      ref={(el: HTMLElement | null) => {
+                        const index = listData.slice(0, visibleItemsCount).findIndex(t => t.id === task.id);
+                        if (index >= 0) {
+                          taskRefs.current[index] = el;
+                        }
+                      }}
+                      className={cn(
+                        "p-2.5 sm:p-3 rounded-lg border",
+                        isSelected ? "border-primary bg-primary/10" : "border-border",
+                        overdueClass,
+                        dueSoonClass,
+                        "hover:border-primary/50 hover:bg-accent/30",
+                        "transition-all duration-300 ease-in-out",
+                        "relative group bg-card shadow-sm hover:shadow-md",
+                        "hover:scale-[1.01] active:scale-[0.99]",
+                        isOptimistic && "opacity-75 animate-pulse",
+                        isMultiSelectMode && "cursor-pointer",
+                        focusedTaskIndex === listData.slice(0, visibleItemsCount).findIndex(t => t.id === task.id) && "ring-2 ring-ring",
+                        // Durum değişikliği animasyonu: fade ve slide
+                        "animate-in fade-in slide-in-from-left-2 duration-300"
+                      )}
+                      role="article"
+                      aria-labelledby={`task-title-${task.id}`}
+                      tabIndex={focusedTaskIndex === listData.slice(0, visibleItemsCount).findIndex(t => t.id === task.id) ? 0 : -1}
+                      onClick={isMultiSelectMode ? () => {
+                        setSelectedTaskIds(prev => {
+                          const newSet = new Set(prev);
+                          if (newSet.has(task.id)) {
+                            newSet.delete(task.id);
+                          } else {
+                            newSet.add(task.id);
+                          }
+                          return newSet;
+                        });
+                      } : undefined}
                     >
-                      {/* 3 Nokta Menü - Sağ Üst Köşe */}
-                      {(isSuperAdmin || isAdmin || isTeamLeader || task.createdBy === user?.id) && (
+                      {/* Jira Tarzı Yatay Düzen */}
+                      <div className="flex items-start gap-2.5 sm:gap-3">
+                        {/* Multi-select checkbox veya Status Icon */}
+                        {isMultiSelectMode ? (
+                          <div className="flex-shrink-0">
+                            <div 
+                              className={cn(
+                                "h-5 w-5 rounded border-2 flex items-center justify-center transition-all duration-200 cursor-pointer",
+                                selectedTaskIds.has(task.id)
+                                  ? "bg-primary border-primary text-primary-foreground" 
+                                  : "border-border hover:border-primary/50"
+                              )}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedTaskIds(prev => {
+                                  const newSet = new Set(prev);
+                                  if (newSet.has(task.id)) {
+                                    newSet.delete(task.id);
+                                  } else {
+                                    newSet.add(task.id);
+                                  }
+                                  return newSet;
+                                });
+                              }}
+                              role="checkbox"
+                              aria-checked={selectedTaskIds.has(task.id)}
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setSelectedTaskIds(prev => {
+                                    const newSet = new Set(prev);
+                                    if (newSet.has(task.id)) {
+                                      newSet.delete(task.id);
+                                    } else {
+                                      newSet.add(task.id);
+                                    }
+                                    return newSet;
+                                  });
+                                }
+                              }}
+                            >
+                              {selectedTaskIds.has(task.id) && <Check className="h-3.5 w-3.5" />}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex-shrink-0" aria-label={`Durum: ${getStatusLabel(displayStatus)}`}>
+                            {getStatusIcon(displayStatus)}
+                          </div>
+                        )}
+                        
+                        {/* İçerik - Orta (Genişleyebilir) */}
                         <div 
-                          className="absolute top-2 right-2 sm:top-4 sm:right-4 z-[9999]"
-                          style={{
-                            visibility: 'visible',
-                            display: 'block',
-                            zIndex: 9999,
+                          className="flex-1 min-w-0 cursor-pointer"
+                          onClick={() => openTaskDetail(task.id, task.status)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              openTaskDetail(task.id, task.status);
+                            }
                           }}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`${task.title} görevini aç`}
                         >
+                          <div className="flex items-center gap-2">
+                            <h3 
+                              id={`task-title-${task.id}`}
+                              className="font-semibold text-sm sm:text-base text-foreground line-clamp-1 flex-1"
+                            >
+                              {task.title}
+                            </h3>
+                            {task.projectId && projects && projects.has(task.projectId) && (
+                              <Badge 
+                                variant="outline" 
+                                className="h-4 px-1.5 text-[10px] font-medium flex-shrink-0"
+                                aria-label={`Proje: ${projects.get(task.projectId)?.name || task.projectId}`}
+                              >
+                                {projects.get(task.projectId)?.name || task.projectId}
+                              </Badge>
+                            )}
+                          </div>
+                          
+                          {/* Meta Bilgiler - Sadeleştirilmiş */}
+                          <div className="flex items-center gap-2 flex-wrap mt-1" role="group" aria-label="Görev detayları">
+                            <Badge 
+                              variant="secondary" 
+                              className={cn(
+                                "h-4 px-1.5 text-[10px] font-medium",
+                                isOptimistic && "animate-pulse"
+                              )}
+                              aria-label={`Durum: ${getStatusLabel(displayStatus)}`}
+                            >
+                              {getStatusLabel(displayStatus)}
+                            </Badge>
+                            {task.due_date && (
+                              <time 
+                                dateTime={task.due_date}
+                                className={cn(
+                                  "text-[10px] flex items-center gap-1 font-medium",
+                                  overdue ? "text-destructive" : dueSoon ? "text-amber-600" : "text-muted-foreground"
+                                )}
+                                aria-label={`Bitiş tarihi: ${formatDueDate(task.due_date)}`}
+                              >
+                                <CalendarDays className="h-3 w-3" aria-hidden="true" />
+                                {formatDueDate(task.due_date)}
+                              </time>
+                            )}
+                            {task.assignedUsers && task.assignedUsers.length > 0 && (
+                              <div className="flex items-center -space-x-1.5" aria-label={`Atanan kullanıcılar: ${task.assignedUsers.map(u => u.full_name).join(', ')}`}>
+                                {task.assignedUsers.slice(0, 2).map((user) => (
+                                  <Avatar key={user.id} className="h-5 w-5 border border-background" title={user.full_name}>
+                                    <AvatarFallback className="text-[9px] font-medium">
+                                      {getInitials(user.full_name)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                ))}
+                                {task.assignedUsers.length > 2 && (
+                                  <div className="h-5 w-5 rounded-full bg-muted border border-background flex items-center justify-center text-[9px] font-medium text-muted-foreground">
+                                    +{task.assignedUsers.length - 2}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {(overdue || dueSoon || task.approvalStatus === "pending") && (
+                              <>
+                                {overdue && (
+                                  <Badge 
+                                    variant="destructive" 
+                                    className="h-4 px-1.5 text-[10px] font-medium"
+                                    aria-label="Gecikmiş görev"
+                                  >
+                                    Gecikti
+                                  </Badge>
+                                )}
+                                {dueSoon && !overdue && (
+                                  <Badge 
+                                    className="bg-amber-100 text-amber-900 border-amber-200 h-4 px-1.5 text-[10px] font-medium"
+                                    aria-label="Yaklaşan görev"
+                                  >
+                                    Yaklaşan
+                                  </Badge>
+                                )}
+                                {task.approvalStatus === "pending" && (
+                                  <Badge 
+                                    className="bg-yellow-100 text-yellow-900 border-yellow-300 h-4 px-1.5 text-[10px] font-medium"
+                                    aria-label="Onay bekleyen görev"
+                                  >
+                                    Onay
+                                  </Badge>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* 3 Nokta Menü - Sağ */}
+                        {(isSuperAdmin || isAdmin || isTeamLeader || task.createdBy === user?.id) && (
+                          <div className="flex-shrink-0 z-[9999]">
                           <DropdownMenu 
                             open={openDropdownMenuId === task.id} 
                             onOpenChange={(open) => {
@@ -2225,42 +3271,29 @@ const Tasks = () => {
                                 className={cn(
                                   "task-menu-trigger",
                                   "inline-flex items-center justify-center",
-                                  "h-8 w-8 sm:h-9 sm:w-9 rounded-lg",
+                                  "h-7 w-7 rounded-md",
                                   "transition-colors duration-200",
-                                  "border",
+                                  "border border-transparent",
                                   openDropdownMenuId === task.id 
-                                    ? "border-border bg-muted/80 opacity-100" 
-                                    : "border-transparent bg-transparent opacity-70 hover:opacity-100",
-                                  "hover:bg-muted/80 hover:border-border",
-                                  "focus:bg-muted/80 focus:border-border focus:outline-none focus:ring-0",
-                                  "active:bg-muted/80 active:border-border"
+                                    ? "border-border bg-muted/80" 
+                                    : "hover:bg-muted/50 hover:border-border/50",
+                                  "focus:bg-muted/50 focus:border-border/50 focus:outline-none focus:ring-0",
+                                  "active:bg-muted/50 active:border-border/50"
                                 )}
                                 style={{
                                   WebkitTapHighlightColor: 'transparent',
                                   backgroundColor: openDropdownMenuId === task.id ? 'hsl(var(--muted) / 0.8)' : 'transparent',
                                   borderColor: openDropdownMenuId === task.id ? 'hsl(var(--border))' : 'transparent',
-                                  opacity: openDropdownMenuId === task.id ? 1 : 0.7,
+                                  opacity: 1,
                                   visibility: 'visible',
                                   display: 'inline-flex',
                                   pointerEvents: 'auto',
                                   position: 'relative',
                                   zIndex: 9999,
                                 } as React.CSSProperties}
-                                onMouseEnter={(e) => {
-                                  const btn = e.currentTarget;
-                                  if (openDropdownMenuId !== task.id) {
-                                    btn.style.opacity = '1';
-                                  }
-                                }}
-                                onMouseLeave={(e) => {
-                                  const btn = e.currentTarget;
-                                  if (openDropdownMenuId !== task.id) {
-                                    btn.style.opacity = '0.7';
-                                  }
-                                }}
                               >
                                 <MoreVertical 
-                                  className="h-4 w-4 sm:h-[18px] sm:w-[18px] stroke-[2.5] text-foreground" 
+                                  className="h-3.5 w-3.5 stroke-[2.5] text-foreground" 
                                   style={{
                                     opacity: 1,
                                     visibility: 'visible',
@@ -2315,255 +3348,389 @@ const Tasks = () => {
                           </DropdownMenu>
                         </div>
                       )}
-                      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                        <div
-                          className="flex-1 cursor-pointer"
-                          onClick={() => openTaskDetail(task.id, task.status)}
-                        >
-                          <div className="flex items-start gap-3 mb-3">
-                            {getStatusIcon(task.status)}
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <h3 className="font-semibold text-lg">{task.title}</h3>
-                                {task.projectId && projects.has(task.projectId) && (
-                                  <>
-                                    <Badge 
-                                      variant="outline" 
-                                      className="bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-blue-300 hover:from-blue-100 hover:to-indigo-100 transition-all shadow-sm"
-                                    >
-                                      <Folder className="h-3 w-3 mr-1.5" />
-                                      <span className="font-semibold text-xs">
-                                        {projects.get(task.projectId)?.name}
-                                      </span>
-                                    </Badge>
-                                    {/* Gizli etiketi sadece gizli proje sayfasında göster */}
-                                    {projectId && projects.get(projectId)?.isPrivate && (
-                                      <Badge variant="outline" className="gap-1">
-                                        <Lock className="h-3 w-3" />
-                                        Gizli
-                                      </Badge>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          {task.description && (
-                            <p className="text-sm text-muted-foreground mt-2 mb-4 line-clamp-2 leading-relaxed">
-                              {task.description}
-                            </p>
-                          )}
-                          
-                          <div className="flex flex-wrap gap-2 mb-4">
-                            <Badge variant="secondary">{getStatusLabel(task.status)}</Badge>
-                            <Badge variant="outline" className="text-xs">
-                              Öncelik {task.priority}
-                            </Badge>
-                            {dueSoon && <Badge className="bg-amber-100 text-amber-900 border-amber-200">Yaklaşan Termin</Badge>}
-                            {overdue && <Badge variant="destructive">Termin Geçti</Badge>}
-                            {isPendingAssignment && <Badge variant="outline" className="bg-yellow-50 text-yellow-700">Atama Onayı Bekleniyor</Badge>}
-                            {isAcceptedAssignment && <Badge variant="outline" className="bg-green-50 text-green-700">Kabul Edildi</Badge>}
-                            {isRejectedAssignment && <Badge variant="outline" className="bg-red-50 text-red-700">Reddedildi</Badge>}
-                            {task.approvalStatus === "pending" && (
-                              <Badge className="bg-yellow-100 text-yellow-900 border-yellow-300">Görev Onayı Bekleniyor</Badge>
-                            )}
-                            {task.approvalStatus === "approved" && (
-                              <Badge className="bg-green-100 text-green-900 border-green-300">Görev Onaylandı</Badge>
-                            )}
-                            {task.approvalStatus === "rejected" && (
-                              <Badge className="bg-red-100 text-red-900 border-red-300">Görev Onayı Reddedildi</Badge>
-                            )}
-                            {task.production_order_number && (
-                              <Badge variant="outline" className="bg-primary/5 text-primary">
-                                Sipariş #{task.production_order_number}
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-4 mt-4 text-sm text-muted-foreground">
-                            {task.due_date && (
-                              <span className="flex items-center gap-2">
-                                <CalendarDays className="h-4 w-4" />
-                                Termin: {formatDueDate(task.due_date)}
-                              </span>
-                            )}
-                            {!!task.assignedUsers?.length && (
-                              <span className="flex items-center gap-2">
-                                <Users className="h-4 w-4" />
-                                {task.assignedUsers.length} kişi
-                              </span>
-                            )}
-                          </div>
-                          {task.assignedUsers && task.assignedUsers.length > 0 && (
-                            <div className="flex items-center gap-2 mt-4">
-                              <div className="flex -space-x-2">
-                                {(Array.isArray(task.assignedUsers) ? task.assignedUsers.slice(0, 4) : []).map((user) => (
-                                  <Avatar key={user.id} className="h-7 w-7 border-2 border-background">
-                                    <AvatarFallback className="text-[11px]">
-                                      {getInitials(user.full_name)}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                ))}
-                              </div>
-                              {task.assignedUsers.length > 4 && (
-                                <span className="text-xs text-muted-foreground">
-                                  +{task.assignedUsers.length - 4} daha
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {/* "Oluşturduklarım" sekmesi kaldırıldı */}
-                          {false && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={deletingId === task.id}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {deletingId === task.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  )}
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Görevi Sil</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    "{task.title}" görevini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>İptal</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteTask(task.id);
-                                    }}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Sil
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-
-                          {isPendingAssignment && assignment && (
-                            <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                size="sm"
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                onClick={async () => {
-                                  try {
-                                    await acceptTaskAssignment(assignment.task_id, assignment.id);
-                                    toast.success("Görev kabul edildi");
-                                    // Real-time subscribe otomatik güncelleyecek
-                                  } catch (error: any) {
-                                    console.error("Accept task error:", error);
-                                    toast.error(error.message || "Görev kabul edilemedi");
-                                  }
-                                }}
-                              >
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
-                                Kabul Et
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => {
-                                  setRejectingAssignment(assignment);
-                                  setRejectionReason("");
-                                  setRejectDialogOpen(true);
-                                }}
-                              >
-                                <X className="h-4 w-4 mr-1" />
-                                Reddet
-                              </Button>
-                            </div>
-                          )}
-                        </div>
                       </div>
-                    </div>
+                    </article>
                   );
                 })}
 
+                {/* Infinite scroll loading indicator */}
+                {listData.length > visibleItemsCount && (
+                  <div className="py-8 text-center">
+                    <Button
+                                      variant="outline" 
+                      onClick={() => setVisibleItemsCount(prev => Math.min(prev + 25, listData.length))}
+                      className="text-sm transition-all duration-200 hover:scale-105"
+                    >
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Daha Fazla Yükle ({listData.length - visibleItemsCount} görev kaldı)
+                    </Button>
+                  </div>
+                )}
+
                 {listData.length === 0 && (
-                  <div className="py-16 text-center text-muted-foreground border-2 border-dashed rounded-xl bg-muted/30">
-                    <div className="flex flex-col items-center gap-3">
-                      <CheckSquare className="h-12 w-12 text-muted-foreground/50" />
-                      <p className="text-base font-medium">
-                        {searchTerm || statusFilter !== "all" || focusFilter !== "all"
-                          ? "Filtre kriterlerinize uyan görev bulunamadı"
-                          : activeListTab === "my-tasks"
-                          ? "Henüz size atanan ve kabul ettiğiniz görev yok"
-                          : "Henüz görev bulunmuyor"}
-                      </p>
-                      {(searchTerm || statusFilter !== "all" || focusFilter !== "all") && (
-                        <p className="text-sm text-muted-foreground/70">
-                          Filtreleri değiştirerek tekrar deneyin
+                  <div 
+                    className="py-16 sm:py-20 text-center text-muted-foreground border-2 border-dashed rounded-xl bg-muted/30"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <div className="flex flex-col items-center gap-4 max-w-md mx-auto px-4">
+                      <div className="rounded-full bg-muted p-4">
+                        <CheckSquare className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground/50" aria-hidden="true" />
+                              </div>
+                      <div className="space-y-2">
+                        <h2 className="text-lg sm:text-xl font-semibold text-foreground">
+                          {searchTerm || statusFilter !== "all" || focusFilter !== "all"
+                            ? "Filtre kriterlerinize uyan görev bulunamadı"
+                            : activeFilter === "my-tasks"
+                            ? "Henüz size atanan görev yok"
+                            : activeFilter === "archive"
+                            ? "Arşivde görev bulunmuyor"
+                            : "Henüz görev bulunmuyor"}
+                        </h2>
+                        <p className="text-sm sm:text-base text-muted-foreground">
+                          {searchTerm || statusFilter !== "all" || focusFilter !== "all" || selectedProject !== "all"
+                            ? "Aktif filtreleriniz sonuç bulamadı. Filtreleri değiştirerek tekrar deneyin."
+                            : activeFilter === "my-tasks"
+                            ? "Size atanan görevler burada görünecek"
+                            : activeFilter === "archive"
+                            ? "Arşivlenen görevler burada görünecek"
+                            : "İlk görevinizi oluşturarak başlayabilirsiniz"}
                         </p>
-                      )}
+                        {/* Aktif filtreleri göster */}
+                        {(searchTerm || statusFilter !== "all" || focusFilter !== "all" || selectedProject !== "all") && (
+                          <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+                            <span className="text-xs text-muted-foreground font-medium">Aktif Filtreler:</span>
+                            {searchTerm && (
+                              <Badge variant="secondary" className="text-xs">
+                                Arama: "{searchTerm}"
+                              </Badge>
+                            )}
+                            {statusFilter !== "all" && (
+                              <Badge variant="secondary" className="text-xs">
+                                Durum: {getStatusLabel(statusFilter)}
+                            </Badge>
+                            )}
+                            {focusFilter !== "all" && (
+                              <Badge variant="secondary" className="text-xs">
+                                Odak: {focusFilter === "due_soon" ? "Yaklaşan" : focusFilter === "overdue" ? "Gecikti" : focusFilter === "high_priority" ? "Yüksek Öncelik" : focusFilter}
+                              </Badge>
+                            )}
+                            {selectedProject !== "all" && (
+                              <Badge variant="secondary" className="text-xs">
+                                Proje: {selectedProject === "general" ? "Genel" : projects?.get(selectedProject)?.name || selectedProject}
+                              </Badge>
+                            )}
+                          </div>
+                            )}
+                          </div>
+                      {(searchTerm || statusFilter !== "all" || focusFilter !== "all" || selectedProject !== "all") ? (
+                                <Button
+                          variant="outline"
+                          onClick={() => {
+                            setSearchTerm("");
+                            setStatusFilter("all");
+                            setFocusFilter("all");
+                            setSelectedProject("all");
+                            setProjectFilter("all");
+                          }}
+                          className="mt-2"
+                          aria-label="Filtreleri temizle"
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Filtreleri Temizle
+                        </Button>
+                      ) : canCreate ? (
+                              <Button
+                                onClick={async () => {
+                            if (!user) return;
+                            try {
+                              const departments = await getDepartments();
+                              const userProfile: UserProfile = {
+                                id: user.id,
+                                email: user.email,
+                                emailVerified: user.emailVerified,
+                                fullName: user.fullName,
+                                displayName: user.fullName,
+                                phone: user.phone,
+                                dateOfBirth: user.dateOfBirth,
+                                role: user.roles,
+                                createdAt: Timestamp.now(),
+                                updatedAt: Timestamp.now(),
+                              };
+                              const hasPermission = await canCreateTask(userProfile, departments);
+                              if (!hasPermission) {
+                                toast.error("Görev oluşturma yetkiniz yok");
+                                return;
+                              }
+                              openInlineForm("create");
+                            } catch (error) {
+                              console.error("Permission check error:", error);
+                              toast.error("Yetki kontrolü yapılamadı");
+                            }
+                          }}
+                          className="mt-2"
+                          aria-label="Yeni görev oluştur"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          İlk Görevinizi Oluşturun
+                              </Button>
+                      ) : null}
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
         ) : (
-          <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
-            {/* Panoda sadece proje filtresi gösterilir - Sadece "Tüm Görevler" sekmesinde */}
-            {activeListTab === "all" && (
-              <Card className="border-2 flex-shrink-0">
-                <CardContent className="pt-3 sm:pt-4 md:pt-6 pb-3 sm:pb-4 md:pb-6 px-3 sm:px-4 md:px-6">
-                  <div className="grid grid-cols-1 gap-2 sm:gap-3 md:gap-4">
-                    {/* Proje Filtresi - Sadece "Tüm Görevler" sekmesinde göster */}
-                    <div className="w-full">
-                      <Select value={projectFilter} onValueChange={setProjectFilter}>
-                        <SelectTrigger className="w-full h-9 sm:h-10">
-                          <SelectValue placeholder="Proje filtrele" />
+          <TaskBoard
+            tasks={boardTasks}
+            onTaskClick={(taskId, initialStatus) => openTaskDetail(taskId, initialStatus)}
+            onStatusChange={handleStatusChange}
+            showArchived={activeFilter === "archive"}
+          />
+        )}
+
+        {/* Advanced Search Dialog */}
+        <Dialog open={advancedSearchOpen} onOpenChange={setAdvancedSearchOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Gelişmiş Arama</DialogTitle>
+              <DialogDescription>
+                Görevleri detaylı kriterlere göre arayın ve filtreleyin
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="search-title">Başlık</Label>
+                  <Input
+                    id="search-title"
+                    value={advancedSearchFilters.title}
+                    onChange={(e) => setAdvancedSearchFilters(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="Başlıkta ara..."
+                    className="mt-1"
+                  />
+                    </div>
+                <div>
+                  <Label htmlFor="search-description">Açıklama</Label>
+                  <Input
+                    id="search-description"
+                    value={advancedSearchFilters.description}
+                    onChange={(e) => setAdvancedSearchFilters(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Açıklamada ara..."
+                    className="mt-1"
+                  />
+                  </div>
+                <div>
+                  <Label htmlFor="search-status">Durum</Label>
+                  <Select
+                    value={advancedSearchFilters.status}
+                    onValueChange={(value) => setAdvancedSearchFilters(prev => ({ ...prev, status: value }))}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tüm Durumlar</SelectItem>
+                      <SelectItem value="pending">Beklemede</SelectItem>
+                      <SelectItem value="in_progress">Devam Ediyor</SelectItem>
+                      <SelectItem value="completed">Tamamlandı</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="search-priority">Öncelik</Label>
+                  <Select
+                    value={advancedSearchFilters.priority}
+                    onValueChange={(value) => setAdvancedSearchFilters(prev => ({ ...prev, priority: value }))}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tüm Öncelikler</SelectItem>
+                      <SelectItem value="1">P1 - Çok Yüksek</SelectItem>
+                      <SelectItem value="2">P2 - Yüksek</SelectItem>
+                      <SelectItem value="3">P3 - Orta</SelectItem>
+                      <SelectItem value="4">P4 - Düşük</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="search-project">Proje</Label>
+                  <Select
+                    value={advancedSearchFilters.projectId}
+                    onValueChange={(value) => setAdvancedSearchFilters(prev => ({ ...prev, projectId: value }))}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Tüm Projeler</SelectItem>
                           <SelectItem value="general">Genel Görevler</SelectItem>
-                          {filterableProjects
-                            .filter(p => p.name?.toLowerCase() !== "genel görevler" && p.name?.toLowerCase() !== "genel")
-                            .map((project) => (
-                              <SelectItem key={project.id} value={project.id}>
-                                {project.isPrivate ? (
-                                  <span className="flex items-center gap-2">
-                                    <Lock className="h-3 w-3" />
-                                    {project.name}
-                                  </span>
-                                ) : (
-                                  project.name
-                                )}
-                              </SelectItem>
+                      {filterableProjects.map(proj => (
+                        <SelectItem key={proj.id} value={proj.id}>{proj.name}</SelectItem>
                             ))}
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                <div>
+                  <Label htmlFor="search-assigned">Atanan Kişi</Label>
+                  <Select
+                    value={advancedSearchFilters.assignedTo}
+                    onValueChange={(value) => setAdvancedSearchFilters(prev => ({ ...prev, assignedTo: value }))}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tüm Kullanıcılar</SelectItem>
+                      {cachedUsers.map(user => (
+                        <SelectItem key={user.id} value={user.id}>{user.fullName || user.email}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="search-due-from">Bitiş Tarihi (Başlangıç)</Label>
+                  <Input
+                    id="search-due-from"
+                    type="date"
+                    value={advancedSearchFilters.dueDateFrom}
+                    onChange={(e) => setAdvancedSearchFilters(prev => ({ ...prev, dueDateFrom: e.target.value }))}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="search-due-to">Bitiş Tarihi (Bitiş)</Label>
+                  <Input
+                    id="search-due-to"
+                    type="date"
+                    value={advancedSearchFilters.dueDateTo}
+                    onChange={(e) => setAdvancedSearchFilters(prev => ({ ...prev, dueDateTo: e.target.value }))}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAdvancedSearchFilters({
+                    title: "",
+                    description: "",
+                    status: "all",
+                    priority: "all",
+                    projectId: "all",
+                    assignedTo: "all",
+                    dueDateFrom: "",
+                    dueDateTo: "",
+                  });
+                  setSearchTerm("");
+                  setStatusFilter("all");
+                  setSelectedProject("all");
+                }}
+              >
+                Temizle
+              </Button>
+              <Button
+                onClick={() => {
+                  // Advanced search filtrelerini uygula
+                  let searchText = "";
+                  if (advancedSearchFilters.title) searchText += advancedSearchFilters.title + " ";
+                  if (advancedSearchFilters.description) searchText += advancedSearchFilters.description + " ";
+                  setSearchTerm(searchText.trim());
+                  if (advancedSearchFilters.status !== "all") setStatusFilter(advancedSearchFilters.status);
+                  if (advancedSearchFilters.projectId !== "all") {
+                    setSelectedProject(advancedSearchFilters.projectId);
+                    setProjectFilter(advancedSearchFilters.projectId);
+                  }
+                  setAdvancedSearchOpen(false);
+                  toast.success("Arama filtreleri uygulandı");
+                }}
+              >
+                Ara
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-          <div>
-            <TaskBoard
-              tasks={boardTasks}
-              onTaskClick={(taskId, initialStatus) => openTaskDetail(taskId, initialStatus)}
-              onStatusChange={handleStatusChange}
-              showProjectFilter={activeListTab === "all"}
-            />
-          </div>
-          </div>
-        )}
+        {/* Create Project Dialog */}
+        <Dialog open={createProjectDialogOpen} onOpenChange={setCreateProjectDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Yeni Proje Oluştur</DialogTitle>
+              <DialogDescription>
+                Yeni bir proje oluşturun. Proje adı zorunludur.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="project_name">
+                  Proje Adı <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="project_name"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="Proje adını girin..."
+                  className="mt-2"
+                />
+              </div>
+              <div>
+                <Label htmlFor="project_description">Açıklama</Label>
+                <Textarea
+                  id="project_description"
+                  value={newProjectDescription}
+                  onChange={(e) => setNewProjectDescription(e.target.value)}
+                  placeholder="Proje açıklaması (isteğe bağlı)..."
+                  rows={3}
+                  className="mt-2"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCreateProjectDialogOpen(false);
+                  setNewProjectName("");
+                  setNewProjectDescription("");
+                }}
+              >
+                İptal
+              </Button>
+              <Button
+                onClick={handleCreateProject}
+                disabled={!newProjectName.trim()}
+              >
+                Oluştur
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
+        {/* Delete Project Dialog */}
+        <AlertDialog open={deleteProjectDialogOpen} onOpenChange={setDeleteProjectDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Projeyi Sil</AlertDialogTitle>
+              <AlertDialogDescription>
+                "{projectToDelete?.name}" projesini silmek istediğinize emin misiniz? Bu işlem geri alınamaz ve projeye ait tüm görevler de silinecektir.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setProjectToDelete(null)}>
+                İptal
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteProject}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Sil
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Reject Task Dialog */}
         <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>

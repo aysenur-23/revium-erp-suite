@@ -372,9 +372,15 @@ export const RawMaterialDetailModal = ({
                           </p>
                         </div>
                       ) : null}
+                      {material.vatRate !== undefined && material.vatRate !== null && material.vatRate > 0 ? (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">KDV Yüzdesi</p>
+                          <p className="font-medium">%{material.vatRate.toFixed(2)}</p>
+                        </div>
+                      ) : null}
                       {material.totalPrice !== undefined && material.totalPrice !== null ? (
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">Toplam Fiyat</p>
+                          <p className="text-sm text-muted-foreground mb-1">Nihai Fiyat (KDV Dahil)</p>
                           <p className="font-medium">
                             {(() => {
                               const currency = material.currency || (material.currencies && material.currencies.length > 0 ? material.currencies[0] : "TRY");
@@ -382,6 +388,11 @@ export const RawMaterialDetailModal = ({
                               return `${symbol}${(material.totalPrice || 0).toFixed(2)}`;
                             })()}
                           </p>
+                          {material.unitPrice && material.vatRate && material.vatRate > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Birim: {symbol}{material.unitPrice.toFixed(2)} + KDV (%{material.vatRate.toFixed(2)}): {symbol}{((material.unitPrice * material.vatRate) / 100).toFixed(2)}
+                            </p>
+                          )}
                         </div>
                       ) : null}
                       {material.brand ? (

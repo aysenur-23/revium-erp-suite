@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createBrowserRouter, RouterProvider, Outlet } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Outlet, Navigate, useParams } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AdminRoute } from "./components/AdminRoute";
@@ -11,6 +11,12 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ErrorPage } from "./components/ErrorPage";
 import { Loader2 } from "lucide-react";
 import { MainLayout } from "./components/Layout/MainLayout";
+
+// Redirect component for project tasks
+const ProjectTasksRedirect = () => {
+  const { projectId } = useParams<{ projectId: string }>();
+  return <Navigate to={`/tasks?project=${projectId}&view=board`} replace />;
+};
 
 // Lazy load pages for better performance with error handling
 // Optimized for faster initial load
@@ -117,10 +123,18 @@ const router = createBrowserRouter(
         { path: "/production", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><Production /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
         { path: "/tasks", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><Tasks /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
         { path: "/tasks/:id", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><TaskDetail /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
-        { path: "/tasks/archive", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><TasksArchive /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
-        { path: "/task-pool", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><TaskPool /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
+        { path: "/tasks/archive", element: <ProtectedRoute><Navigate to="/tasks?filter=archive&view=board" replace /></ProtectedRoute>, errorElement: <ErrorPage /> },
+        { path: "/task-pool", element: <ProtectedRoute><Navigate to="/tasks?filter=pool&view=board" replace /></ProtectedRoute>, errorElement: <ErrorPage /> },
         { path: "/projects", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><Projects /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
-        { path: "/projects/:projectId/tasks", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><Tasks /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
+        { 
+          path: "/projects/:projectId/tasks", 
+          element: <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <ProjectTasksRedirect />
+            </Suspense>
+          </ProtectedRoute>, 
+          errorElement: <ErrorPage /> 
+        },
         { path: "/customers", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><Customers /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
         { path: "/products", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><Products /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
         { path: "/orders", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><Orders /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },

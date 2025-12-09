@@ -522,13 +522,10 @@ const RawMaterials = () => {
                   <Table className="w-full table-fixed border-collapse">
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[25%] sm:w-[20%]">Hammadde</TableHead>
-                          <TableHead className="w-[15%] whitespace-nowrap hidden md:table-cell">Stok Kodu</TableHead>
-                          <TableHead className="w-[10%] text-right whitespace-nowrap hidden xl:table-cell">Stok Durumu</TableHead>
-                          <TableHead className="w-[15%] sm:w-[12%] text-right whitespace-nowrap">Mevcut</TableHead>
-                          <TableHead className="w-[15%] whitespace-nowrap hidden lg:table-cell">Ekleyen</TableHead>
-                          <TableHead className="w-[10%] whitespace-nowrap hidden lg:table-cell">Durum</TableHead>
-                          <TableHead className="w-[20%] sm:w-[15%] text-right whitespace-nowrap">İşlemler</TableHead>
+                          <TableHead className="w-[35%] sm:w-[40%]">Malzeme Adı</TableHead>
+                          <TableHead className="w-[30%] sm:w-[35%]">Açıklamalar</TableHead>
+                          <TableHead className="w-[20%] sm:w-[15%] text-right whitespace-nowrap">Mevcut</TableHead>
+                          <TableHead className="w-[15%] sm:w-[10%] text-right whitespace-nowrap">İşlemler</TableHead>
                         </TableRow>
                       </TableHeader>
                     <TableBody>
@@ -551,99 +548,55 @@ const RawMaterials = () => {
                             }}
                           >
                             <TableCell className="font-medium">
-                              <div className="flex flex-col gap-1 min-w-0">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span className="truncate text-xs sm:text-sm" title={material.name}>
-                                          {material.name}
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>{material.name}</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                </div>
-                                <div className="flex items-center gap-1.5 md:hidden flex-wrap">
-                                  <Badge
-                                    variant={stockStatus.variant}
-                                    className={cn(
-                                      "font-medium text-[10px] px-1 py-0",
-                                      stockStatus.variant === "destructive" && "bg-red-500 hover:bg-red-600 text-white",
-                                      stockStatus.variant === "secondary" && "bg-yellow-500 hover:bg-yellow-600 text-white",
-                                      stockStatus.variant === "default" && "bg-green-500 hover:bg-green-600 text-white"
-                                    )}
-                                  >
-                                    {stockStatus.label}
-                                  </Badge>
-                                </div>
-                                <span className="text-[10px] text-muted-foreground md:hidden font-mono">
-                                  {material.sku || material.code || "-"}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell">
-                              <span className="text-xs text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded truncate block">
-                                {material.sku || material.code || "-"}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right whitespace-nowrap hidden xl:table-cell">
-                              <div className="flex flex-col items-end gap-0.5">
-                                <Progress 
-                                  value={stockPercentage} 
-                                  className={cn(
-                                    "h-1.5 w-16",
-                                    stockStatus.variant === "destructive" && "[&>div]:bg-red-500",
-                                    stockStatus.variant === "secondary" && "[&>div]:bg-yellow-500",
-                                    stockStatus.variant === "default" && "[&>div]:bg-green-500"
-                                  )}
-                                />
-                                <span className={cn("text-[10px] font-medium", stockStatus.color)}>
-                                  {isNaN(stockPercentage) ? "0" : stockPercentage.toFixed(0)}%
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right font-semibold whitespace-nowrap">
-                              <div className="flex flex-col items-end gap-0.5">
-                                <span className={cn(stockStatus.color, "text-xs sm:text-sm")}>
-                                  {currentStock} {material.unit}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="hidden lg:table-cell">
-                              <div className="flex items-center gap-1">
-                                <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0" />
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className="text-xs truncate" title={material.created_by_name || "-"}>
-                                        {material.created_by_name || "-"}
+                                      <span className="truncate text-sm sm:text-base font-semibold" title={material.name}>
+                                        {material.name}
                                       </span>
                                     </TooltipTrigger>
-                                    {material.created_by_name && (
-                                      <TooltipContent>
-                                        <p>{material.created_by_name}</p>
-                                      </TooltipContent>
-                                    )}
+                                    <TooltipContent>
+                                      <p>{material.name}</p>
+                                    </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
                               </div>
                             </TableCell>
-                            <TableCell className="hidden lg:table-cell">
-                              <Badge
-                                variant={stockStatus.variant}
-                                className={cn(
-                                  "font-medium text-xs px-1.5 py-0.5",
-                                  stockStatus.variant === "destructive" && "bg-red-500 hover:bg-red-600 text-white",
-                                  stockStatus.variant === "secondary" && "bg-yellow-500 hover:bg-yellow-600 text-white",
-                                  stockStatus.variant === "default" && "bg-green-500 hover:bg-green-600 text-white"
-                                )}
-                              >
-                                {stockStatus.label}
-                              </Badge>
+                            <TableCell>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 truncate" title={material.description || material.notes || "-"}>
+                                      {material.description || material.notes || "-"}
+                                    </p>
+                                  </TooltipTrigger>
+                                  {(material.description || material.notes) && (
+                                    <TooltipContent className="max-w-xs">
+                                      <p>{material.description || material.notes}</p>
+                                    </TooltipContent>
+                                  )}
+                                </Tooltip>
+                              </TooltipProvider>
+                            </TableCell>
+                            <TableCell className="text-right font-semibold whitespace-nowrap">
+                              <div className="flex flex-col items-end gap-1">
+                                <span className={cn(stockStatus.color, "text-sm sm:text-base")}>
+                                  {currentStock} {material.unit}
+                                </span>
+                                <Badge
+                                  variant={stockStatus.variant}
+                                  className={cn(
+                                    "font-medium text-[10px] px-1.5 py-0.5",
+                                    stockStatus.variant === "destructive" && "bg-red-500 hover:bg-red-600 text-white",
+                                    stockStatus.variant === "secondary" && "bg-yellow-500 hover:bg-yellow-600 text-white",
+                                    stockStatus.variant === "default" && "bg-green-500 hover:bg-green-600 text-white"
+                                  )}
+                                >
+                                  {stockStatus.label}
+                                </Badge>
+                              </div>
                             </TableCell>
                             <TableCell className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1 flex-wrap">

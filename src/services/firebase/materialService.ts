@@ -36,7 +36,8 @@ export interface RawMaterial {
   max_stock?: number | null; // maxStock ile aynı (eski sistem uyumluluğu için)
   cost?: number | null; // unitPrice ile aynı (eski sistem uyumluluğu için)
   unitPrice?: number | null; // Birim fiyat
-  totalPrice?: number | null; // Toplam fiyat
+  vatRate?: number | null; // KDV yüzdesi
+  totalPrice?: number | null; // Toplam fiyat (KDV dahil)
   currency?: string | null; // Para birimi: 'TRY', 'USD', 'EUR', vb.
   currencies?: string[]; // Para birimleri: ['TRY', 'USD', 'EUR', vb.] (eski sistem uyumluluğu için)
   brand?: string | null; // Marka

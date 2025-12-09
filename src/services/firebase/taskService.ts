@@ -841,6 +841,35 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
       // Bildirim hatası görev silinmesini engellemez
     }
     
+    // Önce subcollection'ları sil (assignments, checklists, attachments)
+    try {
+      // Assignments'ları sil
+      const assignmentsSnapshot = await getDocs(collection(firestore, "tasks", taskId, "assignments"));
+      const deleteAssignmentsPromises = assignmentsSnapshot.docs.map((doc) => deleteDoc(doc.ref));
+      await Promise.all(deleteAssignmentsPromises);
+      
+      // Checklists'leri sil
+      const checklistsSnapshot = await getDocs(collection(firestore, "tasks", taskId, "checklists"));
+      const deleteChecklistsPromises = checklistsSnapshot.docs.map((doc) => deleteDoc(doc.ref));
+      await Promise.all(deleteChecklistsPromises);
+      
+      // Attachments'ları sil (eğer varsa)
+      try {
+        const attachmentsSnapshot = await getDocs(collection(firestore, "tasks", taskId, "attachments"));
+        const deleteAttachmentsPromises = attachmentsSnapshot.docs.map((doc) => deleteDoc(doc.ref));
+        await Promise.all(deleteAttachmentsPromises);
+      } catch (attachmentsError) {
+        // Attachments collection'ı yoksa hata verme
+        if (import.meta.env.DEV) {
+          console.warn("Attachments collection not found or error:", attachmentsError);
+        }
+      }
+    } catch (subcollectionError) {
+      console.error("Error deleting subcollections:", subcollectionError);
+      // Subcollection silme hatası görev silinmesini engellemez, devam et
+    }
+    
+    // Ana görev document'ini sil
     await deleteDoc(doc(firestore, "tasks", taskId));
     
     // Audit log

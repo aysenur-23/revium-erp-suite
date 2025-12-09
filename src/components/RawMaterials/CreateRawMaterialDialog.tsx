@@ -35,7 +35,40 @@ export const CreateRawMaterialDialog = ({
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const STORAGE_KEY = "rawMaterialFormDraft";
+
+  // localStorage'dan draft verileri yükle
+  const loadDraft = () => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error("Error loading draft:", error);
+    }
+    return null;
+  };
+
+  // Draft verileri localStorage'a kaydet
+  const saveDraft = (data: typeof defaultFormData) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.error("Error saving draft:", error);
+    }
+  };
+
+  // Draft verileri temizle
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.error("Error clearing draft:", error);
+    }
+  };
+
+  const defaultFormData = {
     name: "",
     sku: "",
     category: "other",
@@ -44,6 +77,7 @@ export const CreateRawMaterialDialog = ({
     max_stock: "",
     unit: "Adet",
     unitPrice: "0",
+    vatRate: "0", // KDV yüzdesi
     totalPrice: "0",
     currency: DEFAULT_CURRENCY,
     brand: "",
@@ -52,13 +86,74 @@ export const CreateRawMaterialDialog = ({
     purchasedBy: "",
     location: "",
     description: "",
+  };
+
+  const [formData, setFormData] = useState(() => {
+    const draft = loadDraft();
+    return draft || defaultFormData;
   });
 
+  // KDV ve birim fiyat değiştiğinde nihai fiyatı otomatik hesapla
+  useEffect(() => {
+    const unitPrice = parseFloat(formData.unitPrice) || 0;
+    const vatRate = parseFloat(formData.vatRate) || 0;
+    
+    if (unitPrice > 0) {
+      const vatAmount = (unitPrice * vatRate) / 100;
+      const finalPrice = unitPrice + vatAmount;
+      setFormData(prev => ({
+        ...prev,
+        totalPrice: finalPrice.toFixed(2)
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        totalPrice: "0"
+      }));
+    }
+  }, [formData.unitPrice, formData.vatRate]);
+
+  // Form açıldığında kullanıcıları yükle ve draft verileri yükle
   useEffect(() => {
     if (open) {
       fetchUsers();
+      // Form açıldığında draft varsa yükle, yoksa default değerleri kullan
+      const draft = loadDraft();
+      if (draft) {
+        setFormData(draft);
+      } else {
+        // Draft yoksa formu temizle
+        setFormData(defaultFormData);
+      }
     }
   }, [open]);
+
+  // Form verileri değiştiğinde draft olarak kaydet (debounce ile)
+  useEffect(() => {
+    if (open) {
+      // Sadece form açıkken ve veri varsa kaydet
+      const hasData = formData.name || formData.sku || formData.supplier || formData.brand || formData.description || formData.purchasedBy || formData.location || formData.link || formData.unitPrice || formData.vatRate;
+      if (hasData) {
+        const timeoutId = setTimeout(() => {
+          saveDraft(formData);
+        }, 500); // 500ms debounce
+        return () => clearTimeout(timeoutId);
+      } else {
+        // Veri yoksa draft'ı temizle
+        clearDraft();
+      }
+    }
+  }, [formData, open]);
+
+  // Form başarıyla kaydedildikten sonra state'i ve draft'ı sıfırla
+  const resetForm = () => {
+    const resetData = {
+      ...defaultFormData,
+      vatRate: "0",
+    };
+    setFormData(resetData);
+    clearDraft();
+  };
 
   const fetchUsers = async () => {
     setUsersLoading(true);
@@ -95,6 +190,7 @@ export const CreateRawMaterialDialog = ({
         maxStock: formData.max_stock ? parseInt(formData.max_stock) : null,
         unitPrice: parseFloat(formData.unitPrice) || null,
         totalPrice: parseFloat(formData.totalPrice) || null,
+        vatRate: formData.vatRate ? parseFloat(formData.vatRate) : null,
         currency: formData.currency,
         currencies: [formData.currency],
         brand: formData.brand || null,
@@ -108,25 +204,8 @@ export const CreateRawMaterialDialog = ({
 
       toast.success("Hammadde başarıyla eklendi");
       onSuccess();
+      resetForm(); // State'i sıfırla
       onOpenChange(false);
-      setFormData({
-        name: "",
-        sku: "",
-        category: "other",
-        stock: "0",
-        min_stock: "0",
-        max_stock: "",
-        unit: "Adet",
-        unitPrice: "0",
-        totalPrice: "0",
-        currency: DEFAULT_CURRENCY,
-        brand: "",
-        link: "",
-        supplier: "",
-        purchasedBy: "",
-        location: "",
-        description: "",
-      });
     } catch (error: any) {
       handleErrorToast(error, "Hammadde eklenirken hata oluştu");
     } finally {
@@ -222,7 +301,7 @@ export const CreateRawMaterialDialog = ({
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="category"  className="text-sm sm:text-base">Kategori</Label>
                         <Select
@@ -266,6 +345,16 @@ export const CreateRawMaterialDialog = ({
                             <SelectItem value="Ton">Ton</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="brand" className="text-sm sm:text-base">Marka</Label>
+                        <Input
+                          id="brand"
+                          value={formData.brand}
+                          onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                          className="min-h-[44px] sm:min-h-0"
+                          placeholder="Örn: Bosch, Samsung, vb."
+                        />
                       </div>
                     </div>
 
@@ -341,31 +430,38 @@ export const CreateRawMaterialDialog = ({
                           className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="totalPrice" className="text-sm sm:text-base">Toplam Fiyat ({CURRENCY_SYMBOLS[formData.currency as Currency]})</Label>
+                        <Label htmlFor="vatRate" className="text-sm sm:text-base">KDV Yüzdesi (%)</Label>
                         <Input
-                          id="totalPrice"
+                          id="vatRate"
                           type="number"
                           step="0.01"
                           min="0"
-                          value={formData.totalPrice}
-                          onChange={(e) => setFormData({ ...formData, totalPrice: e.target.value })}
+                          max="100"
+                          value={formData.vatRate}
+                          onChange={(e) => setFormData({ ...formData, vatRate: e.target.value })}
                           className="min-h-[44px] sm:min-h-0"
+                          placeholder="Örn: 20"
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="brand" className="text-sm sm:text-base">Marka</Label>
-                        <Input
-                          id="brand"
-                          value={formData.brand}
-                          onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                          className="min-h-[44px] sm:min-h-0"
-                          placeholder="Örn: Bosch, Samsung, vb."
-                        />
-                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="totalPrice" className="text-sm sm:text-base">Nihai Fiyat (KDV Dahil) ({CURRENCY_SYMBOLS[formData.currency as Currency]})</Label>
+                      <Input
+                        id="totalPrice"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.totalPrice}
+                        readOnly
+                        className="min-h-[44px] sm:min-h-0 bg-muted cursor-not-allowed"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {formData.unitPrice && parseFloat(formData.unitPrice) > 0 && formData.vatRate && parseFloat(formData.vatRate) > 0
+                          ? `Birim Fiyat: ${parseFloat(formData.unitPrice).toFixed(2)} + KDV (%${formData.vatRate}): ${((parseFloat(formData.unitPrice) * parseFloat(formData.vatRate)) / 100).toFixed(2)} = ${parseFloat(formData.totalPrice).toFixed(2)}`
+                          : "Birim fiyat ve KDV yüzdesi girildiğinde otomatik hesaplanır"}
+                      </p>
                     </div>
 
                     <div className="space-y-2">
@@ -400,7 +496,7 @@ export const CreateRawMaterialDialog = ({
                           <SelectTrigger className="min-h-[44px] sm:min-h-0">
                             <SelectValue placeholder={usersLoading ? "Yükleniyor..." : "Kişi seçin"} />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="max-h-[300px] overflow-y-auto">
                             <SelectItem value="none">Satın Alan Kişi Yok</SelectItem>
                             {users.map((user) => (
                               <SelectItem key={user.id} value={user.id}>

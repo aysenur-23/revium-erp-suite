@@ -172,23 +172,23 @@ All colors MUST be HSL.
   /* Task menu trigger button - prevent green color and visibility issues */
   /* Sadece görevler sayfasındaki 3 nokta menüsü için */
   button.task-menu-trigger,
-  button.task-menu-trigger:hover,
-  button.task-menu-trigger:focus,
-  button.task-menu-trigger:active,
-  button.task-menu-trigger[data-state],
-  button.task-menu-trigger[data-state="open"],
-  button.task-menu-trigger[data-state="closed"] {
-    background-color: transparent !important;
-    border-color: transparent !important;
+  /* 3 nokta menüsü her zaman görünür ve yeşil olmaz */
+  button.task-menu-trigger {
+    opacity: 1 !important;
     visibility: visible !important;
     display: inline-flex !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
   }
 
-  button.task-menu-trigger:hover:not([data-menu-open="true"]),
-  button.task-menu-trigger:focus:not([data-menu-open="true"]),
-  button.task-menu-trigger:active:not([data-menu-open="true"]) {
-    background-color: hsl(var(--muted) / 0.8) !important;
-    border-color: hsl(var(--border)) !important;
+  button.task-menu-trigger:hover,
+  button.task-menu-trigger:focus,
+  button.task-menu-trigger:active {
+    background-color: hsl(var(--muted) / 0.5) !important;
+    border-color: hsl(var(--border) / 0.5) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: inline-flex !important;
   }
 
   button.task-menu-trigger[data-menu-open="true"],
@@ -200,12 +200,11 @@ All colors MUST be HSL.
     display: inline-flex !important;
   }
 
-  button.task-menu-trigger[data-menu-open="true"] svg,
-  button.task-menu-trigger[data-state="open"] svg,
   button.task-menu-trigger svg {
     opacity: 1 !important;
     visibility: visible !important;
     display: block !important;
+    color: hsl(var(--foreground)) !important;
   }
 
   /* Safe area support for iOS */

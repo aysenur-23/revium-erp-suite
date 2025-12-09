@@ -34,6 +34,7 @@ export const EditRawMaterialDialog = ({
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [formData, setFormData] = useState({
     name: "",
     sku: "",
@@ -43,6 +44,7 @@ export const EditRawMaterialDialog = ({
     max_stock: "",
     unit: "Adet",
     unitPrice: "0",
+    vatRate: "0", // KDV yüzdesi
     totalPrice: "0",
     currency: DEFAULT_CURRENCY,
     brand: "",
@@ -52,6 +54,31 @@ export const EditRawMaterialDialog = ({
     location: "",
     description: "",
   });
+
+  // KDV ve birim fiyat değiştiğinde nihai fiyatı otomatik hesapla
+  // İlk yükleme sırasında hesaplama yapma (material'dan gelen totalPrice'ı koru)
+  useEffect(() => {
+    if (isInitialLoad) {
+      return; // İlk yükleme sırasında hesaplama yapma
+    }
+    
+    const unitPrice = parseFloat(formData.unitPrice) || 0;
+    const vatRate = parseFloat(formData.vatRate) || 0;
+    
+    if (unitPrice > 0) {
+      const vatAmount = (unitPrice * vatRate) / 100;
+      const finalPrice = unitPrice + vatAmount;
+      setFormData(prev => ({
+        ...prev,
+        totalPrice: finalPrice.toFixed(2)
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        totalPrice: "0"
+      }));
+    }
+  }, [formData.unitPrice, formData.vatRate, isInitialLoad]);
 
   useEffect(() => {
     if (open) {
@@ -74,6 +101,21 @@ export const EditRawMaterialDialog = ({
 
   useEffect(() => {
     if (material) {
+      setIsInitialLoad(true); // Material yüklenirken flag'i set et
+      
+      // KDV yüzdesini belirle: önce material'da varsa onu kullan, yoksa hesapla
+      let vatRate = "0";
+      if (material.vatRate !== undefined && material.vatRate !== null && material.vatRate > 0) {
+        // Material'da zaten KDV yüzdesi varsa onu kullan
+        vatRate = material.vatRate.toString();
+      } else if (material.unitPrice && material.totalPrice && material.unitPrice > 0) {
+        // Material'da KDV yüzdesi yoksa, birim fiyat ve toplam fiyattan hesapla
+        const calculatedVat = ((material.totalPrice - material.unitPrice) / material.unitPrice) * 100;
+        if (calculatedVat > 0) {
+          vatRate = calculatedVat.toFixed(2);
+        }
+      }
+
       setFormData({
         name: material.name || "",
         sku: material.code || "",
@@ -83,6 +125,7 @@ export const EditRawMaterialDialog = ({
         max_stock: material.maxStock?.toString() || "",
         unit: material.unit || "Adet",
         unitPrice: material.unitPrice?.toString() || "0",
+        vatRate: vatRate,
         totalPrice: material.totalPrice?.toString() || "0",
         currency: (material.currencies && material.currencies.length > 0 ? material.currencies[0] : material.currency || DEFAULT_CURRENCY) as Currency,
         brand: material.brand || "",
@@ -92,6 +135,9 @@ export const EditRawMaterialDialog = ({
         location: material.location || "",
         description: material.description || material.notes || "",
       });
+      
+      // Material yüklendikten sonra flag'i false yap (kullanıcı değişiklik yapabilir)
+      setTimeout(() => setIsInitialLoad(false), 100);
     }
   }, [material]);
 
@@ -111,6 +157,7 @@ export const EditRawMaterialDialog = ({
         maxStock: formData.max_stock ? parseInt(formData.max_stock) : null,
         unitPrice: parseFloat(formData.unitPrice) || null,
         totalPrice: parseFloat(formData.totalPrice) || null,
+        vatRate: formData.vatRate ? parseFloat(formData.vatRate) : null,
         currency: formData.currency,
         currencies: [formData.currency],
         brand: formData.brand || null,
@@ -220,7 +267,7 @@ export const EditRawMaterialDialog = ({
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="category"  className="text-sm sm:text-base">Kategori</Label>
                         <Select
@@ -264,6 +311,16 @@ export const EditRawMaterialDialog = ({
                             <SelectItem value="Ton">Ton</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="brand" className="text-sm sm:text-base">Marka</Label>
+                        <Input
+                          id="brand"
+                          value={formData.brand}
+                          onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                          className="min-h-[44px] sm:min-h-0"
+                          placeholder="Örn: Bosch, Samsung, vb."
+                        />
                       </div>
                     </div>
 
@@ -339,32 +396,40 @@ export const EditRawMaterialDialog = ({
                           className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="totalPrice" className="text-sm sm:text-base">Toplam Fiyat ({CURRENCY_SYMBOLS[formData.currency as Currency]})</Label>
+                        <Label htmlFor="vatRate" className="text-sm sm:text-base">KDV Yüzdesi (%)</Label>
                         <Input
-                          id="totalPrice"
+                          id="vatRate"
                           type="number"
                           step="0.01"
                           min="0"
-                          value={formData.totalPrice}
-                          onChange={(e) => setFormData({ ...formData, totalPrice: e.target.value })}
+                          max="100"
+                          value={formData.vatRate}
+                          onChange={(e) => setFormData({ ...formData, vatRate: e.target.value })}
                           className="min-h-[44px] sm:min-h-0"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="brand" className="text-sm sm:text-base">Marka</Label>
-                        <Input
-                          id="brand"
-                          value={formData.brand}
-                          onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                          className="min-h-[44px] sm:min-h-0"
-                          placeholder="Örn: Bosch, Samsung, vb."
+                          placeholder="Örn: 20"
                         />
                       </div>
                     </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="totalPrice" className="text-sm sm:text-base">Nihai Fiyat (KDV Dahil) ({CURRENCY_SYMBOLS[formData.currency as Currency]})</Label>
+                      <Input
+                        id="totalPrice"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.totalPrice}
+                        readOnly
+                        className="min-h-[44px] sm:min-h-0 bg-muted cursor-not-allowed"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {formData.unitPrice && parseFloat(formData.unitPrice) > 0 && formData.vatRate && parseFloat(formData.vatRate) > 0
+                          ? `Birim Fiyat: ${parseFloat(formData.unitPrice).toFixed(2)} + KDV (%${formData.vatRate}): ${((parseFloat(formData.unitPrice) * parseFloat(formData.vatRate)) / 100).toFixed(2)} = ${parseFloat(formData.totalPrice).toFixed(2)}`
+                          : "Birim fiyat ve KDV yüzdesi girildiğinde otomatik hesaplanır"}
+                      </p>
+                    </div>
+
 
                     <div className="space-y-2">
                       <Label htmlFor="link" className="text-sm sm:text-base">Link</Label>
@@ -398,7 +463,7 @@ export const EditRawMaterialDialog = ({
                           <SelectTrigger className="min-h-[44px] sm:min-h-0">
                             <SelectValue placeholder={usersLoading ? "Yükleniyor..." : "Kişi seçin"} />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="max-h-[300px] overflow-y-auto">
                             <SelectItem value="none">Satın Alan Kişi Yok</SelectItem>
                             {users.map((user) => (
                               <SelectItem key={user.id} value={user.id}>

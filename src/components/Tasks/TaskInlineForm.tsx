@@ -980,9 +980,24 @@ export const TaskInlineForm = ({
               <Input
                 placeholder="Görev başlığı"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.length <= 200) {
+                    setTitle(value);
+                  }
+                }}
                 disabled={isRestrictedUser}
+                maxLength={200}
+                aria-describedby="title-char-count"
               />
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground" id="title-char-count">
+                  {title.length}/200 karakter
+                </span>
+                {title.length === 0 && (
+                  <span className="text-xs text-destructive">Zorunlu alan</span>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               <Label className="text-sm sm:text-base">Bitiş Tarihi</Label>
@@ -1083,9 +1098,21 @@ export const TaskInlineForm = ({
               rows={3}
               placeholder="Görev açıklaması"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value.length <= 2000) {
+                  setDescription(value);
+                }
+              }}
               disabled={isRestrictedUser}
+              maxLength={2000}
+              aria-describedby="description-char-count"
             />
+            <div className="flex justify-end">
+              <span className="text-xs text-muted-foreground" id="description-char-count">
+                {description.length}/2000 karakter
+              </span>
+            </div>
           </div>
 
           <div className="space-y-3">

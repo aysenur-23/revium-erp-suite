@@ -32,6 +32,7 @@ import {
   Plus,
   MoreVertical,
   Edit2,
+  Edit,
   Trash2,
   Calendar,
   Tag,
@@ -111,7 +112,7 @@ type BoardState = {
 };
 
 const STORAGE_KEY = "taskBoardState_v1";
-const FILTER_STORAGE_KEY = "taskBoardFilters_v1";
+// FILTER_STORAGE_KEY kaldırıldı - filtreler yok
 
 type BoardTaskInput = {
   id: string;
@@ -148,6 +149,7 @@ interface TaskBoardProps {
   onStatusChange: (taskId: string, status: string) => Promise<void>;
   showProjectFilter?: boolean; // Proje filtresini göster/gizle
   projectId?: string; // Gizli proje kontrolü için
+  showArchived?: boolean; // Arşivlenmiş görevleri göster (archive filtresi için)
 }
 
 // Trello color palette for labels
@@ -198,7 +200,7 @@ const defaultColumns: Column[] = [
   { id: "approved", title: "Onaylandı", taskIds: [] }, // Onaylanmış ve tamamlanmış görevler (status: completed, approvalStatus: approved)
 ];
 
-export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilter = true, projectId: propProjectId }: TaskBoardProps) => {
+export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilter = true, projectId: propProjectId, showArchived = false }: TaskBoardProps) => {
   const { user, isAdmin, isTeamLeader, isSuperAdmin } = useAuth();
   
   // Status helper fonksiyonları - component içinde tanımlı
@@ -239,6 +241,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [openDropdownMenuId, setOpenDropdownMenuId] = useState<string | null>(null);
   const [showAddTask, setShowAddTask] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
@@ -266,10 +269,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [showMemberAssignment, setShowMemberAssignment] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
-  const [boardSearch, setBoardSearch] = useState("");
-  const [memberFilter, setMemberFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [projectFilter, setProjectFilter] = useState("all");
+  // Filtreler kaldırıldı - boardSearch, memberFilter, priorityFilter, projectFilter artık kullanılmıyor
   const [productionOrders, setProductionOrders] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [selectedOrderLink, setSelectedOrderLink] = useState("none");
@@ -383,36 +383,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
 
   // Etiket filtresi kaldırıldı - labelOptions artık kullanılmıyor
 
-  const matchesFilters = (task?: Task) => {
-    if (!task) return false;
-    // Proje filtresi zaten boardTasks'ta uygulanmış, burada tekrar uygulamaya gerek yok
-    // Sadece pano içi filtreleri (arama, üye, öncelik) uygula
-    const text = boardSearch.toLocaleLowerCase('tr-TR');
-    if (
-      boardSearch &&
-      !(task.title.toLocaleLowerCase('tr-TR').includes(text) || task.description?.toLocaleLowerCase('tr-TR').includes(text))
-    ) {
-      return false;
-    }
-    if (memberFilter !== "all") {
-      // Göreve atanan kullanıcıları kontrol et
-      const isAssigned = Array.isArray(task.assignedUsers) && task.assignedUsers.some((u) => u.id === memberFilter);
-      // Görevi oluşturan kullanıcıyı kontrol et
-      const isCreator = task.createdBy === memberFilter;
-      // İkisinden biri eşleşiyorsa göster
-      if (!isAssigned && !isCreator) {
-        return false;
-      }
-    }
-    // Etiket filtresi kaldırıldı - kullanılmıyor
-    if (priorityFilter !== "all") {
-      if (priorityFilter === "high" && task.priority < 4) return false;
-      if (priorityFilter === "medium" && (task.priority < 2 || task.priority > 3)) return false;
-      if (priorityFilter === "low" && task.priority >= 2) return false;
-    }
-    // projectFilter kontrolü kaldırıldı - zaten boardTasks'ta uygulanmış
-    return true;
-  };
+  // matchesFilters fonksiyonu kaldırıldı - filtreler yok
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -432,19 +403,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
       }
     }
 
-    const savedFilters = localStorage.getItem(FILTER_STORAGE_KEY);
-    if (savedFilters) {
-      try {
-        const parsedFilters = JSON.parse(savedFilters);
-        if (parsedFilters.boardSearch) setBoardSearch(parsedFilters.boardSearch);
-        if (parsedFilters.memberFilter) setMemberFilter(parsedFilters.memberFilter);
-        // Etiket filtresi kaldırıldı
-        if (parsedFilters.priorityFilter) setPriorityFilter(parsedFilters.priorityFilter);
-        if (parsedFilters.projectFilter) setProjectFilter(parsedFilters.projectFilter);
-      } catch (error) {
-        // Silently fail - invalid saved filters
-      }
-    }
+    // Filtre localStorage işlemleri kaldırıldı
   }, []);
 
   // Sync tasks from props to board state
@@ -521,9 +480,9 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
         };
         newTasks[task.id] = taskData;
 
-        // Arşivlenmiş görevleri atla - arşiv ayrı sayfada gösteriliyor
-        if (task.is_archived || task.isArchived) {
-          return; // Arşivlenmiş görevleri board'da gösterme
+        // Arşivlenmiş görevleri atla - sadece showArchived=false ise (archive filtresi aktif değilse)
+        if (!showArchived && (task.is_archived || task.isArchived)) {
+          return; // Arşivlenmiş görevleri board'da gösterme (archive filtresi aktif değilse)
         }
 
         // Onaylanmış görevler için "Onaylandı" kolonu (status: completed, approvalStatus: approved)
@@ -546,6 +505,13 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
           const col = newColumns.find((c) => c.id === task.status);
           if (col) {
             col.taskIds.push(task.id);
+          } else {
+            // Eğer status defaultColumns içinde yoksa, "pending" kolonuna ekle
+            // Bu, bilinmeyen status'lerin de görünmesini sağlar
+            const pendingCol = newColumns.find((c) => c.id === "pending");
+            if (pendingCol) {
+              pendingCol.taskIds.push(task.id);
+            }
           }
         }
       });
@@ -598,15 +564,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
     fetchProjects();
   }, []);
 
-  useEffect(() => {
-    const data = {
-      boardSearch,
-      memberFilter,
-      priorityFilter,
-      projectFilter,
-    };
-    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(data));
-  }, [boardSearch, memberFilter, priorityFilter, projectFilter]);
+  // Filtre localStorage kaydetme kaldırıldı
 
   // Sonraki aşamaya geç fonksiyonu
   const handleNextStage = async (taskId: string, currentStatus: string) => {
@@ -658,12 +616,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
     }
   };
 
-  const clearBoardFilters = () => {
-    setBoardSearch("");
-    setMemberFilter("all");
-    setPriorityFilter("all");
-    setProjectFilter("all");
-  };
+  // clearBoardFilters fonksiyonu kaldırıldı - filtreler yok
 
   // Liste ekleme/düzenleme/arşivleme/silme özellikleri kaldırıldı - sabit 4 kolon kullanılıyor
 
@@ -1246,80 +1199,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
 
   return (
     <div className="flex flex-col bg-[#F4F5F7] min-h-[500px] rounded-lg border border-[#DFE1E6]">
-      {/* Trello-style Header */}
-      <div className="bg-white border-b border-[#E4E6EA] px-3 sm:px-6 py-3 sm:py-3.5 shadow-sm space-y-3 rounded-t-lg">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-sm">
-            <h1 className="text-base sm:text-lg font-semibold text-[#172B4D]">Görev Panosu</h1>
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-1">
-            <SearchInput
-              value={boardSearch}
-              onChange={(e) => setBoardSearch(e.target.value)}
-              placeholder="Kart ara..."
-              containerClassName="flex-1 min-w-0"
-              iconClassName="text-[#5E6C84]"
-              className="bg-[#F4F5F7] border-none focus-visible:ring-[#0079BF] text-sm sm:text-base min-h-[44px] sm:min-h-0"
-            />
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-shrink-0">
-              <Select value={memberFilter} onValueChange={setMemberFilter}>
-                <SelectTrigger className="w-full sm:w-[180px] md:w-[200px] bg-[#F4F5F7] border-none focus:ring-[#0079BF] min-h-[44px] sm:min-h-0">
-                  <SelectValue placeholder="Üye filtresi" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tüm üyeler</SelectItem>
-                  {memberOptions.map((member) => (
-                    <SelectItem key={member.id} value={member.id} className="min-h-[44px] sm:min-h-0">
-                      {member.full_name || "İsimsiz kullanıcı"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                <SelectTrigger className="w-full sm:w-[140px] md:w-[160px] bg-[#F4F5F7] border-none focus:ring-[#0079BF] min-h-[44px] sm:min-h-0">
-                  <SelectValue placeholder="Öncelik" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="min-h-[44px] sm:min-h-0">Tümü</SelectItem>
-                  <SelectItem value="high" className="min-h-[44px] sm:min-h-0">Yüksek</SelectItem>
-                  <SelectItem value="medium" className="min-h-[44px] sm:min-h-0">Orta</SelectItem>
-                  <SelectItem value="low" className="min-h-[44px] sm:min-h-0">Düşük</SelectItem>
-                </SelectContent>
-              </Select>
-              {showProjectFilter && (
-                <Select value={projectFilter} onValueChange={setProjectFilter}>
-                  <SelectTrigger className="w-full sm:w-[180px] md:w-[200px] bg-[#F4F5F7] border-none focus:ring-[#0079BF] min-h-[44px] sm:min-h-0">
-                    <SelectValue placeholder="Proje Seçiniz" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all" className="min-h-[44px] sm:min-h-0">Tüm Projeler</SelectItem>
-                    <SelectItem value="general" className="min-h-[44px] sm:min-h-0">Genel Görevler</SelectItem>
-                    {Array.from(projects.values())
-                      .filter(p => p.name?.toLowerCase() !== "genel görevler" && p.name?.toLowerCase() !== "genel")
-                      .map((project) => (
-                        <SelectItem key={project.id} value={project.id} className="min-h-[44px] sm:min-h-0">
-                          {project.isPrivate ? (
-                            <span className="flex items-center gap-2">
-                              <Folder className="h-3 w-3" />
-                              {project.name}
-                            </span>
-                          ) : (
-                            project.name
-                          )}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" onClick={clearBoardFilters} className="text-[#5E6C84] touch-manipulation min-h-[44px] sm:min-h-0 w-full sm:w-auto whitespace-nowrap">
-            Filtreleri Temizle
-          </Button>
-        </div>
-      </div>
+      {/* Header kaldırıldı - filtreler ve başlık yok */}
 
       {/* Board - Sabit kolonlar, drag & drop yok */}
       <div 
@@ -1344,7 +1224,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
               const columnTasks = Array.isArray(column.taskIds) 
                 ? column.taskIds
                     .map((id) => boardState.tasks[id])
-                    .filter((task) => matchesFilters(task))
+                    .filter((task) => task !== undefined) // Sadece undefined olmayan görevleri filtrele
                 : [];
               const difficultyLabel = column.title.toLowerCase().includes("tamam") || column.id === "completed"
                 ? "EASY"
@@ -1389,59 +1269,123 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                       onDragStart={(e) => e.preventDefault()}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => e.preventDefault()}
-                      className="relative group bg-white rounded-[3px] p-3.5 sm:p-4 shadow-[0_1px_0_rgba(9,30,66,0.25)] hover:shadow-[0_2px_4px_rgba(9,30,66,0.15)] transition-all duration-200 cursor-pointer border-0"
+                      className={cn(
+                        "relative group bg-white dark:bg-gray-800 rounded-lg p-4",
+                        "shadow-sm hover:shadow-md border border-gray-200 dark:border-gray-700",
+                        "transition-all duration-300 ease-in-out cursor-pointer",
+                        "hover:border-primary/30 hover:-translate-y-0.5",
+                        "active:scale-[0.98]"
+                      )}
                       onClick={() => openTaskModal(task)}
                     >
                       {/* 3 Nokta Menü - Sağ Üst Köşe */}
                       {(isAdmin || isTeamLeader || isSuperAdmin || task.createdBy === user?.id) && (
-                        <div className="absolute top-2 right-2 z-10">
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                          >
-                                            <MoreVertical className="h-3.5 w-3.5" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                                          <DropdownMenuItem
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleArchiveTask(task.id);
-                                            }}
-                                            className="cursor-pointer"
-                                          >
-                                            <Archive className="h-4 w-4 mr-2" />
-                                            Arşivle
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (confirm("Bu görevi kalıcı olarak silmek istediğinize emin misiniz?")) {
-                                                handleDeleteTask(task.id);
-                                              }
-                                            }}
-                                            className="cursor-pointer text-destructive focus:text-destructive"
-                                          >
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Sil
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </div>
+                        <div className="absolute top-3 right-3 z-[9999]">
+                          <DropdownMenu
+                            open={openDropdownMenuId === task.id}
+                            onOpenChange={(open) => {
+                              if (open) {
+                                setOpenDropdownMenuId(task.id);
+                              } else {
+                                setOpenDropdownMenuId(null);
+                              }
+                            }}
+                          >
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                id={`task-menu-trigger-${task.id}`}
+                                data-menu-open={openDropdownMenuId === task.id ? "true" : "false"}
+                                className={cn(
+                                  "task-menu-trigger",
+                                  "inline-flex items-center justify-center",
+                                  "h-7 w-7 rounded-md",
+                                  "transition-colors duration-200",
+                                  "border border-transparent",
+                                  openDropdownMenuId === task.id
+                                    ? "border-border bg-muted/80"
+                                    : "hover:bg-muted/50 hover:border-border/50",
+                                  "focus:bg-muted/50 focus:border-border/50 focus:outline-none focus:ring-0",
+                                  "active:bg-muted/50 active:border-border/50"
+                                )}
+                                style={{
+                                  WebkitTapHighlightColor: 'transparent',
+                                  backgroundColor: openDropdownMenuId === task.id ? 'hsl(var(--muted) / 0.8)' : 'transparent',
+                                  borderColor: openDropdownMenuId === task.id ? 'hsl(var(--border))' : 'transparent',
+                                  opacity: 1,
+                                  visibility: 'visible',
+                                  display: 'inline-flex',
+                                  pointerEvents: 'auto',
+                                  position: 'relative',
+                                  zIndex: 9999,
+                                } as React.CSSProperties}
+                              >
+                                <MoreVertical
+                                  className="h-3.5 w-3.5 stroke-[2.5] text-foreground"
+                                  style={{
+                                    opacity: 1,
+                                    visibility: 'visible',
+                                    display: 'block',
+                                  }}
+                                />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-44 rounded-lg shadow-lg border border-border bg-popover p-1.5 z-[10000]"
+                              onCloseAutoFocus={(e) => e.preventDefault()}
+                            >
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdownMenuId(null);
+                                  openTaskModal(task);
+                                }}
+                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+                              >
+                                <Edit className="h-4 w-4 mr-2.5 stroke-[2]" />
+                                Düzenle
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdownMenuId(null);
+                                  handleArchiveTask(task.id);
+                                }}
+                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+                              >
+                                <Archive className="h-4 w-4 mr-2.5 stroke-[2]" />
+                                {(task as any).isArchived || (task as any).is_archived ? "Arşivden Çıkar" : "Arşivle"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdownMenuId(null);
+                                  if (confirm(`"${task.title}" görevini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
+                                    handleDeleteTask(task.id);
+                                  }
+                                }}
+                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium text-destructive focus:text-destructive hover:bg-destructive/10 focus:bg-destructive/10 transition-colors"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2.5 stroke-[2]" />
+                                Sil
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                                   )}
                                   
-                                  {/* Labels - Trello style (thin bars at top) */}
+                                  {/* Labels - Improved design */}
                                       {Array.isArray(task.labels) && task.labels.length > 0 && (
-                                    <div className="flex flex-wrap gap-0.5 mb-2.5 -mx-3 -mt-3">
+                                    <div className="flex flex-wrap gap-1.5 mb-3 -mx-1 -mt-1">
                                       {task.labels.map((label, idx) => (
                                         <div
                                           key={idx}
-                                          className="h-1.5 rounded-sm flex-1 min-w-[40px]"
+                                          className="h-2 rounded-full flex-1 min-w-[60px] shadow-sm"
                                           style={{ 
                                             backgroundColor: label.color,
+                                            opacity: 0.9,
                                           }}
                                           title={label.name}
                                         />
@@ -1449,24 +1393,24 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                                     </div>
                                   )}
 
-                                  {/* Project info - Trello style, more prominent */}
+                                  {/* Project info - Improved design */}
                                   {task.projectId && projects.has(task.projectId) && (
-                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-[3px] px-2.5 py-1.5 mb-2 text-xs text-blue-700 flex items-center gap-1.5 shadow-sm">
-                                      <Folder className="h-3.5 w-3.5 flex-shrink-0" />
-                                      <span className="font-semibold truncate">
+                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-md px-2 py-1 mb-2.5 text-[10px] text-blue-700 dark:text-blue-300 flex items-center gap-1.5 shadow-sm hover:shadow transition-shadow">
+                                      <Folder className="h-3 w-3 flex-shrink-0" />
+                                      <span className="font-medium truncate">
                                         {projects.get(task.projectId)?.name}
                                       </span>
                                     </div>
                                   )}
 
                                   {task.linkedProductionOrder && (
-                                    <div className="bg-[#F4F5F7] rounded-[3px] px-2.5 py-2 mb-2 text-xs text-[#5E6C84] flex items-start gap-2">
-                                      <Package className="h-4 w-4 text-[#5E6C84]" />
-                                      <div>
-                                        <p className="text-[12px] text-[#172B4D] font-medium">
+                                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-md px-2.5 py-2 mb-2.5 text-xs text-gray-700 dark:text-gray-300 flex items-start gap-2 border border-gray-200 dark:border-gray-700 shadow-sm">
+                                      <Package className="h-4 w-4 text-gray-600 dark:text-gray-400 flex-shrink-0 mt-0.5" />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs text-gray-900 dark:text-gray-100 font-semibold truncate">
                                           {task.linkedProductionOrder.orderNumber || "Bağlı sipariş"}
                                         </p>
-                                        <p className="text-[11px]">
+                                        <p className="text-[11px] text-gray-600 dark:text-gray-400 truncate">
                                           {task.linkedProductionOrder.customerName || "-"}
                                           {task.linkedProductionOrder.dueDate && (
                                             <>
@@ -1480,26 +1424,26 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                                   )}
 
                                   {/* Title */}
-                                  <p className="font-normal text-sm text-[#172B4D] leading-[20px] mb-1.5 break-words">
+                                  <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-5 mb-2 break-words">
                                     {task.title}
                                   </p>
 
                                   {/* Description preview */}
                                   {task.description && (
-                                    <p className="text-xs text-[#5E6C84] line-clamp-2 leading-[16px] mb-2 break-words">
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-4 mb-3 break-words">
                                       {task.description}
                                     </p>
                                   )}
 
                                   {/* Footer - Icons and metadata */}
-                                  {(task.dueDate || (task.attachments && task.attachments > 0) || (task.comments && task.comments > 0) || (task.checklists && task.checklists.length > 0) || (task.assignedUsers && task.assignedUsers.length > 0) || task.createdBy) && (
-                                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-transparent">
-                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                  {(task.dueDate || (task.attachments && task.attachments > 0) || (task.comments && task.comments > 0) || (task.checklists && task.checklists.length > 0) || (task.assignedUsers && task.assignedUsers.length > 0) || task.createdBy || task.createdAt) && (
+                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                      <div className="flex items-center gap-2 flex-wrap">
                                         {/* Due date */}
                                         {task.dueDate && (
                                           <div
                                             className={cn(
-                                              "flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded font-medium",
+                                              "flex items-center gap-1 text-xs px-2 py-1 rounded-md font-medium shadow-sm",
                                               getDueDateDisplay(task.dueDate).className
                                             )}
                                           >
@@ -1509,29 +1453,41 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                                         
                                       {/* Attachments */}
                                       {task.attachments > 0 && (
-                                        <div className="flex items-center gap-1 text-[11px] text-[#5E6C84] hover:text-[#172B4D]">
+                                        <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
                                           <Paperclip className="h-3.5 w-3.5" />
-                                          <span>{task.attachments}</span>
+                                          <span className="font-medium">{task.attachments}</span>
                                         </div>
                                       )}
 
                                       {/* Comments */}
                                       {task.comments > 0 && (
-                                        <div className="flex items-center gap-1 text-[11px] text-[#5E6C84] hover:text-[#172B4D]">
+                                        <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
                                           <MessageSquare className="h-3.5 w-3.5" />
-                                          <span>{task.comments}</span>
+                                          <span className="font-medium">{task.comments}</span>
                                         </div>
                                       )}
 
                                         {/* Checklists */}
                                         {Array.isArray(task.checklists) && task.checklists.length > 0 && task.checklists.some(c => c.total > 0) && (
-                                          <div className="flex items-center gap-1 text-[11px] text-[#5E6C84] hover:text-[#172B4D]">
+                                          <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
                                             <CheckCircle2 className="h-3.5 w-3.5" />
-                                            <span>
+                                            <span className="font-medium">
                                               {task.checklists.reduce((acc, c) => acc + (c.completed || 0), 0)}/
                                               {task.checklists.reduce((acc, c) => acc + (c.total || 0), 0)}
                                             </span>
                                           </div>
+                                        )}
+
+                                        {/* Created date */}
+                                        {task.createdAt && (
+                                          <time 
+                                            dateTime={task.createdAt}
+                                            className="flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-400"
+                                            title={`Oluşturulma: ${new Date(task.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                                          >
+                                            <Clock className="h-3 w-3" />
+                                            <span>{new Date(task.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</span>
+                                          </time>
                                         )}
 
                                         {/* Creator */}
@@ -1549,21 +1505,21 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                                         })()}
                                       </div>
 
-                                      {/* Assigned users - Trello style */}
+                                      {/* Assigned users - Improved design */}
                                       {Array.isArray(task.assignedUsers) && task.assignedUsers.length > 0 && (
-                                        <div className="flex -space-x-1">
-                                          {task.assignedUsers.slice(0, 4).map((user) => (
+                                        <div className="flex items-center -space-x-2">
+                                          {task.assignedUsers.slice(0, 3).map((user) => (
                                             <div
                                               key={user.id}
-                                              className="h-7 w-7 rounded-full bg-[#0079BF] text-white text-[11px] font-semibold flex items-center justify-center border-2 border-white shadow-sm hover:z-10 relative transition-transform hover:scale-110"
+                                              className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-semibold flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:scale-110 transition-transform"
                                               title={user.full_name}
                                             >
                                               {getInitials(user.full_name)}
                                             </div>
                                           ))}
-                                          {task.assignedUsers.length > 4 && (
-                                            <div className="h-7 w-7 rounded-full bg-[#DFE1E6] text-[#172B4D] text-[11px] font-semibold flex items-center justify-center border-2 border-white shadow-sm hover:z-10 relative">
-                                              +{task.assignedUsers.length - 4}
+                                          {task.assignedUsers.length > 3 && (
+                                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 text-white text-xs font-semibold flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:scale-110 transition-transform">
+                                              +{task.assignedUsers.length - 3}
                                             </div>
                                           )}
                                         </div>
