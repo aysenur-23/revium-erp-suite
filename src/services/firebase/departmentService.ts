@@ -11,7 +11,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { getAllUsers, getUserProfile } from "./authService";
+import { getAllUsers, getUserProfile, UserProfile } from "./authService";
 import { logAudit } from "@/utils/auditLogger";
 
 export interface Department {
@@ -44,7 +44,7 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
     try {
       const departmentsRef = collection(db, DEPARTMENTS_COLLECTION);
       snapshot = await getDocs(departmentsRef);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // İzin hatası durumunda sessizce devam et (kayıt sayfası için opsiyonel)
       // Permission-denied beklenen bir durum olduğu için log gösterme
       // İzin hatası olsa bile boş array döndür (kayıt sayfası için gerekli)
@@ -52,13 +52,15 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
     }
     
     // Tüm kullanıcıları önceden al (daha verimli ve güvenilir)
-    let allUsers: any[] = [];
+    let allUsers: UserProfile[] = [];
     try {
       const { getAllUsers } = await import("./authService");
       allUsers = await getAllUsers();
-    } catch (error) {
+    } catch (error: unknown) {
       // Kullanıcılar alınamazsa sessizce devam et
-      console.warn("Kullanıcılar yüklenemedi, getUserProfile ile devam edilecek:", error);
+      if (import.meta.env.DEV) {
+        console.warn("Kullanıcılar yüklenemedi, getUserProfile ile devam edilecek:", error);
+      }
     }
     
     const departments: DepartmentWithStats[] = [];
@@ -73,7 +75,7 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
       // Fetch manager name if exists (sadece authenticated kullanıcılar için)
       if (department.managerId) {
         // Önce getAllUsers'dan dene (daha hızlı ve güvenilir)
-        const managerFromAllUsers = allUsers.find(u => u.id === department.managerId && !(u as any).deleted);
+        const managerFromAllUsers = allUsers.find(u => u.id === department.managerId);
         if (managerFromAllUsers) {
           department.managerName = managerFromAllUsers.fullName || managerFromAllUsers.displayName || managerFromAllUsers.email || "Bilinmeyen";
         } else {
@@ -81,39 +83,52 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
           try {
             const { getUserProfile } = await import("./authService");
             const managerProfile = await getUserProfile(department.managerId, false); // allowDeleted: false - silinmiş kullanıcıları gösterme
-            if (managerProfile && !(managerProfile as any).deleted) {
+            if (managerProfile) {
               department.managerName = managerProfile.fullName || managerProfile.displayName || managerProfile.email || "Bilinmeyen";
               // Eğer hiçbir isim alanı yoksa, managerId'yi logla
               if (!managerProfile.fullName && !managerProfile.displayName && !managerProfile.email) {
+                if (import.meta.env.DEV) {
                 console.warn(`Manager ID ${department.managerId} için isim bilgisi bulunamadı. Departman: ${department.name}`);
+              }
               }
             } else {
               // Eğer kullanıcı silinmişse veya bulunamadıysa, managerId'yi temizle
-              console.warn(`Manager ID ${department.managerId} bulunamadı veya silinmiş. Departman: ${department.name}`);
+              if (import.meta.env.DEV) {
+                console.warn(`Manager ID ${department.managerId} bulunamadı veya silinmiş. Departman: ${department.name}`);
+              }
               department.managerName = undefined;
               // managerId'yi null yap (async olarak güncelle)
               updateDoc(doc(db, DEPARTMENTS_COLLECTION, docSnap.id), {
                 managerId: null,
                 updatedAt: Timestamp.now(),
-              }).catch(err => {
-                console.error("Error clearing deleted manager:", err);
+              }).catch((err: unknown) => {
+                if (import.meta.env.DEV) {
+                  console.error("Error clearing deleted manager:", err);
+                }
               });
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             // Silinmiş kullanıcı hatası durumunda managerId'yi temizle
-            if (error.message?.includes("silinmiş")) {
-              console.warn(`Manager ID ${department.managerId} silinmiş. Departman: ${department.name}`);
+            if (error instanceof Error && error.message?.includes("silinmiş")) {
+              if (import.meta.env.DEV) {
+                console.warn(`Manager ID ${department.managerId} silinmiş. Departman: ${department.name}`);
+              }
               department.managerName = undefined;
               // managerId'yi null yap (async olarak güncelle)
               updateDoc(doc(db, DEPARTMENTS_COLLECTION, docSnap.id), {
                 managerId: null,
                 updatedAt: Timestamp.now(),
-              }).catch(err => {
-                console.error("Error clearing deleted manager:", err);
+              }).catch((err: unknown) => {
+                if (import.meta.env.DEV) {
+                  console.error("Error clearing deleted manager:", err);
+                }
               });
             } else {
               // Diğer hatalar için logla ama devam et
-              console.error(`Manager ID ${department.managerId} için hata (Departman: ${department.name}):`, error.message || error);
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              if (import.meta.env.DEV) {
+                console.error(`Manager ID ${department.managerId} için hata (Departman: ${department.name}):`, errorMessage);
+              }
               // Hata olsa bile managerId'yi göster (kullanıcı bulunamadı ama ID var)
               department.managerName = undefined;
             }
@@ -136,7 +151,7 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
     }
     
     return departments;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Beklenmeyen hatalar için boş array döndür (kayıt sayfası için gerekli)
     // Sessizce devam et - permission-denied beklenen bir durum
     return [];
@@ -168,15 +183,19 @@ export const getDepartmentById = async (departmentId: string): Promise<Departmen
     if (department.managerId) {
       try {
         const managerProfile = await getUserProfile(department.managerId, false); // allowDeleted: false - silinmiş kullanıcıları gösterme
-        if (managerProfile && !(managerProfile as any).deleted) {
+        if (managerProfile) {
           department.managerName = managerProfile.fullName || managerProfile.displayName || managerProfile.email || "Bilinmeyen";
           // Eğer hiçbir isim alanı yoksa, managerId'yi logla
           if (!managerProfile.fullName && !managerProfile.displayName && !managerProfile.email) {
-            console.warn(`Manager ID ${department.managerId} için isim bilgisi bulunamadı. Departman: ${department.name}`);
+            if (import.meta.env.DEV) {
+              console.warn(`Manager ID ${department.managerId} için isim bilgisi bulunamadı. Departman: ${department.name}`);
+            }
           }
         } else {
           // Eğer kullanıcı silinmişse veya bulunamadıysa, managerId'yi temizle
-          console.warn(`Manager ID ${department.managerId} bulunamadı veya silinmiş. Departman: ${department.name}`);
+          if (import.meta.env.DEV) {
+            console.warn(`Manager ID ${department.managerId} bulunamadı veya silinmiş. Departman: ${department.name}`);
+          }
           department.managerName = undefined;
           // managerId'yi null yap
           try {
@@ -185,13 +204,17 @@ export const getDepartmentById = async (departmentId: string): Promise<Departmen
               updatedAt: Timestamp.now(),
             });
           } catch (updateErr) {
-            console.error("Error clearing deleted manager:", updateErr);
+            if (import.meta.env.DEV) {
+              console.error("Error clearing deleted manager:", updateErr);
+            }
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Silinmiş kullanıcı hatası durumunda managerId'yi temizle
-        if (error.message?.includes("silinmiş")) {
-          console.warn(`Manager ID ${department.managerId} silinmiş. Departman: ${department.name}`);
+        if (error instanceof Error && error.message?.includes("silinmiş")) {
+          if (import.meta.env.DEV) {
+            console.warn(`Manager ID ${department.managerId} silinmiş. Departman: ${department.name}`);
+          }
           department.managerName = undefined;
           // managerId'yi null yap
           try {
@@ -199,12 +222,17 @@ export const getDepartmentById = async (departmentId: string): Promise<Departmen
               managerId: null,
               updatedAt: Timestamp.now(),
             });
-          } catch (updateErr) {
-            console.error("Error clearing deleted manager:", updateErr);
+          } catch (updateErr: unknown) {
+            if (import.meta.env.DEV) {
+              console.error("Error clearing deleted manager:", updateErr);
+            }
           }
         } else {
           // Diğer hatalar için logla ama devam et
-          console.error(`Manager ID ${department.managerId} için hata (Departman: ${department.name}):`, error.message || error);
+          if (import.meta.env.DEV) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error(`Manager ID ${department.managerId} için hata (Departman: ${department.name}):`, errorMessage);
+          }
           // Hata olsa bile managerId'yi göster (kullanıcı bulunamadı ama ID var)
           department.managerName = undefined;
         }
@@ -212,9 +240,12 @@ export const getDepartmentById = async (departmentId: string): Promise<Departmen
     }
     
     return department;
-  } catch (error: any) {
-    console.error("Error getting department:", error);
-    throw new Error(error.message || "Departman yüklenemedi");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error getting department:", error);
+    }
+    const errorMessage = error instanceof Error ? error.message : "Departman yüklenemedi";
+    throw new Error(errorMessage);
   }
 };
 
@@ -248,9 +279,12 @@ export const createDepartment = async (
     }
     
     return docRef.id;
-  } catch (error: any) {
-    console.error("Error creating department:", error);
-    throw new Error(error.message || "Departman oluşturulamadı");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error creating department:", error);
+    }
+    const errorMessage = error instanceof Error ? error.message : "Departman oluşturulamadı";
+    throw new Error(errorMessage);
   }
 };
 
@@ -287,9 +321,12 @@ export const updateDepartment = async (
     if (userId) {
       await logAudit("UPDATE", "departments", departmentId, userId, oldDepartment, newDepartment);
     }
-  } catch (error: any) {
-    console.error("Error updating department:", error);
-    throw new Error(error.message || "Departman güncellenemedi");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error updating department:", error);
+    }
+    const errorMessage = error instanceof Error ? error.message : "Departman güncellenemedi";
+    throw new Error(errorMessage);
   }
 };
 
@@ -312,9 +349,12 @@ export const deleteDepartment = async (departmentId: string, userId?: string | n
     if (userId) {
       await logAudit("DELETE", "departments", departmentId, userId, oldDepartment, null);
     }
-  } catch (error: any) {
-    console.error("Error deleting department:", error);
-    throw new Error(error.message || "Departman silinemedi");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error deleting department:", error);
+    }
+    const errorMessage = error instanceof Error ? error.message : "Departman silinemedi";
+    throw new Error(errorMessage);
   }
 };
 
@@ -340,9 +380,12 @@ export const createDefaultDepartments = async (): Promise<void> => {
         await createDepartment(team.name, team.description, null, null);
       }
     }
-  } catch (error: any) {
-    console.error("Error creating default departments:", error);
-    throw new Error(error.message || "Varsayılan departmanlar oluşturulamadı");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error creating default departments:", error);
+    }
+    const errorMessage = error instanceof Error ? error.message : "Varsayılan departmanlar oluşturulamadı";
+    throw new Error(errorMessage);
   }
 };
 

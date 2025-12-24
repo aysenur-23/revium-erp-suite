@@ -23,8 +23,10 @@ export const DriveSettings = () => {
       setLoading(true);
       const isAuth = await isDriveAuthorized();
       setAuthorized(isAuth);
-    } catch (error: any) {
-      console.error("Drive authorization check error:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Drive authorization check error:", error);
+      }
       setAuthorized(false);
     } finally {
       setLoading(false);
@@ -42,9 +44,11 @@ export const DriveSettings = () => {
       } else {
         toast.error("Google Drive yetkilendirmesi başarısız oldu");
       }
-    } catch (error: any) {
-      console.error("Drive authorization error:", error);
-      toast.error(error?.message || "Google Drive yetkilendirmesi başarısız oldu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Drive authorization error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Google Drive yetkilendirmesi başarısız oldu");
       setAuthorized(false);
     } finally {
       setAuthorizing(false);
@@ -58,9 +62,11 @@ export const DriveSettings = () => {
       setAuthorized(false);
       toast.success("Google Drive yetkilendirmesi kaldırıldı");
       await checkAuthorization();
-    } catch (error: any) {
-      console.error("Drive revoke error:", error);
-      toast.error(error?.message || "Google Drive yetkilendirmesi kaldırılamadı");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Drive revoke error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Google Drive yetkilendirmesi kaldırılamadı");
     } finally {
       setRevoking(false);
     }

@@ -45,9 +45,11 @@ export const uploadFile = async (
     const downloadURL = await getDownloadURL(uploadResult.ref);
     
     return downloadURL;
-  } catch (error: any) {
-    console.error("Upload file error:", error);
-    throw new Error(error.message || "Dosya yüklenirken hata oluştu");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Upload file error:", error);
+    }
+    throw new Error(error instanceof Error ? error.message : "Dosya yüklenirken hata oluştu");
   }
 };
 
@@ -162,7 +164,7 @@ export const deleteFile = async (
 
     const storageRef = ref(storage, path);
     await deleteObject(storageRef);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Delete file error:", error);
     throw new Error(error.message || "Dosya silinirken hata oluştu");
   }

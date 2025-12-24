@@ -265,7 +265,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
     try {
       const fetched = await getProducts();
       setProducts(
-        fetched.map((product: any) => ({
+        fetched.map((product: { id: string; name: string; sku?: string; price?: number; category?: string }) => ({
           id: product.id,
           name: product.name,
           sku: product.sku,
@@ -273,9 +273,11 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
           category: product.category,
         }))
       );
-    } catch (error: any) {
-      console.error("Ürünler yüklenemedi:", error);
-      toast.error("Ürünler yüklenirken hata oluştu: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Ürünler yüklenemedi:", error);
+      }
+      toast.error("Ürünler yüklenirken hata oluştu: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     }
   }, []);
 
@@ -298,10 +300,12 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
     try {
       const customer = await getCustomerById(customerId);
       setCustomerDetails(customer);
-    } catch (error: any) {
-      console.error("Müşteri bilgisi alınamadı:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Müşteri bilgisi alınamadı:", error);
+      }
       setCustomerDetails(null);
-      setCustomerDetailsError(error?.message || "Müşteri bilgileri alınamadı");
+      setCustomerDetailsError(error instanceof Error ? error.message : "Müşteri bilgileri alınamadı");
     } finally {
       setCustomerDetailsLoading(false);
     }
@@ -359,7 +363,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
     });
   };
 
-  const updateItem = (index: number, field: keyof OrderItem, value: any) => {
+  const updateItem = (index: number, field: keyof OrderItem, value: string | number | null) => {
     setOrderItems((prev) => {
       const updated = [...prev];
       const current = { ...updated[index] };
@@ -373,7 +377,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
         } else if (value) {
           const product = products.find((p) => p.id === value);
           current.is_manual = false;
-          current.product_id = value;
+          current.product_id = String(value);
           current.product_name = product?.name || "";
           if (product?.price) {
             current.unit_price = product.price;
@@ -395,7 +399,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
         const numericValue = Number(value);
         current[field] = Number.isFinite(numericValue) ? numericValue : 0;
       } else {
-        (current as any)[field] = value;
+        (current as Record<string, unknown>)[field] = value;
       }
 
       const quantity = current.quantity || 0;
@@ -458,9 +462,11 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
 
       updateItem(index, "product_id", newProduct.id);
       toast.success("Ürün kayıtlı ürünlere eklendi");
-    } catch (error: any) {
-      console.error("Manuel ürün kaydedilemedi:", error);
-      toast.error("Ürün kaydedilemedi: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Manuel ürün kaydedilemedi:", error);
+      }
+      toast.error("Ürün kaydedilemedi: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     } finally {
       setSavingProduct((prev) => ({ ...prev, [index]: false }));
     }
@@ -577,9 +583,11 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
       onSuccess();
       resetForm();
       onOpenChange(false);
-    } catch (error: any) {
-      console.error("Create order error:", error);
-      toast.error(error?.message || "Sipariş oluşturulurken bir hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Create order error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Sipariş oluşturulurken bir hata oluştu");
     } finally {
       setLoading(false);
     }
@@ -588,7 +596,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] lg:!max-w-[90vw] xl:!max-w-[1400px] !w-[100vw] sm:!w-[95vw] lg:!w-[90vw] xl:!w-[1400px] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[50%] !top-0 sm:!top-[50%] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 sm:!translate-x-[-50%] !translate-y-0 sm:!translate-y-[-50%] overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
           <div className="flex flex-col h-full min-h-0">
             <DialogHeader className="p-3 sm:p-4 pr-12 sm:pr-14 md:pr-16 border-b bg-white flex-shrink-0 relative">
               <div className="flex items-center justify-between gap-3">
@@ -596,7 +604,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                   <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                     <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                  <DialogTitle className="text-[18px] sm:text-[20px] font-semibold text-foreground truncate">
                     Yeni Satış Siparişi
                   </DialogTitle>
                   <DialogDescription className="sr-only">
@@ -618,7 +626,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                     <div className="col-span-1 lg:col-span-8 space-y-4 sm:space-y-6 flex flex-col">
                       <Card className="rounded-xl shadow-lg border bg-white flex-1 flex flex-col min-h-0">
                         <CardHeader className="p-4 sm:p-6 border-b flex-shrink-0">
-                          <CardTitle className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                          <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                             <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                             Sipariş Bilgileri
                           </CardTitle>
@@ -831,7 +839,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                         <Card className="rounded-xl shadow-lg border bg-white">
                           <CardHeader className="p-2 border-b">
                             <div className="flex items-center justify-between">
-                              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                              <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                                 <User className="h-4 w-4 text-primary" />
                                 Müşteri Özeti
                               </CardTitle>
@@ -891,7 +899,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                       <div className="w-full lg:w-96 lg:sticky lg:top-6 h-full">
                         <Card className="rounded-xl shadow-lg border bg-white h-full flex flex-col">
                           <CardHeader className="p-6 border-b flex-shrink-0">
-                            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                            <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                               <CreditCard className="h-5 w-5 text-primary" />
                               Özet
                             </CardTitle>
@@ -935,7 +943,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                     <div className="col-span-1 lg:col-span-8 space-y-4 sm:space-y-6 flex flex-col">
                       <Card className="rounded-xl shadow-lg border bg-white flex-1 flex flex-col min-h-0">
                         <CardHeader className="p-4 sm:p-6 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 flex-shrink-0">
-                          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                          <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                             <ShoppingCart className="h-5 w-5 text-primary" />
                             Ürünler
                           </CardTitle>
@@ -1140,7 +1148,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                       <div className="w-full lg:w-96 lg:sticky lg:top-6 h-full">
                         <Card className="rounded-xl shadow-lg border bg-white h-full flex flex-col">
                           <CardHeader className="p-6 border-b flex-shrink-0">
-                            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                            <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                               <CreditCard className="h-5 w-5 text-primary" />
                               Özet
                             </CardTitle>
@@ -1184,7 +1192,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                     <div className="col-span-1 lg:col-span-8 space-y-3 sm:space-y-4 flex flex-col">
                       <Card className="rounded-xl shadow-lg border bg-white flex-1 flex flex-col min-h-0">
                         <CardHeader className="p-4 sm:p-6 border-b flex-shrink-0">
-                          <CardTitle className="text-base font-semibold flex items-center gap-2">
+                          <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                             <ShoppingCart className="h-4 w-4 text-primary" />
                             Sipariş Özeti
                           </CardTitle>
@@ -1232,7 +1240,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                       <div className="w-full lg:w-80 lg:sticky lg:top-3 h-full">
                         <Card className="rounded-xl shadow-lg border bg-white h-full flex flex-col">
                           <CardHeader className="p-4 sm:p-6 border-b flex-shrink-0">
-                            <CardTitle className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                            <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                               <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                               Fiyat Özeti
                             </CardTitle>

@@ -76,12 +76,14 @@ export const useAdminStats = () => {
         };
 
         return stats;
-      } catch (error: any) {
-        throw new Error(error.message || "Admin istatistikleri alınamadı");
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "Admin istatistikleri alınamadı";
+        throw new Error(errorMessage);
       }
     },
-    refetchInterval: 120000, // 2 dakikada bir güncelle (performans için)
+    refetchInterval: 300000, // 5 dakikada bir güncelle (performans için)
     refetchOnWindowFocus: false, // Window focus'ta refetch yapma (performans için)
-    staleTime: 60000, // 1 dakika stale time (performans için)
+    staleTime: 180000, // 3 dakika stale time (performans için)
+    gcTime: 600000, // 10 dakika cache time (performans için)
   });
 };

@@ -56,7 +56,9 @@ export const getExchangeRates = async (): Promise<ExchangeRate> => {
     cacheTimestamp = now;
     return cachedRates;
   } catch (error) {
-    console.error('Exchange rate fetch error:', error);
+    if (import.meta.env.DEV) {
+      console.error('Exchange rate fetch error:', error);
+    }
     
     // Fallback: Son bilinen kurlar veya varsayılan değerler
     if (cachedRates) {

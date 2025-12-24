@@ -16,8 +16,8 @@ const VerifyEmailPrompt = () => {
   const [message, setMessage] = useState<string | null>(null);
   
   // Location state'ten email ve message al
-  const stateEmail = (location.state as any)?.email;
-  const stateMessage = (location.state as any)?.message;
+  const stateEmail = location.state && typeof location.state === 'object' && 'email' in location.state && typeof location.state.email === 'string' ? location.state.email : undefined;
+  const stateMessage = location.state && typeof location.state === 'object' && 'message' in location.state && typeof location.state.message === 'string' ? location.state.message : undefined;
 
   useEffect(() => {
     // Location state'ten mesaj varsa göster
@@ -45,8 +45,8 @@ const VerifyEmailPrompt = () => {
       await sendVerificationEmail();
       toast.success("Doğrulama e-postası tekrar gönderildi. Lütfen e-posta kutunuzu kontrol edin.");
       setMessage(null);
-    } catch (error: any) {
-      toast.error("E-posta gönderilemedi: " + error.message);
+    } catch (error: unknown) {
+      toast.error("E-posta gönderilemedi: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setResending(false);
     }

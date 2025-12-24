@@ -46,7 +46,7 @@ const hasActionMetadata = (notification: FirebaseNotification): boolean => {
   const meta = notification.metadata;
   if (meta && typeof meta === "object" && "action" in meta) {
     const value = (meta as Record<string, unknown>).action;
-    return typeof value === "string" && (value === "accepted" || value === "rejected" || value === "rejection_approved" || value === "rejection_rejected");
+    return typeof value === "string" && (value === "accepted" || value === "rejected" || value === "rejection_approved" || value === "rejection_rejected" || value === "pool_request_approved");
   }
   return false;
 };
@@ -114,13 +114,15 @@ export default function Notifications() {
 
     setLoading(true);
     
-    // Gerçek zamanlı dinleme başlat
-    const unsubscribe = subscribeToNotifications(user.id, {}, (firebaseNotifications) => {
+    // Gerçek zamanlı dinleme başlat (performans için limit: 100)
+    const unsubscribe = subscribeToNotifications(user.id, { limit: 100 }, (firebaseNotifications) => {
       try {
         setNotifications(firebaseNotifications.map(mapNotification));
         setLoading(false);
       } catch (error: unknown) {
-        console.error("Real-time notifications update error:", error);
+        if (import.meta.env.DEV) {
+          console.error("Real-time notifications update error:", error);
+        }
         setLoading(false);
       }
     });
@@ -153,7 +155,9 @@ export default function Notifications() {
         prev.map(n => (n.id === notificationId ? { ...n, read: true } : n))
       );
     } catch (error) {
-      console.error("Bildirim güncellenirken hata:", error);
+      if (import.meta.env.DEV) {
+        console.error("Bildirim güncellenirken hata:", error);
+      }
       toast.error("Bildirim güncellenemedi");
     }
   };
@@ -438,11 +442,11 @@ export default function Notifications() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-6xl">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 w-[90%] max-w-[90%]">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div className="flex items-center gap-2 sm:gap-3">
             <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-primary flex-shrink-0" />
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Bildirimler</h1>
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Bildirimler</h1>
             {unreadCount > 0 && (
               <Badge variant="destructive" className="h-5 sm:h-6 px-2 text-xs sm:text-sm">
                 {unreadCount} okunmamış
@@ -545,14 +549,58 @@ export default function Notifications() {
                       markAsRead(notification.id);
                     }
                     
+                    // Yönlendirme mantığı
                     if (notification.relatedId) {
+                      // Görev havuzu talebi bildirimleri - Ekip Yönetimi sayfasına yönlendir
+                      if (notification.type === 'task_pool_request') {
+                        navigate('/team-management?tab=approvals');
+                        return;
+                      }
                       // Görev ile ilgili bildirimler
-                      if (['task_assigned', 'task_updated', 'task_completed', 'task_created', 'task_approval'].includes(notification.type)) {
+                      if (['task_assigned', 'task_updated', 'task_completed', 'task_created', 'task_approval', 'task_deleted', 'comment_added'].includes(notification.type)) {
                         navigate(`/tasks?taskId=${notification.relatedId}&view=list`);
-                      } else if (['order_created', 'order_updated'].includes(notification.type)) {
-                        navigate('/orders');
+                      } 
+                      // Sipariş bildirimleri
+                      else if (['order_created', 'order_updated'].includes(notification.type)) {
+                        // Metadata'dan sipariş tipini kontrol et (üretim siparişi mi normal sipariş mi)
+                        const metadata = notification.metadata as { orderType?: string; [key: string]: unknown };
+                        if (metadata?.orderType === 'production' || notification.message?.includes('üretim')) {
+                          navigate(`/production?orderId=${notification.relatedId}`);
+                        } else {
+                          navigate(`/orders?orderId=${notification.relatedId}`);
+                        }
+                      } 
+                      // Talep bildirimleri
+                      else if (notification.type === 'system' && notification.metadata) {
+                        const metadata = notification.metadata as { requestType?: string; [key: string]: unknown };
+                        if (metadata.requestType || notification.message?.includes('talep')) {
+                          navigate(`/requests?requestId=${notification.relatedId}`);
+                        }
+                      }
+                      // Rol değişikliği
+                      else if (notification.type === 'role_changed') {
+                        navigate('/admin');
+                      }
+                    } else {
+                      // relatedId yoksa tip bazlı yönlendirme
+                      if (['order_created', 'order_updated'].includes(notification.type)) {
+                        const metadata = notification.metadata as { orderType?: string; [key: string]: unknown };
+                        if (metadata?.orderType === 'production' || notification.message?.includes('üretim')) {
+                          navigate('/production');
+                        } else {
+                          navigate('/orders');
+                        }
+                      } else if (notification.type === 'system' && notification.metadata) {
+                        const metadata = notification.metadata as { requestType?: string; [key: string]: unknown };
+                        if (metadata.requestType || notification.message?.includes('talep')) {
+                          navigate('/requests');
+                        }
                       } else if (notification.type === 'role_changed') {
                         navigate('/admin');
+                      } else if (notification.type === 'task_pool_request') {
+                        navigate('/team-management?tab=approvals');
+                      } else if (['task_assigned', 'task_updated', 'task_completed', 'task_created', 'task_approval', 'task_deleted', 'comment_added'].includes(notification.type)) {
+                        navigate('/tasks');
                       }
                     }
                   }}
@@ -609,7 +657,7 @@ export default function Notifications() {
                             message = message.replace(columnIdPattern, (match) => {
                               // Metadata'dan status bilgisini al
                               if (notification.metadata) {
-                                const meta = notification.metadata as any;
+                                const meta = notification.metadata as { newStatus?: string; status?: string; new_status?: string; [key: string]: unknown };
                                 // newStatus veya status olabilir
                                 const status = meta.newStatus || meta.status || meta.new_status;
                                 if (status && statusNames[status]) {
@@ -618,8 +666,9 @@ export default function Notifications() {
                                 // Eğer status string olarak direkt metadata'da varsa
                                 if (typeof meta === 'object') {
                                   for (const key in meta) {
-                                    if (statusNames[meta[key]]) {
-                                      return statusNames[meta[key]];
+                                    const value = meta[key];
+                                    if (typeof value === 'string' && statusNames[value]) {
+                                      return statusNames[value];
                                     }
                                   }
                                 }

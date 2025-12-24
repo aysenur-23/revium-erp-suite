@@ -80,7 +80,9 @@ if (getApps().length === 0) {
     if (!isFirebaseConfigValid) {
       // Don't initialize Firebase if config is missing
       // This allows the app to load but Firebase features won't work
-      console.warn('⚠️  Firebase başlatılamadı - config eksik, uygulama sınırlı modda çalışacak');
+      if (import.meta.env.DEV) {
+        console.warn('⚠️  Firebase başlatılamadı - config eksik, uygulama sınırlı modda çalışacak');
+      }
     } else {
       app = initializeApp(normalizedFirebaseConfig);
       
@@ -91,10 +93,10 @@ if (getApps().length === 0) {
         setTimeout(() => {
           try {
             analytics = getAnalytics(app);
-          } catch (error: any) {
+          } catch (error: unknown) {
             // Silently handle - Analytics is not critical for app functionality
             if (import.meta.env.DEV) {
-              console.warn('Firebase Analytics initialization failed:', error?.message || 'Unknown error');
+              console.warn('Firebase Analytics initialization failed:', error instanceof Error ? error.message : 'Unknown error');
             }
           }
         }, 1000); // 1 saniye sonra başlat (sayfa yüklenmesini engellemesin)
@@ -106,9 +108,9 @@ if (getApps().length === 0) {
         if (!auth) {
           throw new Error('Firebase Auth instance oluşturulamadı');
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (import.meta.env.DEV) {
-          console.error('❌ Firebase Authentication başlatma hatası:', error?.message || 'Unknown error');
+          console.error('❌ Firebase Authentication başlatma hatası:', error instanceof Error ? error.message : 'Unknown error');
         }
         auth = null;
       }
@@ -117,7 +119,7 @@ if (getApps().length === 0) {
       if (normalizedFirebaseConfig.databaseURL) {
         try {
           database = getDatabase(app);
-        } catch (error: any) {
+        } catch (error: unknown) {
           if (import.meta.env.DEV) {
             console.warn('Firebase Realtime Database initialization failed:', error?.message || 'Unknown error');
           }
@@ -131,26 +133,28 @@ if (getApps().length === 0) {
       // Offline desteği gerekirse daha sonra eklenebilir
       try {
         firestore = getFirestore(app);
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Silently handle - Firestore might not be critical for app startup
         if (import.meta.env.DEV) {
-          console.warn('Firebase Firestore initialization failed:', error?.message || 'Unknown error');
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.warn('Firebase Firestore initialization failed:', errorMessage);
         }
       }
       
       // Initialize Storage
       try {
         storage = getStorage(app);
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (import.meta.env.DEV) {
-          console.warn('Firebase Storage initialization failed:', error?.message || 'Unknown error');
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.warn('Firebase Storage initialization failed:', errorMessage);
         }
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (import.meta.env.DEV) {
       console.error('Firebase app initialization failed:', error);
-      const errorMessage = error?.message || 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       if (errorMessage.includes('CONFIGURATION_NOT_FOUND') || errorMessage.includes('configuration')) {
         console.error('❌ Firebase yapılandırması bulunamadı.');
         console.error('📝 Lütfen .env dosyasını kontrol edin ve Firebase değerlerini girin.');
@@ -172,18 +176,18 @@ if (getApps().length === 0) {
         }
         auth = getAuth(app);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (import.meta.env.DEV) {
-        console.error('Firebase Auth re-initialization failed:', error?.message || 'Unknown error');
+        console.error('Firebase Auth re-initialization failed:', error instanceof Error ? error.message : 'Unknown error');
       }
       auth = null;
     }
     if (normalizedFirebaseConfig.databaseURL) {
       try {
         database = getDatabase(app);
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (import.meta.env.DEV) {
-          console.warn('Database might not be initialized:', error?.message || 'Unknown error');
+          console.warn('Database might not be initialized:', error instanceof Error ? error.message : 'Unknown error');
         }
       }
     }
@@ -191,10 +195,10 @@ if (getApps().length === 0) {
       // If Firestore is already initialized (from previous app initialization), just get the existing instance
       // Don't try to re-initialize with persistence as it will fail with "already been started" error
       firestore = getFirestore(app);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Silently handle - Firestore might not be initialized yet or there's an error
       // This is non-critical as Firestore will be initialized when needed
-      const errorMessage = error?.message || '';
+      const errorMessage = error instanceof Error ? error.message : '';
       if (errorMessage.includes('already been started') || errorMessage.includes('already initialized')) {
         // This is expected - Firestore is already initialized, just ignore
       } else if (import.meta.env.DEV) {
@@ -203,9 +207,9 @@ if (getApps().length === 0) {
     }
     try {
       storage = getStorage(app);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (import.meta.env.DEV) {
-        console.warn('Storage might not be initialized:', error?.message || 'Unknown error');
+        console.warn('Storage might not be initialized:', error instanceof Error ? error.message : 'Unknown error');
       }
     }
   }

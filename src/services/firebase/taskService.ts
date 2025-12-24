@@ -20,6 +20,8 @@ import {
   writeBatch,
   onSnapshot,
   Unsubscribe,
+  QueryConstraint,
+  FieldValue,
 } from "firebase/firestore";
 import { firestore, auth } from "@/lib/firebase";
 import { logAudit } from "@/utils/auditLogger";
@@ -41,6 +43,12 @@ export interface TaskAttachment {
   driveFileId?: string;
   uploadedBy: string;
   uploadedAt: Timestamp;
+}
+
+export interface StatusHistoryEntry {
+  status: "pending" | "in_progress" | "completed" | "cancelled";
+  changedAt: Timestamp;
+  changedBy: string;
 }
 
 export interface Task {
@@ -68,6 +76,9 @@ export interface Task {
   rejectionReason?: string | null; // Reddetme nedeni
   isArchived?: boolean; // Arşivlendi mi?
   onlyInMyTasks?: boolean; // Sadece "Benim Görevlerim" sayfasında görünsün mü?
+  statusHistory?: StatusHistoryEntry[]; // Aşama geçmişi
+  statusUpdatedBy?: string; // Durum değiştiren kullanıcı
+  statusUpdatedAt?: Timestamp | FieldValue; // Durum değişiklik tarihi
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -124,7 +135,7 @@ export const getTasks = async (filters?: {
   try {
     const tasksRef = collection(firestore, "tasks");
     const buildQuery = (options?: { skipOrder?: boolean }) => {
-      const constraints: any[] = [];
+      const constraints: QueryConstraint[] = [];
       if (!options?.skipOrder) {
         constraints.push(orderBy("createdAt", "desc"));
       }
@@ -151,16 +162,17 @@ export const getTasks = async (filters?: {
     let snapshot;
     try {
       snapshot = await getDocs(buildQuery());
-    } catch (error: any) {
-      const requiresIndex =
-        typeof error?.message === "string" &&
-        error.message.includes("requires an index");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const requiresIndex = typeof errorMessage === "string" && errorMessage.includes("requires an index");
 
       if (requiresIndex) {
-        console.warn(
-          "⚠️ Firestore index gerekiyor, sıralama olmadan görevler getiriliyor. Index linki:",
-          error.message.match(/https:\/\/[^\s]+/)?.[0] || "–"
-        );
+        if (import.meta.env.DEV) {
+          console.warn(
+            "⚠️ Firestore index gerekiyor, sıralama olmadan görevler getiriliyor. Index linki:",
+            errorMessage.match(/https:\/\/[^\s]+/)?.[0] || "–"
+          );
+        }
         snapshot = await getDocs(buildQuery({ skipOrder: true }));
       } else {
         throw error;
@@ -219,20 +231,65 @@ export const getTasks = async (filters?: {
       // Güvenlik kuralları zaten Firestore tarafında olmalı ama client-side filtreleme de yapalım
       const currentUserId = auth?.currentUser?.uid;
       if (currentUserId) {
+         // Personnel kullanıcıları için özel kontrol
+         let isPersonnel = false;
+         try {
+           const userProfile = await getUserProfile(currentUserId);
+           if (userProfile?.role) {
+             isPersonnel = userProfile.role.includes("personnel") && 
+                          !userProfile.role.includes("super_admin") && 
+                          !userProfile.role.includes("main_admin") &&
+                          !userProfile.role.includes("team_leader");
+           }
+         } catch (error: unknown) {
+           if (import.meta.env.DEV) {
+             console.error("Error checking user role:", error);
+           }
+         }
+
          tasks = await Promise.all(tasks.map(async (task) => {
+           // Personnel kullanıcıları sadece atanan görevleri görebilir
+           if (isPersonnel) {
+             // Gizli olmayan görevleri görebilir (ama sadece atananlar)
+             if (!task.isPrivate) {
+               // Gizli olmayan görevler için assignment kontrolü yap
+               const assignments = await getTaskAssignments(task.id);
+               const isAssigned = assignments.some(a => a.assignedTo === currentUserId && a.status !== "rejected");
+               // assignedUsers array'inde de kontrol et
+               const isInAssignedUsers = Array.isArray(task.assignedUsers) && task.assignedUsers.includes(currentUserId);
+               return (isAssigned || isInAssignedUsers) ? task : null;
+             } else {
+               // Gizli görevler için: sadece atananlar görebilir
+               const assignments = await getTaskAssignments(task.id);
+               const isAssigned = assignments.some(a => a.assignedTo === currentUserId && a.status !== "rejected");
+               const isInAssignedUsers = Array.isArray(task.assignedUsers) && task.assignedUsers.includes(currentUserId);
+               return (isAssigned || isInAssignedUsers) ? task : null;
+             }
+           }
+
+           // Diğer kullanıcılar için normal filtreleme
            // onlyInMyTasks görevleri sadece oluşturan görebilir, diğer listelerde görünmez
            if (task.onlyInMyTasks) {
              return task.createdBy === currentUserId ? task : null;
            }
            
-           if (!task.isPrivate) return task;
+           // Gizli görevler için canViewPrivateTask kontrolü
+           if (task.isPrivate) {
+             const { getUserProfile } = await import("./authService");
+             const userProfile = await getUserProfile(currentUserId);
+             if (userProfile) {
+               const { canViewPrivateTask } = await import("@/utils/permissions");
+               const assignments = await getTaskAssignments(task.id);
+               const assignedUserIds = assignments
+                 .filter((a) => a.status === "accepted" || a.status === "pending")
+                 .map((a) => a.assignedTo);
+               const canView = await canViewPrivateTask(task, userProfile, assignedUserIds);
+               return canView ? task : null;
+             }
+             return null;
+           }
            
-           if (task.createdBy === currentUserId) return task;
-           
-           const assignments = await getTaskAssignments(task.id);
-           const isAssigned = assignments.some(a => a.assignedTo === currentUserId);
-           
-           return isAssigned ? task : null;
+           return task;
          })).then(results => results.filter(t => t !== null) as Task[]);
       } else {
         // Kullanıcı yoksa onlyInMyTasks görevlerini filtrele
@@ -241,8 +298,10 @@ export const getTasks = async (filters?: {
     }
 
     return tasks;
-  } catch (error: any) {
-    console.error("Get tasks error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get tasks error:", error);
+    }
     if (isPermissionError(error)) {
       throw handlePermissionError(error, {
         operation: "read",
@@ -274,7 +333,7 @@ export const subscribeToTasks = (
   try {
     const tasksRef = collection(firestore, "tasks");
     const buildQuery = (options?: { skipOrder?: boolean }) => {
-      const constraints: any[] = [];
+      const constraints: QueryConstraint[] = [];
       if (!options?.skipOrder) {
         constraints.push(orderBy("createdAt", "desc"));
       }
@@ -310,18 +369,7 @@ export const subscribeToTasks = (
             ...doc.data(),
           })) as Task[];
 
-          // projectId filtresi varsa client-side filtreleme
-          if (filters?.projectId) {
-            tasks = tasks
-              .filter((task) => {
-                return task.projectId === filters.projectId && task.projectId !== null && task.projectId !== undefined;
-              })
-              .sort((a, b) => {
-                const aTime = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : 0;
-                const bTime = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : 0;
-                return bTime - aTime;
-              });
-          }
+          // projectId filtresi zaten server-side'da uygulanıyor, client-side filtreleme gereksiz
 
           // assignedTo filtresi varsa, assignments'ları kontrol et
           if (filters?.assignedTo) {
@@ -373,8 +421,10 @@ export const subscribeToTasks = (
           }
 
           callback(tasks);
-        } catch (error) {
-          console.error("Subscribe to tasks error:", error);
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Subscribe to tasks error:", error);
+          }
           // Hata durumunda boş array gönder
           callback([]);
         }
@@ -403,8 +453,10 @@ export const subscribeToTasks = (
     );
 
     return unsubscribe;
-  } catch (error: any) {
-    console.error("Subscribe to tasks setup error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Subscribe to tasks setup error:", error);
+    }
     // Hata durumunda boş unsubscribe fonksiyonu döndür
     return () => {};
   }
@@ -425,8 +477,10 @@ export const getTaskById = async (taskId: string): Promise<Task | null> => {
       id: taskDoc.id,
       ...taskDoc.data(),
     } as Task;
-  } catch (error: any) {
-    console.error("Get task by id error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get task by id error:", error);
+    }
     if (isPermissionError(error)) {
       throw handlePermissionError(error, {
         operation: "read",
@@ -469,10 +523,10 @@ export const createTask = async (taskData: Omit<Task, "id" | "createdAt" | "upda
       }
     }
     
-    const taskDoc: any = {
+    const taskDoc: Partial<Task> & { createdAt: FieldValue | Timestamp; updatedAt: FieldValue | Timestamp } = {
       ...taskData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp() as any,
+      updatedAt: serverTimestamp() as any,
     };
     
     // dueDate'i Timestamp'e çevir
@@ -496,6 +550,30 @@ export const createTask = async (taskData: Omit<Task, "id" | "createdAt" | "upda
     // Audit log
     await logAudit("CREATE", "tasks", docRef.id, taskData.createdBy, null, createdTask);
 
+    // Aktivite log ekle
+    if (taskData.createdBy) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(taskData.createdBy);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addTaskActivity(
+          docRef.id,
+          taskData.createdBy,
+          "created",
+          `bu görevi oluşturdu`,
+          { taskTitle: createdTask.title },
+          userName,
+          userEmail
+        );
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Add task activity error:", error);
+        }
+      }
+    }
+
     // Görev oluşturulduğunda ekip liderlerine bildirim gönder
     try {
       const teamLeaders = await getTaskTeamLeaders(createdTask);
@@ -514,24 +592,30 @@ export const createTask = async (taskData: Omit<Task, "id" | "createdAt" | "upda
               userId: leaderId,
               type: "task_created",
               title: "Yeni görev oluşturuldu",
-              message: `${creatorName} "${createdTask.title}" adlı yeni bir görev oluşturdu.`,
+              message: `${creatorName} kullanıcısı tarafından "${createdTask.title}" başlıklı yeni bir görev oluşturuldu.\n\nYeni görev sisteme eklendi. Görev detaylarını görüntülemek için bildirime tıklayabilirsiniz.\n\nOluşturulma Zamanı: ${new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
               read: false,
               relatedId: docRef.id,
               metadata: { createdBy: taskData.createdBy },
             });
           } catch (notifError) {
-            console.error("Error sending task creation notification to team leader:", leaderId, notifError);
+            if (import.meta.env.DEV) {
+              console.error("Error sending task creation notification to team leader:", leaderId, notifError);
+            }
           }
         })
       );
     } catch (notifError) {
-      console.error("Error sending task creation notifications:", notifError);
+      if (import.meta.env.DEV) {
+        console.error("Error sending task creation notifications:", notifError);
+      }
       // Bildirim hatası görev oluşturmayı engellemez
     }
 
     return createdTask;
-  } catch (error: any) {
-    console.error("Create task error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Create task error:", error);
+    }
     if (isPermissionError(error)) {
       throw handlePermissionError(error, {
         operation: "create",
@@ -572,14 +656,18 @@ const getTaskTeamLeaders = async (task: Task | null): Promise<string[]> => {
       try {
         const project = await getProjectById(task.projectId);
         // Projelerde şimdilik departmentId yok, bu yüzden sadece creator'ın ekibini kullanıyoruz
-      } catch (error) {
-        console.error("Error fetching project:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error fetching project:", error);
+        }
       }
     }
     
     return teamLeaderIds;
-  } catch (error) {
-    console.error("Error getting team leaders:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error getting team leaders:", error);
+    }
     return [];
   }
 };
@@ -623,9 +711,9 @@ export const updateTask = async (
       }
     }
     
-    const updateData: any = {
+    const updateData: Partial<Task> & { updatedAt: FieldValue | Timestamp } = {
       ...updates,
-      updatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp() as any,
     };
     
     // dueDate'i Timestamp'e çevir
@@ -646,7 +734,39 @@ export const updateTask = async (
     if (userId) {
       await logAudit("UPDATE", "tasks", taskId, userId, oldTask, newTask);
     }
-    
+
+    // Aktivite log ekle
+    if (userId && oldTask && newTask) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(userId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+
+        const changedFields = Object.keys(updates).filter(key => {
+          const oldValue = (oldTask as unknown as Record<string, unknown>)[key];
+          const newValue = (updates as Record<string, unknown>)[key];
+          return oldValue !== newValue;
+        });
+        
+        if (changedFields.length > 0) {
+          await addTaskActivity(
+            taskId,
+            userId,
+            "updated",
+            `bu görevi güncelledi`,
+            { changedFields, taskTitle: newTask.title },
+            userName,
+            userEmail
+          );
+        }
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Add task activity error:", error);
+        }
+      }
+    }
+
     // Görev güncellemelerinde atanan kullanıcılara bildirim gönder
     if (newTask && userId) {
       try {
@@ -667,7 +787,7 @@ export const updateTask = async (
                 userId: assignedUserId,
                 type: "task_updated",
                 title: "Görev güncellendi",
-                message: `${updaterUser?.fullName || updaterUser?.email || "Bir kullanıcı"} "${newTask.title}" görevinde değişiklik yaptı.`,
+                message: `${updaterUser?.fullName || updaterUser?.email || "Bir kullanıcı"} kullanıcısı tarafından "${newTask.title}" görevinde değişiklik yapıldı.\n\nGörev bilgileri güncellendi. Detayları görüntülemek için bildirime tıklayabilirsiniz.\n\nİşlem Zamanı: ${new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
                 read: false,
                 relatedId: taskId,
                 metadata: null,
@@ -682,8 +802,10 @@ export const updateTask = async (
         // Bildirim hatası görev güncellemesini engellemez
       }
     }
-  } catch (error: any) {
-    console.error("Update task error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Update task error:", error);
+    }
     if (isPermissionError(error)) {
       throw handlePermissionError(error, {
         operation: "update",
@@ -715,21 +837,64 @@ export const updateTaskStatus = async (
     const currentUserId = auth?.currentUser?.uid;
     
     // Durumu güncelle
-    const updateData: any = {
+    const updateData: Partial<Task> & { status: Task["status"]; updatedAt: FieldValue | Timestamp } = {
       status,
-      updatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp() as any,
     };
     
     // Status değişikliği varsa statusUpdatedBy ve statusUpdatedAt ekle
     if (oldStatus !== status && currentUserId) {
-      updateData.statusUpdatedBy = currentUserId;
-      updateData.statusUpdatedAt = serverTimestamp();
+      (updateData as Partial<Task>).statusUpdatedBy = currentUserId;
+      (updateData as Partial<Task>).statusUpdatedAt = serverTimestamp() as any;
+      
+      // Aşama geçmişine yeni kayıt ekle
+      const statusHistory: StatusHistoryEntry[] = task.statusHistory || [];
+      statusHistory.push({
+        status,
+        changedAt: Timestamp.now(),
+        changedBy: currentUserId,
+      });
+      updateData.statusHistory = statusHistory;
     }
     
     await updateDoc(doc(firestore, "tasks", taskId), updateData);
 
     // Audit log
     await logAudit("UPDATE", "tasks", taskId, auth?.currentUser?.uid || "system", { status: oldStatus }, { status });
+
+    // Aktivite log ekle (durum değişikliği)
+    if (oldStatus !== status && currentUserId) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(currentUserId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        const statusNames: Record<string, string> = {
+          pending: "Beklemede",
+          in_progress: "Devam Ediyor",
+          completed: "Tamamlandı",
+          cancelled: "İptal Edildi"
+        };
+        
+        const oldStatusName = statusNames[oldStatus] || oldStatus;
+        const newStatusName = statusNames[status] || status;
+        
+        await addTaskActivity(
+          taskId,
+          currentUserId,
+          "status_changed",
+          `görev durumunu "${oldStatusName}" → "${newStatusName}" olarak değiştirdi`,
+          { oldStatus, newStatus: status, taskTitle: task.title },
+          userName,
+          userEmail
+        );
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Add task activity error:", error);
+        }
+      }
+    }
 
     // Durum değişikliği bildirimleri gönder (sadece durum gerçekten değiştiyse)
     if (oldStatus !== status) {
@@ -753,14 +918,21 @@ export const updateTaskStatus = async (
         // Görevi oluşturan kişiye bildirim gönder (durum değiştiren kişi hariç)
         if (task.createdBy && task.createdBy !== currentUser?.uid) {
           try {
+            const changeTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
             await createNotification({
               userId: task.createdBy,
               type: "task_updated",
               title: "Görev durumu değişti",
-              message: `${changerUser?.fullName || changerUser?.email || "Bir kullanıcı"} "${task.title}" görevinin durumunu "${oldStatusName}" → "${statusName}" olarak değiştirdi.`,
+              message: `${changerUser?.fullName || changerUser?.email || "Bir kullanıcı"} kullanıcısı tarafından "${task.title}" görevinin durumu "${oldStatusName}" durumundan "${statusName}" durumuna güncellendi.\n\nİşlem Zamanı: ${changeTime}`,
               read: false,
               relatedId: taskId,
-              metadata: { oldStatus, newStatus: status },
+              metadata: { 
+                oldStatus, 
+                newStatus: status,
+                updatedAt: new Date(),
+                priority: task.priority,
+                dueDate: task.dueDate,
+              },
             });
           } catch (notifError) {
             console.error("Error sending notification to task creator:", notifError);
@@ -775,14 +947,21 @@ export const updateTaskStatus = async (
         await Promise.all(
           assignedUserIds.map(async (assignedUserId) => {
             try {
+              const changeTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
               await createNotification({
                 userId: assignedUserId,
                 type: "task_updated",
                 title: "Görev durumu değişti",
-                message: `${changerUser?.fullName || changerUser?.email || "Bir kullanıcı"} "${task.title}" görevinin durumunu "${oldStatusName}" → "${statusName}" olarak değiştirdi.`,
+                message: `${changerUser?.fullName || changerUser?.email || "Bir kullanıcı"} tarafından "${task.title}" görevinin durumu "${oldStatusName}" durumundan "${statusName}" durumuna güncellendi.\n\nİşlem Zamanı: ${changeTime}`,
                 read: false,
                 relatedId: taskId,
-                metadata: { oldStatus, newStatus: status },
+                metadata: { 
+                  oldStatus, 
+                  newStatus: status,
+                  updatedAt: new Date(),
+                  priority: task.priority,
+                  dueDate: task.dueDate,
+                },
               });
             } catch (notifError) {
               console.error("Error sending notification to assigned user:", assignedUserId, notifError);
@@ -794,8 +973,10 @@ export const updateTaskStatus = async (
         // Bildirim hatası görev durumu güncellemesini engellemez
       }
     }
-  } catch (error) {
-    console.error("Update task status error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Update task status error:", error);
+    }
     throw error;
   }
 };
@@ -827,6 +1008,30 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
       }
     }
     
+    // Aktivite log ekle (silmeden önce)
+    if (userId && oldTask) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(userId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addTaskActivity(
+          taskId,
+          userId,
+          "deleted",
+          `bu görevi sildi`,
+          { taskTitle: oldTask.title },
+          userName,
+          userEmail
+        );
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Add task activity error:", error);
+        }
+      }
+    }
+
     // Bildirim göndermek için gerekli bilgileri al
     let assignments: TaskAssignment[] = [];
     let allUsers: UserProfile[] = [];
@@ -884,14 +1089,18 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
       // Görevi oluşturan kişiye bildirim gönder (silen kişi hariç)
       if (oldTask.createdBy && oldTask.createdBy !== currentUser?.uid) {
         try {
+          const deleteTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
           await createNotification({
             userId: oldTask.createdBy,
             type: "task_deleted",
             title: "Görev silindi",
-            message: `${deleterUser?.fullName || deleterUser?.email || "Bir kullanıcı"} "${oldTask.title}" görevini sildi.`,
+            message: `${deleterUser?.fullName || deleterUser?.email || "Bir kullanıcı"} kullanıcısı tarafından "${oldTask.title}" görevi silindi.\n\nGörev sistemden kalıcı olarak kaldırıldı. Bu işlem geri alınamaz.\n\nSilme Zamanı: ${deleteTime}`,
             read: false,
             relatedId: taskId,
-            metadata: { taskTitle: oldTask.title },
+            metadata: { 
+              taskTitle: oldTask.title,
+              updatedAt: new Date(),
+            },
           });
         } catch (notifError) {
           console.error("Error sending notification to task creator:", notifError);
@@ -906,14 +1115,18 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
       await Promise.all(
         assignedUserIds.map(async (assignedUserId) => {
           try {
+            const deleteTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
             await createNotification({
               userId: assignedUserId,
               type: "task_deleted",
               title: "Görev silindi",
-              message: `${deleterUser?.fullName || deleterUser?.email || "Bir kullanıcı"} "${oldTask.title}" görevini sildi.`,
+              message: `${deleterUser?.fullName || deleterUser?.email || "Bir kullanıcı"} kullanıcısı tarafından "${oldTask.title}" görevi silindi.\n\nGörev sistemden kalıcı olarak kaldırıldı. Bu işlem geri alınamaz.\n\nSilme Zamanı: ${deleteTime}`,
               read: false,
               relatedId: taskId,
-              metadata: { taskTitle: oldTask.title },
+              metadata: { 
+                taskTitle: oldTask.title,
+                updatedAt: new Date(),
+              },
             });
           } catch (notifError) {
             console.error("Error sending notification to assigned user:", assignedUserId, notifError);
@@ -924,8 +1137,10 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
       console.error("Error sending task deletion notifications:", notifError);
       // Bildirim hatası görev silinmesini engellemez
     }
-  } catch (error) {
-    console.error("Delete task error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Delete task error:", error);
+    }
     throw error;
   }
 };
@@ -976,14 +1191,41 @@ export const assignTask = async (
       ]);
 
       if (task) {
+        // Görev detaylarını topla
+        const taskDetails: string[] = [];
+        if (task.description) {
+          const desc = task.description.length > 100 ? task.description.substring(0, 100) + "..." : task.description;
+          taskDetails.push(`Açıklama: ${desc}`);
+        }
+        if (task.priority) {
+          const priorityLabels: Record<number, string> = { 1: "Düşük", 2: "Normal", 3: "Yüksek", 4: "Acil" };
+          taskDetails.push(`Öncelik: ${priorityLabels[task.priority] || `Öncelik ${task.priority}`}`);
+        }
+        if (task.dueDate) {
+          try {
+            const dueDate = task.dueDate instanceof Timestamp ? task.dueDate.toDate() : new Date(task.dueDate);
+            const formattedDate = dueDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            taskDetails.push(`Bitiş Tarihi: ${formattedDate}`);
+          } catch {
+            // Tarih formatı hatası durumunda sessizce devam et
+          }
+        }
+        
+        const detailsText = taskDetails.length > 0 ? `\n\nGörev Detayları:\n${taskDetails.join('\n')}` : '';
+        
         await createNotification({
           userId,
           type: "task_assigned",
           title: "Yeni görev atandı",
-          message: `${assignerProfile?.fullName || assignerProfile?.email || "Bir yönetici"} size "${task.title}" görevini atadı. Bildirim üzerinden kabul veya reddedebilirsiniz.`,
+          message: `${assignerProfile?.fullName || assignerProfile?.email || "Bir yönetici"} kullanıcısı tarafından size "${task.title}" başlıklı yeni bir görev atandı.${detailsText}\n\nGörevi kabul etmek veya reddetmek için bildirime tıklayabilirsiniz.`,
           read: false,
           relatedId: taskId,
-          metadata: { assignment_id: docRef.id },
+          metadata: { 
+            assignment_id: docRef.id,
+            priority: task.priority,
+            dueDate: task.dueDate,
+            updatedAt: new Date(),
+          },
         });
       }
     } catch (notifError) {
@@ -998,8 +1240,10 @@ export const assignTask = async (
       id: docRef.id,
       ...assignmentData,
     };
-  } catch (error) {
-    console.error("Assign task error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Assign task error:", error);
+    }
     throw error;
   }
 };
@@ -1069,14 +1313,21 @@ export const acceptTaskAssignment = async (taskId: string, assignmentId: string)
         await Promise.all(
           teamLeaders.map(async (leaderId) => {
             try {
+              const acceptTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
               await createNotification({
                 userId: leaderId,
                 type: "task_assigned",
                 title: "Görev kabul edildi",
-                message: `${assignedUser?.fullName || assignedUser?.email || "Bir kullanıcı"} "${task.title}" görevini kabul etti.`,
+                message: `${assignedUser?.fullName || assignedUser?.email || "Bir kullanıcı"} kullanıcısı "${task.title}" görevini kabul etti.\n\nGörev artık bu kullanıcının görev listesinde görünecek ve üzerinde çalışmaya başlayabilir.\n\nKabul Zamanı: ${acceptTime}`,
                 read: false,
                 relatedId: taskId,
-                metadata: { assignment_id: assignmentId, action: "accepted" },
+                metadata: { 
+                  assignment_id: assignmentId, 
+                  action: "accepted",
+                  updatedAt: new Date(),
+                  priority: task.priority,
+                  dueDate: task.dueDate,
+                },
               });
             } catch (notifError) {
               console.error("Error sending notification to team leader:", leaderId, notifError);
@@ -1088,8 +1339,10 @@ export const acceptTaskAssignment = async (taskId: string, assignmentId: string)
       console.error("Error sending acceptance notifications:", notifError);
       // Bildirim hatası kabul işlemini engellemez
     }
-  } catch (error) {
-    console.error("Accept task assignment error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Accept task assignment error:", error);
+    }
     throw error;
   }
 };
@@ -1169,18 +1422,22 @@ export const rejectTaskAssignment = async (
         // 1. Görevi veren kişiye bildirim gönder (assignedBy) - ÖNEMLİ: Görevi veren kişi reddi bilmeli
         if (assignmentData.assignedBy && assignmentData.assignedBy !== auth?.currentUser?.uid) {
           try {
+            const rejectTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
             await createNotification({
               userId: assignmentData.assignedBy,
               type: "task_assigned",
               title: "Görev reddedildi",
-              message: `${assignedUser?.fullName || assignedUser?.email || "Bir kullanıcı"} "${task.title}" görevini reddetti. Sebep: ${reason.trim().substring(0, 100)}${reason.trim().length > 100 ? "..." : ""}`,
+              message: `${assignedUser?.fullName || assignedUser?.email || "Bir kullanıcı"} kullanıcısı "${task.title}" görevini reddetti.\n\nReddetme Sebebi: ${reason.trim().substring(0, 200)}${reason.trim().length > 200 ? "..." : ""}\n\nReddetme Zamanı: ${rejectTime}`,
               read: false,
               relatedId: taskId,
               metadata: { 
                 assignment_id: assignmentId, 
                 action: "rejected", 
                 reason: reason.trim(),
-                assigned_user_id: assignmentData.assignedTo
+                assigned_user_id: assignmentData.assignedTo,
+                updatedAt: new Date(),
+                priority: task.priority,
+                dueDate: task.dueDate,
               },
             });
           } catch (notifError) {
@@ -1191,18 +1448,22 @@ export const rejectTaskAssignment = async (
         // 2. Görevi tanımlayan kişiye bildirim gönder (createdBy) - Eğer görevi veren kişi değilse
         if (task.createdBy && task.createdBy !== auth?.currentUser?.uid && task.createdBy !== assignmentData.assignedBy) {
           try {
+            const rejectTime2 = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
             await createNotification({
               userId: task.createdBy,
               type: "task_assigned",
               title: "Görev reddedildi - Onayınız gerekiyor",
-              message: `${assignedUser?.fullName || assignedUser?.email || "Bir kullanıcı"} "${task.title}" görevini reddetti. Sebep: ${reason.trim().substring(0, 100)}${reason.trim().length > 100 ? "..." : ""}. Lütfen reddi onaylayın veya reddedin.`,
+              message: `${assignedUser?.fullName || assignedUser?.email || "Bir kullanıcı"} kullanıcısı "${task.title}" görevini reddetti.\n\nReddetme Sebebi: ${reason.trim().substring(0, 200)}${reason.trim().length > 200 ? "..." : ""}\n\nReddetme Zamanı: ${rejectTime2}\n\nLütfen bu reddi onaylayın veya reddedin. Reddin onaylanması durumunda görev başka birine atanabilir.`,
               read: false,
               relatedId: taskId,
               metadata: { 
                 assignment_id: assignmentId, 
                 action: "rejection_pending_approval", 
                 reason: reason.trim(),
-                assigned_user_id: assignmentData.assignedTo
+                assigned_user_id: assignmentData.assignedTo,
+                updatedAt: new Date(),
+                priority: task.priority,
+                dueDate: task.dueDate,
               },
             });
           } catch (notifError) {
@@ -1236,8 +1497,10 @@ export const rejectTaskAssignment = async (
       console.error("Error sending rejection notifications:", notifError);
       // Bildirim hatası red işlemini engellemez
     }
-  } catch (error) {
-    console.error("Reject task assignment error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Reject task assignment error:", error);
+    }
     throw error;
   }
 };
@@ -1252,8 +1515,10 @@ export const getTaskAssignments = async (taskId: string): Promise<TaskAssignment
       id: doc.id,
       ...doc.data(),
     })) as TaskAssignment[];
-  } catch (error) {
-    console.error("Get task assignments error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get task assignments error:", error);
+    }
     throw error;
   }
 };
@@ -1304,14 +1569,21 @@ export const deleteTaskAssignment = async (taskId: string, assignmentId: string,
           
           if (task && removedUser) {
             // Kaldırılan kullanıcıya bildirim
+            const removeTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
             const removedUserNotification = await createNotification({
               userId: assignmentData.assignedTo,
               type: "task_updated",
               title: "Görev atamanız kaldırıldı",
-              message: `${deleterProfile?.fullName || deleterProfile?.email || "Bir yönetici"} sizi "${task.title}" görevinden kaldırdı.`,
+              message: `${deleterProfile?.fullName || deleterProfile?.email || "Bir yönetici"} kullanıcısı tarafından siz "${task.title}" görevinden kaldırıldınız.\n\nArtık bu görevle ilgili bildirimler almayacaksınız ve görev üzerinde işlem yapamayacaksınız.\n\nKaldırılma Zamanı: ${removeTime}`,
               read: false,
               relatedId: taskId,
-              metadata: { assignment_id: assignmentId, action: "removed" },
+              metadata: { 
+                assignment_id: assignmentId, 
+                action: "removed",
+                updatedAt: new Date(),
+                priority: task.priority,
+                dueDate: task.dueDate,
+              },
             });
             
             if (import.meta.env.DEV) {
@@ -1320,14 +1592,22 @@ export const deleteTaskAssignment = async (taskId: string, assignmentId: string,
             
             // Görevi oluşturan kişiye bildirim (eğer kaldıran kişi değilse)
             if (task.createdBy && task.createdBy !== deletedBy && task.createdBy !== assignmentData.assignedTo) {
+              const removeTime2 = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
               const creatorNotification = await createNotification({
                 userId: task.createdBy,
                 type: "task_updated",
                 title: "Görev ataması kaldırıldı",
-                message: `${deleterProfile?.fullName || deleterProfile?.email || "Bir yönetici"} "${removedUser?.fullName || removedUser?.email || "bir kullanıcı"}" kullanıcısını "${task.title}" görevinden kaldırdı.`,
+                message: `${deleterProfile?.fullName || deleterProfile?.email || "Bir yönetici"} kullanıcısı tarafından "${removedUser?.fullName || removedUser?.email || "bir kullanıcı"}" kullanıcısı "${task.title}" görevinden kaldırıldı.\n\nBu kullanıcı artık görevle ilgili bildirimler almayacak ve görev üzerinde işlem yapamayacak.\n\nKaldırılma Zamanı: ${removeTime2}`,
                 read: false,
                 relatedId: taskId,
-                metadata: { assignment_id: assignmentId, action: "removed", removed_user_id: assignmentData.assignedTo },
+                metadata: { 
+                  assignment_id: assignmentId, 
+                  action: "removed", 
+                  removed_user_id: assignmentData.assignedTo,
+                  updatedAt: new Date(),
+                  priority: task.priority,
+                  dueDate: task.dueDate,
+                },
               });
               
               if (import.meta.env.DEV) {
@@ -1387,8 +1667,10 @@ export const createChecklist = async (
       id: docRef.id,
       ...checklistData,
     };
-  } catch (error) {
-    console.error("Create checklist error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Create checklist error:", error);
+    }
     throw error;
   }
 };
@@ -1412,21 +1694,19 @@ export const updateChecklistItem = async (
         throw new Error("Görev bulunamadı");
       }
 
-      // Yönetici kontrolü
-      const { isAdmin, isMainAdmin } = await import("@/utils/permissions");
+      // Yetki kontrolü: Firestore'dan kontrol et
       const { getUserProfile } = await import("./authService");
       const userProfile = await getUserProfile(userId);
       
-      if (userProfile && (await isAdmin(userProfile) || await isMainAdmin(userProfile))) {
-        // Yöneticiler her zaman işaretleyebilir
-      } else {
-        // Atanan kullanıcı kontrolü
+      if (userProfile) {
+        const { canAddChecklist } = await import("@/utils/permissions");
         const assignments = await getTaskAssignments(taskId);
-        const isAssigned = assignments.some(
-          (a) => a.assignedTo === userId && (a.status === "accepted" || a.status === "pending")
-        );
+        const assignedUserIds = assignments
+          .filter((a) => a.status === "accepted" || a.status === "pending")
+          .map((a) => a.assignedTo);
         
-        if (!isAssigned && task.createdBy !== userId) {
+        const canAdd = await canAddChecklist(task, userProfile, assignedUserIds);
+        if (!canAdd) {
           throw new Error("Checklist işaretleme yetkiniz yok. Sadece size atanan görevlerin checklist'lerini işaretleyebilirsiniz.");
         }
       }
@@ -1464,8 +1744,10 @@ export const updateChecklistItem = async (
       { completed: !completed },
       { completed }
     );
-  } catch (error) {
-    console.error("Update checklist item error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Update checklist item error:", error);
+    }
     throw error;
   }
 };
@@ -1480,8 +1762,10 @@ export const getChecklists = async (taskId: string): Promise<Checklist[]> => {
       id: doc.id,
       ...doc.data(),
     })) as Checklist[];
-  } catch (error) {
-    console.error("Get checklists error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get checklists error:", error);
+    }
     throw error;
   }
 };
@@ -1515,8 +1799,10 @@ export const addChecklistItem = async (
       items: [...checklist.items, newItem],
       updatedAt: serverTimestamp(),
     });
-  } catch (error) {
-    console.error("Add checklist item error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Add checklist item error:", error);
+    }
     throw error;
   }
 };
@@ -1524,11 +1810,37 @@ export const addChecklistItem = async (
 /**
  * Checklist sil
  */
-export const deleteChecklist = async (taskId: string, checklistId: string): Promise<void> => {
+export const deleteChecklist = async (taskId: string, checklistId: string, userId?: string): Promise<void> => {
   try {
+    // Yetki kontrolü: Firestore'dan kontrol et
+    if (userId) {
+      const task = await getTaskById(taskId);
+      if (!task) {
+        throw new Error("Görev bulunamadı");
+      }
+      
+      const { getUserProfile } = await import("./authService");
+      const userProfile = await getUserProfile(userId);
+      
+      if (userProfile) {
+        const { canEditChecklist } = await import("@/utils/permissions");
+        const assignments = await getTaskAssignments(taskId);
+        const assignedUserIds = assignments
+          .filter((a) => a.status === "accepted" || a.status === "pending")
+          .map((a) => a.assignedTo);
+        
+        const canEdit = await canEditChecklist(task, userProfile, assignedUserIds);
+        if (!canEdit) {
+          throw new Error("Checklist silme yetkiniz yok. Sadece göreve atanan kullanıcılar veya yöneticiler silebilir.");
+        }
+      }
+    }
+    
     await deleteDoc(doc(firestore, "tasks", taskId, "checklists", checklistId));
-  } catch (error) {
-    console.error("Delete checklist error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Delete checklist error:", error);
+    }
     throw error;
   }
 };
@@ -1556,8 +1868,10 @@ export const deleteChecklistItem = async (
       items: updatedItems,
       updatedAt: serverTimestamp(),
     });
-  } catch (error) {
-    console.error("Delete checklist item error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Delete checklist item error:", error);
+    }
     throw error;
   }
 };
@@ -1614,12 +1928,41 @@ export const addTaskComment = async (
     // Activity log ekle
     await addTaskActivity(taskId, userId, "commented", `yorum ekledi`, { commentId: docRef.id }, userName, userEmail);
 
+    // Görevi oluşturan kişiye bildirim gönder (yorum ekleyen kişi hariç)
+    try {
+      const task = await getTaskById(taskId);
+      if (task?.createdBy && task.createdBy !== userId) {
+        const { createNotification } = await import("@/services/firebase/notificationService");
+        await createNotification({
+          userId: task.createdBy,
+          type: "comment_added",
+          title: "Görevinize Yorum Eklendi",
+          message: `${userName || userEmail || "Bir kullanıcı"} kullanıcısı "${task.title || "Görev"}" görevinize yorum ekledi.\n\nYorum: ${content.substring(0, 200)}${content.length > 200 ? "..." : ""}\n\nYorumu görüntülemek ve yanıtlamak için bildirime tıklayabilirsiniz.\n\nYorum Zamanı: ${new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+          read: false,
+          relatedId: taskId,
+          metadata: { 
+            commentId: docRef.id, 
+            commenterId: userId, 
+            commenterName: userName, 
+            commenterEmail: userEmail,
+            updatedAt: new Date(),
+          },
+        });
+      }
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Send comment notification error:", error);
+      }
+    }
+
     return {
       id: docRef.id,
       ...commentData,
     };
-  } catch (error) {
-    console.error("Add task comment error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Add task comment error:", error);
+    }
     throw error;
   }
 };
@@ -1639,8 +1982,10 @@ export const getTaskComments = async (taskId: string): Promise<TaskComment[]> =>
       id: doc.id,
       ...doc.data(),
     })) as TaskComment[];
-  } catch (error) {
-    console.error("Get task comments error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get task comments error:", error);
+    }
     throw error;
   }
 };
@@ -1675,8 +2020,10 @@ export const addTaskActivity = async (
     );
 
     return docRef.id;
-  } catch (error) {
-    console.error("Add task activity error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Add task activity error:", error);
+    }
     return "";
   }
 };
@@ -1696,8 +2043,10 @@ export const getTaskActivities = async (taskId: string): Promise<TaskActivity[]>
       id: doc.id,
       ...doc.data(),
     })) as TaskActivity[];
-  } catch (error) {
-    console.error("Get task activities error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get task activities error:", error);
+    }
     throw error;
   }
 };
@@ -1768,8 +2117,10 @@ export const addTaskAttachment = async (
       ...createdAttachment.data(),
       uploadedAt: createdAttachment.data()?.uploadedAt || Timestamp.now(),
     } as TaskAttachment;
-  } catch (error) {
-    console.error("Add task attachment error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Add task attachment error:", error);
+    }
     throw error;
   }
 };
@@ -1789,8 +2140,10 @@ export const getTaskAttachments = async (taskId: string): Promise<TaskAttachment
       id: doc.id,
       ...doc.data(),
     })) as TaskAttachment[];
-  } catch (error) {
-    console.error("Get task attachments error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get task attachments error:", error);
+    }
     throw error;
   }
 };
@@ -1843,8 +2196,10 @@ export const deleteTaskAttachment = async (taskId: string, attachmentId: string)
     }
 
     await deleteDoc(doc(firestore, "tasks", taskId, "attachments", attachmentId));
-  } catch (error) {
-    console.error("Delete task attachment error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Delete task attachment error:", error);
+    }
     throw error;
   }
 };
@@ -1854,7 +2209,18 @@ export const deleteTaskAttachment = async (taskId: string, attachmentId: string)
  */
 export const addTaskToPool = async (taskId: string): Promise<void> => {
   try {
-    await updateDoc(doc(firestore, "tasks", taskId), {
+    // Önce görev bilgilerini al
+    const taskRef = doc(firestore, "tasks", taskId);
+    const taskSnap = await getDoc(taskRef);
+    
+    if (!taskSnap.exists()) {
+      throw new Error("Görev bulunamadı");
+    }
+    
+    const taskData = taskSnap.data() as Task;
+    
+    // Görevi havuza ekle
+    await updateDoc(taskRef, {
       isInPool: true,
       poolRequests: [],
       updatedAt: serverTimestamp(),
@@ -1862,8 +2228,45 @@ export const addTaskToPool = async (taskId: string): Promise<void> => {
 
     // Audit log
     await logAudit("UPDATE", "tasks", taskId, auth?.currentUser?.uid || "system", { isInPool: false }, { isInPool: true });
-  } catch (error) {
-    console.error("Add task to pool error:", error);
+
+    // Tüm üyelere bildirim gönder
+    try {
+      const allUsers = await getAllUsers();
+      const currentUserId = auth?.currentUser?.uid;
+      const currentUser = await getUserProfile(currentUserId || "");
+      const currentUserName = currentUser?.fullName || currentUser?.displayName || currentUser?.email || "Bir kullanıcı";
+      
+      // Görevi oluşturan hariç tüm kullanıcılara bildirim gönder
+      const notificationPromises = allUsers
+        .filter(user => user.id && user.id !== currentUserId && user.id !== taskData.createdBy)
+        .map(user => 
+          createNotification({
+            userId: user.id,
+            type: "task_pool_request",
+            title: "Görev Havuzuna Yeni Görev Eklendi",
+            message: `${currentUserName} "${taskData.title}" görevini görev havuzuna ekledi. Bu görevi talep edebilirsiniz.`,
+            read: false,
+            metadata: {
+              taskId: taskId,
+              taskTitle: taskData.title,
+              addedBy: currentUserId,
+              addedByName: currentUserName,
+              link: `/tasks?taskId=${taskId}&view=list`,
+            },
+          })
+        );
+      
+      await Promise.all(notificationPromises);
+    } catch (notificationError) {
+      if (import.meta.env.DEV) {
+        console.error("Bildirim gönderme hatası:", notificationError);
+      }
+      // Bildirim hatası görevi havuza eklemeyi engellemez
+    }
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Add task to pool error:", error);
+    }
     throw error;
   }
 };
@@ -1878,8 +2281,10 @@ export const removeTaskFromPool = async (taskId: string): Promise<void> => {
       poolRequests: [],
       updatedAt: serverTimestamp(),
     });
-  } catch (error) {
-    console.error("Remove task from pool error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Remove task from pool error:", error);
+    }
     throw error;
   }
 };
@@ -1911,7 +2316,8 @@ export const requestTaskFromPool = async (taskId: string, userId: string): Promi
     // Audit log
     await logAudit("UPDATE", "tasks", taskId, userId, { poolRequests }, { poolRequests: [...poolRequests, userId] });
 
-    // Görevi oluşturan kişiye bildirim gönder
+    // Görevi havuza ekleyen kişiye bildirim gönder (görevi oluşturan kişi)
+    // Not: Görev havuzuna ekleme işlemi genellikle görevi oluşturan kişi tarafından yapılır
     const taskCreatorId = taskData.createdBy;
     if (taskCreatorId && taskCreatorId !== userId) {
       try {
@@ -1921,24 +2327,29 @@ export const requestTaskFromPool = async (taskId: string, userId: string): Promi
         await createNotification({
           userId: taskCreatorId,
           type: "task_pool_request",
-          title: "Görev Talebi",
-          message: `${requestingUserName} "${taskData.title}" görevi için talep gönderdi.`,
+          title: "Görev Havuzu Talebi",
+          message: `${requestingUserName} "${taskData.title}" görevi için talep gönderdi. Talebi onaylayabilirsiniz.`,
           read: false,
+          relatedId: taskId, // Yönlendirme için gerekli
           metadata: {
             taskId: taskId,
             taskTitle: taskData.title,
             requestedBy: userId,
             requestedByName: requestingUserName,
-            link: `/tasks/${taskId}`,
+            link: `/tasks?taskId=${taskId}&view=list`,
           },
         });
       } catch (notificationError) {
-        console.error("Bildirim gönderme hatası:", notificationError);
+        if (import.meta.env.DEV) {
+          console.error("Bildirim gönderme hatası:", notificationError);
+        }
         // Bildirim hatası görev talebini engellemez
       }
     }
-  } catch (error) {
-    console.error("Request task from pool error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Request task from pool error:", error);
+    }
     throw error;
   }
 };
@@ -1955,20 +2366,34 @@ export const approvePoolRequest = async (taskId: string, userId: string, approve
       throw new Error("Görev bulunamadı");
     }
     
-    const taskData = taskSnap.data();
+    const taskData = taskSnap.data() as Task;
     const poolRequests = taskData.poolRequests || [];
     
     if (!poolRequests.includes(userId)) {
       throw new Error("Bu kullanıcı için talep bulunamadı");
     }
     
+    // Görevi havuza ekleyen kişi kontrolü (genellikle görevi oluşturan kişi)
+    // Not: Görev havuzuna ekleme işlemi genellikle görevi oluşturan kişi tarafından yapılır
+    if (taskData.createdBy !== approvedBy) {
+      throw new Error("Sadece görevi havuza ekleyen kişi talepleri onaylayabilir");
+    }
+    
     // Kullanıcıyı göreve ata
-    await assignTask(taskId, userId, approvedBy);
+    const assignment = await assignTask(taskId, userId, approvedBy);
+
+    // Görev havuzu talebi onaylandığında görev otomatik olarak kabul edilir
+    // Assignment'ı direkt "accepted" olarak güncelle
+    const assignmentRef = doc(firestore, "tasks", taskId, "assignments", assignment.id);
+    await updateDoc(assignmentRef, {
+      status: "accepted",
+      acceptedAt: serverTimestamp() as any,
+    });
 
     // Havuz durumunu güncelle
-    const updates: any = {
+    const updates: Partial<Task> & { poolRequests?: string[]; updatedAt?: FieldValue | Timestamp } = {
       poolRequests: poolRequests.filter((id: string) => id !== userId), // Sadece onaylanan kullanıcıyı taleplerden çıkar
-      updatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp() as any,
     };
 
     if (!keepInPool) {
@@ -1978,10 +2403,68 @@ export const approvePoolRequest = async (taskId: string, userId: string, approve
 
     await updateDoc(taskRef, updates);
 
+    // assignTask'ın gönderdiği bildirimi bulup güncelle - "Talebiniz onaylandı, bu göreve atandınız"
+    try {
+      const { getNotifications, updateNotification } = await import("./notificationService");
+      const [task, approverProfile, notifications] = await Promise.all([
+        getTaskById(taskId),
+        getUserProfile(approvedBy),
+        getNotifications(userId, { limit: 10 }), // Son 10 bildirimi al
+      ]);
+
+      if (task) {
+        // assignTask'ın gönderdiği bildirimi bul (assignment_id ve relatedId ile eşleşen)
+        const assignmentNotification = notifications.find(
+          (n) => 
+            n.type === "task_assigned" && 
+            n.relatedId === taskId && 
+            n.metadata?.assignment_id === assignment.id &&
+            !n.read
+        );
+
+        if (assignmentNotification) {
+          // Bildirimi güncelle
+          await updateNotification(assignmentNotification.id, {
+            title: "Görev havuzu talebiniz onaylandı",
+            message: `${approverProfile?.fullName || approverProfile?.email || "Bir yönetici"} kullanıcısı görev havuzu talebinizi onayladı. "${task.title}" görevine atandınız ve görev otomatik olarak kabul edildi.`,
+            metadata: {
+              ...assignmentNotification.metadata,
+              action: "pool_request_approved",
+            },
+          });
+        } else {
+          // Bildirim bulunamadıysa yeni bir bildirim gönder
+          await createNotification({
+            userId,
+            type: "task_assigned",
+            title: "Görev havuzu talebiniz onaylandı",
+            message: `${approverProfile?.fullName || approverProfile?.email || "Bir yönetici"} kullanıcısı görev havuzu talebinizi onayladı. "${task.title}" görevine atandınız ve görev otomatik olarak kabul edildi.`,
+            read: false,
+            relatedId: taskId,
+            metadata: { 
+              assignment_id: assignment.id,
+              action: "pool_request_approved",
+              priority: task.priority,
+              dueDate: task.dueDate,
+              updatedAt: new Date(),
+            },
+          });
+        }
+      }
+    } catch (notifError) {
+      // Bildirim hatası kritik değil, sessizce devam et
+      if (import.meta.env.DEV) {
+        console.error("Error updating pool request approval notification:", notifError);
+      }
+    }
+
     // Audit log
     await logAudit("UPDATE", "tasks", taskId, approvedBy, { isInPool: true, poolRequests }, { isInPool: keepInPool, poolRequests: updates.poolRequests, assignedTo: userId });
-  } catch (error) {
-    console.error("Approve pool request error:", error);
+    await logAudit("UPDATE", "task_assignments", assignment.id, approvedBy, { status: "pending" }, { status: "accepted", taskId: taskId, taskTitle: taskData.title });
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Approve pool request error:", error);
+    }
     throw error;
   }
 };
@@ -2012,8 +2495,10 @@ export const rejectPoolRequest = async (taskId: string, userId: string): Promise
 
     // Audit log
     await logAudit("UPDATE", "tasks", taskId, auth?.currentUser?.uid || "system", { poolRequests }, { poolRequests: poolRequests.filter((id: string) => id !== userId), rejectedUser: userId });
-  } catch (error) {
-    console.error("Reject pool request error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Reject pool request error:", error);
+    }
     throw error;
   }
 };
@@ -2094,18 +2579,25 @@ export const requestTaskApproval = async (taskId: string, requestedBy: string): 
             userId: task.createdBy,
             type: "task_approval",
             title: "Görev onayı bekleniyor",
-            message: `${requesterProfile?.fullName || requesterProfile?.email || "Bir kullanıcı"} "${task.title}" görevini tamamladı ve onayınızı bekliyor.`,
+            message: `${requesterProfile?.fullName || requesterProfile?.email || "Bir kullanıcı"} kullanıcısı "${task.title}" görevini tamamladı ve onayınızı bekliyor.\n\n"${task.title}" başlıklı görev için onay talebi gönderildi. Lütfen görevi inceleyip onaylayın veya gerekirse geri gönderin.\n\nİşlem Zamanı: ${new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
             read: false,
             relatedId: taskId,
-            metadata: { action: "approval_requested" },
+            metadata: { 
+              action: "approval_requested",
+              updatedAt: new Date(),
+              priority: task.priority,
+              dueDate: task.dueDate,
+            },
           });
         }
       }
     } catch (notifError) {
       console.error("Error sending approval request notification:", notifError);
     }
-  } catch (error) {
-    console.error("Request task approval error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Request task approval error:", error);
+    }
     throw error;
   }
 };
@@ -2215,14 +2707,20 @@ export const approveTask = async (taskId: string, approvedBy: string): Promise<v
           );
 
           if (!duplicateExists) {
+            const approvalTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
             await createNotification({
               userId: userId,
               type: "task_approval",
               title: "Görev onaylandı",
-              message: `${approverName} "${updatedTask?.title || "görev"}" görevini onayladı ve tamamlandı olarak işaretlendi.`,
+              message: `${approverName} kullanıcısı tarafından "${updatedTask?.title || "görev"}" görevi onaylandı ve "Tamamlandı" durumuna geçirildi.\n\nGörev başarıyla tamamlanmış olarak işaretlendi. Tüm görev üyeleri bu durumu görebilir.\n\nOnay Zamanı: ${approvalTime}`,
               read: false,
               relatedId: taskId,
-              metadata: { action: "approved" },
+              metadata: { 
+                action: "approved",
+                updatedAt: new Date(),
+                priority: updatedTask?.priority,
+                dueDate: updatedTask?.dueDate,
+              },
             });
           }
         } catch (userNotifError) {
@@ -2232,8 +2730,10 @@ export const approveTask = async (taskId: string, approvedBy: string): Promise<v
     } catch (notifError) {
       console.error("Error sending approval notification:", notifError);
     }
-  } catch (error) {
-    console.error("Approve task error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Approve task error:", error);
+    }
     throw error;
   }
 };
@@ -2307,14 +2807,24 @@ export const rejectTaskApproval = async (taskId: string, rejectedBy: string, rej
         await Promise.all(
           Array.from(allTaskUserIds).map(async (userId) => {
             try {
+              const rejectTime3 = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+              const detailedRejectionMessage = rejectionReason 
+                ? `${rejecterProfile?.fullName || rejecterProfile?.email || "Yönetici"} kullanıcısı tarafından "${task.title}" görevi için tamamlanma onayı reddedildi.\n\nReddetme Notu: ${rejectionReason}\n\nGörev tekrar "Devam Ediyor" durumuna alındı. Lütfen gerekli düzeltmeleri yapıp tekrar onay talebi gönderin.\n\nReddetme Zamanı: ${rejectTime3}`
+                : `${rejecterProfile?.fullName || rejecterProfile?.email || "Yönetici"} kullanıcısı tarafından "${task.title}" görevi için tamamlanma onayı reddedildi.\n\nGörev tekrar "Devam Ediyor" durumuna alındı. Lütfen gerekli düzeltmeleri yapıp tekrar onay talebi gönderin.\n\nReddetme Zamanı: ${rejectTime3}`;
               await createNotification({
                 userId: userId,
                 type: "task_approval",
                 title: "Görev onayı reddedildi",
-                message: rejectionMessage,
+                message: detailedRejectionMessage,
                 read: false,
                 relatedId: taskId,
-                metadata: { action: "rejected", rejectionReason },
+                metadata: { 
+                  action: "rejected", 
+                  rejectionReason,
+                  updatedAt: new Date(),
+                  priority: task.priority,
+                  dueDate: task.dueDate,
+                },
               });
             } catch (notifError) {
               if (import.meta.env.DEV) {
@@ -2329,8 +2839,10 @@ export const rejectTaskApproval = async (taskId: string, rejectedBy: string, rej
         console.error("Error sending rejection notification:", notifError);
       }
     }
-  } catch (error) {
-    console.error("Reject task approval error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Reject task approval error:", error);
+    }
     throw error;
   }
 };
@@ -2385,24 +2897,30 @@ export const approveTaskRejection = async (
       const approverUser = allUsers.find(u => u.id === userId);
 
       if (assignedUser) {
+        const approvalTime2 = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         await createNotification({
           userId: assignmentData.assignedTo,
           type: "task_assigned",
           title: "Görev reddi onaylandı",
-          message: `${approverUser?.fullName || approverUser?.email || "Yönetici"} "${task?.title}" görevi için reddinizi onayladı. Görev artık başka birine atanabilir.`,
+          message: `${approverUser?.fullName || approverUser?.email || "Yönetici"} kullanıcısı tarafından "${task?.title}" görevi için reddiniz onaylandı.\n\nGörev artık başka birine atanabilir veya iptal edilebilir. Bu görevle ilgili artık bildirim almayacaksınız.\n\nOnay Zamanı: ${approvalTime2}`,
           read: false,
           relatedId: taskId,
           metadata: { 
             assignment_id: assignmentId, 
-            action: "rejection_approved"
+            action: "rejection_approved",
+            updatedAt: new Date(),
+            priority: task?.priority,
+            dueDate: task?.dueDate,
           },
         });
       }
     } catch (notifError) {
       console.error("Error sending approval notification:", notifError);
     }
-  } catch (error) {
-    console.error("Approve task rejection error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Approve task rejection error:", error);
+    }
     throw error;
   }
 };
@@ -2472,11 +2990,12 @@ export const rejectTaskRejection = async (
       const rejecterUser = allUsers.find(u => u.id === userId);
 
       if (assignedUser) {
+        const rejectionTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         await createNotification({
           userId: assignmentData.assignedTo,
           type: "task_assigned",
           title: "Görev reddi reddedildi",
-          message: `${rejecterUser?.fullName || rejecterUser?.email || "Yönetici"} "${task?.title}" görevi için reddinizi reddetti. Görev tekrar size atandı. Not: ${reason.trim().substring(0, 100)}${reason.trim().length > 100 ? "..." : ""}`,
+          message: `${rejecterUser?.fullName || rejecterUser?.email || "Yönetici"} kullanıcısı tarafından "${task?.title}" görevi için reddiniz reddedildi.\n\nGörev tekrar size atandı ve üzerinde çalışmaya devam etmeniz bekleniyor.\n\nYönetici Notu: ${reason.trim().substring(0, 200)}${reason.trim().length > 200 ? "..." : ""}\n\nReddetme Zamanı: ${rejectionTime}`,
           read: false,
           relatedId: taskId,
           metadata: { 
@@ -2489,8 +3008,10 @@ export const rejectTaskRejection = async (
     } catch (notifError) {
       console.error("Error sending rejection notification:", notifError);
     }
-  } catch (error) {
-    console.error("Reject task rejection error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Reject task rejection error:", error);
+    }
     throw error;
   }
 };
@@ -2515,7 +3036,9 @@ export const archiveTask = async (taskId: string, userId: string): Promise<void>
     // Audit log
     await logAudit("UPDATE", "tasks", taskId, userId, { isArchived: false }, { isArchived: true });
   } catch (error) {
-    console.error("Archive task error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Archive task error:", error);
+    }
     throw error;
   }
 };
@@ -2533,7 +3056,9 @@ export const unarchiveTask = async (taskId: string, userId: string): Promise<voi
     // Audit log
     await logAudit("UPDATE", "tasks", taskId, userId, { isArchived: true }, { isArchived: false });
   } catch (error) {
-    console.error("Unarchive task error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Unarchive task error:", error);
+    }
     throw error;
   }
 };
@@ -2563,7 +3088,7 @@ export const removeUserFromAllTasks = async (userId: string): Promise<void> => {
         // Eğer göreve kimse kalmamışsa havuza al
         const shouldMoveToPool = updatedAssignedUsers.length === 0;
         
-        const updates: any = {
+        const updates: Partial<Task> & { assignedUsers?: string[]; isInPool?: boolean; poolRequests?: string[] } = {
           assignedUsers: updatedAssignedUsers,
         };
         
@@ -2635,8 +3160,10 @@ export const removeUserFromAllTasks = async (userId: string): Promise<void> => {
       await updateBatch.commit();
     }
     
-  } catch (error: any) {
-    console.error("Error removing user from tasks:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error removing user from tasks:", error);
+    }
     throw error;
   }
 };

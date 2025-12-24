@@ -41,9 +41,12 @@ const Auth = () => {
             { id: "software", name: "Yazılım Ekibi" }
           ]);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // getDepartments artık hata fırlatmıyor, boş array döndürüyor
         // Varsayılan departments'ı kullan (sessizce)
+        if (import.meta.env.DEV) {
+          console.warn("Departments yüklenemedi, varsayılanlar kullanılıyor:", error instanceof Error ? error.message : String(error));
+        }
         setDepartments([
           { id: "mechanic", name: "Mekanik Ekip" },
           { id: "electric", name: "Elektrik Ekibi" },
@@ -170,7 +173,9 @@ const Auth = () => {
         setPhoneValue("+90 5");
         setSelectedTeamId("");
       } catch (error) {
-        console.warn("Form reset hatası:", error);
+        if (import.meta.env.DEV) {
+          console.warn("Form reset hatası:", error);
+        }
       }
       
       // Başarı mesajı ve bilgilendirme
@@ -217,8 +222,8 @@ const Auth = () => {
       } else {
         setForgotError(result.message || "Şifre sıfırlama e-postası gönderilemedi");
       }
-    } catch (error: any) {
-      setForgotError(error.message || "Şifre sıfırlama başarısız");
+    } catch (error: unknown) {
+      setForgotError(error instanceof Error ? error.message : "Şifre sıfırlama başarısız");
     }
 
     setForgotLoading(false);
@@ -246,23 +251,23 @@ const Auth = () => {
               </CardDescription>
             </div>
           </CardHeader>
-          <CardContent className="px-6 pb-6 sm:pb-8">
+          <CardContent className="px-4 sm:px-6 pb-6 sm:pb-8">
           <Tabs value={activeTab} onValueChange={(value) => {
             setActiveTab(value as typeof activeTab);
             if (value === "signup") {
               setPhoneValue("+90 5");
             }
           }} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 h-12 bg-muted/50 rounded-lg p-1">
+            <TabsList className="grid w-full grid-cols-2 h-11 sm:h-12 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-1 overflow-hidden">
               <TabsTrigger 
                 value="signin" 
-                className="text-sm font-medium touch-manipulation min-h-[44px] data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all"
+                className="text-xs sm:text-sm font-medium touch-manipulation min-h-[44px] rounded-md transition-all duration-200 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:text-gray-900 dark:data-[state=active]:text-white data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=inactive]:text-gray-500 dark:data-[state=inactive]:text-gray-400 whitespace-nowrap"
               >
                 Giriş Yap
               </TabsTrigger>
               <TabsTrigger 
                 value="signup" 
-                className="text-sm font-medium touch-manipulation min-h-[44px] data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all"
+                className="text-xs sm:text-sm font-medium touch-manipulation min-h-[44px] rounded-md transition-all duration-200 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:text-gray-900 dark:data-[state=active]:text-white data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=inactive]:text-gray-500 dark:data-[state=inactive]:text-gray-400 whitespace-nowrap"
               >
                 Kayıt Ol
               </TabsTrigger>

@@ -10,7 +10,7 @@ import { getProjects, createProject, updateProject, deleteProject, Project } fro
 import { useAuth } from "@/contexts/AuthContext";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { canCreateProject, canCreateTask, canDeleteProject } from "@/utils/permissions";
+import { canCreateProject, canCreateTask, canDeleteProject, canViewPrivateProject, isMainAdmin, canDeleteResource, canEditProject } from "@/utils/permissions";
 import { getDepartments } from "@/services/firebase/departmentService";
 import { onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 import { UserProfile } from "@/services/firebase/authService";
@@ -34,7 +34,7 @@ import { Lock } from "lucide-react";
 import { LoadingState } from "@/components/ui/loading-state";
 
 const Projects = () => {
-  const { user, isSuperAdmin, isAdmin, isTeamLeader } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -45,6 +45,9 @@ const Projects = () => {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [canCreate, setCanCreate] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  const [canDeleteProjects, setCanDeleteProjects] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -53,13 +56,17 @@ const Projects = () => {
   });
   const [activeProjectForm, setActiveProjectForm] = useState<string | null>(null);
 
-  const checkCreatePermission = async () => {
+  const checkPermissions = async () => {
     if (!user) {
       setCanCreate(false);
+      setCanEdit(false);
+      setCanDeleteProjects(false);
+      setIsSuperAdmin(false);
       return;
     }
     try {
       const departments = await getDepartments();
+      const { isMainAdmin, canDeleteResource } = await import("@/utils/permissions");
       const userProfile: UserProfile = {
         id: user.id,
         email: user.email,
@@ -72,16 +79,40 @@ const Projects = () => {
         createdAt: null,
         updatedAt: null,
       };
-      const hasPermission = await canCreateProject(userProfile, departments);
-      setCanCreate(hasPermission);
+      // Dummy project for permission check
+      const dummyProject: Project = {
+        id: "",
+        name: "",
+        description: null,
+        status: "active",
+        isPrivate: false,
+        createdBy: user.id,
+        createdAt: null,
+        updatedAt: null,
+      };
+      const [hasCreatePermission, hasEditPermission, hasDeletePermission, isMainAdminUser] = await Promise.all([
+        canCreateProject(userProfile, departments),
+        canEditProject(dummyProject, userProfile),
+        canDeleteResource(userProfile, "projects"),
+        isMainAdmin(userProfile),
+      ]);
+      setCanCreate(hasCreatePermission);
+      setCanEdit(hasEditPermission);
+      setCanDeleteProjects(hasDeletePermission);
+      setIsSuperAdmin(isMainAdminUser);
     } catch (error) {
-      console.error("Error checking create permission:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error checking permissions:", error);
+      }
       setCanCreate(false);
+      setCanEdit(false);
+      setCanDeleteProjects(false);
+      setIsSuperAdmin(false);
     }
   };
 
   useEffect(() => {
-    checkCreatePermission();
+    checkPermissions();
   }, [user]);
 
   // Listen to permission changes in real-time
@@ -89,7 +120,7 @@ const Projects = () => {
     if (!user) return;
     const unsubscribe = onPermissionCacheChange(() => {
       // Re-check permissions when they change
-      checkCreatePermission();
+      checkPermissions();
     });
     return () => unsubscribe();
   }, [user]);
@@ -108,56 +139,49 @@ const Projects = () => {
       const filteredProjects = await Promise.all(
         projectsData.map(async (project) => {
           if (!project.isPrivate) return project; // Gizli olmayan projeler herkes görebilir
-          if (isSuperAdmin) return project; // Üst yöneticiler tüm projeleri görebilir
-          if (isAdmin) return project; // Yöneticiler tüm projeleri görebilir
-          if (user?.id && project.createdBy === user.id) return project; // Oluşturan görebilir
           
-          // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
-          const isTeamLeader = user?.roles?.includes("team_leader");
-          if (isTeamLeader) {
-            return null; // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
-          }
-          
-          // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
-          if (user?.id) {
+          // Gizli projeler için canViewPrivateProject kontrolü
+          if (user) {
             try {
-              const { getTasks } = await import("@/services/firebase/taskService");
-              // Gizli projeler için de projectId filtresi ile görevleri al (yeni eklenen görevlerin görünmesi için)
-              const projectTasks = await getTasks({ projectId: project.id });
+              const userProfile: UserProfile = {
+                id: user.id,
+                email: user.email,
+                emailVerified: user.emailVerified,
+                fullName: user.fullName,
+                displayName: user.fullName,
+                phone: user.phone,
+                dateOfBirth: user.dateOfBirth,
+                role: user.roles,
+                createdAt: null,
+                updatedAt: null,
+              };
+              const canView = await canViewPrivateProject(project, userProfile);
+              if (canView) return project;
               
-              // Kullanıcının bu projede görevi var mı kontrol et
-              const hasTaskInProject = projectTasks.some((task) => {
-                // Görevi oluşturan kişi
-                if (task.createdBy === user.id) return true;
+              // Projede görevi olan kullanıcılar görebilir (canViewPrivateProject false döndüyse)
+              try {
+                const { getTasks } = await import("@/services/firebase/taskService");
+                const projectTasks = await getTasks({ projectId: project.id });
                 
-                // Atanan kullanıcılar (async kontrol gerekiyor ama basit kontrol için burada)
-                if (task.assignedUsers && task.assignedUsers.includes(user.id)) return true;
-                
-                return false;
-              });
-              
-              // Daha detaylı kontrol için assignments'ları da kontrol et
-              if (!hasTaskInProject) {
                 for (const task of projectTasks) {
-                  try {
-                    const { getTaskAssignments } = await import("@/services/firebase/taskService");
-                    const assignments = await getTaskAssignments(task.id);
-                    const isAssigned = assignments.some(
-                      (a) => a.assignedTo === user.id && (a.status === "accepted" || a.status === "pending")
-                    );
-                    if (isAssigned) {
-                      return project;
-                    }
-                  } catch (err) {
-                    // Hata durumunda devam et
-                  }
+                  if (task.createdBy === user.id) return project;
+                  if (task.assignedUsers && task.assignedUsers.includes(user.id)) return project;
+                  const { getTaskAssignments } = await import("@/services/firebase/taskService");
+                  const assignments = await getTaskAssignments(task.id);
+                  const isAssigned = assignments.some(
+                    (a) => a.assignedTo === user.id && (a.status === "accepted" || a.status === "pending")
+                  );
+                  if (isAssigned) return project;
                 }
-              } else {
-                return project;
+              } catch (error: unknown) {
+                if (import.meta.env.DEV) {
+                  console.error("Error checking project tasks:", error);
+                }
               }
-            } catch (error) {
-              // Hata durumunda gösterilmesin
-              console.error("Error checking project tasks:", error);
+            } catch (error: unknown) {
+              if (import.meta.env.DEV) {
+                console.error("Error checking private project visibility:", error);
+              }
             }
           }
           
@@ -178,9 +202,12 @@ const Projects = () => {
       });
       
       setProjects(finalProjects);
-    } catch (error: any) {
-      console.error("Fetch projects error:", error);
-      toast.error(error.message || "Projeler yüklenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Fetch projects error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : "Projeler yüklenirken hata oluştu";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -216,9 +243,12 @@ const Projects = () => {
         setSearchParams({});
         navigate(returnTo);
       }
-    } catch (error: any) {
-      console.error("Create project error:", error);
-      toast.error(error.message || "Proje oluşturulurken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Create project error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : "Proje oluşturulurken hata oluştu";
+      toast.error(errorMessage);
     }
   };
 
@@ -244,9 +274,12 @@ const Projects = () => {
       setSelectedProject(null);
       setFormData({ name: "", description: "", status: "active", isPrivate: false });
       fetchProjects();
-    } catch (error: any) {
-      console.error("Update project error:", error);
-      toast.error(error.message || "Proje güncellenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Update project error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : "Proje güncellenirken hata oluştu";
+      toast.error(errorMessage);
     }
   };
 
@@ -264,9 +297,12 @@ const Projects = () => {
       fetchProjects();
       setDeleteDialogOpen(false);
       setSelectedProject(null);
-    } catch (error: any) {
-      console.error("Delete project error:", error);
-      toast.error(error.message || "Proje silinirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete project error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : "Proje silinirken hata oluştu";
+      toast.error(errorMessage);
     }
   };
 
@@ -327,27 +363,24 @@ const Projects = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-4 sm:space-y-5">
+      <div className="space-y-4 sm:space-y-5 w-[90%] max-w-[90%] mx-auto">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">Projeler</h1>
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Projeler</h1>
             <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
               Projelerinizi yönetin ve görevlerinizi takip edin
             </p>
           </div>
-          <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={async () => {
-            if (!canCreate) {
-              const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
-              showPermissionErrorToast("create", "project");
-              return;
-            }
-            setFormData({ name: "", description: "", status: "active", isPrivate: false });
-            setCreateDialogOpen(true);
-          }} disabled={!canCreate}>
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Yeni Proje</span>
-            <span className="sm:hidden">Yeni</span>
-          </Button>
+          {canCreate && (
+            <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={() => {
+              setFormData({ name: "", description: "", status: "active", isPrivate: false });
+              setCreateDialogOpen(true);
+            }}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Yeni Proje</span>
+              <span className="sm:hidden">Yeni</span>
+            </Button>
+          )}
         </div>
 
         {/* Proje İstatistikleri */}
@@ -390,7 +423,7 @@ const Projects = () => {
             >
               <CardContent className="p-4 sm:p-5">
                 <p className="text-xs sm:text-sm text-muted-foreground mb-2 truncate">{stat.label}</p>
-                <div className="text-2xl sm:text-3xl font-bold mb-1">{stat.value}</div>
+                <div className="text-lg font-semibold mb-1">{stat.value}</div>
                 <p className={`text-xs font-medium ${stat.badgeClass} line-clamp-1`}>{stat.sub}</p>
               </CardContent>
             </Card>
@@ -422,9 +455,8 @@ const Projects = () => {
                 </div>
               ) : (
                 filteredProjects.map((project) => {
-                  // Silme yetkisi kontrolü: Ekip lideri ve yöneticiler tüm projeleri silebilir
-                  // Gizli projelerde ekip lideri sadece kendi oluşturduklarını görebilir (zaten filtreleme yapıldı)
-                  const canDelete = isSuperAdmin || isAdmin || isTeamLeader || project.createdBy === user?.id;
+                  // Silme yetkisi kontrolü: Firestore'dan - state'ten al
+                  const canDelete = isSuperAdmin || canDeleteProjects || project.createdBy === user?.id;
                   
                   return (
                   <div
@@ -455,64 +487,70 @@ const Projects = () => {
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            // Double-check permission before opening form
-                            if (!user) return;
-                            try {
-                              const departments = await getDepartments();
-                              const userProfile: UserProfile = {
-                                id: user.id,
-                                email: user.email,
-                                emailVerified: user.emailVerified,
-                                fullName: user.fullName,
-                                displayName: user.fullName,
-                                phone: user.phone,
-                                dateOfBirth: user.dateOfBirth,
-                                role: user.roles,
-                                createdAt: null,
-                                updatedAt: null,
-                              };
-                              const hasTaskPermission = await canCreateTask(userProfile, departments);
-                              if (!hasTaskPermission && !isAdmin) {
-                                toast.error("Görev ekleme yetkiniz yok");
-                                return;
+                        {canCreate && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              // Double-check permission before opening form
+                              if (!user) return;
+                              try {
+                                const departments = await getDepartments();
+                                const userProfile: UserProfile = {
+                                  id: user.id,
+                                  email: user.email,
+                                  emailVerified: user.emailVerified,
+                                  fullName: user.fullName,
+                                  displayName: user.fullName,
+                                  phone: user.phone,
+                                  dateOfBirth: user.dateOfBirth,
+                                  role: user.roles,
+                                  createdAt: null,
+                                  updatedAt: null,
+                                };
+                                // SISTEM_YETKILERI.md'ye göre: Sadece Super Admin ve Team Leader görev oluşturabilir
+                                const hasTaskPermission = await canCreateTask(userProfile, departments);
+                                if (!hasTaskPermission) {
+                                  toast.error("Görev ekleme yetkiniz yok. Sadece yönetici veya ekip lideri görev oluşturabilir.");
+                                  return;
+                                }
+                                setActiveProjectForm((prev) =>
+                                  prev === project.id ? null : project.id
+                                );
+                              } catch (error: unknown) {
+                                if (import.meta.env.DEV) {
+                                  console.error("Permission check error:", error);
+                                }
+                                toast.error("Yetki kontrolü yapılamadı");
                               }
-                              setActiveProjectForm((prev) =>
-                                prev === project.id ? null : project.id
-                              );
-                            } catch (error) {
-                              console.error("Permission check error:", error);
-                              toast.error("Yetki kontrolü yapılamadı");
-                            }
-                          }}
-                          disabled={!canCreate && !isAdmin}
-                        >
-                          {activeProjectForm === project.id ? (
-                            <>
-                              <ChevronUp className="h-4 w-4 mr-1" />
-                              Formu Kapat
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="h-4 w-4 mr-1" />
-                              Görev Ekle
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditDialog(project);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                            }}
+                          >
+                            {activeProjectForm === project.id ? (
+                              <>
+                                <ChevronUp className="h-4 w-4 mr-1" />
+                                Formu Kapat
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-4 w-4 mr-1" />
+                                Görev Ekle
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        {(canEdit || project.createdBy === user?.id) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditDialog(project);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
                         {canDelete && (
                           <Button
                             variant="ghost"
@@ -611,7 +649,7 @@ const Projects = () => {
                 <div className="max-w-full mx-auto h-full overflow-y-auto">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base sm:text-lg">Proje Bilgileri</CardTitle>
+                      <CardTitle className="text-[14px] sm:text-[15px]">Proje Bilgileri</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
@@ -726,7 +764,7 @@ const Projects = () => {
                 <div className="max-w-full mx-auto h-full overflow-y-auto">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base sm:text-lg">Proje Bilgileri</CardTitle>
+                      <CardTitle className="text-[14px] sm:text-[15px]">Proje Bilgileri</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-2">

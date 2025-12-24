@@ -17,15 +17,19 @@ import {
   Package,
   Clock3,
   X,
+  MoreVertical,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { getOrders, deleteOrder, updateOrder, Order } from "@/services/firebase/orderService";
+import { getOrders, deleteOrder, updateOrder, Order, subscribeToOrders, getOrderItems } from "@/services/firebase/orderService";
 import { Timestamp } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
+import { canCreateResource, canUpdateResource, canDeleteResource } from "@/utils/permissions";
+import { UserProfile } from "@/services/firebase/authService";
 import { CURRENCY_SYMBOLS, Currency } from "@/utils/currency";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -97,10 +101,10 @@ const Production = () => {
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-
-  useEffect(() => {
-    fetchOrders();
-  }, [sortBy, sortOrder, statusFilter, searchQuery, page]);
+  const [canCreate, setCanCreate] = useState(false);
+  const [canUpdate, setCanUpdate] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  const [ordersWithItems, setOrdersWithItems] = useState<Map<string, { productName?: string; quantity?: number; unit?: string }>>(new Map());
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -109,81 +113,152 @@ const Production = () => {
     }
   }, [statusFilter, sortBy, sortOrder]);
 
-  // Arama için ayrı useEffect (debounce ile)
+  // Yetki kontrolleri
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (page !== 1) {
-        setPage(1);
+    const checkPermissions = async () => {
+      if (!user) {
+        setCanCreate(false);
+        setCanUpdate(false);
+        setCanDelete(false);
+        return;
       }
-      fetchOrders();
-    }, 300);
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
+      try {
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
+          role: user.roles,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        };
+        const [createAllowed, updateAllowed, deleteAllowed] = await Promise.all([
+          canCreateResource(userProfile, "orders"),
+          canUpdateResource(userProfile, "orders"),
+          canDeleteResource(userProfile, "orders"),
+        ]);
+        setCanCreate(createAllowed);
+        setCanUpdate(updateAllowed);
+        setCanDelete(deleteAllowed);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Production permission check error:", error);
+        }
+        setCanCreate(false);
+        setCanUpdate(false);
+        setCanDelete(false);
+      }
+    };
+    checkPermissions();
+  }, [user]);
 
-  const fetchOrders = async () => {
+  // Gerçek zamanlı sipariş güncellemeleri için subscribe
+  useEffect(() => {
+    const filters: { status?: string } = {};
+    if (statusFilter !== 'all') {
+      filters.status = statusFilter;
+    }
+    
     setLoading(true);
-    try {
-      const filters: { status?: string } = {};
-      if (statusFilter !== 'all') {
-        filters.status = statusFilter;
-      }
-      
-      const ordersData = await getOrders(filters);
-      
-      // Search ve sort işlemleri frontend'de yapılacak
-      let filtered = ordersData;
-      
-      if (searchQuery) {
-        const query = searchQuery.toLocaleLowerCase('tr-TR');
-        filtered = filtered.filter((order: any) =>
-          order.order_number?.toLocaleLowerCase('tr-TR').includes(query) ||
-          order.orderNumber?.toLocaleLowerCase('tr-TR').includes(query) ||
-          order.product_name?.toLocaleLowerCase('tr-TR').includes(query) ||
-          order.customer_name?.toLocaleLowerCase('tr-TR').includes(query) ||
-          order.customerName?.toLocaleLowerCase('tr-TR').includes(query)
-        );
-      }
-      
-      // Sort
-      filtered.sort((a, b) => {
-        let aValue: any, bValue: any;
-        if (sortBy === 'created_at') {
-          aValue = a.createdAt;
-          bValue = b.createdAt;
-        } else if (sortBy === 'priority') {
-          // Priority için order'da priority field'ı yok, şimdilik createdAt kullan
-          aValue = a.createdAt;
-          bValue = b.createdAt;
-        } else if (sortBy === 'due_date') {
-          aValue = a.dueDate || a.deliveryDate;
-          bValue = b.dueDate || b.deliveryDate;
-        } else {
-          aValue = a.orderNumber || '';
-          bValue = b.orderNumber || '';
+    
+    // Gerçek zamanlı dinleme başlat
+    const unsubscribe = subscribeToOrders(filters, async (firebaseOrders) => {
+      try {
+        // Null/undefined kontrolü
+        if (!Array.isArray(firebaseOrders)) {
+          setOrders([]);
+          setTotalPages(1);
+          setLoading(false);
+          return;
         }
         
-        if (aValue instanceof Timestamp) aValue = aValue.toMillis();
-        if (bValue instanceof Timestamp) bValue = bValue.toMillis();
-        if (aValue instanceof Date) aValue = aValue.getTime();
-        if (bValue instanceof Date) bValue = bValue.getTime();
+        // Search ve sort işlemleri frontend'de yapılacak
+        let filtered = firebaseOrders;
         
-        return sortOrder === 'asc' 
-          ? (aValue > bValue ? 1 : -1)
-          : (aValue < bValue ? 1 : -1);
-      });
-      
-      // Pagination
-      const startIndex = (page - 1) * 50;
-      const endIndex = startIndex + 50;
-      setOrders(filtered.slice(startIndex, endIndex) as any);
-      setTotalPages(Math.ceil(filtered.length / 50));
-    } catch (error: any) {
-      console.error("Fetch production orders error:", error);
-      toast.error(error.message || "Siparişler yüklenirken hata oluştu");
-    } finally {
-      setLoading(false);
-    }
-  };
+        if (searchQuery) {
+          const query = searchQuery.toLocaleLowerCase('tr-TR');
+          filtered = filtered.filter((order: Order) => {
+            const orderNum = (order.order_number || order.orderNumber || "").toLocaleLowerCase('tr-TR');
+            const customerName = (order.customer_name || order.customerName || "").toLocaleLowerCase('tr-TR');
+            // Order'da productName yok, items'da var - bu yüzden sadece orderNumber ve customerName ile arama yapıyoruz
+            return orderNum.includes(query) || customerName.includes(query);
+          });
+        }
+        
+        // Sort
+        filtered.sort((a, b) => {
+          let aValue: unknown, bValue: unknown;
+          if (sortBy === 'created_at') {
+            aValue = a.createdAt;
+            bValue = b.createdAt;
+          } else if (sortBy === 'priority') {
+            // Priority için order'da priority field'ı yok, şimdilik createdAt kullan
+            aValue = a.createdAt;
+            bValue = b.createdAt;
+          } else if (sortBy === 'due_date') {
+            aValue = a.dueDate || a.deliveryDate;
+            bValue = b.dueDate || b.deliveryDate;
+          } else {
+            aValue = a.orderNumber || '';
+            bValue = b.orderNumber || '';
+          }
+          
+          if (aValue instanceof Timestamp) aValue = aValue.toMillis();
+          if (bValue instanceof Timestamp) bValue = bValue.toMillis();
+          if (aValue instanceof Date) aValue = aValue.getTime();
+          if (bValue instanceof Date) bValue = bValue.getTime();
+          
+          return sortOrder === 'asc' 
+            ? (aValue > bValue ? 1 : -1)
+            : (aValue < bValue ? 1 : -1);
+        });
+        
+        // Pagination
+        const startIndex = (page - 1) * 50;
+        const endIndex = startIndex + 50;
+        const paginatedOrders = filtered.slice(startIndex, endIndex);
+        setOrders(paginatedOrders);
+        setTotalPages(Math.ceil(filtered.length / 50));
+        
+        // Her sipariş için items'ı yükle (sadece görünür olanlar için)
+        const itemsMap = new Map<string, { productName?: string; quantity?: number; unit?: string }>();
+        await Promise.all(
+          paginatedOrders.map(async (order: Order) => {
+            try {
+              const items = await getOrderItems(order.id);
+              if (items.length > 0) {
+                const firstItem = items[0];
+                itemsMap.set(order.id, {
+                  productName: firstItem.productName || firstItem.product_name || undefined,
+                  quantity: firstItem.quantity,
+                  unit: "Adet", // OrderItem'da unit yok, varsayılan olarak "Adet"
+                });
+              }
+            } catch (error: unknown) {
+              if (import.meta.env.DEV) {
+                console.error(`Error loading items for order ${order.id}:`, error);
+              }
+            }
+          })
+        );
+        setOrdersWithItems(itemsMap);
+        setLoading(false);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Real-time production orders update error:", error);
+        }
+        setLoading(false);
+      }
+    });
+    
+    // Cleanup: Component unmount olduğunda unsubscribe et
+    return () => {
+      unsubscribe();
+    };
+  }, [statusFilter, sortBy, sortOrder, searchQuery, page]);
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -220,7 +295,7 @@ const Production = () => {
     return colors[status] || "bg-gray-100 text-gray-800 border-gray-300";
   };
 
-const formatDate = (value?: string | Date | null | any) => {
+const formatDate = (value?: string | Date | Timestamp | null | undefined) => {
   if (!value) return "-";
   
   let date: Date | null = null;
@@ -305,26 +380,36 @@ const priorityOptions = [
     try {
       await deleteOrder(selectedOrder.id);
       toast.success("Sipariş silindi");
-      fetchOrders();
+      // Subscription otomatik güncelleyecek
       setDeleteDialogOpen(false);
       setSelectedOrder(null);
-    } catch (error: any) {
-      console.error("Delete production order error:", error);
-      toast.error(error.message || "Sipariş silinirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete production order error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Sipariş silinirken hata oluştu");
     }
   };
 
   const handleUpdateOrder = async (orderId: string, payload: Partial<ProductionOrder>) => {
     setUpdatingOrderId(orderId);
     try {
+      // Yetki kontrolü
+      if (!canUpdate && !isAdmin) {
+        toast.error("Sipariş güncelleme yetkiniz yok.");
+        setUpdatingOrderId(null);
+        return;
+      }
       // Üst yöneticiler için durum geçiş validasyonunu atla
-      const skipValidation = isAdmin === true;
-      await updateOrder(orderId, payload as any, user?.id, skipValidation);
+      const skipValidation = isAdmin === true || canUpdate;
+      await updateOrder(orderId, payload as Partial<Order>, user?.id, skipValidation);
       toast.success("Sipariş güncellendi");
-      fetchOrders();
-    } catch (error: any) {
-      console.error("Update order error:", error);
-      toast.error(error.message || "Sipariş güncellenemedi");
+      // Subscription otomatik güncelleyecek
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Update order error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Sipariş güncellenemedi");
     } finally {
       setUpdatingOrderId(null);
     }
@@ -341,17 +426,19 @@ const priorityOptions = [
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">Üretim Siparişleri</h1>
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Üretim Siparişleri</h1>
             <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Üretim süreçlerini yönetin</p>
           </div>
-          <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Yeni Sipariş</span>
-            <span className="sm:hidden">Yeni</span>
-          </Button>
+          {canCreate && (
+            <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={() => setCreateDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Yeni Sipariş</span>
+              <span className="sm:hidden">Yeni</span>
+            </Button>
+          )}
         </div>
 
         <Card>
@@ -369,7 +456,7 @@ const priorityOptions = [
               
               {/* Durum Filtresi */}
               <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
-                <Select value={statusFilter === "all" ? "all" : statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
+                <Select value={statusFilter === "all" ? "all" : statusFilter} onValueChange={(value) => setStatusFilter(value as Order["status"] | "all")}>
                   <SelectTrigger className="w-full h-9 sm:h-10 text-xs sm:text-sm">
                     <SelectValue placeholder="Durum Filtrele" />
                   </SelectTrigger>
@@ -420,14 +507,12 @@ const priorityOptions = [
                 <Table className="min-w-[1000px] sm:min-w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs sm:text-sm px-2 sm:px-4">Sipariş No</TableHead>
-                    <TableHead className="text-xs sm:text-sm px-2 sm:px-4 hidden md:table-cell">Müşteri</TableHead>
-                    <TableHead className="text-xs sm:text-sm px-2 sm:px-4">Ürün / Miktar</TableHead>
-                    <TableHead className="text-xs sm:text-sm px-2 sm:px-4 hidden lg:table-cell">Termin</TableHead>
-                    <TableHead className="text-xs sm:text-sm px-2 sm:px-4">Durum</TableHead>
-                    <TableHead className="text-xs sm:text-sm px-2 sm:px-4 hidden xl:table-cell">Öncelik</TableHead>
-                    <TableHead className="text-right text-xs sm:text-sm px-2 sm:px-4">Tutar</TableHead>
-                    <TableHead className="text-right text-xs sm:text-sm px-2 sm:px-4">İşlemler</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4">Sipariş No</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden md:table-cell">Müşteri</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden lg:table-cell">Termin</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4">Durum</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden xl:table-cell">Öncelik</TableHead>
+                    <TableHead className="text-right text-xs font-semibold px-2 sm:px-4">Tutar</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -436,13 +521,15 @@ const priorityOptions = [
                     return (
                       <TableRow
                         key={order.id}
-                        className="cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => {
-                          setSelectedOrder(order);
-                          setDetailModalOpen(true);
-                        }}
+                        className="hover:bg-muted/50 transition-colors"
                       >
-                        <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 py-2 sm:py-3">
+                        <TableCell 
+                          className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 cursor-pointer"
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            setDetailModalOpen(true);
+                          }}
+                        >
                           <div className="flex flex-col gap-0.5">
                             <span>{order.order_number || order.orderNumber || "-"}</span>
                             <span className="md:hidden text-[10px] text-muted-foreground">
@@ -453,7 +540,7 @@ const priorityOptions = [
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-2 sm:py-3 hidden md:table-cell">
+                        <TableCell className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 hidden md:table-cell">
                           <div className="flex flex-col">
                             <span className="font-medium">{order.customer_name || order.customerName || "-"}</span>
                             {order.customer_company && (
@@ -461,17 +548,7 @@ const priorityOptions = [
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-2 sm:py-3">
-                          <div className="flex flex-col">
-                            <span className="font-medium">{order.product_name || order.productName || "-"}</span>
-                            {order.quantity && (
-                              <span className="text-[10px] sm:text-xs text-muted-foreground">
-                                {order.quantity} {order.unit || "Adet"}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">
+                        <TableCell className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">
                           {formatDate(
                             order.due_date || order.dueDate || order.created_at || order.createdAt
                           )}
@@ -486,43 +563,21 @@ const priorityOptions = [
                             {priorityMeta.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-xs sm:text-sm px-2 sm:px-4 py-2 sm:py-3">
+                        <TableCell 
+                          className="text-right text-xs font-semibold px-2 sm:px-4 py-2 sm:py-3 cursor-pointer"
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            setDetailModalOpen(true);
+                          }}
+                        >
                           {formatCurrency(order.totalAmount || order.total_amount || 0, order.currency)}
-                        </TableCell>
-                        <TableCell className="text-right px-2 sm:px-4 py-2 sm:py-3">
-                          <div className="flex items-center justify-end gap-1 sm:gap-2" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 w-8 sm:h-9 sm:w-9 p-0"
-                              onClick={() => {
-                                setSelectedOrder(order);
-                                setDetailModalOpen(true);
-                              }}
-                              disabled={updatingOrderId === order.id}
-                            >
-                              <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 w-8 sm:h-9 sm:w-9 p-0"
-                              onClick={() => {
-                                setSelectedOrder(order);
-                                setDeleteDialogOpen(true);
-                              }}
-                              disabled={updatingOrderId === order.id}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                            </Button>
-                          </div>
                         </TableCell>
                       </TableRow>
                     );
                   })}
                   {orders.length === 0 && !loading && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-6 sm:py-8 text-xs sm:text-sm text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-6 sm:py-8 text-xs sm:text-sm text-muted-foreground">
                         {searchQuery || statusFilter !== "all" ? "Arama sonucu bulunamadı" : "Henüz üretim siparişi bulunmuyor"}
                       </TableCell>
                     </TableRow>
@@ -565,19 +620,23 @@ const priorityOptions = [
       <CreateOrderDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
-        onSuccess={fetchOrders}
+        onSuccess={() => {
+          // Subscription otomatik güncelleyecek
+        }}
       />
 
       {selectedOrder && (
         <OrderDetailModal
           open={detailModalOpen}
           onOpenChange={setDetailModalOpen}
-          order={selectedOrder}
+          order={selectedOrder as unknown as Order}
           onDelete={() => {
             setDetailModalOpen(false);
             setDeleteDialogOpen(true);
           }}
-          onUpdate={fetchOrders}
+          onUpdate={() => {
+            // Subscription otomatik güncelleyecek
+          }}
         />
       )}
 

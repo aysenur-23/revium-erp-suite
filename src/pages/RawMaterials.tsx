@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { useSidebarContext } from "@/contexts/SidebarContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,11 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { 
   Plus, Package, AlertTriangle, Edit, Trash2, X, User, 
-  TrendingDown, TrendingUp, AlertCircle, Filter, BarChart3, Loader2
+  TrendingDown, TrendingUp, AlertCircle, Filter, BarChart3, Loader2,
+  ChevronRight, ChevronLeft
 } from "lucide-react";
 import { toast } from "sonner";
 import { getRawMaterials, deleteRawMaterial, RawMaterial } from "@/services/firebase/materialService";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
+import { canCreateResource, canDeleteResource } from "@/utils/permissions";
 import { CreateRawMaterialDialog } from "@/components/RawMaterials/CreateRawMaterialDialog";
 import { EditRawMaterialDialog } from "@/components/RawMaterials/EditRawMaterialDialog";
 import { RawMaterialDetailModal } from "@/components/RawMaterials/RawMaterialDetailModal";
@@ -42,52 +45,90 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const RawMaterials = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const sidebarContext = useSidebarContext();
   const tableRef = useRef<HTMLDivElement>(null);
-  const [materials, setMaterials] = useState<any[]>([]);
+  const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [stockView, setStockView] = useState<"all" | "normal" | "low" | "out">("all");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [selectedMaterial, setSelectedMaterial] = useState<any>(null);
+  const [selectedMaterial, setSelectedMaterial] = useState<RawMaterial | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit] = useState(50);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [materialToDelete, setMaterialToDelete] = useState<any>(null);
+  const [materialToDelete, setMaterialToDelete] = useState<RawMaterial | null>(null);
   const [statsModalOpen, setStatsModalOpen] = useState(false);
   const [activeStatCard, setActiveStatCard] = useState<string | null>(null);
+  const [statsExpanded, setStatsExpanded] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [canCreate, setCanCreate] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
 
+  // Yetki kontrolleri - Firestore'dan kontrol et
   useEffect(() => {
-    const initializeData = async () => {
-      await fetchUsers();
-      await fetchMaterials();
+    const checkPermissions = async () => {
+      if (!user) {
+        setCanCreate(false);
+        setCanDelete(false);
+        return;
+      }
+      try {
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: null,
+          dateOfBirth: null,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const [canCreateMaterial, canDeleteMaterial] = await Promise.all([
+          canCreateResource(userProfile, "raw_materials"),
+          canDeleteResource(userProfile, "raw_materials"),
+        ]);
+        setCanCreate(canCreateMaterial);
+        setCanDelete(canDeleteMaterial);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking raw material permissions:", error);
+        }
+        setCanCreate(false);
+        setCanDelete(false);
+      }
     };
-    initializeData();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    checkPermissions();
+  }, [user]);
 
-  const fetchUsers = async () => {
-    try {
-      const allUsers = await getAllUsers();
-      setUsers(allUsers);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-    }
-  };
+  // Kullanıcıları lazy load et (sadece gerektiğinde yükle - performans için)
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (users.length > 0) return; // Zaten yüklü
+      // Kullanıcı listesini arka planda yükle (bloklamadan)
+      setTimeout(async () => {
+        try {
+          const allUsers = await getAllUsers();
+          setUsers(allUsers);
+        } catch (error) {
+          console.error("Error fetching users:", error);
+        }
+      }, 100); // 100ms gecikme ile non-blocking yükleme
+    };
+    fetchUsers();
+  }, [users.length]);
 
-  const fetchMaterials = async () => {
+  // Materyalleri yükle
+  const fetchMaterials = useCallback(async () => {
     setLoading(true);
     try {
       const materialsData = await getRawMaterials();
-      // Kullanıcı adlarını ekle - eğer users henüz yüklenmemişse tekrar yükle
-      let usersToUse = users;
-      if (usersToUse.length === 0) {
-        usersToUse = await getAllUsers();
-        setUsers(usersToUse);
-      }
+      // Kullanıcı adlarını ekle
       const materialsWithUserNames = materialsData.map((material) => {
         if (!material.createdBy) {
           return {
@@ -95,7 +136,7 @@ const RawMaterials = () => {
             created_by_name: "-",
           };
         }
-        const creator = usersToUse.find((u) => u.id === material.createdBy);
+        const creator = users.find((u) => u.id === material.createdBy);
         return {
           ...material,
           created_by_name: creator
@@ -104,41 +145,24 @@ const RawMaterials = () => {
         };
       });
       setMaterials(materialsWithUserNames);
-    } catch (error: any) {
-      console.error("Fetch materials error:", error);
-      toast.error(error.message || "Hammaddeler yüklenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Fetch materials error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Hammaddeler yüklenirken hata oluştu");
       setMaterials([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [users]);
 
-  // Kullanıcılar yüklendiğinde materyalleri yeniden yükle
   useEffect(() => {
-    if (users.length > 0 && materials.length > 0) {
-      const materialsWithUserNames = materials.map((material) => {
-        const creator = users.find((u) => u.id === material.createdBy);
-        const creatorName = creator
-          ? creator.fullName || creator.displayName || creator.email || "-"
-          : "-";
-        // Sadece değişiklik varsa güncelle
-        if (material.created_by_name !== creatorName) {
-          return {
-            ...material,
-            created_by_name: creatorName,
-          };
-        }
-        return material;
-      });
-      // Değişiklik kontrolü
-      const hasChanges = materialsWithUserNames.some(
-        (m, i) => m.created_by_name !== materials[i]?.created_by_name
-      );
-      if (hasChanges) {
-        setMaterials(materialsWithUserNames);
-      }
+    // Kullanıcılar yüklendiyse materyalleri yükle
+    if (users.length > 0) {
+      fetchMaterials();
     }
-  }, [users, materials.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [users.length, fetchMaterials]);
 
   const getCategoryLabel = (category: string) => {
     const labels: Record<string, string> = {
@@ -307,7 +331,7 @@ const RawMaterials = () => {
   const totalPages = Math.ceil(filteredMaterials.length / limit);
   const paginatedMaterials = filteredMaterials.slice((page - 1) * limit, page * limit);
 
-  const handleDeleteClick = (material: any) => {
+  const handleDeleteClick = (material: RawMaterial) => {
     setMaterialToDelete(material);
     setDeleteDialogOpen(true);
   };
@@ -315,15 +339,24 @@ const RawMaterials = () => {
   const handleDelete = async () => {
     if (!materialToDelete) return;
     
+    // Yetki kontrolü
+    if (!canDelete) {
+      toast.error("Hammadde silme yetkiniz yok.");
+      setDeleteDialogOpen(false);
+      return;
+    }
+    
     try {
       await deleteRawMaterial(materialToDelete.id);
       toast.success("Hammadde silindi");
       fetchMaterials();
       setDeleteDialogOpen(false);
       setMaterialToDelete(null);
-    } catch (error: any) {
-      console.error("Delete material error:", error);
-      toast.error(error.message || "Hammadde silinirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete material error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Hammadde silinirken hata oluştu");
     }
   };
 
@@ -404,59 +437,94 @@ const RawMaterials = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground break-words">Hammadde Yönetimi</h1>
-            <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Hammadde stoklarını yönetin ve takip edin</p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground break-words">Hammadde Yönetimi</h1>
+                <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Hammadde stoklarını yönetin ve takip edin</p>
+              </div>
+              {/* İstatistikler Açılma Butonu */}
+              {!statsExpanded ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setStatsExpanded(true)}
+                  className="h-7 px-2 gap-1 text-xs"
+                  aria-label="İstatistikleri göster"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setStatsExpanded(false)}
+                  className="h-7 px-2 gap-1 text-xs"
+                  aria-label="İstatistikleri gizle"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
-          <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Yeni Hammadde</span>
-            <span className="sm:hidden">Yeni</span>
-          </Button>
+          {canCreate && (
+            <Button 
+              className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" 
+              onClick={() => {
+                setCreateDialogOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Yeni Hammadde</span>
+              <span className="sm:hidden">Yeni</span>
+            </Button>
+          )}
         </div>
 
-        {/* İstatistik Kartları */}
-        <Card className="overflow-hidden">
-          <CardContent className="pt-4 sm:pt-6 overflow-hidden">
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-              {rawMaterialStatCards.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Card
-                    key={item.key}
-                    className={cn(
-                      "border border-border/60 shadow-none cursor-pointer transition-all hover:shadow-md focus-within:ring-2 focus-within:ring-primary/40 h-full flex flex-col",
-                      item.isActive && "border-primary shadow-lg ring-2 ring-primary/20"
-                    )}
-                    role="button"
-                    tabIndex={0}
-                    onClick={item.onClick}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        item.onClick();
-                      }
-                    }}
-                    aria-label={`${item.label} kartı`}
-                  >
-                    <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-4 flex-1">
-                      <div className={cn("h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0", item.accent)}>
-                        <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[10px] sm:text-xs uppercase tracking-wide text-muted-foreground truncate">{item.label}</p>
-                        <p className="text-lg sm:text-xl md:text-2xl font-bold text-foreground mt-0.5 sm:mt-1 truncate">{item.value}</p>
-                        <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 hidden sm:block">{item.description}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-              </div>
-            </CardContent>
-          </Card>
+        {/* İstatistikler */}
+        {statsExpanded && (
+          <Card className="border-2">
+            <CardContent className="p-4 sm:p-5 md:pt-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+                {rawMaterialStatCards.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Card
+                      key={item.key}
+                      className={cn(
+                        "border border-border/60 shadow-none cursor-pointer transition-all hover:shadow-md focus-within:ring-2 focus-within:ring-primary/40 h-full flex flex-col",
+                        item.isActive && "border-primary shadow-lg ring-2 ring-primary/20"
+                      )}
+                      role="button"
+                      tabIndex={0}
+                      onClick={item.onClick}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          item.onClick();
+                        }
+                      }}
+                      aria-label={`${item.label} kartı`}
+                    >
+                      <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-4 flex-1">
+                        <div className={cn("h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0", item.accent)}>
+                          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] sm:text-xs uppercase tracking-wide text-muted-foreground truncate">{item.label}</p>
+                          <p className="text-lg font-semibold text-foreground mt-0.5 sm:mt-1 truncate">{item.value}</p>
+                          <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 hidden sm:block">{item.description}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+                </div>
+              </CardContent>
+            </Card>
+        )}
 
         {/* Filtreler */}
         <Card>
@@ -522,9 +590,10 @@ const RawMaterials = () => {
                   <Table className="w-full table-fixed border-collapse">
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[35%] sm:w-[40%]">Malzeme Adı</TableHead>
-                          <TableHead className="w-[30%] sm:w-[35%]">Açıklamalar</TableHead>
-                          <TableHead className="w-[20%] sm:w-[15%] text-right whitespace-nowrap">Mevcut</TableHead>
+                          <TableHead className="w-[30%] sm:w-[35%]">Malzeme Adı</TableHead>
+                          <TableHead className="w-[25%] sm:w-[30%]">Açıklamalar</TableHead>
+                          <TableHead className="w-[15%] sm:w-[10%] text-right whitespace-nowrap">Mevcut</TableHead>
+                          <TableHead className="w-[15%] sm:w-[15%]">Oluşturan</TableHead>
                           <TableHead className="w-[15%] sm:w-[10%] text-right whitespace-nowrap">İşlemler</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -598,6 +667,21 @@ const RawMaterials = () => {
                                 </Badge>
                               </div>
                             </TableCell>
+                            <TableCell>
+                              {material.createdBy ? (
+                                <div className="flex items-center gap-1.5">
+                                  <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                  <span className="text-xs text-muted-foreground truncate">
+                                    {users.find(u => u.id === material.createdBy)?.fullName || 
+                                     users.find(u => u.id === material.createdBy)?.displayName || 
+                                     users.find(u => u.id === material.createdBy)?.email || 
+                                     "Bilinmeyen"}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1 flex-wrap">
                                 <TooltipProvider>
@@ -624,17 +708,19 @@ const RawMaterials = () => {
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDeleteClick(material);
-                                        }}
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
+                                      {canDelete && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteClick(material);
+                                          }}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      )}
                                     </TooltipTrigger>
                                     <TooltipContent>
                                       <p>Sil</p>
@@ -741,7 +827,7 @@ const RawMaterials = () => {
           onOpenChange={setStatsModalOpen}
           title="Hammadde Değer Raporu"
           type="rawMaterials"
-          data={materials}
+          data={materials as unknown as Record<string, unknown>[]}
         />
       </div>
     </MainLayout>

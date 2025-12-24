@@ -55,23 +55,23 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Content>, SheetContentProps>(
   ({ side = "right", className, children, ...props }, ref) => {
     const sidebarContext = useSidebarContext();
-    const propsAny = props as any;
+    const propsObj = props as Record<string, unknown>;
     
     // Sheet açıldığında mobilde menüyü kapat (sadece sidebar değilse)
     // SheetContent mount olduğunda menüyü kapat (Sheet açıldığında)
     React.useEffect(() => {
       // Sidebar Sheet'i değilse (yani data-sidebar attribute'u yoksa) menüyü kapat
-      if (sidebarContext && !propsAny['data-sidebar']) {
+      if (sidebarContext && !('data-sidebar' in propsObj && propsObj['data-sidebar'])) {
         sidebarContext.closeSidebar();
       }
-    }, [sidebarContext, propsAny]);
+    }, [sidebarContext, propsObj]);
     
     return (
       <SheetPortal>
         <SheetOverlay 
           onClick={() => {
             // Overlay'e tıklandığında mobilde menüyü kapat (sadece sidebar değilse)
-            if (sidebarContext && !propsAny['data-sidebar']) {
+            if (sidebarContext && !('data-sidebar' in propsObj && propsObj['data-sidebar'])) {
               sidebarContext.closeSidebar();
             }
           }}

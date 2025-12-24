@@ -1,16 +1,17 @@
 import { uploadTaskAttachment } from "@/services/firebase/storageService";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { UserMultiSelect } from "@/components/Tasks/UserMultiSelect";
-import { canCreateTask, canCreateProject } from "@/utils/permissions";
+import { canCreateTask, canCreateProject, canUpdateResource, isMainAdmin, canAddChecklist } from "@/utils/permissions";
 import { getDepartments } from "@/services/firebase/departmentService";
 import { onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 import { UserProfile } from "@/services/firebase/authService";
+import { Project } from "@/services/firebase/projectService";
 import {
   addChecklistItem,
   addTaskAttachment,
@@ -29,6 +30,7 @@ import {
   TaskAssignment,
   updateChecklistItem,
   updateTask,
+  updateTaskStatus,
 } from "@/services/firebase/taskService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -83,6 +85,7 @@ const formatDateInput = (value?: Timestamp | Date | string | null) => {
   }
 };
 
+
 export const TaskInlineForm = ({
   mode,
   projectId,
@@ -95,10 +98,67 @@ export const TaskInlineForm = ({
   showOnlyInMyTasks = false,
 }: TaskInlineFormProps) => {
   const isEdit = mode === "edit";
-  const { user, isAdmin, isSuperAdmin, isTeamLeader } = useAuth();
+  const { user } = useAuth();
+  const [canUpdate, setCanUpdate] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  
+  // Permission state'lerini Firestore'dan kontrol et
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user) {
+        setCanUpdate(false);
+        setIsSuperAdmin(false);
+        return;
+      }
+      try {
+        const { canUpdateResource, isMainAdmin } = await import("@/utils/permissions");
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: null,
+          dateOfBirth: null,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const [hasUpdatePermission, isMainAdminUser] = await Promise.all([
+          canUpdateResource(userProfile, "tasks"),
+          isMainAdmin(userProfile),
+        ]);
+        setCanUpdate(hasUpdatePermission);
+        setIsSuperAdmin(isMainAdminUser);
+      } catch (error: unknown) {
+        setCanUpdate(false);
+        setIsSuperAdmin(false);
+      }
+    };
+    checkPermissions();
+  }, [user]);
+  
+  // Görev oluşturma modunda personnel/izleyici için erişim yok
+  const isPersonnelOrViewer = useMemo(() => {
+    if (!user?.roles) return false;
+    return user.roles.includes("personnel") || user.roles.includes("viewer");
+  }, [user?.roles]);
+  
+  if (!isEdit && isPersonnelOrViewer) {
+    return (
+      <Card className={className}>
+        <Card className="p-4 border-destructive/50 bg-destructive/5">
+          <p className="text-sm text-destructive font-medium">
+            Görev oluşturma yetkiniz yok. Sadece yönetici veya ekip lideri görev oluşturabilir.
+          </p>
+        </Card>
+      </Card>
+    );
+  }
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [priority, setPriority] = useState<1 | 2 | 3 | 4 | 5>(2);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [checklistItems, setChecklistItems] = useState<ChecklistItemState[]>([]);
   const [newChecklistText, setNewChecklistText] = useState("");
@@ -116,9 +176,11 @@ export const TaskInlineForm = ({
   const [approvalRequestedBy, setApprovalRequestedBy] = useState<string | undefined>(undefined);
   const [taskCreatorId, setTaskCreatorId] = useState<string | undefined>(undefined);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null);
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [canCreate, setCanCreate] = useState(false);
   const [canSelectProject, setCanSelectProject] = useState(false);
+  const [taskStatus, setTaskStatus] = useState<"pending" | "in_progress" | "completed">("pending");
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const formTitle = useMemo(
@@ -159,9 +221,12 @@ export const TaskInlineForm = ({
         canCreateProject(userProfile, departments),
       ]);
       setCanCreate(hasTaskPermission);
-      setCanSelectProject(hasTaskPermission || hasProjectPermission || isAdmin);
+      const [hasUpdatePermission, isMainAdminUser] = await Promise.all([
+        canUpdateResource(userProfile, "tasks"),
+        isMainAdmin(userProfile),
+      ]);
+      setCanSelectProject(hasTaskPermission || hasProjectPermission || hasUpdatePermission || isMainAdminUser);
     } catch (error) {
-      console.error("Permission check error:", error);
       setCanCreate(false);
       setCanSelectProject(false);
     }
@@ -170,7 +235,7 @@ export const TaskInlineForm = ({
   // Yetki kontrolleri
   useEffect(() => {
     checkPermissions();
-  }, [user, isAdmin]);
+  }, [user, isSuperAdmin]);
 
   // Listen to permission changes in real-time
   useEffect(() => {
@@ -180,15 +245,16 @@ export const TaskInlineForm = ({
       checkPermissions();
     });
     return () => unsubscribe();
-  }, [user, isAdmin]);
+  }, [user, isSuperAdmin]);
 
-  const isRestrictedUser = isEdit && !isAdmin && user?.id !== taskCreatorId;
+  const isRestrictedUser = isEdit && !isSuperAdmin && !canUpdate && user?.id !== taskCreatorId;
   const navigate = useNavigate();
 
   const resetState = () => {
     setTitle("");
     setDescription("");
     setDueDate("");
+    setPriority(2);
     setSelectedMembers([]);
     setChecklistItems([]);
     setNewChecklistText("");
@@ -221,11 +287,17 @@ export const TaskInlineForm = ({
       setTitle(task.title);
       setDescription(task.description || "");
       setDueDate(formatDateInput(task.dueDate));
+      setPriority((task.priority as 1 | 2 | 3 | 4 | 5) || 2);
       setApprovalStatus(task.approvalStatus);
       setApprovalRequestedBy(task.approvalRequestedBy);
       setTaskCreatorId(task.createdBy);
       setSelectedProjectId(task.projectId || null);
       setIsPrivate(task.isPrivate || false);
+      // Status'ü normalize et (column_ prefix'ini kaldır)
+      const normalizedStatus = task.status?.startsWith("column_") 
+        ? "pending" 
+        : (task.status as "pending" | "in_progress" | "completed" || "pending");
+      setTaskStatus(normalizedStatus);
       
       const activeAssignments = assignments.filter((a) => a.status !== "rejected");
       setSelectedMembers(activeAssignments.map((a) => a.assignedTo));
@@ -255,9 +327,9 @@ export const TaskInlineForm = ({
           type: (attachment.attachmentType === "file" || attachment.type === "file") ? "file" : "drive_link",
         }))
       );
-    } catch (error: any) {
-      console.error("Inline form load error:", error);
-      toast.error(error?.message || "Görev verileri yüklenemedi");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Görev verileri yüklenemedi";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -294,17 +366,13 @@ export const TaskInlineForm = ({
                 setProjects([currentProject]);
                 return;
               }
-              if (isAdmin) {
-                setProjects([currentProject]);
-                return;
-              }
               if (user?.id && currentProject.createdBy === user.id) {
                 setProjects([currentProject]);
                 return;
               }
               // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
-              const isTeamLeader = user?.roles?.includes("team_leader");
-              if (isTeamLeader) {
+              // Team Leader kontrolü - Firestore'dan (canUpdate projects)
+              if (canUpdate && !isSuperAdmin) {
                 // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
                 setProjects([]);
                 return;
@@ -333,8 +401,8 @@ export const TaskInlineForm = ({
                       return;
                     }
                   }
-                } catch (error) {
-                  console.error("Error checking project tasks:", error);
+                } catch (error: unknown) {
+                  // Hata durumunda sessizce devam et
                 }
               }
               // Yetkisiz kullanıcı - boş liste
@@ -345,8 +413,7 @@ export const TaskInlineForm = ({
               setProjects([currentProject]);
               return;
             }
-          } catch (error) {
-            console.error("Proje yüklenemedi", error);
+          } catch (error: unknown) {
             setProjects([]);
             return;
           }
@@ -383,13 +450,12 @@ export const TaskInlineForm = ({
             if (!project.isPrivate) return project; // Gizli olmayan projeler herkes görebilir
             
             // Gizli projeler için yetki kontrolü
-            if (isSuperAdmin) return project; // Üst yöneticiler tüm projeleri görebilir
-            if (isAdmin) return project; // Yöneticiler tüm projeleri görebilir
+            if (isSuperAdmin) return project; // Super Admin tüm projeleri görebilir
             if (user?.id && project.createdBy === user.id) return project; // Oluşturan görebilir
             
             // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
-            const isTeamLeader = user?.roles?.includes("team_leader");
-            if (isTeamLeader) {
+            // Team Leader kontrolü - Firestore'dan (canUpdate projects)
+            if (canUpdate && !isSuperAdmin) {
               return null; // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
             }
             
@@ -418,8 +484,7 @@ export const TaskInlineForm = ({
                   if (isAssigned) return project;
                 }
               } catch (error) {
-                // Hata durumunda gösterilmesin
-                console.error("Error checking project tasks:", error);
+                // Hata durumunda sessizce devam et
               }
             }
             
@@ -437,10 +502,10 @@ export const TaskInlineForm = ({
         );
 
         setProjects(uniqueProjects);
-      } catch (error) {
-        console.error("Projeler yüklenemedi", error);
+      } catch (error: unknown) {
+        // Hata durumunda sessizce devam et
       }
-  }, [isEdit, isSuperAdmin, user, projectId]);
+  }, [isEdit, isSuperAdmin, canUpdate, user, projectId]);
   
   useEffect(() => {
     loadProjects();
@@ -475,7 +540,7 @@ export const TaskInlineForm = ({
     
     // Yetki kontrolü: Düzenleme modunda sadece atanan kullanıcılar ve adminler checklist öğesi ekleyebilir
     if (isEdit && taskId) {
-      const canInteract = isAdmin || (user?.id && selectedMembers.includes(user.id));
+      const canInteract = isSuperAdmin || canUpdate || (user?.id && selectedMembers.includes(user.id));
       if (!canInteract) {
         const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
         showPermissionErrorToast("interact", "checklist");
@@ -496,9 +561,9 @@ export const TaskInlineForm = ({
         setNewChecklistText("");
         toast.success("Checklist maddesi eklendi");
         return;
-      } catch (error: any) {
-        console.error("Inline checklist add error:", error);
-        toast.error(error?.message || "Checklist maddesi eklenemedi");
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "Checklist maddesi eklenemedi";
+        toast.error(errorMessage);
         return;
       }
     }
@@ -516,9 +581,9 @@ export const TaskInlineForm = ({
         setChecklistItems((prev) =>
           prev.map((c) => (c.id === id ? { ...c, completed: !c.completed } : c))
         );
-      } catch (error: any) {
-        console.error("Inline checklist toggle error:", error);
-        toast.error(error?.message || "Checklist güncellenemedi");
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "Checklist güncellenemedi";
+        toast.error(errorMessage);
       }
       return;
     }
@@ -531,7 +596,7 @@ export const TaskInlineForm = ({
   const handleRemoveChecklistItem = async (id: string) => {
     // Yetki kontrolü: Düzenleme modunda sadece atanan kullanıcılar ve adminler checklist öğesi silebilir
     if (isEdit && taskId) {
-      const canInteract = isAdmin || (user?.id && selectedMembers.includes(user.id));
+      const canInteract = isSuperAdmin || canUpdate || (user?.id && selectedMembers.includes(user.id));
       if (!canInteract) {
         const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
         showPermissionErrorToast("delete", "checklist");
@@ -544,9 +609,9 @@ export const TaskInlineForm = ({
         await deleteChecklistItem(taskId, activeChecklistId, id);
         setChecklistItems((prev) => prev.filter((item) => item.id !== id));
         toast.success("Checklist maddesi silindi");
-      } catch (error: any) {
-        console.error("Inline checklist delete error:", error);
-        toast.error(error?.message || "Checklist maddesi silinemedi");
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "Checklist maddesi silinemedi";
+        toast.error(errorMessage);
       }
       return;
     }
@@ -586,9 +651,9 @@ export const TaskInlineForm = ({
         setLinkUrl("");
         toast.success("Link eklendi");
         return;
-      } catch (error: any) {
-        console.error("Inline link add error:", error);
-        toast.error(error?.message || "Link eklenemedi");
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "Link eklenemedi";
+        toast.error(errorMessage);
         return;
       }
     }
@@ -652,9 +717,9 @@ export const TaskInlineForm = ({
       ]);
       
       toast.success("Dosya başarıyla yüklendi", { id: toastId });
-    } catch (error: any) {
-      console.error("File upload error:", error);
-      toast.error(error?.message || "Dosya yüklenemedi", { id: toastId });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Dosya yüklenemedi";
+      toast.error(errorMessage, { id: toastId });
     } finally {
       // Reset input
       if (fileInputRef.current) {
@@ -678,9 +743,9 @@ export const TaskInlineForm = ({
         await deleteTaskAttachment(taskId, attachment.attachmentId);
         setAttachments((prev) => prev.filter((item) => item.id !== id));
         toast.success("Ek kaldırıldı");
-      } catch (error: any) {
-        console.error("Inline attachment delete error:", error);
-        toast.error(error?.message || "Ek kaldırılamadı");
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "Ek kaldırılamadı";
+        toast.error(errorMessage);
       }
       return;
     }
@@ -723,8 +788,9 @@ export const TaskInlineForm = ({
       await approveTask(taskId, user.id);
       toast.success("Görev onaylandı ve tamamlandı");
       onSuccess?.(taskId);
-    } catch (error: any) {
-      toast.error("Onaylama işlemi başarısız: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Onaylama işlemi başarısız";
+      toast.error(errorMessage);
     }
   };
 
@@ -734,8 +800,9 @@ export const TaskInlineForm = ({
       await rejectTaskApproval(taskId, user.id);
       toast.success("Görev onayı reddedildi");
       onSuccess?.(taskId);
-    } catch (error: any) {
-      toast.error("Reddetme işlemi başarısız: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Reddetme işlemi başarısız";
+      toast.error(errorMessage);
     }
   };
 
@@ -810,12 +877,39 @@ export const TaskInlineForm = ({
           throw new Error("Görev seçilemedi");
         }
 
+        // Yetki kontrolü: Görev düzenleme yetkisi var mı?
+        if (!canUpdate && !isSuperAdmin) {
+          const taskData = await getTaskById(taskId);
+          if (taskData) {
+            const userProfile: UserProfile = {
+              id: user.id,
+              email: user.email,
+              emailVerified: user.emailVerified,
+              fullName: user.fullName,
+              displayName: user.fullName,
+              phone: user.phone,
+              dateOfBirth: user.dateOfBirth,
+              role: user.roles,
+              createdAt: null,
+              updatedAt: null,
+            };
+            const { canEditTask } = await import("@/utils/permissions");
+            const canEdit = await canEditTask(taskData, userProfile);
+            if (!canEdit) {
+              toast.error("Bu görevi düzenlemek için yetkiniz yok. Sadece yöneticiler, ekip liderleri veya görevi oluşturan kişi düzenleyebilir.");
+              setSaving(false);
+              return;
+            }
+          }
+        }
+
         await updateTask(
           taskId,
           {
             title: title.trim(),
             description: description.trim() || null,
             dueDate: parsedDueDate,
+            priority: priority,
             projectId: finalProjectId || null,
             isPrivate: finalIsPrivate,
           },
@@ -825,23 +919,42 @@ export const TaskInlineForm = ({
         await syncAssignments(taskId);
 
         // Eğer checklist yoksa ve yeni maddeler varsa oluştur
-        // Yetki kontrolü: Sadece atanan kullanıcılar ve adminler checklist oluşturabilir
+        // Yetki kontrolü: Firestore'dan kontrol et
         if (!activeChecklistId && checklistItems.length > 0) {
-          const canInteract = isAdmin || (user?.id && selectedMembers.includes(user.id));
-          if (canInteract) {
-            const newChecklist = await createChecklist(
-              taskId,
-              "Checklist",
-              checklistItems.map((item) => ({
-                text: item.text,
-                completed: !!item.completed,
-                updatedAt: Timestamp.now(),
-              }))
-            );
-            setActiveChecklistId(newChecklist.id);
-          } else {
-            const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
-            showPermissionErrorToast("create", "checklist");
+          try {
+            const taskData = await getTaskById(taskId);
+            if (taskData) {
+              const userProfile: UserProfile = {
+                id: user.id,
+                email: user.email,
+                emailVerified: user.emailVerified,
+                fullName: user.fullName,
+                displayName: user.fullName,
+                phone: user.phone,
+                dateOfBirth: user.dateOfBirth,
+                role: user.roles,
+                createdAt: null,
+                updatedAt: null,
+              };
+              const canAdd = await canAddChecklist(taskData, userProfile, selectedMembers);
+              if (canAdd) {
+                const newChecklist = await createChecklist(
+                  taskId,
+                  "Checklist",
+                  checklistItems.map((item) => ({
+                    text: item.text,
+                    completed: !!item.completed,
+                    updatedAt: Timestamp.now(),
+                  }))
+                );
+                setActiveChecklistId(newChecklist.id);
+              } else {
+                const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
+                showPermissionErrorToast("create", "checklist");
+              }
+            }
+          } catch (error: unknown) {
+            // Hata durumunda sessizce devam et
           }
         }
 
@@ -850,11 +963,34 @@ export const TaskInlineForm = ({
         return;
       }
 
+      // Yetki kontrolü: Görev oluşturma yetkisi var mı?
+      if (!canCreate && !isSuperAdmin) {
+        const departments = await getDepartments();
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
+          role: user.roles,
+          createdAt: null,
+          updatedAt: null,
+        };
+        const canCreateResult = await canCreateTask(userProfile, departments);
+        if (!canCreateResult) {
+          toast.error("Görev oluşturma yetkiniz yok. Sadece yöneticiler ve ekip liderleri görev oluşturabilir.");
+          setSaving(false);
+          return;
+        }
+      }
+
       const task = await createTask({
         title: title.trim(),
         description: description.trim() || null,
         status: defaultStatus,
-        priority: 2,
+        priority: priority,
         dueDate: parsedDueDate,
         labels: null,
         projectId: onlyInMyTasks ? null : (finalProjectId || null),
@@ -910,9 +1046,9 @@ export const TaskInlineForm = ({
       toast.success("Görev oluşturuldu");
       resetState();
       onSuccess?.(createdTaskId);
-    } catch (error: any) {
-      console.error("Task inline form submit error:", error);
-      toast.error(error?.message || "Görev kaydedilirken hata oluştu");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Görev kaydedilirken hata oluştu";
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -949,7 +1085,8 @@ export const TaskInlineForm = ({
                     Bu görev tamamlandı olarak işaretlendi ve onayınızı bekliyor.
                   </p>
                 </div>
-                {(isAdmin || isTeamLeader || (user?.id && taskCreatorId === user.id)) && (
+                {/* SISTEM_YETKILERI.md'ye göre: Super Admin, Team Leader ve görevi oluşturan onaylayabilir */}
+                {(isSuperAdmin || canUpdate || (user?.id && taskCreatorId === user.id)) && (
                   <div className="flex gap-2 w-full sm:w-auto">
                     <Button
                       size="sm"
@@ -973,6 +1110,7 @@ export const TaskInlineForm = ({
               </div>
             </div>
           )}
+
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
@@ -1008,6 +1146,26 @@ export const TaskInlineForm = ({
                 disabled={isRestrictedUser}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm sm:text-base">Öncelik</Label>
+            <Select
+              value={priority.toString()}
+              onValueChange={(value) => setPriority(Number(value) as 1 | 2 | 3 | 4 | 5)}
+              disabled={isRestrictedUser}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">Çok Düşük</SelectItem>
+                <SelectItem value="2">Düşük</SelectItem>
+                <SelectItem value="3">Orta</SelectItem>
+                <SelectItem value="4">Yüksek</SelectItem>
+                <SelectItem value="5">Kritik</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -1157,8 +1315,8 @@ export const TaskInlineForm = ({
                 </div>
               )}
               
-              {/* Gizlilik Ayarı */}
-              {!onlyInMyTasks && (
+              {/* Gizlilik Ayarı - Personel göremez */}
+              {!onlyInMyTasks && !isPersonnelOrViewer && (
                 <div className="flex items-center space-x-2">
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -1216,8 +1374,9 @@ export const TaskInlineForm = ({
                     await requestTaskApproval(taskId, user.id);
                     toast.success("Görev tamamlandı olarak işaretlendi ve onay için yöneticiye gönderildi.");
                     onSuccess?.(taskId);
-                  } catch (error: any) {
-                    toast.error("İşlem başarısız: " + error.message);
+                  } catch (error: unknown) {
+                    const errorMessage = error instanceof Error ? error.message : "İşlem başarısız";
+                    toast.error(errorMessage);
                   }
                 }}
               >

@@ -1,271 +1,559 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, CheckSquare, UserPlus, FileText, TrendingUp, Clock, CheckCircle2, AlertCircle, BarChart3 } from "lucide-react";
-import { TeamApprovalManagement } from "@/components/Admin/TeamApprovalManagement";
+import { Users, UserPlus, TrendingUp, Clock, Loader2, CheckCircle2, FileText, CheckSquare, BarChart3, RefreshCw, Info, Award, ChevronLeft, ChevronRight } from "lucide-react";
 import { PendingTaskApprovals } from "@/components/Team/PendingTaskApprovals";
 import { TeamMembers } from "@/components/Team/TeamMembers";
 import { AuditLogs } from "@/components/Admin/AuditLogs";
 import { TeamStatsView } from "@/components/Team/TeamStatsView";
+import { StatCard } from "@/components/Dashboard/StatCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { getAllUsers } from "@/services/firebase/authService";
 import { getDepartments } from "@/services/firebase/departmentService";
 import { getTasks } from "@/services/firebase/taskService";
 import { getPendingTeamRequests, getAllPendingTeamRequests } from "@/services/firebase/teamApprovalService";
 import { UserProfile } from "@/services/firebase/authService";
 import { toast } from "sonner";
+import { isMainAdmin, canUpdateResource } from "@/utils/permissions";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const TeamManagement = () => {
-  const { user, isAdmin, isTeamLeader } = useAuth();
-  const [activeTab, setActiveTab] = useState("approvals");
+  const { user } = useAuth();
+  const [canAccess, setCanAccess] = useState(false);
+  const [isMainAdminUser, setIsMainAdminUser] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
   const [stats, setStats] = useState({
     totalMembers: 0,
     pendingApprovals: 0,
     pendingRequests: 0,
     activeTasks: 0,
+    completedTasks: 0,
+    totalTasks: 0,
   });
   const [loadingStats, setLoadingStats] = useState(true);
+  
+  // Hero kısmındaki istatistikler için state (sağdan sola açılır/kapanır, default kapalı)
+  const [heroStatsExpanded, setHeroStatsExpanded] = useState(false);
+  
+  // Ekip seçimi için state
+  const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("all");
+  const [allDepartments, setAllDepartments] = useState<Awaited<ReturnType<typeof getDepartments>>>([]);
+  
+  // Ortak filtreleme state'leri
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  
+  // Cache için ref'ler
+  const usersCacheRef = useRef<UserProfile[]>([]);
+  const departmentsCacheRef = useRef<Awaited<ReturnType<typeof getDepartments>>>([]);
+  const tasksCacheRef = useRef<Awaited<ReturnType<typeof getTasks>>>([]);
+  const cacheTimestampRef = useRef<number>(0);
+  const CACHE_DURATION = 2 * 60 * 1000; // 2 dakika
 
-  // Sadece yönetici veya ekip liderleri erişebilir
-  if (!isAdmin && !isTeamLeader) {
-    return <Navigate to="/" replace />;
-  }
-
+  // Erişim kontrolü - Firestore'dan
   useEffect(() => {
-    fetchStats();
-  }, [user, isAdmin]);
+    const checkAccess = async () => {
+      if (!user) {
+        setCanAccess(false);
+        setLoading(false);
+        return;
+      }
+      try {
+        const { isMainAdmin, canUpdateResource } = await import("@/utils/permissions");
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
+          role: user.roles,
+          createdAt: null,
+          updatedAt: null,
+        };
+        const [isMainAdminResult, canUpdateDepts] = await Promise.all([
+          isMainAdmin(userProfile),
+          canUpdateResource(userProfile, "departments"),
+        ]);
+        setIsMainAdminUser(isMainAdminResult);
+        setCanAccess(isMainAdminResult || canUpdateDepts);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking team management access:", error);
+        }
+        setCanAccess(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkAccess();
+  }, [user]);
 
-  const fetchStats = async () => {
-    if (!user?.id) return;
+  const fetchStats = useCallback(async () => {
+    if (!user?.id) {
+      setLoadingStats(false);
+      return;
+    }
     setLoadingStats(true);
     try {
-      const [allUsers, allDepts, allTasks, requests] = await Promise.all([
-        getAllUsers(),
-        getDepartments(),
-        getTasks(),
-        isAdmin ? getAllPendingTeamRequests() : getPendingTeamRequests(user.id),
-      ]);
+      const now = Date.now();
+      const shouldRefresh = !usersCacheRef.current.length || 
+                           (now - cacheTimestampRef.current) > CACHE_DURATION;
+      
+      let allUsers = usersCacheRef.current;
+      let allDepts = departmentsCacheRef.current;
+      let allTasks = tasksCacheRef.current;
+      
+      if (shouldRefresh) {
+        const [fetchedUsers, fetchedDepts, fetchedTasks] = await Promise.all([
+          getAllUsers(),
+          getDepartments(),
+          getTasks(),
+        ]);
+        
+        // Cache'e kaydet
+        usersCacheRef.current = fetchedUsers;
+        departmentsCacheRef.current = fetchedDepts;
+        tasksCacheRef.current = fetchedTasks;
+        cacheTimestampRef.current = now;
+        
+        allUsers = fetchedUsers;
+        allDepts = fetchedDepts;
+        allTasks = fetchedTasks;
+      }
+      
+      // Requests'i her zaman al (cache'lenmez çünkü sık değişir)
+      const requests = await (isMainAdminUser ? getAllPendingTeamRequests() : getPendingTeamRequests(user.id));
 
       let teamMembers: UserProfile[] = [];
-      if (isAdmin) {
-        // Admin herkesi görür
+      if (isMainAdminUser) {
         teamMembers = allUsers;
       } else {
-        // Ekip lideri sadece yönettiği departmanlardaki üyeleri görür
-        // Kullanıcının yönettiği tüm departmanları bul (managerId kontrolü)
         const managedDepartments = allDepts.filter(d => d.managerId === user.id);
         
         if (managedDepartments.length === 0) {
-          // Kullanıcı hiçbir departmanın yöneticisi değilse boş liste
           teamMembers = [];
         } else {
-          // Kullanıcının yönettiği tüm departman ID'lerini topla
           const managedDeptIds = managedDepartments.map(d => d.id);
           
-          // KRİTİK: approvedTeams, pendingTeams ve departmentId alanlarını kontrol et
           teamMembers = allUsers.filter(u => {
-            // approvedTeams kontrolü - yönettiği herhangi bir departmanda onaylanmış üye
             if (u.approvedTeams && u.approvedTeams.some(deptId => managedDeptIds.includes(deptId))) {
               return true;
             }
-            
-            // pendingTeams kontrolü - yönettiği herhangi bir departmanda onay bekleyen üye
             if (u.pendingTeams && u.pendingTeams.some(deptId => managedDeptIds.includes(deptId))) {
               return true;
             }
-            
-            // departmentId kontrolü - yönettiği herhangi bir departmanda doğrudan atanmış üye
             if (u.departmentId && managedDeptIds.includes(u.departmentId)) {
               return true;
             }
-            
             return false;
           });
         }
       }
 
-      // Ekip lideri için sadece kendi ekibindeki görevleri filtrele
       let relevantTasks = allTasks;
-      if (!isAdmin) {
-        // Ekip lideri sadece yönettiği departmanlardaki üyelerin görevlerini görür
+      if (!isMainAdminUser) {
         const managedDepartments = allDepts.filter(d => d.managerId === user.id);
         
         if (managedDepartments.length > 0) {
           const managedDeptIds = managedDepartments.map(d => d.id);
         const teamMemberIds = allUsers
             .filter(u => {
-              // approvedTeams kontrolü - yönettiği herhangi bir departmanda onaylanmış üye
               if (u.approvedTeams && u.approvedTeams.some(deptId => managedDeptIds.includes(deptId))) {
                 return true;
               }
-              // pendingTeams kontrolü - yönettiği herhangi bir departmanda onay bekleyen üye
               if (u.pendingTeams && u.pendingTeams.some(deptId => managedDeptIds.includes(deptId))) {
                 return true;
               }
-              // departmentId kontrolü - yönettiği herhangi bir departmanda doğrudan atanmış üye
               if (u.departmentId && managedDeptIds.includes(u.departmentId)) {
                 return true;
               }
               return false;
             })
           .map(u => u.id);
-        // Ekip üyelerinin görevlerini ve kendi görevlerini filtrele
         relevantTasks = allTasks.filter(t => 
           teamMemberIds.includes(t.createdBy) || t.createdBy === user.id
         );
         } else {
-          // Departman yoksa sadece kendi görevlerini göster
           relevantTasks = allTasks.filter(t => t.createdBy === user.id);
         }
       }
 
       const pendingTasks = relevantTasks.filter(t => t.approvalStatus === "pending");
+      const completedTasks = relevantTasks.filter(t => t.status === "completed").length;
+      const activeTasks = relevantTasks.filter(t => t.status === "in_progress").length;
 
       setStats({
         totalMembers: teamMembers.length,
         pendingApprovals: pendingTasks.length,
         pendingRequests: requests.length,
-        activeTasks: relevantTasks.filter(t => t.status === "in_progress").length,
+        activeTasks: activeTasks,
+        completedTasks: completedTasks,
+        totalTasks: relevantTasks.length,
       });
-    } catch (error) {
-      console.error("Error fetching stats:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Error fetching stats:", error);
+      }
       toast.error("İstatistikler yüklenirken hata oluştu");
     } finally {
       setLoadingStats(false);
     }
-  };
+  }, [user?.id, isMainAdminUser]);
+
+  const handleRefresh = useCallback(async () => {
+    if (loadingStats) return;
+    try {
+      // Clear cache
+      usersCacheRef.current = [];
+      departmentsCacheRef.current = [];
+      tasksCacheRef.current = [];
+      cacheTimestampRef.current = 0;
+      
+      await fetchStats();
+      toast.success("Veriler yenilendi");
+    } catch (error) {
+      toast.error("Veriler yenilenirken hata oluştu");
+    }
+  }, [loadingStats, fetchStats]);
+
+  // Departmanları yükle - Hem admin hem de filtreleme için gerekli
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const depts = await getDepartments();
+        setAllDepartments(depts);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Error loading departments:", error);
+        }
+      }
+    };
+    loadDepartments();
+  }, []);
+
+  useEffect(() => {
+    if (canAccess && user?.id) {
+      fetchStats();
+    }
+  }, [canAccess, fetchStats, user?.id]);
+
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + R to refresh - only if not in input/textarea
+      if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        const target = e.target as HTMLElement;
+        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && !target.isContentEditable) {
+          e.preventDefault();
+          handleRefresh();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [handleRefresh]);
+
+
+
+  // En aktif üyeleri hesapla
+  const [mostActiveMembers, setMostActiveMembers] = useState<Array<{
+    member: UserProfile;
+    totalTasks: number;
+    completedTasks: number;
+    completionRate: number;
+  }>>([]);
+
+  useEffect(() => {
+    const allUsers = usersCacheRef.current;
+    const allTasks = tasksCacheRef.current;
+    
+    if (!allUsers.length || !allTasks.length) {
+      setMostActiveMembers([]);
+      return;
+    }
+    
+    const memberTaskCounts = allUsers.map(member => {
+      const memberTasks = allTasks.filter(t => t.createdBy === member.id);
+      const completedCount = memberTasks.filter(t => t.status === "completed").length;
+      return {
+        member,
+        totalTasks: memberTasks.length,
+        completedTasks: completedCount,
+        completionRate: memberTasks.length > 0 ? (completedCount / memberTasks.length) * 100 : 0,
+      };
+    }).sort((a, b) => b.completedTasks - a.completedTasks).slice(0, 5);
+    
+    setMostActiveMembers(memberTaskCounts);
+  }, [loadingStats]);
+
+
+  // Sadece yönetici veya ekip liderleri erişebilir
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+          <div className="text-center space-y-4">
+            <div className="relative">
+              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="h-6 w-6 rounded-full bg-primary/20"></div>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">Yükleniyor...</p>
+              <p className="text-xs text-muted-foreground mt-1">Ekip yönetimi hazırlanıyor</p>
+            </div>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+  if (!canAccess) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6">
-        <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">Ekip Yönetimi</h1>
-          <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
-            Ekip üyelerinizi, görev onaylarını ve katılım isteklerini yönetin.
-          </p>
+      <div className="space-y-2 min-w-0 max-w-full overflow-x-hidden w-[90%] max-w-[90%] mx-auto">
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2 border-b">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Ekip Yönetimi</h1>
+          </div>
         </div>
 
-        {/* İstatistik Kartları */}
-        {!loadingStats && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button
-              type="button"
-              onClick={() => setActiveTab("members")}
-              className="text-left group focus:outline-none touch-manipulation h-full"
+        {/* Ortak Filtreler */}
+        <div className="flex flex-row items-center justify-between gap-2 pb-2 border-b">
+          <div className="flex flex-row items-center gap-2">
+            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <SelectTrigger className="w-full sm:w-[200px] h-9 text-sm">
+                <SelectValue placeholder="Departman Filtrele" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tüm Departmanlar</SelectItem>
+                {allDepartments.map((dept) => (
+                  <SelectItem key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isMainAdminUser && (
+              <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter}>
+                <SelectTrigger className="w-full sm:w-[200px] h-9 text-sm">
+                  <SelectValue placeholder="Ekip seçiniz" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tüm Ekipler</SelectItem>
+                  {allDepartments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          {/* Hero İstatistikler Açılma Butonu */}
+          {!heroStatsExpanded ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setHeroStatsExpanded(true)}
+              className="h-7 px-2 gap-1 text-xs"
+              aria-label="İstatistikleri göster"
             >
-              <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200 group-hover:border-blue-400 transition-colors h-full">
-                <CardContent className="p-3 sm:p-4 h-full flex items-center justify-between gap-3 sm:gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm font-medium text-blue-700">Toplam Üye</p>
-                    <p className="text-xl sm:text-2xl font-bold text-blue-900 mt-1">{stats.totalMembers}</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">Ekip üyelerini görüntüleyin</p>
-                  </div>
-                  <Users className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
-                </CardContent>
-              </Card>
-            </button>
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setHeroStatsExpanded(false)}
+              className="h-7 px-2 gap-1 text-xs"
+              aria-label="İstatistikleri gizle"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab("approvals")}
-              className="text-left group focus:outline-none touch-manipulation h-full"
-            >
-              <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100/50 border-yellow-200 group-hover:border-yellow-400 transition-colors h-full">
-                <CardContent className="p-3 sm:p-4 h-full flex items-center justify-between gap-3 sm:gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm font-medium text-yellow-700">Bekleyen Onaylar</p>
-                    <p className="text-xl sm:text-2xl font-bold text-yellow-900 mt-1">{stats.pendingApprovals}</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">Görev onay taleplerini inceleyin</p>
-                  </div>
-                  <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-600 flex-shrink-0" />
-                </CardContent>
-              </Card>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("approvals")}
-              className="text-left group focus:outline-none touch-manipulation h-full"
-            >
-              <Card className="bg-gradient-to-br from-green-50 to-green-100/50 border-green-200 group-hover:border-green-400 transition-colors h-full">
-                <CardContent className="p-3 sm:p-4 h-full flex items-center justify-between gap-3 sm:gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm font-medium text-green-700">Aktif Görevler</p>
-                    <p className="text-xl sm:text-2xl font-bold text-green-900 mt-1">{stats.activeTasks}</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">Görev durumlarına göz atın</p>
-                  </div>
-                  <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-green-600 flex-shrink-0" />
-                </CardContent>
-              </Card>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("join-requests")}
-              className="text-left group focus:outline-none touch-manipulation h-full"
-            >
-              <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200 group-hover:border-purple-400 transition-colors h-full">
-                <CardContent className="p-3 sm:p-4 h-full flex items-center justify-between gap-3 sm:gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm font-medium text-purple-700">Katılım İstekleri</p>
-                    <p className="text-xl sm:text-2xl font-bold text-purple-900 mt-1">{stats.pendingRequests}</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">Bekleyen katılım taleplerini yönetin</p>
-                  </div>
-                  <UserPlus className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600 flex-shrink-0" />
-                </CardContent>
-              </Card>
-            </button>
+        {/* Hero İstatistik Kartları - Sağdan Sola Açılıp Kapanan */}
+        {heroStatsExpanded && (
+          <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {loadingStats ? (
+              <>
+                {[...Array(6)].map((_, i) => (
+                  <Card key={i} className="animate-pulse border">
+                    <CardContent className="p-2">
+                      <div className="h-3 bg-muted rounded w-2/3 mb-1.5"></div>
+                      <div className="h-7 bg-muted rounded w-1/2 mb-1"></div>
+                      <div className="h-2 bg-muted rounded w-full"></div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </>
+            ) : (
+              <>
+                <StatCard
+                  title="Toplam Üye"
+                  value={stats.totalMembers}
+                  icon={Users}
+                  variant="primary"
+                />
+                <StatCard
+                  title="Bekleyen Onaylar"
+                  value={stats.pendingApprovals}
+                  icon={Clock}
+                  variant="warning"
+                />
+                <StatCard
+                  title="Aktif Görevler"
+                  value={stats.activeTasks}
+                  icon={TrendingUp}
+                  variant="success"
+                />
+                <StatCard
+                  title="Tamamlanan"
+                  value={stats.completedTasks}
+                  icon={CheckCircle2}
+                  variant="success"
+                />
+                <StatCard
+                  title="Toplam Görev"
+                  value={stats.totalTasks}
+                  icon={FileText}
+                  variant="primary"
+                />
+                <StatCard
+                  title="Katılım İstekleri"
+                  value={stats.pendingRequests}
+                  icon={UserPlus}
+                  variant="info"
+                />
+              </>
+            )}
           </div>
         )}
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:pb-0">
-            <TabsList className="w-full justify-start sm:justify-between h-auto p-1 gap-1">
-              <TabsTrigger value="approvals" className="gap-2 flex-1 min-w-[140px]">
-                <CheckSquare className="h-4 w-4" />
-                <span>Görev Onayları</span>
-              </TabsTrigger>
-              <TabsTrigger value="members" className="gap-2 flex-1 min-w-[140px]">
-                <Users className="h-4 w-4" />
-                <span>Ekip Üyeleri</span>
-              </TabsTrigger>
-              <TabsTrigger value="logs" className="gap-2 flex-1 min-w-[140px]">
-                <FileText className="h-4 w-4" />
-                <span>Ekip Logları</span>
-              </TabsTrigger>
-              <TabsTrigger value="join-requests" className="gap-2 flex-1 min-w-[140px]">
-                <UserPlus className="h-4 w-4" />
-                <span>Katılım İstekleri</span>
-              </TabsTrigger>
-              <TabsTrigger value="stats" className="gap-2 flex-1 min-w-[140px]">
-                <BarChart3 className="h-4 w-4" />
-                <span>İstatistikler</span>
-              </TabsTrigger>
-            </TabsList>
+        {/* Two Column Layout - Sol: Görev Onayları + İstatistikler, Sağ: En Aktif Üyeler + Loglar */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0 items-start">
+          {/* Sol Sütun - Görev Onayları ve İstatistikler */}
+          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col">
+            {/* Görev Onayları Bölümü */}
+            <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-md bg-primary/10">
+                    <CheckSquare className="h-4 w-4 text-primary" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-foreground">Görev Onayları</h3>
+                </div>
+              </div>
+              <CardContent className="p-2">
+                <PendingTaskApprovals />
+                </CardContent>
+              </Card>
+
+            {/* İstatistikler Bölümü */}
+            <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-md bg-primary/10">
+                    <BarChart3 className="h-4 w-4 text-primary" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-foreground">İstatistikler</h3>
+                </div>
+              </div>
+              <CardContent className="p-2">
+                <TeamStatsView selectedTeamFilter={selectedTeamFilter} />
+                </CardContent>
+              </Card>
           </div>
 
-          <TabsContent value="approvals" className="space-y-4">
-            <PendingTaskApprovals />
-          </TabsContent>
+          {/* Sağ Sütun - En Aktif Üyeler ve Loglar */}
+          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col">
 
-          <TabsContent value="members" className="space-y-4">
-            <TeamMembers />
-          </TabsContent>
+            {/* En Aktif Üyeler Bölümü */}
+            {mostActiveMembers.length > 0 && (
+              <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200">
+                <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-md bg-primary/10">
+                      <Award className="h-4 w-4 text-primary" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-foreground">En Aktif Üyeler</h3>
+                  </div>
+                </div>
+                <CardContent className="p-2">
+                  <div className="space-y-1.5">
+                    {mostActiveMembers.map(({ member, totalTasks, completedTasks, completionRate }, index) => (
+                      <div key={member.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-xs">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{member.fullName || member.email}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {completedTasks} tamamlanan / {totalTasks} toplam
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className="text-xs px-2 py-1">
+                          {completionRate.toFixed(0)}%
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-          <TabsContent value="logs" className="space-y-4">
-            <AuditLogs mode={isAdmin ? "admin" : "team"} userId={user?.id} />
-          </TabsContent>
+            {/* Ekip Logları Bölümü */}
+            <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200 flex-1 flex flex-col">
+              <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-md bg-primary/10">
+                    <FileText className="h-4 w-4 text-primary" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-foreground">Ekip Logları</h3>
+                </div>
+              </div>
+              <CardContent className="p-2 flex-1 flex flex-col min-h-0">
+                <AuditLogs 
+                  mode={isMainAdminUser ? "admin" : "team"} 
+                  userId={user?.id}
+                  selectedTeamFilter={isMainAdminUser ? selectedTeamFilter : undefined}
+                />
+                </CardContent>
+              </Card>
+          </div>
+        </div>
 
-          <TabsContent value="join-requests" className="space-y-4">
-            <TeamApprovalManagement />
-          </TabsContent>
+        {/* Ekip Üyeleri Bölümü - Tam Genişlik */}
+        <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200 w-full">
+          <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-md bg-primary/10">
+                <Users className="h-4 w-4 text-primary" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">Ekip Üyeleri</h3>
+            </div>
+          </div>
+          <CardContent className="p-2">
+            <TeamMembers departmentFilter={departmentFilter} />
+          </CardContent>
+        </Card>
 
-          <TabsContent value="stats" className="space-y-4">
-            <TeamStatsView />
-          </TabsContent>
-        </Tabs>
       </div>
     </MainLayout>
   );

@@ -2,12 +2,13 @@ import { useMemo, memo } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { StatCard } from "@/components/Dashboard/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Package, ShoppingCart, TrendingUp, Loader2, FileText, AlertTriangle, Clock, CheckSquare } from "lucide-react";
+import { Users, Package, ShoppingCart, TrendingUp, Loader2, FileText, AlertTriangle, Clock, CheckSquare, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { getTasks, getTaskAssignments, Task } from "@/services/firebase/taskService";
+import { getTasks, getTaskAssignments, Task, TaskAssignment } from "@/services/firebase/taskService";
 import { getProducts, Product } from "@/services/firebase/productService";
 import { getRawMaterials, RawMaterial } from "@/services/firebase/materialService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,6 +17,7 @@ const Dashboard = () => {
   const { data: stats, isLoading } = useDashboardStats();
   const navigate = useNavigate();
   const { isAdmin, user } = useAuth();
+  const statsExpanded = true; // İstatistikler her zaman açık
   
   // Tasks'i dinamik olarak güncelle - İlk yüklemede sadece kritik verileri al
   // Performans için: Sadece kullanıcının görevlerini al
@@ -31,8 +33,10 @@ const Dashboard = () => {
           if (userTasks.length > 0) return userTasks;
         }
         return allTasks.slice(0, 20);
-      } catch (error) {
-        console.error("Tasks yüklenirken hata:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Tasks yüklenirken hata:", error);
+        }
         return [];
       }
     },
@@ -51,7 +55,7 @@ const Dashboard = () => {
     queryFn: async () => {
       if (!user?.id || tasks.length === 0) return new Map();
       try {
-        const assignmentsMap = new Map<string, any[]>();
+        const assignmentsMap = new Map<string, TaskAssignment[]>();
         // Sadece ilk 10 görev için assignment'ları al (performans için)
         const limitedTasks = tasks.slice(0, 10);
         // Her görev için assignment'ları al (batch işlem, paralel)
@@ -60,14 +64,14 @@ const Dashboard = () => {
             try {
               const assignments = await getTaskAssignments(task.id);
               assignmentsMap.set(task.id, assignments);
-            } catch (error) {
+            } catch (error: unknown) {
               // Sessizce handle et - performans için
               assignmentsMap.set(task.id, []);
             }
           })
         );
         return assignmentsMap;
-      } catch (error) {
+      } catch (error: unknown) {
         // Sessizce handle et - performans için
         return new Map();
       }
@@ -134,8 +138,10 @@ const Dashboard = () => {
           if (a.stock !== 0 && b.stock === 0) return 1;
           return a.stock - b.stock;
         });
-      } catch (error) {
-        console.error("Düşük stoklu ürünler ve hammaddeler yüklenirken hata:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Düşük stoklu ürünler ve hammaddeler yüklenirken hata:", error);
+        }
         return [];
       }
     },
@@ -177,7 +183,7 @@ const Dashboard = () => {
       const assignments = taskAssignmentsMap.get(task.id);
       if (assignments && assignments.length > 0) {
         const userAssignment = assignments.find(
-          (a: any) => a.assignedTo === user.id && a.status === "accepted"
+          (a: TaskAssignment) => a.assignedTo === user.id && a.status === "accepted"
         );
         if (userAssignment) return true;
       }
@@ -218,16 +224,32 @@ const Dashboard = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 sm:space-y-3 md:space-y-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Hoş geldiniz, işte bugünkü özet</p>
+      <div className="space-y-2 sm:space-y-3 md:space-y-4 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Hoş geldiniz, işte bugünkü özet</p>
+          </div>
         </div>
 
-        <div className={isAdmin 
-          ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-5 lg:gap-6"
-          : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5 lg:gap-6"
-        }>
+        {statsExpanded && (
+          <div className={isAdmin 
+            ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4 lg:gap-3 xl:gap-4"
+            : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5 lg:gap-6"
+          }>
+          {isLoading || !stats ? (
+            // Loading skeleton
+            Array.from({ length: isAdmin ? 6 : 4 }).map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="h-4 bg-muted rounded w-3/4 mb-4"></div>
+                  <div className="h-8 bg-muted rounded w-1/2 mb-2"></div>
+                  <div className="h-3 bg-muted rounded w-2/3"></div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <>
           <StatCard
             title="Toplam Müşteri"
             value={stats?.customers?.total != null && !isNaN(stats.customers.total) ? stats.customers.total.toString() : "0"}
@@ -316,12 +338,15 @@ const Dashboard = () => {
               clickable
           />
           )}
-        </div>
+            </>
+          )}
+          </div>
+        )}
 
         <div className="grid gap-3 sm:gap-4 md:gap-5 lg:gap-6 grid-cols-1 lg:grid-cols-2">
           <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-base sm:text-lg md:text-xl">Son Siparişler</CardTitle>
+              <CardTitle className="text-[14px] sm:text-[15px]">Son Siparişler</CardTitle>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
               {!stats?.recent_orders || stats.recent_orders.length === 0 ? (
@@ -350,9 +375,16 @@ const Dashboard = () => {
                             >
                               {order.status === 'confirmed' ? 'Onaylandı' :
                                order.status === 'pending' ? 'Beklemede' :
+                               order.status === 'planned' ? 'Planlandı' :
                                order.status === 'in_progress' ? 'İşlemde' :
+                               order.status === 'in_production' ? 'Üretimde' :
+                               order.status === 'quality_check' ? 'Kalite Kontrolü' :
                                order.status === 'completed' ? 'Tamamlandı' :
+                               order.status === 'shipped' ? 'Kargoda' :
+                               order.status === 'delivered' ? 'Teslim Edildi' :
+                               order.status === 'on_hold' ? 'Beklemede' :
                                order.status === 'cancelled' ? 'İptal' :
+                               order.status === 'draft' ? 'Taslak' :
                                order.status}
                             </Badge>
                           )}
@@ -374,7 +406,7 @@ const Dashboard = () => {
 
           <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-base sm:text-lg md:text-xl">Gecikmiş ve Yaklaşan Görevler</CardTitle>
+              <CardTitle className="text-[14px] sm:text-[15px]">Gecikmiş ve Yaklaşan Görevler</CardTitle>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
               {isLoadingData ? (
@@ -442,7 +474,7 @@ const Dashboard = () => {
 
           <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-base sm:text-lg md:text-xl">Düşük Stoklu Ürünler ve Hammaddeler</CardTitle>
+              <CardTitle className="text-[14px] sm:text-[15px]">Düşük Stoklu Ürünler ve Hammaddeler</CardTitle>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
               {lowStockLoading ? (

@@ -34,8 +34,8 @@ export const SystemSettings = () => {
       try {
         const data = await getAdminSettings();
         setSettings(data);
-      } catch (error: any) {
-        toast.error("Sistem ayarları yüklenemedi: " + error.message);
+      } catch (error: unknown) {
+        toast.error("Sistem ayarları yüklenemedi: " + (error instanceof Error ? error.message : String(error)));
       } finally {
         setLoading(false);
       }
@@ -54,8 +54,8 @@ export const SystemSettings = () => {
     try {
       await updateAdminSettings(settings, user.id);
       toast.success("Sistem ayarları kaydedildi");
-    } catch (error: any) {
-      toast.error("Sistem ayarları kaydedilemedi: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Sistem ayarları kaydedilemedi: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setSaving(false);
     }
@@ -93,10 +93,10 @@ export const SystemSettings = () => {
         };
         toast.success(messages[type as "restore" | "cleanup"]);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Error handled in downloadDatabaseBackup or here
       if (type !== "backup") { // backup has its own toast
-         toast.error("İşlem başarısız: " + error.message);
+         toast.error("İşlem başarısız: " + (error instanceof Error ? error.message : String(error)));
       }
     } finally {
       setActionLoading((prev) => ({ ...prev, [type]: false }));

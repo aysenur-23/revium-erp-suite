@@ -158,9 +158,10 @@ const STATUS_LABELS: Record<string, string> = {
 interface AuditLogsProps {
   mode?: "admin" | "team" | "personal";
   userId?: string; // Team Leader ID for 'team' mode, User ID for 'personal' mode
+  selectedTeamFilter?: string; // Admin için seçilen ekip filtresi
 }
 
-export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
+export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditLogsProps) => {
   const { user, isAdmin, isTeamLeader } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,7 +176,6 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
     teamMembers: Array<{ id: string; name: string; email: string }>;
   } | null>(null);
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
-  const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("all");
   const [teamMemberIds, setTeamMemberIds] = useState<Set<string>>(new Set());
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -199,8 +199,8 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
         setProducts(productsData);
         
         // Ekip lideri ise otomatik olarak kendi ekibini filtrele
-        if (isTeamLeader && !isAdmin) {
-          const managedDepts = depts.filter(d => d.managerId === user.id);
+        if (mode === "team" && userId && !isAdmin) {
+          const managedDepts = depts.filter(d => d.managerId === userId);
           const managedDeptIds = managedDepts.map(d => d.id);
           
           const memberIds = new Set(
@@ -214,9 +214,10 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
               .map(u => u.id)
           );
           
+          // Ekip liderinin kendisini de ekle
+          memberIds.add(userId);
           setTeamMemberIds(memberIds);
-          setSelectedTeamFilter("all"); // Ekip lideri için filtreleme yok
-        } else if (isAdmin && selectedTeamFilter !== "all") {
+        } else if (mode === "admin" && selectedTeamFilter && selectedTeamFilter !== "all") {
           // Yönetici için seçilen ekibin üyelerini bul
           const selectedDept = depts.find(d => d.id === selectedTeamFilter);
           if (selectedDept) {
@@ -234,16 +235,23 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
           } else {
             setTeamMemberIds(new Set());
           }
+        } else if (mode === "admin" && (!selectedTeamFilter || selectedTeamFilter === "all")) {
+          // Admin için tüm ekipler seçiliyse filtreleme yok
+          setTeamMemberIds(new Set());
         } else {
           setTeamMemberIds(new Set());
         }
       } catch (error) {
-        console.error("Error loading departments:", error);
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.error("Error loading departments:", error);
+          }
+        }
       }
     };
     
     loadDepartmentsAndMembers();
-  }, [user, isAdmin, isTeamLeader, selectedTeamFilter]);
+  }, [user, isAdmin, isTeamLeader, selectedTeamFilter, mode, userId]);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -255,9 +263,16 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
       } | null = null;
 
       if (mode === "team" && userId) {
+        // Ekip lideri için: Sadece kendi ekibinin logları
         const result = await getTeamMemberLogs(userId);
         data = result.logs;
         teamData = result.teamInfo;
+        
+        // Ekip üyelerinin ID'lerine göre ek filtreleme yap
+        if (teamMemberIds.size > 0) {
+          data = data.filter(log => teamMemberIds.has(log.userId));
+        }
+        
         setTeamInfo(teamData);
       } else if (mode === "personal" && userId) {
         data = await getAuditLogs({ userId });
@@ -301,18 +316,20 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
         }
         // task_assignments için taskId ve assignedTo'yu al
         if (log.tableName === "task_assignments") {
-          if (log.newData?.taskId) {
+          if (log.newData && typeof log.newData === 'object' && 'taskId' in log.newData && typeof log.newData.taskId === 'string') {
             entityMap.tasks.add(log.newData.taskId);
           }
-          if (log.newData?.assignedTo) {
+          if (log.newData && typeof log.newData === 'object' && 'assignedTo' in log.newData && typeof log.newData.assignedTo === 'string') {
             userIds.add(log.newData.assignedTo);
           }
-          if (log.newData?.assignedBy) {
+          if (log.newData && typeof log.newData === 'object' && 'assignedBy' in log.newData && typeof log.newData.assignedBy === 'string') {
             userIds.add(log.newData.assignedBy);
           }
         }
         // Tüm log verilerinden ID'leri topla
-        const allData = { ...log.newData, ...log.oldData };
+        const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
+        const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
+        const allData = { ...newDataObj, ...oldDataObj };
         Object.entries(allData || {}).forEach(([key, value]) => {
           if (typeof value === "string" && value.length > 15 && value.length < 30) {
             // Muhtemelen bir ID
@@ -512,7 +529,11 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
       
       setEntityNames(names);
     } catch (error) {
-      console.error("Error fetching logs:", error);
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.error("Error fetching logs:", error);
+        }
+      }
       const message = error instanceof Error ? error.message : "Bilinmeyen hata";
       // Sadece kritik hatalarda toast göster, entity yükleme hatalarında sessizce devam et
       if (error instanceof Error && (
@@ -523,12 +544,16 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
         toast.error("Loglar yüklenemedi: " + message);
       } else {
         // Entity yükleme hataları kritik değil, logları göster
-        console.warn("Entity names could not be loaded, but logs are available");
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.warn("Entity names could not be loaded, but logs are available");
+          }
+        }
       }
     } finally {
       setLoading(false);
     }
-  }, [mode, userId, actionFilter, tableFilter, limit, teamMemberIds]);
+  }, [mode, userId, actionFilter, tableFilter, limit, teamMemberIds.size]);
   
   const loadMore = useCallback(() => {
     setLimit(prev => prev + 100);
@@ -584,15 +609,15 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
   };
 
   // Değeri anlaşılır formata çevir
-  const formatValue = (value: any, fieldName?: string, tableName?: string): string => {
+  const formatValue = (value: unknown, fieldName?: string, tableName?: string): string => {
     if (value === null || value === undefined) return "Yok";
     if (typeof value === "boolean") return value ? "Evet" : "Hayır";
     if (value instanceof Date) {
       return format(value, "dd.MM.yyyy HH:mm", { locale: tr });
     }
-    if (typeof value === "object" && value.toDate) {
+    if (typeof value === "object" && value !== null && 'toDate' in value && typeof (value as { toDate: unknown }).toDate === 'function') {
       // Firebase Timestamp
-      return format(value.toDate(), "dd.MM.yyyy HH:mm", { locale: tr });
+      return format((value as { toDate: () => Date }).toDate(), "dd.MM.yyyy HH:mm", { locale: tr });
     }
     if (typeof value === "object") {
       if (Array.isArray(value)) {
@@ -678,7 +703,7 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
     return String(value);
   };
 
-  const getRecordDisplayName = (data: any, tableName: string, recordId?: string | null): string | null => {
+  const getRecordDisplayName = (data: unknown, tableName: string, recordId?: string | null): string | null => {
     if (!data && !recordId) return null;
     
     // Önce entityNames'den kontrol et
@@ -687,44 +712,111 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
     }
     
     // Sonra data'dan kontrol et
-    if (tableName === "orders" && data?.orderNumber) return `Sipariş #${data.orderNumber}`;
-    if (tableName === "tasks" && data?.title) return data.title;
-    if (tableName === "customers" && data?.name) return data.name;
-    if (tableName === "products" && data?.name) return data.name;
-    if (tableName === "projects" && data?.name) return data.name;
-    if (tableName === "reports" && data?.title) return data.title;
-    if (tableName === "task_assignments" && data?.taskTitle) return `Görev: ${data.taskTitle}`;
-    if (tableName === "raw_materials" && data?.name) return data.name;
-    if (tableName === "customerNotes" && (data?.content || data?.note)) {
-      const note = data.content || data.note;
-      return note.length > 50 ? `${note.substring(0, 50)}...` : note;
-    }
-    if (tableName === "warranty") {
-      // Warranty için müşteri ve ürün adlarını göster
-      const customerId = data?.customerId;
-      const productId = data?.productId;
-      const customer = customerId ? customers.find(c => c.id === customerId) : null;
-      const product = productId ? products.find(p => p.id === productId) : null;
-      const customerName = customer?.name || "Bilinmeyen Müşteri";
-      const productName = product?.name || "Bilinmeyen Ürün";
-      return `${customerName} - ${productName}`;
-    }
-    if (tableName === "user_logins") {
-      // Metadata'dan giriş yöntemini al
-      if (data?.metadata && typeof data.metadata === 'object' && 'method' in data.metadata) {
-        const methodLabels: Record<string, string> = {
-          EMAIL: "E-posta ile giriş",
-          GOOGLE: "Google ile giriş",
-        };
-        const method = (data.metadata as { method?: string }).method;
-        return method ? (methodLabels[method] || `Giriş (${method})`) : "Sistem girişi";
+    if (data && typeof data === 'object') {
+      const dataObj = data as Record<string, unknown>;
+      if (tableName === "orders" && typeof dataObj.orderNumber === 'string') return `Sipariş #${dataObj.orderNumber}`;
+      if (tableName === "tasks" && typeof dataObj.title === 'string') return dataObj.title;
+      if (tableName === "customers" && typeof dataObj.name === 'string') return dataObj.name;
+      if (tableName === "products" && typeof dataObj.name === 'string') return dataObj.name;
+      if (tableName === "projects" && typeof dataObj.name === 'string') return dataObj.name;
+      if (tableName === "reports" && typeof dataObj.title === 'string') return dataObj.title;
+      if (tableName === "task_assignments" && typeof dataObj.taskTitle === 'string') return `Görev: ${dataObj.taskTitle}`;
+      if (tableName === "raw_materials" && typeof dataObj.name === 'string') return dataObj.name;
+      if (tableName === "customerNotes") {
+        const content = typeof dataObj.content === 'string' ? dataObj.content : (typeof dataObj.note === 'string' ? dataObj.note : null);
+        if (content) {
+          return content.length > 50 ? `${content.substring(0, 50)}...` : content;
+        }
       }
-      return "Sistem girişi";
+      if (tableName === "warranty") {
+        // Warranty için müşteri ve ürün adlarını göster
+        const customerId = typeof dataObj.customerId === 'string' ? dataObj.customerId : null;
+        const productId = typeof dataObj.productId === 'string' ? dataObj.productId : null;
+        const customer = customerId ? customers.find(c => c.id === customerId) : null;
+        const product = productId ? products.find(p => p.id === productId) : null;
+        const customerName = customer?.name || "Bilinmeyen Müşteri";
+        const productName = product?.name || "Bilinmeyen Ürün";
+        return `${customerName} - ${productName}`;
+      }
+      if (tableName === "user_logins") {
+        // Metadata'dan giriş yöntemini al
+        if (dataObj.metadata && typeof dataObj.metadata === 'object' && dataObj.metadata !== null && 'method' in dataObj.metadata) {
+          const methodLabels: Record<string, string> = {
+            EMAIL: "E-posta ile giriş",
+            GOOGLE: "Google ile giriş",
+          };
+          const method = typeof (dataObj.metadata as { method?: unknown }).method === 'string' ? (dataObj.metadata as { method: string }).method : null;
+          return method ? (methodLabels[method] || `Giriş (${method})`) : "Sistem girişi";
+        }
+        return "Sistem girişi";
+      }
+      if (typeof dataObj.name === 'string') return dataObj.name;
+      if (typeof dataObj.title === 'string') return dataObj.title;
     }
-    if (data?.name) return data.name;
-    if (data?.title) return data.title;
     // ID gösterme - sadece entity ismi yoksa
     return null;
+  };
+
+  // Değişiklik detaylarını anlaşılır formatta oluştur
+  const getDetailedChangeDescription = (
+    field: string,
+    oldValue: unknown,
+    newValue: unknown,
+    tableName: string
+  ): string => {
+    const fieldLabel = FIELD_LABELS[field] || field;
+    const formattedOldValue = formatValue(oldValue, field, tableName);
+    const formattedNewValue = formatValue(newValue, field, tableName);
+    
+    // Özel durumlar için daha açıklayıcı mesajlar
+    if (field === "status") {
+      if (tableName === "tasks") {
+        return `görev durumunu "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
+      } else if (tableName === "orders" || tableName === "production_orders") {
+        return `sipariş durumunu "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
+      }
+      return `${fieldLabel} değerini "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
+    }
+    
+    if (field === "priority") {
+      return `öncelik seviyesini "${formattedOldValue}"'den "${formattedNewValue}"'e güncelledi`;
+    }
+    
+    if (field === "assignedTo" || field === "assignedUsers") {
+      return `atanan kişiyi "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
+    }
+    
+    if (field === "dueDate") {
+      return `bitiş tarihini "${formattedOldValue}"'den "${formattedNewValue}"'e güncelledi`;
+    }
+    
+    if (field === "approvalStatus") {
+      if (formattedNewValue === "Onaylandı") {
+        return `onay durumunu "Beklemede"den "Onaylandı"ya güncelledi`;
+      } else if (formattedNewValue === "Reddedildi") {
+        return `onay durumunu "Beklemede"den "Reddedildi"ye güncelledi`;
+      }
+      return `onay durumunu "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
+    }
+    
+    if (field === "title" || field === "name") {
+      return `${fieldLabel} değerini "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
+    }
+    
+    if (field === "description") {
+      return `${fieldLabel} içeriğini güncelledi`;
+    }
+    
+    if (field === "role") {
+      return `kullanıcı rolünü "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
+    }
+    
+    if (field === "totalAmount" || field === "grandTotal" || field === "subtotal") {
+      return `${fieldLabel} tutarını "${formattedOldValue}"'den "${formattedNewValue}"'e güncelledi`;
+    }
+    
+    // Genel format
+    return `${fieldLabel} değerini "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
   };
 
   // Log mesajını oluştur - Kullanıcı dostu ve anlamlı
@@ -737,15 +829,24 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
     
     // Giriş logları
     if (log.tableName === "user_logins") {
-      description = `${userName} Giriş yaptı`;
+      const metadata = log.metadata && typeof log.metadata === 'object' ? log.metadata as Record<string, unknown> : {};
+      const method = 'method' in metadata && typeof metadata.method === 'string' ? metadata.method : null;
+      if (method === "GOOGLE") {
+        description = `${userName} Google hesabı ile giriş yaptı`;
+      } else if (method === "EMAIL") {
+        description = `${userName} e-posta ve şifre ile giriş yaptı`;
+      } else {
+        description = `${userName} sisteme giriş yaptı`;
+      }
     }
     // Görev atama logları - özel format
     else if (log.tableName === "task_assignments" && log.action === "CREATE") {
-      const taskId = log.newData?.taskId;
-      const assignedToId = log.newData?.assignedTo;
+      const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
+      const taskId = 'taskId' in newDataObj && typeof newDataObj.taskId === 'string' ? newDataObj.taskId : null;
+      const assignedToId = 'assignedTo' in newDataObj && typeof newDataObj.assignedTo === 'string' ? newDataObj.assignedTo : null;
       const taskName = taskId && entityNames[`tasks_${taskId}`] 
         ? entityNames[`tasks_${taskId}`] 
-        : (log.newData?.taskTitle || "görev");
+        : ('taskTitle' in newDataObj && typeof newDataObj.taskTitle === 'string' ? newDataObj.taskTitle : "görev");
       const assignedUserName = assignedToId && entityNames[`users_${assignedToId}`]
         ? entityNames[`users_${assignedToId}`]
         : "bir kişiyi";
@@ -765,29 +866,58 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
     }
     // Görev logları - proje bilgisi ile
     else if (log.tableName === "tasks" && log.recordId) {
+      const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
+      const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
       const taskName = entityNames[`tasks_${log.recordId}`] || 
-                      log.newData?.title || 
-                      log.oldData?.title || 
+                      ('title' in newDataObj && typeof newDataObj.title === 'string' ? newDataObj.title : null) ||
+                      ('title' in oldDataObj && typeof oldDataObj.title === 'string' ? oldDataObj.title : null) ||
                       "görev";
       
       // Proje bilgisini kontrol et
-      const projectId = log.newData?.projectId || log.oldData?.projectId;
+      const projectId = ('projectId' in newDataObj && typeof newDataObj.projectId === 'string' ? newDataObj.projectId : null) || 
+                        ('projectId' in oldDataObj && typeof oldDataObj.projectId === 'string' ? oldDataObj.projectId : null);
       const projectPrefix = projectId && entityNames[`projects_${projectId}`] 
         ? `"${entityNames[`projects_${projectId}`]}" projesindeki `
         : "";
       
-      if (log.action === "UPDATE" && log.oldData && log.newData) {
-        const changedFields = getChangedFields(log.oldData, log.newData);
+      if (log.action === "CREATE") {
+        description = `${userName} ${projectPrefix}"${taskName}" görevini oluşturdu`;
+      } else if (log.action === "DELETE") {
+        description = `${userName} ${projectPrefix}"${taskName}" görevini sildi`;
+      } else if (log.action === "UPDATE" && log.oldData && typeof log.oldData === 'object' && log.newData && typeof log.newData === 'object') {
+        const changedFields = getChangedFields(log.oldData as Record<string, unknown>, log.newData as Record<string, unknown>);
         if (changedFields.length > 0) {
+          // Önemli alanlar için detaylı açıklama
+          const importantFields = ["status", "priority", "assignedTo", "assignedUsers", "dueDate", "approvalStatus"];
+          const hasImportantField = changedFields.some(f => importantFields.includes(f));
+          
+          if (hasImportantField && changedFields.length === 1) {
+            // Tek önemli alan değiştiyse detaylı açıklama
+            const field = changedFields[0];
+            const changeDesc = getDetailedChangeDescription(
+              field,
+              log.oldData[field],
+              log.newData[field],
+              log.tableName
+            );
+            description = `${userName} ${projectPrefix}"${taskName}" görevinin ${changeDesc}`;
+          } else if (changedFields.length === 1) {
+            // Tek alan değiştiyse
+            const field = changedFields[0];
+            const fieldLabel = FIELD_LABELS[field] || field;
+            description = `${userName} ${projectPrefix}"${taskName}" görevinin "${fieldLabel}" alanını güncelledi`;
+          } else {
+            // Birden fazla alan değiştiyse
           const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
           const fieldsText = fieldLabels.length === 1 
-            ? `'${fieldLabels[0]}' alanını`
+              ? `"${fieldLabels[0]}" alanını`
             : fieldLabels.length === 2
-            ? `'${fieldLabels[0]}' ve '${fieldLabels[1]}' alanlarını`
-            : `'${fieldLabels.join("', '")}'${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
-          description = `${userName} ${projectPrefix}"${taskName}" görevinin ${fieldsText} ${actionVerb}`;
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+            description = `${userName} ${projectPrefix}"${taskName}" görevinin ${fieldsText} güncelledi`;
+          }
         } else {
-          description = `${userName} ${projectPrefix}"${taskName}" görevini ${actionVerb}`;
+          description = `${userName} ${projectPrefix}"${taskName}" görevini güncelledi`;
         }
       } else {
         description = `${userName} ${projectPrefix}"${taskName}" görevini ${actionVerb}`;
@@ -795,22 +925,34 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
     }
     // Müşteri logları
     else if (log.tableName === "customers" && log.recordId) {
+      const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
+      const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
       const customerName = entityNames[`customers_${log.recordId}`] || 
-                          log.newData?.name || 
-                          log.oldData?.name || 
+                          ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
+                          ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
                           "müşteri";
-      if (log.action === "UPDATE" && log.oldData && log.newData) {
-        const changedFields = getChangedFields(log.oldData, log.newData);
+      if (log.action === "CREATE") {
+        description = `${userName} "${customerName}" adlı müşteriyi oluşturdu`;
+      } else if (log.action === "DELETE") {
+        description = `${userName} "${customerName}" adlı müşteriyi sildi`;
+      } else if (log.action === "UPDATE" && log.oldData && typeof log.oldData === 'object' && log.newData && typeof log.newData === 'object') {
+        const changedFields = getChangedFields(log.oldData as Record<string, unknown>, log.newData as Record<string, unknown>);
         if (changedFields.length > 0) {
+          if (changedFields.length === 1) {
+            const field = changedFields[0];
+            const changeDesc = getDetailedChangeDescription(field, log.oldData[field], log.newData[field], log.tableName);
+            description = `${userName} "${customerName}" müşterisinin ${changeDesc}`;
+          } else {
           const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
           const fieldsText = fieldLabels.length === 1 
-            ? `'${fieldLabels[0]}' alanını`
+              ? `"${fieldLabels[0]}" alanını`
             : fieldLabels.length === 2
-            ? `'${fieldLabels[0]}' ve '${fieldLabels[1]}' alanlarını`
-            : `'${fieldLabels.join("', '")}'${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
-          description = `${userName} "${customerName}" müşterisinin ${fieldsText} ${actionVerb}`;
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+            description = `${userName} "${customerName}" müşterisinin ${fieldsText} güncelledi`;
+          }
         } else {
-          description = `${userName} "${customerName}" müşterisini ${actionVerb}`;
+          description = `${userName} "${customerName}" müşterisini güncelledi`;
         }
       } else {
         description = `${userName} "${customerName}" müşterisini ${actionVerb}`;
@@ -818,45 +960,76 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
     }
     // Sipariş logları
     else if (log.tableName === "orders" && log.recordId) {
+      const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
+      const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
       const orderName = entityNames[`orders_${log.recordId}`] || 
-                       (log.newData?.orderNumber ? `Sipariş #${log.newData.orderNumber}` : null) ||
-                       (log.oldData?.orderNumber ? `Sipariş #${log.oldData.orderNumber}` : null) ||
+                       ('orderNumber' in newDataObj && typeof newDataObj.orderNumber === 'string' ? `Sipariş #${newDataObj.orderNumber}` : null) ||
+                       ('orderNumber' in oldDataObj && typeof oldDataObj.orderNumber === 'string' ? `Sipariş #${oldDataObj.orderNumber}` : null) ||
                        "sipariş";
-      if (log.action === "UPDATE" && log.oldData && log.newData) {
-        const changedFields = getChangedFields(log.oldData, log.newData);
+      if (log.action === "CREATE") {
+        description = `${userName} ${orderName} siparişini oluşturdu`;
+      } else if (log.action === "DELETE") {
+        description = `${userName} ${orderName} siparişini sildi`;
+      } else if (log.action === "UPDATE" && log.oldData && typeof log.oldData === 'object' && log.newData && typeof log.newData === 'object') {
+        const changedFields = getChangedFields(log.oldData as Record<string, unknown>, log.newData as Record<string, unknown>);
         if (changedFields.length > 0) {
+          const importantFields = ["status", "totalAmount", "grandTotal", "subtotal", "deliveryDate"];
+          const hasImportantField = changedFields.some(f => importantFields.includes(f));
+          
+          if (hasImportantField && changedFields.length === 1) {
+            const field = changedFields[0];
+            const changeDesc = getDetailedChangeDescription(field, log.oldData[field], log.newData[field], log.tableName);
+            description = `${userName} ${orderName} siparişinin ${changeDesc}`;
+          } else if (changedFields.length === 1) {
+            const field = changedFields[0];
+            const fieldLabel = FIELD_LABELS[field] || field;
+            description = `${userName} ${orderName} siparişinin "${fieldLabel}" alanını güncelledi`;
+          } else {
           const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
           const fieldsText = fieldLabels.length === 1 
-            ? `'${fieldLabels[0]}' alanını`
+              ? `"${fieldLabels[0]}" alanını`
             : fieldLabels.length === 2
-            ? `'${fieldLabels[0]}' ve '${fieldLabels[1]}' alanlarını`
-            : `'${fieldLabels.join("', '")}'${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
-          description = `${userName} "${orderName}" siparişinin ${fieldsText} ${actionVerb}`;
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+            description = `${userName} ${orderName} siparişinin ${fieldsText} güncelledi`;
+          }
         } else {
-          description = `${userName} "${orderName}" siparişini ${actionVerb}`;
+          description = `${userName} ${orderName} siparişini güncelledi`;
         }
       } else {
-        description = `${userName} "${orderName}" siparişini ${actionVerb}`;
+        description = `${userName} ${orderName} siparişini ${actionVerb}`;
       }
     }
     // Ürün logları
     else if (log.tableName === "products" && log.recordId) {
+      const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
+      const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
       const productName = entityNames[`products_${log.recordId}`] || 
-                         log.newData?.name || 
-                         log.oldData?.name || 
+                         ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
+                         ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
                          "ürün";
-      if (log.action === "UPDATE" && log.oldData && log.newData) {
-        const changedFields = getChangedFields(log.oldData, log.newData);
+      if (log.action === "CREATE") {
+        description = `${userName} "${productName}" adlı ürünü oluşturdu`;
+      } else if (log.action === "DELETE") {
+        description = `${userName} "${productName}" adlı ürünü sildi`;
+      } else if (log.action === "UPDATE" && log.oldData && typeof log.oldData === 'object' && log.newData && typeof log.newData === 'object') {
+        const changedFields = getChangedFields(log.oldData as Record<string, unknown>, log.newData as Record<string, unknown>);
         if (changedFields.length > 0) {
+          if (changedFields.length === 1) {
+            const field = changedFields[0];
+            const changeDesc = getDetailedChangeDescription(field, log.oldData[field], log.newData[field], log.tableName);
+            description = `${userName} "${productName}" ürününün ${changeDesc}`;
+          } else {
           const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
           const fieldsText = fieldLabels.length === 1 
-            ? `'${fieldLabels[0]}' alanını`
+              ? `"${fieldLabels[0]}" alanını`
             : fieldLabels.length === 2
-            ? `'${fieldLabels[0]}' ve '${fieldLabels[1]}' alanlarını`
-            : `'${fieldLabels.join("', '")}'${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
-          description = `${userName} "${productName}" ürününün ${fieldsText} ${actionVerb}`;
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+            description = `${userName} "${productName}" ürününün ${fieldsText} güncelledi`;
+          }
         } else {
-          description = `${userName} "${productName}" ürününü ${actionVerb}`;
+          description = `${userName} "${productName}" ürününü güncelledi`;
         }
       } else {
         description = `${userName} "${productName}" ürününü ${actionVerb}`;
@@ -864,43 +1037,136 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
     }
     // Proje logları
     else if (log.tableName === "projects" && log.recordId) {
+      const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
+      const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
       const projectName = entityNames[`projects_${log.recordId}`] || 
-                         log.newData?.name || 
-                         log.oldData?.name || 
+                         ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
+                         ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
                          "proje";
-      if (log.action === "UPDATE" && log.oldData && log.newData) {
-        const changedFields = getChangedFields(log.oldData, log.newData);
+      if (log.action === "CREATE") {
+        description = `${userName} "${projectName}" adlı projeyi oluşturdu`;
+      } else if (log.action === "DELETE") {
+        description = `${userName} "${projectName}" adlı projeyi sildi`;
+      } else if (log.action === "UPDATE" && log.oldData && typeof log.oldData === 'object' && log.newData && typeof log.newData === 'object') {
+        const changedFields = getChangedFields(log.oldData as Record<string, unknown>, log.newData as Record<string, unknown>);
         if (changedFields.length > 0) {
+          if (changedFields.length === 1) {
+            const field = changedFields[0];
+            const changeDesc = getDetailedChangeDescription(field, log.oldData[field], log.newData[field], log.tableName);
+            description = `${userName} "${projectName}" projesinin ${changeDesc}`;
+          } else {
           const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
           const fieldsText = fieldLabels.length === 1 
-            ? `'${fieldLabels[0]}' alanını`
+              ? `"${fieldLabels[0]}" alanını`
             : fieldLabels.length === 2
-            ? `'${fieldLabels[0]}' ve '${fieldLabels[1]}' alanlarını`
-            : `'${fieldLabels.join("', '")}'${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
-          description = `${userName} "${projectName}" projesinin ${fieldsText} ${actionVerb}`;
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+            description = `${userName} "${projectName}" projesinin ${fieldsText} güncelledi`;
+          }
         } else {
-          description = `${userName} "${projectName}" projesini ${actionVerb}`;
+          description = `${userName} "${projectName}" projesini güncelledi`;
         }
       } else {
         description = `${userName} "${projectName}" projesini ${actionVerb}`;
+      }
+    }
+    // Kullanıcı rolleri logları
+    else if (log.tableName === "user_roles" || log.tableName === "users") {
+      const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
+      const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
+      const userName_entity = ('fullName' in newDataObj && typeof newDataObj.fullName === 'string' ? newDataObj.fullName : null) ||
+                              ('fullName' in oldDataObj && typeof oldDataObj.fullName === 'string' ? oldDataObj.fullName : null) ||
+                              ('email' in newDataObj && typeof newDataObj.email === 'string' ? newDataObj.email.split("@")[0] : null) ||
+                              ('email' in oldDataObj && typeof oldDataObj.email === 'string' ? oldDataObj.email.split("@")[0] : null) ||
+                              (log.recordId && entityNames[`users_${log.recordId}`]) ||
+                              "kullanıcı";
+      
+      if (log.action === "CREATE") {
+        description = `${userName} "${userName_entity}" adlı kullanıcıyı oluşturdu`;
+      } else if (log.action === "DELETE") {
+        description = `${userName} "${userName_entity}" adlı kullanıcıyı sildi`;
+      } else if (log.action === "UPDATE" && log.oldData && typeof log.oldData === 'object' && log.newData && typeof log.newData === 'object') {
+        const changedFields = getChangedFields(log.oldData as Record<string, unknown>, log.newData as Record<string, unknown>);
+        if (changedFields.includes("role")) {
+          const oldRole = formatValue(log.oldData["role"], "role", log.tableName);
+          const newRole = formatValue(log.newData["role"], "role", log.tableName);
+          description = `${userName} "${userName_entity}" kullanıcısının rolünü "${oldRole}"'den "${newRole}"'e değiştirdi`;
+        } else if (changedFields.length > 0) {
+          const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
+          const fieldsText = fieldLabels.length === 1 
+            ? `"${fieldLabels[0]}" alanını`
+            : fieldLabels.length === 2
+            ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+            : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+          description = `${userName} "${userName_entity}" kullanıcısının ${fieldsText} güncelledi`;
+        } else {
+          description = `${userName} "${userName_entity}" kullanıcısını güncelledi`;
+        }
+      } else {
+        description = `${userName} "${userName_entity}" kullanıcısını ${actionVerb}`;
+      }
+    }
+    // Departman logları
+    else if (log.tableName === "departments" && log.recordId) {
+      const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
+      const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
+      const deptName = entityNames[`departments_${log.recordId}`] || 
+                      ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
+                      ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
+                      "departman";
+      if (log.action === "CREATE") {
+        description = `${userName} "${deptName}" adlı departmanı oluşturdu`;
+      } else if (log.action === "DELETE") {
+        description = `${userName} "${deptName}" adlı departmanı sildi`;
+      } else if (log.action === "UPDATE" && log.oldData && typeof log.oldData === 'object' && log.newData && typeof log.newData === 'object') {
+        const changedFields = getChangedFields(log.oldData as Record<string, unknown>, log.newData as Record<string, unknown>);
+        if (changedFields.length > 0) {
+          if (changedFields.length === 1) {
+            const field = changedFields[0];
+            const fieldLabel = FIELD_LABELS[field] || field;
+            description = `${userName} "${deptName}" departmanının "${fieldLabel}" alanını güncelledi`;
+          } else {
+            const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
+            const fieldsText = fieldLabels.length === 1 
+              ? `"${fieldLabels[0]}" alanını`
+              : fieldLabels.length === 2
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+            description = `${userName} "${deptName}" departmanının ${fieldsText} güncelledi`;
+          }
+        } else {
+          description = `${userName} "${deptName}" departmanını güncelledi`;
+        }
+      } else {
+        description = `${userName} "${deptName}" departmanını ${actionVerb}`;
       }
     }
     // Diğer loglar - entity adı ile
     else if (log.recordId && entityNames[`${log.tableName}_${log.recordId}`]) {
       const entityName = entityNames[`${log.tableName}_${log.recordId}`];
       const tableLabel = TABLE_LABELS[log.tableName] || log.tableName;
-      if (log.action === "UPDATE" && log.oldData && log.newData) {
-        const changedFields = getChangedFields(log.oldData, log.newData);
+      if (log.action === "CREATE") {
+        description = `${userName} "${entityName}" adlı ${tableLabel.toLowerCase()} kaydını oluşturdu`;
+      } else if (log.action === "DELETE") {
+        description = `${userName} "${entityName}" adlı ${tableLabel.toLowerCase()} kaydını sildi`;
+      } else if (log.action === "UPDATE" && log.oldData && typeof log.oldData === 'object' && log.newData && typeof log.newData === 'object') {
+        const changedFields = getChangedFields(log.oldData as Record<string, unknown>, log.newData as Record<string, unknown>);
         if (changedFields.length > 0) {
+          if (changedFields.length === 1) {
+            const field = changedFields[0];
+            const fieldLabel = FIELD_LABELS[field] || field;
+            description = `${userName} "${entityName}" ${tableLabel.toLowerCase()} kaydının "${fieldLabel}" alanını güncelledi`;
+          } else {
           const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
           const fieldsText = fieldLabels.length === 1 
-            ? `'${fieldLabels[0]}' alanını`
+              ? `"${fieldLabels[0]}" alanını`
             : fieldLabels.length === 2
-            ? `'${fieldLabels[0]}' ve '${fieldLabels[1]}' alanlarını`
-            : `'${fieldLabels.join("', '")}'${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
-          description = `${userName} "${entityName}" ${tableLabel.toLowerCase()} kaydının ${fieldsText} ${actionVerb}`;
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+            description = `${userName} "${entityName}" ${tableLabel.toLowerCase()} kaydının ${fieldsText} güncelledi`;
+          }
         } else {
-          description = `${userName} "${entityName}" ${tableLabel.toLowerCase()} kaydını ${actionVerb}`;
+          description = `${userName} "${entityName}" ${tableLabel.toLowerCase()} kaydını güncelledi`;
         }
       } else {
         description = `${userName} "${entityName}" ${tableLabel.toLowerCase()} kaydını ${actionVerb}`;
@@ -910,7 +1176,13 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
     else {
       const actionLabel = actionMeta?.label || "İşlem";
       const tableLabel = TABLE_LABELS[log.tableName] || log.tableName;
-      description = `${userName} ${tableLabel.toLowerCase()} bölümünde ${actionLabel.toLowerCase()} ${actionVerb}`;
+      if (log.action === "CREATE") {
+        description = `${userName} ${tableLabel.toLowerCase()} bölümünde yeni bir kayıt oluşturdu`;
+      } else if (log.action === "DELETE") {
+        description = `${userName} ${tableLabel.toLowerCase()} bölümünden bir kayıt sildi`;
+      } else {
+        description = `${userName} ${tableLabel.toLowerCase()} bölümünde ${actionLabel.toLowerCase()} işlemi ${actionVerb}`;
+      }
     }
 
     const timestamp = format(log.createdAt.toDate(), "dd MMMM yyyy, HH:mm", { locale: tr });
@@ -923,7 +1195,7 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
   };
 
   // Kayıt adını al
-  const getRecordName = (data: any, tableName: string, recordId?: string | null): string => {
+  const getRecordName = (data: unknown, tableName: string, recordId?: string | null): string => {
     // Önce entityNames'den kontrol et
     if (recordId && entityNames[`${tableName}_${recordId}`]) {
       const entityName = entityNames[`${tableName}_${recordId}`];
@@ -938,38 +1210,44 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
     if (!data) return "kayıt";
     
     // Tablo bazlı özel isimlendirme
-    if (tableName === "orders" && data.orderNumber) {
-      return `"Sipariş #${data.orderNumber}" siparişini`;
+    if (data && typeof data === 'object') {
+      const dataObj = data as Record<string, unknown>;
+      if (tableName === "orders" && typeof dataObj.orderNumber === 'string') {
+        return `"Sipariş #${dataObj.orderNumber}" siparişini`;
+      }
+      if (tableName === "tasks" && typeof dataObj.title === 'string') {
+        return `"${dataObj.title}" görevini`;
+      }
+      if (tableName === "customers" && typeof dataObj.name === 'string') {
+        return `"${dataObj.name}" müşterisini`;
+      }
+      if (tableName === "products" && typeof dataObj.name === 'string') {
+        return `"${dataObj.name}" ürününü`;
+      }
+      if (tableName === "projects" && typeof dataObj.name === 'string') {
+        return `"${dataObj.name}" projesini`;
+      }
+      if (tableName === "reports" && typeof dataObj.title === 'string') {
+        return `"${dataObj.title}" raporunu`;
+      }
+      if (tableName === "task_assignments" && typeof dataObj.taskTitle === 'string') {
+        return `"${dataObj.taskTitle}" görev atamasını`;
+      }
+      if (tableName === "raw_materials" && typeof dataObj.name === 'string') {
+        return `"${dataObj.name}" hammaddesini`;
+      }
+      if (tableName === "customerNotes") {
+        const content = typeof dataObj.content === 'string' ? dataObj.content : (typeof dataObj.note === 'string' ? dataObj.note : null);
+        if (content) {
+          const note = content.substring(0, 30);
+          return `"${note}${content.length > 30 ? '...' : ''}" notunu`;
+        }
+      }
+      
+      // Genel fallback
+      if (typeof dataObj.name === 'string') return `"${dataObj.name}" kaydını`;
+      if (typeof dataObj.title === 'string') return `"${dataObj.title}" kaydını`;
     }
-    if (tableName === "tasks" && data.title) {
-      return `"${data.title}" görevini`;
-    }
-    if (tableName === "customers" && data.name) {
-      return `"${data.name}" müşterisini`;
-    }
-    if (tableName === "products" && data.name) {
-      return `"${data.name}" ürününü`;
-    }
-    if (tableName === "projects" && data.name) {
-      return `"${data.name}" projesini`;
-    }
-    if (tableName === "reports" && data.title) {
-      return `"${data.title}" raporunu`;
-    }
-    if (tableName === "task_assignments" && data.taskTitle) {
-      return `"${data.taskTitle}" görev atamasını`;
-    }
-    if (tableName === "raw_materials" && data.name) {
-      return `"${data.name}" hammaddesini`;
-    }
-    if (tableName === "customerNotes" && (data.content || data.note)) {
-      const note = (data.content || data.note).substring(0, 30);
-      return `"${note}${(data.content || data.note).length > 30 ? '...' : ''}" notunu`;
-    }
-    
-    // Genel fallback
-    if (data.name) return `"${data.name}" kaydını`;
-    if (data.title) return `"${data.title}" kaydını`;
     
     // ID gösterme - sadece tableName göster
     const tableLabel = TABLE_LABELS[tableName] || tableName;
@@ -978,34 +1256,36 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
 
   // İnsan tarafından okunabilir değişiklik mesajları oluştur
   const getHumanReadableChanges = (
-    oldData: any,
-    newData: any,
+    oldData: unknown,
+    newData: unknown,
     tableName: string,
     recordName?: string | null
   ): string[] => {
     if (!oldData || !newData) return [];
     
     const changes: string[] = [];
-    const changedFields = getChangedFields(oldData, newData);
+    const oldDataObj = oldData && typeof oldData === 'object' ? oldData as Record<string, unknown> : {};
+    const newDataObj = newData && typeof newData === 'object' ? newData as Record<string, unknown> : {};
+    const changedFields = getChangedFields(oldDataObj, newDataObj);
 
     changedFields.forEach((field) => {
       const fieldLabel = FIELD_LABELS[field] || field;
-      const oldValue = formatValue(oldData[field], field, tableName);
-      const newValue = formatValue(newData[field], field, tableName);
+      const oldValue = formatValue(oldDataObj[field], field, tableName);
+      const newValue = formatValue(newDataObj[field], field, tableName);
 
       // Özel durumlar için özel mesajlar
       if (field === "status" && tableName === "tasks") {
         // Görev adını da ekle
-        const taskTitle = recordName || oldData.title || newData.title || "görev";
+        const taskTitle = recordName || (typeof oldDataObj.title === 'string' ? oldDataObj.title : null) || (typeof newDataObj.title === 'string' ? newDataObj.title : null) || "görev";
         changes.push(`"${taskTitle}" görevinin durumunu "${oldValue}"'den "${newValue}"'e değiştirdi`);
       } else if (field === "status" && tableName === "orders") {
-        const orderNum = recordName || oldData.orderNumber || newData.orderNumber || "sipariş";
+        const orderNum = recordName || (typeof oldDataObj.orderNumber === 'string' ? oldDataObj.orderNumber : null) || (typeof newDataObj.orderNumber === 'string' ? newDataObj.orderNumber : null) || "sipariş";
         changes.push(`"${orderNum}" siparişinin durumunu "${oldValue}"'den "${newValue}"'e değiştirdi`);
       } else if (field === "status" && tableName === "production_orders") {
-        const orderNum = recordName || oldData.orderNumber || newData.orderNumber || "üretim siparişi";
+        const orderNum = recordName || (typeof oldDataObj.orderNumber === 'string' ? oldDataObj.orderNumber : null) || (typeof newDataObj.orderNumber === 'string' ? newDataObj.orderNumber : null) || "üretim siparişi";
         changes.push(`"${orderNum}" üretim siparişinin durumunu "${oldValue}"'den "${newValue}"'e değiştirdi`);
       } else if (field === "approvalStatus") {
-        const taskTitle = recordName || oldData.title || newData.title || "";
+        const taskTitle = recordName || (typeof oldDataObj.title === 'string' ? oldDataObj.title : null) || (typeof newDataObj.title === 'string' ? newDataObj.title : null) || "";
         const prefix = taskTitle ? `"${taskTitle}" görevinin ` : "";
         if (newValue === "Onaylandı") {
           changes.push(`${prefix}onay durumunu "Beklemede"den "Onaylandı"ya güncelledi`);
@@ -1015,27 +1295,27 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
           changes.push(`${prefix}onay durumunu "${oldValue}"'den "${newValue}"'e değiştirdi`);
         }
       } else if (field === "rejectionReason") {
-        const taskTitle = recordName || oldData.title || newData.title || "";
+        const taskTitle = recordName || (typeof oldDataObj.title === 'string' ? oldDataObj.title : null) || (typeof newDataObj.title === 'string' ? newDataObj.title : null) || "";
         const prefix = taskTitle ? `"${taskTitle}" görevi için ` : "";
         changes.push(`${prefix}red nedeni ekledi: "${newValue}"`);
       } else if (field === "title" && tableName === "tasks") {
         changes.push(`görev başlığını "${oldValue}"'den "${newValue}"'e değiştirdi`);
       } else if (field === "description" && tableName === "tasks") {
-        const taskTitle = recordName || oldData.title || newData.title || "";
+        const taskTitle = recordName || (typeof oldDataObj.title === 'string' ? oldDataObj.title : null) || (typeof newDataObj.title === 'string' ? newDataObj.title : null) || "";
         const prefix = taskTitle ? `"${taskTitle}" ` : "";
         changes.push(`${prefix}görev açıklamasını güncelledi`);
       } else if (field === "priority" && tableName === "tasks") {
-        const taskTitle = recordName || oldData.title || newData.title || "";
+        const taskTitle = recordName || (typeof oldDataObj.title === 'string' ? oldDataObj.title : null) || (typeof newDataObj.title === 'string' ? newDataObj.title : null) || "";
         const prefix = taskTitle ? `"${taskTitle}" görevinin ` : "";
         changes.push(`${prefix}önceliği "${oldValue}"'den "${newValue}"'e değiştirdi`);
       } else if (field === "dueDate" && tableName === "tasks") {
-        const taskTitle = recordName || oldData.title || newData.title || "";
+        const taskTitle = recordName || (typeof oldDataObj.title === 'string' ? oldDataObj.title : null) || (typeof newDataObj.title === 'string' ? newDataObj.title : null) || "";
         const prefix = taskTitle ? `"${taskTitle}" görevinin ` : "";
         changes.push(`${prefix}bitiş tarihini "${oldValue}"'den "${newValue}"'e değiştirdi`);
       } else if (field === "role") {
         changes.push(`rolünü "${oldValue}"'den "${newValue}"'e değiştirdi`);
       } else if (field === "assignedTo" || field === "assignedUsers") {
-        const taskTitle = recordName || oldData.title || newData.title || "";
+        const taskTitle = recordName || (typeof oldDataObj.title === 'string' ? oldDataObj.title : null) || (typeof newDataObj.title === 'string' ? newDataObj.title : null) || "";
         const prefix = tableName === "tasks" && taskTitle ? `"${taskTitle}" görevinin ` : "";
         changes.push(`${prefix}atanan kişiyi "${oldValue}"'den "${newValue}"'e değiştirdi`);
       } else if (field === "totalAmount" || field === "grandTotal" || field === "subtotal") {
@@ -1084,94 +1364,9 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Yönetici için Ekip Seçimi */}
-      {isAdmin && mode === "admin" && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium">Ekip Seç:</label>
-              <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter}>
-                <SelectTrigger className="w-full sm:w-[250px]">
-                  <SelectValue placeholder="Ekip seçiniz" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tüm Ekipler</SelectItem>
-                  {allDepartments.map((dept) => (
-                    <SelectItem key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      
-      <div>
-        <h2 className="text-xl sm:text-2xl font-bold">
-          {mode === "team" ? "Ekip Logları" : mode === "personal" ? "Kişisel Loglar" : "Sistem Logları"}
-        </h2>
-        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
-          {mode === "team" 
-            ? "Yönettiğiniz ekiplerdeki üyelerin ve sizin işlem geçmişiniz" 
-            : mode === "personal" 
-            ? "Kendi işlem geçmişiniz" 
-            : "Sistemdeki tüm kullanıcıların tüm işlemlerinin detaylı kaydı"}
-        </p>
-        {mode === "team" && teamInfo && !isAdmin && (
-          <Card className="bg-gradient-to-br from-blue-50/50 to-transparent border-blue-200">
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline" className="text-xs">
-                    {teamInfo.managedTeams.length} Ekip Yönetiliyor
-                  </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    {teamInfo.teamMembers.length} Ekip Üyesi
-                  </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    {logs.length} Log Kaydı
-                  </Badge>
-                </div>
-                {teamInfo.managedTeams.length > 0 && (
-                  <div className="text-sm">
-                    <span className="font-medium text-foreground">Yönettiğiniz Ekipler:</span>{" "}
-                    <span className="text-muted-foreground">
-                      {teamInfo.managedTeams.map(t => t.name).join(", ")}
-                    </span>
-                  </div>
-                )}
-                {teamInfo.teamMembers.length > 0 && (
-                  <div className="text-sm">
-                    <span className="font-medium text-foreground">Ekip Üyeleri:</span>{" "}
-                    <span className="text-muted-foreground">
-                      {teamInfo.teamMembers.map(m => m.name).join(", ")}
-                    </span>
-                  </div>
-                )}
-                {teamInfo.teamMembers.length === 0 && teamInfo.managedTeams.length > 0 && (
-                  <div className="text-sm text-yellow-700 bg-yellow-100 p-3 rounded-lg border border-yellow-200">
-                    <span className="font-medium">⚠️ Bilgi:</span> Yönettiğiniz ekiplerde henüz üye bulunmuyor. 
-                    Üyeler eklendiğinde ve işlem yaptığında logları burada görebilirsiniz.
-                  </div>
-                )}
-                {teamInfo.managedTeams.length === 0 && (
-                  <div className="text-sm text-blue-700 bg-blue-100 p-3 rounded-lg border border-blue-200">
-                    <span className="font-medium">ℹ️ Bilgi:</span> Henüz yönettiğiniz bir ekip bulunmuyor. 
-                    Ekip lideri olarak atandığınızda, o ekipteki üyelerin loglarını burada görebilirsiniz.
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      <Card>
-        <CardContent className="pt-4 sm:pt-6 space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
+    <div className="space-y-1 h-full flex flex-col">
+      <div className="space-y-1">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 mb-1">
             <div className="text-xs sm:text-sm text-muted-foreground">
               {filteredLogs.length} kayıt bulundu
             </div>
@@ -1180,7 +1375,7 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
               <span className="text-xs sm:text-sm">CSV İndir</span>
             </Button>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+          <div className="flex flex-col sm:flex-row gap-1.5">
             <SearchInput
               placeholder="İçerikte ara..."
               value={searchTerm}
@@ -1211,16 +1406,20 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
             </Select>
           </div>
 
-          <div className="space-y-4">
-                {filteredLogs.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <FileText className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                <p>Hiç log bulunamadı</p>
-              </div>
+          {filteredLogs.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="h-8 w-8 mx-auto mb-2 opacity-20" />
+              <p className="text-sm">Hiç log bulunamadı</p>
+            </div>
                 ) : (
-                  filteredLogs.map((log) => {
+            <div className="max-h-[500px] overflow-y-auto overscroll-contain pr-2 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+              <div className="space-y-1">
+                {/* Tüm loglar - Scroll edilebilir */}
+                {filteredLogs.map((log) => {
                 const isExpanded = expandedLogs.has(log.id);
-                    const changedFields = log.action === "UPDATE" ? getChangedFields(log.oldData, log.newData) : [];
+                    const changedFields = log.action === "UPDATE" && log.oldData && typeof log.oldData === 'object' && log.newData && typeof log.newData === 'object' 
+                      ? getChangedFields(log.oldData as Record<string, unknown>, log.newData as Record<string, unknown>) 
+                      : [];
                     
                     return (
                   <Card key={log.id} className="hover:shadow-md transition-shadow">
@@ -1266,20 +1465,6 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
                                   <p className="text-xs text-muted-foreground">
                                     {summary.metaLine}
                                   </p>
-                                )}
-                                {log.action === "UPDATE" && changedFields.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 mt-2" onClick={(e) => e.stopPropagation()}>
-                                    {changedFields.slice(0, 5).map(field => (
-                                      <Badge key={field} variant="secondary" className="text-xs pointer-events-none">
-                                        {FIELD_LABELS[field] || field}
-                            </Badge>
-                                    ))}
-                                    {changedFields.length > 5 && (
-                                      <Badge variant="secondary" className="text-xs pointer-events-none">
-                                        +{changedFields.length - 5} daha
-                                      </Badge>
-                                    )}
-                                  </div>
                                 )}
                               </div>
                               <div className="flex-shrink-0">
@@ -1456,25 +1641,25 @@ export const AuditLogs = ({ mode = "admin", userId }: AuditLogsProps) => {
                     </CardContent>
                   </Card>
                     );
-                  })
-                )}
-                
-                {/* Daha fazla yükle butonu */}
-                {hasMore && mode === "admin" && !loading && (
-                  <div className="flex justify-center mt-6">
-                    <Button
-                      onClick={loadMore}
-                      variant="outline"
-                      className="gap-2"
-                    >
-                      <Loader2 className="h-4 w-4" />
-                      Daha Fazla Yükle ({limit} / {filteredLogs.length})
-                    </Button>
-                  </div>
-                )}
-          </div>
-        </CardContent>
-      </Card>
+                  })}
+              </div>
+              
+              {/* Daha fazla yükle butonu */}
+              {hasMore && mode === "admin" && !loading && (
+                <div className="flex justify-center mt-2">
+                  <Button
+                    onClick={loadMore}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Loader2 className="h-4 w-4" />
+                    Daha Fazla Yükle ({limit} / {filteredLogs.length})
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+      </div>
     </div>
   );
 };

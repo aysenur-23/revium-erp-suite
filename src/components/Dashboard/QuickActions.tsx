@@ -2,6 +2,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Users, Package, ShoppingCart, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { useState, useEffect } from "react";
+import { canCreateTask } from "@/utils/permissions";
+import { UserProfile } from "@/services/firebase/authService";
 
 interface QuickActionsProps {
   onCreateTask?: () => void;
@@ -17,6 +21,40 @@ export const QuickActions = ({
   onCreateSalesOrder,
 }: QuickActionsProps) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [canCreate, setCanCreate] = useState(false);
+  
+  // Görev oluşturma yetkisi - Firestore'dan kontrol et
+  useEffect(() => {
+    const checkPermission = async () => {
+      if (!user) {
+        setCanCreate(false);
+        return;
+      }
+      try {
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: null,
+          dateOfBirth: null,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const result = await canCreateTask(userProfile, []);
+        setCanCreate(result);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking create task permission:", error);
+        }
+        setCanCreate(false);
+      }
+    };
+    checkPermission();
+  }, [user]);
 
   const handleAction = (callback: (() => void) | undefined, fallbackPath: string) => {
     if (callback) {
@@ -27,7 +65,8 @@ export const QuickActions = ({
   };
 
   const actions = [
-    {
+    // Firestore'dan kontrol: canCreate yetkisi varsa "Yeni Görev" butonu gösterilir
+    ...(canCreate ? [{
       title: "Yeni Görev",
       description: "İş planına ekle",
       icon: Plus,
@@ -36,7 +75,7 @@ export const QuickActions = ({
       bgColor: "bg-blue-50",
       hoverBg: "hover:bg-blue-100",
       borderColor: "border-blue-100",
-    },
+    }]),
     {
       title: "Üretim Siparişi",
       description: "Üretim başlat",

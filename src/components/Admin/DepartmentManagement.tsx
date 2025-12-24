@@ -44,6 +44,10 @@ import {
 import { getAllUsers, UserProfile, updateFirebaseUserProfile } from "@/services/firebase/authService";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { canCreateResource, canUpdateResource, canDeleteResource, UserProfile } from "@/utils/permissions";
+import { collection, onSnapshot, Unsubscribe } from "firebase/firestore";
+import { firestore } from "@/lib/firebase";
+import { onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 
 export const DepartmentManagement = () => {
   const { isAdmin, user } = useAuth();
@@ -65,6 +69,33 @@ export const DepartmentManagement = () => {
   useEffect(() => {
     fetchDepartments();
     fetchUsers();
+    
+    // Departman koleksiyonu için real-time listener
+    let unsubscribe: Unsubscribe | null = null;
+    const unsubscribePermissionCache = onPermissionCacheChange(() => {
+      fetchDepartments();
+      fetchUsers();
+    });
+    if (firestore) {
+      const departmentsRef = collection(firestore, "departments");
+      unsubscribe = onSnapshot(
+        departmentsRef,
+        () => {
+          // Değişiklik geldiğinde departman listesini yeniden çek
+          fetchDepartments();
+        },
+        (error) => {
+          if (import.meta.env.DEV) {
+            console.error("Departments snapshot error:", error);
+          }
+        }
+      );
+    }
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+      unsubscribePermissionCache?.();
+    };
   }, []);
 
   const fetchUsers = async () => {
@@ -76,11 +107,15 @@ export const DepartmentManagement = () => {
       );
       setUsers(validUsers);
       if (validUsers.length === 0 && allUsers.length > 0) {
-        console.warn("Geçerli kullanıcı bulunamadı, tüm kullanıcılar:", allUsers);
+        if (import.meta.env.DEV) {
+          console.warn("Geçerli kullanıcı bulunamadı, tüm kullanıcılar:", allUsers);
+        }
       }
-    } catch (error: any) {
-      console.error("Kullanıcılar yüklenirken hata:", error);
-      toast.error("Kullanıcılar yüklenirken hata: " + (error.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Kullanıcılar yüklenirken hata:", error);
+      }
+      toast.error("Kullanıcılar yüklenirken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
       setUsers([]);
     }
   };
@@ -89,8 +124,8 @@ export const DepartmentManagement = () => {
     try {
       const data = await getDepartments();
       setDepartments(data);
-    } catch (error: any) {
-      toast.error("Departmanlar yüklenirken hata: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Departmanlar yüklenirken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     } finally {
       setLoading(false);
     }
@@ -99,6 +134,19 @@ export const DepartmentManagement = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
+
+    // Yetki kontrolü
+    if (editingDept) {
+      if (!canUpdate && !isAdmin) {
+        toast.error("Departman düzenleme yetkiniz yok.");
+        return;
+      }
+    } else {
+      if (!canCreate && !isAdmin) {
+        toast.error("Departman oluşturma yetkiniz yok.");
+        return;
+      }
+    }
 
     try {
       if (editingDept) {
@@ -123,19 +171,25 @@ export const DepartmentManagement = () => {
       setEditingDept(null);
       setFormData({ name: "", description: "" });
       fetchDepartments();
-    } catch (error: any) {
-      toast.error("İşlem sırasında hata: " + error.message);
+    } catch (error: unknown) {
+      toast.error("İşlem sırasında hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     }
   };
 
   const handleDelete = async (id: string) => {
+    // Yetki kontrolü
+    if (!canDelete && !isAdmin) {
+      toast.error("Departman silme yetkiniz yok.");
+      return;
+    }
+
     setDeletingId(id);
     try {
       await deleteDepartment(id, user?.id || null);
       toast.success("Departman başarıyla silindi");
       fetchDepartments();
-    } catch (error: any) {
-      toast.error("Silme hatası: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Silme hatası: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     } finally {
       setDeletingId(null);
     }
@@ -160,8 +214,8 @@ export const DepartmentManagement = () => {
       await createDefaultDepartments();
       toast.success("Varsayılan ekipler oluşturuldu");
       fetchDepartments();
-    } catch (error: any) {
-      toast.error("Varsayılan ekipler oluşturulurken hata: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Varsayılan ekipler oluşturulurken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     }
   };
 
@@ -214,7 +268,7 @@ export const DepartmentManagement = () => {
         managerId: newManagerId,
       }, user?.id || null);
       
-      // Yeni manager'ın rolünü team_leader olarak güncelle
+      // Yeni manager'ın rolünü team_leader olarak güncelle (ZORUNLU)
       if (newManagerId) {
         const newManager = users.find(u => u.id === newManagerId);
         if (newManager) {
@@ -223,18 +277,65 @@ export const DepartmentManagement = () => {
             await updateFirebaseUserProfile(newManagerId, {
               role: [...currentRoles, "team_leader"],
             });
+            toast.success(`${newManager.fullName || newManager.email} kullanıcısı ekip lideri rolü ile "${selectedDeptForLeader.name}" departmanının yöneticisi olarak atandı`);
+          } else {
+            toast.success(`${newManager.fullName || newManager.email} kullanıcısı "${selectedDeptForLeader.name}" departmanının yöneticisi olarak atandı`);
+          }
+          
+          // Ekip kontrolü yap (uyarı ver ama engelleme)
+          try {
+            const { validateTeamLeaderHasTeam } = await import("@/utils/validateTeamLeader");
+            const teamValidation = await validateTeamLeaderHasTeam(newManagerId);
+            if (!teamValidation.isValid) {
+              toast.warning("Uyarı: Ekip lideri henüz ekip üyesine sahip değil. Lütfen ekip yönetiminden ekip üyeleri ekleyin.");
+            }
+          } catch (error: unknown) {
+            if (import.meta.env.DEV) {
+              console.error("Ekip kontrolü hatası:", error);
+            }
           }
         }
+      } else {
+        // Manager kaldırılıyorsa, eğer başka departmanda manager değilse team_leader rolünü kaldır
+        // (Bu zaten yukarıda yapılıyor)
       }
       
+      // Permission cache'i temizle ve yeniden yükle
+      try {
+        const { clearPermissionCache } = await import("@/services/firebase/rolePermissionsService");
+        clearPermissionCache();
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Permission cache temizleme hatası:", error);
+        }
+      }
+
+      // Eğer değişiklik yapılan kullanıcı şu an giriş yapmış kullanıcıysa, AuthContext'i güncelle
+      if (newManagerId === user?.id) {
+        try {
+          const { getUserProfile } = await import("@/services/firebase/authService");
+          const updatedProfile = await getUserProfile();
+          if (updatedProfile) {
+            // AuthContext'teki checkRoles fonksiyonunu tetiklemek için sayfayı yenile
+            window.location.reload(); // En güvenilir yöntem: sayfayı yenile
+          }
+        } catch (error) {
+          if (import.meta.env.DEV) {
+            console.error("Kullanıcı profilini yeniden yükleme hatası:", error);
+          }
+          // Hata durumunda sayfayı yenile
+          window.location.reload();
+        }
+      }
+
       toast.success("Ekip lideri başarıyla atandı");
       setAssignLeaderOpen(false);
       setSelectedDeptForLeader(null);
       setSelectedUserId("");
       fetchDepartments();
       fetchUsers(); // Kullanıcı rolleri güncellendi, yeniden yükle
-    } catch (error: any) {
-      toast.error("Ekip lideri atanırken hata: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Ekip lideri atanırken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     } finally {
       setAssigningLeader(false);
     }
@@ -255,12 +356,12 @@ export const DepartmentManagement = () => {
           <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <span>Departmanlar ({departments.length})</span>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              {isAdmin && (
+              {(isAdmin || canCreate) && (
                 <Button variant="outline" onClick={handleCreateDefaults}>
                   Varsayılan Ekipleri Oluştur
                 </Button>
               )}
-              {isAdmin && (
+              {(isAdmin || canCreate) && (
                 <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
                   <DialogTrigger asChild>
                     <Button>
@@ -378,7 +479,7 @@ export const DepartmentManagement = () => {
                               <span className="hidden sm:inline">Lider Ata</span>
                         </Button>
                       )}
-                      {isAdmin && (
+                      {(isAdmin || canUpdate) && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -390,7 +491,7 @@ export const DepartmentManagement = () => {
                               <span className="hidden sm:inline">Düzenle</span>
                         </Button>
                       )}
-                      {isAdmin && (
+                      {(isAdmin || canDelete) && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button

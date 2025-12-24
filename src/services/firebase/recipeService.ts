@@ -82,7 +82,9 @@ export const getProductRecipes = async (productId: string): Promise<RecipeWithMa
             continue;
           }
         } catch (error) {
-          console.error("Error fetching raw material:", error);
+          if (import.meta.env.DEV) {
+            console.error("Error fetching raw material:", error);
+          }
           // Hata durumunda da bu reçeteyi atla
           continue;
         }
@@ -95,9 +97,11 @@ export const getProductRecipes = async (productId: string): Promise<RecipeWithMa
     }
     
     return recipes;
-  } catch (error: any) {
-    console.error("Error getting product recipes:", error);
-    throw new Error(error.message || "Reçeteler yüklenemedi");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error getting product recipes:", error);
+    }
+    throw new Error(error instanceof Error ? error.message : "Reçeteler yüklenemedi");
   }
 };
 
@@ -121,9 +125,11 @@ export const addRecipeItem = async (
     
     const docRef = await addDoc(recipesRef, newRecipe);
     return docRef.id;
-  } catch (error: any) {
-    console.error("Error adding recipe item:", error);
-    throw new Error(error.message || "Reçete eklenemedi");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error adding recipe item:", error);
+    }
+    throw new Error(error instanceof Error ? error.message : "Reçete eklenemedi");
   }
 };
 
@@ -140,9 +146,11 @@ export const updateRecipeItem = async (
       quantityPerUnit,
       updatedAt: Timestamp.now(),
     });
-  } catch (error: any) {
-    console.error("Error updating recipe item:", error);
-    throw new Error(error.message || "Reçete güncellenemedi");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error updating recipe item:", error);
+    }
+    throw new Error(error instanceof Error ? error.message : "Reçete güncellenemedi");
   }
 };
 
@@ -153,9 +161,11 @@ export const deleteRecipeItem = async (recipeId: string): Promise<void> => {
   try {
     const recipeRef = doc(db, RECIPES_COLLECTION, recipeId);
     await deleteDoc(recipeRef);
-  } catch (error: any) {
-    console.error("Error deleting recipe item:", error);
-    throw new Error(error.message || "Reçete silinemedi");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error deleting recipe item:", error);
+    }
+    throw new Error(error instanceof Error ? error.message : "Reçete silinemedi");
   }
 };
 
@@ -188,7 +198,9 @@ export const getRawMaterialRecipes = async (rawMaterialId: string): Promise<Reci
             } as RecipeWithProduct["product"];
           }
         } catch (error) {
-          console.error("Error fetching product:", error);
+          if (import.meta.env.DEV) {
+            console.error("Error fetching product:", error);
+          }
         }
       }
       
@@ -196,9 +208,11 @@ export const getRawMaterialRecipes = async (rawMaterialId: string): Promise<Reci
     }
     
     return recipes;
-  } catch (error: any) {
-    console.error("Error getting raw material recipes:", error);
-    throw new Error(error.message || "Reçeteler yüklenemedi");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error getting raw material recipes:", error);
+    }
+    throw new Error(error instanceof Error ? error.message : "Reçeteler yüklenemedi");
   }
 };
 

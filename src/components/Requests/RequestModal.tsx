@@ -38,22 +38,25 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
         const fetchManagers = async () => {
             try {
                 const users = await getAllUsers();
-                // Admin, Süper Admin veya Ekip Lideri olanları filtrele
+                // Süper Admin veya Ekip Lideri olanları filtrele
                 // role array veya string olabilir, her ikisini de kontrol et
                 const eligibleManagers = users.filter(u => {
                     if (!u || !u.role) return false;
-                    const roles = Array.isArray(u.role) ? u.role : [u.role];
+                    const roles = (Array.isArray(u.role) ? u.role : [u.role]).map((r) =>
+                      r === "admin" ? "super_admin" : r
+                    );
                     return roles.some(r => 
-                        r === "admin" || 
                         r === "super_admin" || 
                         r === "team_leader" ||
-                        (typeof r === "string" && (r.includes("admin") || r.includes("team_leader")))
+                        (typeof r === "string" && r.includes("team_leader"))
                     );
                 });
                 setManagers(eligibleManagers);
-            } catch (error) {
-                console.error("Yöneticiler yüklenemedi", error);
-                toast.error("Yöneticiler yüklenirken hata oluştu: " + ((error as Error).message || "Bilinmeyen hata"));
+            } catch (error: unknown) {
+                if (import.meta.env.DEV) {
+                  console.error("Yöneticiler yüklenemedi", error);
+                }
+                toast.error("Yöneticiler yüklenirken hata oluştu: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
                 setManagers([]);
             }
         };
@@ -74,7 +77,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
     setLoading(true);
     try {
       await createRequest({
-        type: type as any,
+        type: (type === "overtime" ? "other" : type) as "leave" | "purchase" | "advance" | "expense" | "other",
         title,
         description,
         amount: amount ? parseFloat(amount) : undefined,
@@ -95,9 +98,11 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
       setRequestDate("");
       setEndDate("");
       setAssignedTo("");
-    } catch (error: any) {
-      console.error("Request creation error:", error);
-      toast.error("Talep oluşturulamadı: " + error.message);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Request creation error:", error);
+      }
+      toast.error("Talep oluşturulamadı: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     } finally {
       setLoading(false);
     }
@@ -105,7 +110,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           {/* Header */}
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -114,7 +119,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                   Yeni Talep Oluştur
                 </DialogTitle>
                 <DialogDescription className="sr-only">
@@ -170,7 +175,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
                         <SelectContent>
                           {managers.map(manager => (
                             <SelectItem key={manager.id} value={manager.id}>
-                              {manager.fullName || manager.displayName || manager.email} ({manager.role.includes('super_admin') ? 'Yönetici' : manager.role.includes('team_leader') ? 'Ekip Lideri' : 'Admin'})
+                              {manager.fullName || manager.displayName || manager.email} ({manager.role.includes('super_admin') || manager.role.includes('main_admin') ? 'Yönetici' : manager.role.includes('team_leader') ? 'Ekip Lideri' : 'Personel'})
                             </SelectItem>
                           ))}
                         </SelectContent>

@@ -94,7 +94,7 @@ export const showPermissionErrorToast = (
  * Hata mesajını kontrol et ve uygun toast göster
  */
 export const handleErrorToast = (
-  error: any, 
+  error: unknown, 
   defaultMessage?: string,
   operation?: "create" | "update" | "delete" | "read" | "interact" | "assign" | "approve" | "view",
   resource?: "task" | "project" | "user" | "department" | "checklist" | "attachment" | "log" | "general"

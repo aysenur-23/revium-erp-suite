@@ -267,18 +267,18 @@ try {
   RewriteEngine On
   RewriteBase /
 
-  # Static dosyalar için direkt erişim (MIME type'ları korumak için önce kontrol et)
-  # Gerçek dosyalar varsa direkt servis et, yoksa SPA routing'e geç
-  RewriteCond %{REQUEST_FILENAME} -f
-  RewriteCond %{REQUEST_URI} \\.(js|mjs|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|json|xml|webp|map)$ [NC]
-  RewriteRule ^ - [L]
-  
-  # Assets klasöründeki dosyalar için direkt erişim
+  # Assets klasöründeki dosyalar için ÖNCE kontrol et (en yüksek öncelik)
   RewriteCond %{REQUEST_URI} ^/assets/ [NC]
   RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
 
-  # SPA Routing - Tüm istekleri index.html'e yönlendir
+  # Static dosyalar için direkt erişim (MIME type'ları korumak için)
+  # Gerçek dosyalar varsa direkt servis et, yoksa SPA routing'e geç
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteCond %{REQUEST_URI} \\.(js|mjs|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|json|xml|webp|map)$ [NC]
+  RewriteRule ^ - [L]
+
+  # SPA Routing - Tüm istekleri index.html'e yönlendir (sadece dosya yoksa)
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^ index.html [L]
@@ -310,39 +310,43 @@ try {
 </IfModule>
 
 # MIME Types - Kritik: JS ve CSS dosyaları için doğru MIME type'ları ayarla
+# Bu bölüm EN ÜSTTE olmalı, RewriteRule'lardan ÖNCE çalışmalı
 <IfModule mod_mime.c>
-  # JavaScript dosyaları
-  AddType application/javascript js
-  AddType application/javascript mjs
-  AddType text/javascript js
+  # JavaScript dosyaları - ÖNCE application/javascript, sonra text/javascript
+  AddType application/javascript .js
+  AddType application/javascript .mjs
+  AddType text/javascript .js
   
   # CSS dosyaları
-  AddType text/css css
+  AddType text/css .css
   
   # Diğer dosya tipleri
-  AddType image/svg+xml svg
-  AddType application/json json
-  AddType application/xml xml
-  AddType text/xml xml
+  AddType image/svg+xml .svg
+  AddType application/json .json
+  AddType application/xml .xml
+  AddType text/xml .xml
   
   # Font dosyaları
-  AddType font/woff woff
-  AddType font/woff2 woff2
-  AddType application/font-ttf ttf
-  AddType application/vnd.ms-fontobject eot
+  AddType font/woff .woff
+  AddType font/woff2 .woff2
+  AddType application/font-ttf .ttf
+  AddType application/vnd.ms-fontobject .eot
 </IfModule>
 
 # Force correct MIME types for JS and CSS (Header ile - mod_headers varsa)
+# Bu RewriteRule'lardan ÖNCE çalışmalı
 <IfModule mod_headers.c>
   <FilesMatch "\\.(js|mjs)$">
-    Header set Content-Type "application/javascript"
+    Header set Content-Type "application/javascript; charset=utf-8"
+    Header unset X-Content-Type-Options
   </FilesMatch>
   <FilesMatch "\\.css$">
-    Header set Content-Type "text/css"
+    Header set Content-Type "text/css; charset=utf-8"
+    Header unset X-Content-Type-Options
   </FilesMatch>
 </IfModule>
 
-# Fallback: ForceType (mod_mime varsa)
+# Fallback: ForceType (mod_mime varsa) - EN SON çalışmalı
 <IfModule mod_mime.c>
   <FilesMatch "\\.(js|mjs)$">
     ForceType application/javascript

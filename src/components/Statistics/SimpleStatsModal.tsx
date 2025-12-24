@@ -21,7 +21,7 @@ interface SimpleStatsModalProps {
 export const SimpleStatsModal = ({ open, onOpenChange, title, stats }: SimpleStatsModalProps) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl w-[80vw] max-h-[85vh] overflow-y-auto">
         <VisuallyHidden>
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>

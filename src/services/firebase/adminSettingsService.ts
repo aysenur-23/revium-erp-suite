@@ -73,9 +73,11 @@ export const getAdminSettings = async (): Promise<AdminSettings | null> => {
       id: settingsSnap.id,
       ...settingsSnap.data(),
     } as AdminSettings;
-  } catch (error: any) {
-    console.error("Error getting admin settings:", error);
-    throw new Error(error.message || "Admin ayarları yüklenemedi");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error getting admin settings:", error);
+    }
+    throw new Error(error instanceof Error ? error.message : "Admin ayarları yüklenemedi");
   }
 };
 
@@ -100,7 +102,7 @@ export const updateAdminSettings = async (
     };
     
     await setDoc(settingsRef, updatedSettings, { merge: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error updating admin settings:", error);
     throw new Error(error.message || "Admin ayarları güncellenemedi");
   }

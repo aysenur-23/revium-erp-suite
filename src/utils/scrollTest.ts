@@ -98,21 +98,25 @@ export function logScrollTest(): void {
 
   const result = testMainLayoutScroll();
   if (!result) {
-    console.warn("Scroll test: MainLayout elementi bulunamadı");
+    if (import.meta.env.DEV) {
+      console.warn("Scroll test: MainLayout elementi bulunamadı");
+    }
     return;
   }
 
-  console.group("🔍 Scroll Test Sonuçları");
-  console.log("Scroll edilebilir:", result.isScrollable ? "✅" : "❌");
-  console.log("Overflow var:", result.hasOverflow ? "✅" : "❌");
-  console.log("Overflow-Y:", result.overflowY);
-  console.log("Scroll Height:", result.scrollHeight, "px");
-  console.log("Client Height:", result.clientHeight, "px");
-  if (result.issues.length > 0) {
-    console.warn("Sorunlar:", result.issues);
-  } else {
-    console.log("✅ Scroll yapılandırması doğru görünüyor");
+  if (import.meta.env.DEV) {
+    console.group("🔍 Scroll Test Sonuçları");
+    console.log("Scroll edilebilir:", result.isScrollable ? "✅" : "❌");
+    console.log("Overflow var:", result.hasOverflow ? "✅" : "❌");
+    console.log("Overflow-Y:", result.overflowY);
+    console.log("Scroll Height:", result.scrollHeight, "px");
+    console.log("Client Height:", result.clientHeight, "px");
+    if (result.issues.length > 0) {
+      console.warn("Sorunlar:", result.issues);
+    } else {
+      console.log("✅ Scroll yapılandırması doğru görünüyor");
+    }
+    console.groupEnd();
   }
-  console.groupEnd();
 }
 

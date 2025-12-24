@@ -31,7 +31,7 @@ export interface SavedReport {
   fileSize: number;
   createdBy: string;
   createdAt: Timestamp;
-  metadata?: Record<string, any> | null;
+  metadata?: Record<string, unknown> | null;
   storageProvider?: "firebase" | "google_drive";
   driveFileId?: string | null;
   driveLink?: string | null;
@@ -48,7 +48,7 @@ export const saveReport = async (
   options?: {
     startDate?: string;
     endDate?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }
 ): Promise<SavedReport> => {
   try {
@@ -62,7 +62,7 @@ export const saveReport = async (
       if (import.meta.env.DEV) {
         console.log("✅ PDF Google Drive'a başarıyla yüklendi:", uploadInfo.fileId);
       }
-    } catch (uploadError: any) {
+    } catch (uploadError: unknown) {
       // Hata - detaylı log (hem dev hem production'da görünür olmalı)
       const errorMessage = uploadError?.message || String(uploadError);
       if (import.meta.env.DEV) {
@@ -133,7 +133,7 @@ export const getSavedReports = async (filters?: {
       id: doc.id,
       ...doc.data(),
     })) as SavedReport[];
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Get saved reports error:", error);
     // Firestore index hatası durumunda boş array döndür (dashboard'un yüklenmesini engelleme)
     if (error?.code === "failed-precondition" || error?.message?.includes("index")) {

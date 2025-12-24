@@ -12,6 +12,7 @@ import {
   RecipeWithMaterial,
 } from "@/services/firebase/recipeService";
 import { getRawMaterials, RawMaterial } from "@/services/firebase/materialService";
+import { Product } from "@/services/firebase/productService";
 import { Plus, Trash2 } from "lucide-react";
 import {
   Table,
@@ -32,7 +33,7 @@ import {
 interface ProductRecipeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  product: any;
+  product: Product;
 }
 
 export const ProductRecipeDialog = ({
@@ -57,12 +58,12 @@ export const ProductRecipeDialog = ({
     try {
       const recipesData = await getProductRecipes(product.id);
       setRecipes(recipesData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Sadece development'ta log göster
       if (import.meta.env.DEV) {
         console.error("Reçete yüklenirken hata:", error);
       }
-      toast.error("Reçeteler yüklenemedi: " + error.message);
+      toast.error("Reçeteler yüklenemedi: " + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -70,12 +71,12 @@ export const ProductRecipeDialog = ({
     try {
       const materialsData = await getRawMaterials();
       setMaterials(materialsData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Sadece development'ta log göster
       if (import.meta.env.DEV) {
         console.error("Hammaddeler yüklenirken hata:", error);
       }
-      toast.error("Hammaddeler yüklenemedi: " + error.message);
+      toast.error("Hammaddeler yüklenemedi: " + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -105,8 +106,8 @@ export const ProductRecipeDialog = ({
       fetchRecipes();
       setSelectedMaterial(null);
       setNewQuantity("");
-    } catch (error: any) {
-      toast.error("Hata: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Hata: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setLoading(false);
     }
@@ -120,8 +121,8 @@ export const ProductRecipeDialog = ({
       await deleteRecipeItem(recipeId);
       toast.success("Hammadde çıkarıldı");
       fetchRecipes();
-    } catch (error: any) {
-      toast.error("Hata: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Hata: " + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -132,8 +133,8 @@ export const ProductRecipeDialog = ({
       await updateRecipeItem(recipeId, parseFloat(newQty));
       toast.success("Miktar güncellendi");
       fetchRecipes();
-    } catch (error: any) {
-      toast.error("Hata: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Hata: " + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -146,7 +147,7 @@ export const ProductRecipeDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl w-[80vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{product.name} - Reçete Yönetimi</DialogTitle>
           <DialogDescription>Ürün reçetesini düzenleyin ve hammaddeleri yönetin</DialogDescription>

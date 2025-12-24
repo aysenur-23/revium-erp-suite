@@ -14,8 +14,8 @@ interface DetailedValueReportModalProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   type: "rawMaterials" | "products" | "customers";
-  data: any[];
-  orders?: any[]; // Customers için sipariş verisi
+  data: Array<Record<string, unknown>>;
+  orders?: Array<Record<string, unknown>>; // Customers için sipariş verisi
 }
 
 export const DetailedValueReportModal = ({ 
@@ -28,7 +28,15 @@ export const DetailedValueReportModal = ({
 }: DetailedValueReportModalProps) => {
 
   // useMemo async döndüremez, bu yüzden useEffect kullanıyoruz
-  const [report, setReport] = useState<any>(null);
+  const [report, setReport] = useState<{
+    totalValue: number;
+    totalValueTRY: number;
+    byCategory: Array<{ category: string; count: number; value: number; valueTRY: number }>;
+    byCurrency: Array<{ currency: string; count: number; value: number; valueTRY: number }>;
+    byStatus: Array<{ status: string; count: number; value: number; valueTRY: number }>;
+    topItems: Array<{ name: string; value: number; valueTRY: number; stock: number; cost: number; currency?: string; category?: string }>;
+    averageCost: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -74,7 +82,7 @@ export const DetailedValueReportModal = ({
 
             const customerId = order.customerId || order.customer_id;
             if (customerId) {
-              const customer = data.find((c: any) => c.id === customerId);
+              const customer = data.find((c): c is Record<string, unknown> & { id: string } => typeof c === 'object' && c !== null && 'id' in c && typeof c.id === 'string' && c.id === customerId);
               const customerName = customer?.name || "Bilinmeyen Müşteri";
               
               const custData = customerMap.get(customerId) || { name: customerName, orderCount: 0, totalAmount: 0, totalAmountTRY: 0 };
@@ -323,9 +331,9 @@ export const DetailedValueReportModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[95vw] sm:w-[90vw] max-h-[90vh] flex flex-col p-0 !overflow-hidden">
+      <DialogContent className="max-w-5xl w-[80vw] sm:w-[80vw] max-h-[90vh] flex flex-col p-0 !overflow-hidden">
         <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
-          <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground">
+          <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground">
             {title}
           </DialogTitle>
           <DialogDescription className="sr-only">
@@ -411,7 +419,7 @@ export const DetailedValueReportModal = ({
                           </TableRow>
                         </TableHeader>
                       <TableBody>
-                        {report.byCategory.map((item: any) => (
+                        {report.byCategory.map((item: { category: string; count: number; valueTRY: number }) => (
                           <TableRow key={item.category}>
                             <TableCell className="font-medium">{item.category}</TableCell>
                             <TableCell className="text-right">{item.count}</TableCell>
@@ -453,7 +461,7 @@ export const DetailedValueReportModal = ({
                           </TableRow>
                         </TableHeader>
                       <TableBody>
-                        {report.byCurrency.map((item: any) => (
+                        {report.byCurrency.map((item: { currency: string; count: number; value: number; valueTRY: number }) => (
                           <TableRow key={item.currency}>
                             <TableCell className="font-medium">
                               <Badge variant="outline">{item.currency}</Badge>
@@ -495,7 +503,7 @@ export const DetailedValueReportModal = ({
                           </TableRow>
                         </TableHeader>
                       <TableBody>
-                        {report.byStatus.map((item: any) => {
+                        {report.byStatus.map((item: { status: string; count: number; valueTRY: number }) => {
                           const StatusIcon = getStatusIcon(item.status);
                           return (
                             <TableRow key={item.status}>
@@ -550,7 +558,7 @@ export const DetailedValueReportModal = ({
                           </TableRow>
                         </TableHeader>
                       <TableBody>
-                        {report.topItems.map((item: any, index: number) => (
+                        {report.topItems.map((item: { name: string; category?: string; stock?: number; cost?: number; currency?: string; valueTRY: number }, index: number) => (
                           <TableRow key={index}>
                             <TableCell className="font-medium">{item.name}</TableCell>
                             <TableCell>

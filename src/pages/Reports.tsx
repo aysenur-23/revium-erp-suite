@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, TrendingUp, Package, Users, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SalesReportDialog } from "@/components/Reports/SalesReportDialog";
-import { ProductionReportDialog } from "@/components/Reports/ProductionReportDialog";
-import { CustomerReportDialog } from "@/components/Reports/CustomerReportDialog";
-import { FinancialReportDialog } from "@/components/Reports/FinancialReportDialog";
-import { SalesQuoteForm } from "@/components/Reports/SalesQuoteForm";
+// Lazy load dialog components to avoid loading pdfGenerator.ts on initial page load
+const SalesReportDialog = lazy(() => import("@/components/Reports/SalesReportDialog").then(module => ({ default: module.SalesReportDialog })));
+const ProductionReportDialog = lazy(() => import("@/components/Reports/ProductionReportDialog").then(module => ({ default: module.ProductionReportDialog })));
+const CustomerReportDialog = lazy(() => import("@/components/Reports/CustomerReportDialog").then(module => ({ default: module.CustomerReportDialog })));
+const FinancialReportDialog = lazy(() => import("@/components/Reports/FinancialReportDialog").then(module => ({ default: module.FinancialReportDialog })));
+const SalesQuoteForm = lazy(() => import("@/components/Reports/SalesQuoteForm").then(module => ({ default: module.SalesQuoteForm })));
 // apiClient moved to legacy_before_firebase_migration
 // Reports should use Firebase services
 import { toast } from "sonner";
@@ -20,7 +21,7 @@ const Reports = () => {
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
   const [financialDialogOpen, setFinancialDialogOpen] = useState(false);
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
-  const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [savedReports, setSavedReports] = useState<Array<{ id: string; title: string; reportType: string; createdAt?: unknown; [key: string]: unknown }>>([]);
   const [reportsIndexLink, setReportsIndexLink] = useState<string | null>(null);
   const [auditIndexLink, setAuditIndexLink] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -43,9 +44,11 @@ const Reports = () => {
       const reports = await getSavedReports({ createdBy: user?.id });
       setSavedReports(reports);
       setReportsIndexLink(null);
-    } catch (error: any) {
-      console.error("Fetch saved reports error:", error);
-      const link = parseIndexLink(error?.message);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Fetch saved reports error:", error);
+      }
+      const link = parseIndexLink(error instanceof Error ? error.message : String(error));
       if (link) {
         setReportsIndexLink(link);
         toast.warning("Raporlar için Firestore index’i oluşturmanız gerekiyor.");
@@ -55,7 +58,7 @@ const Reports = () => {
     }
   };
 
-  const downloadReport = async (report: any) => {
+  const downloadReport = async (report: { id: string; title: string; createdAt?: unknown; [key: string]: unknown }) => {
     setDownloading(report.id);
     try {
       if (report.fileUrl) {
@@ -70,8 +73,10 @@ const Reports = () => {
       } else {
         toast.error("Rapor dosyası bulunamadı");
       }
-    } catch (error: any) {
-      console.error("Download report error:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Download report error:", error);
+      }
       toast.error(error.message || "Rapor indirilemedi");
     } finally {
       setDownloading(null);
@@ -128,9 +133,9 @@ const Reports = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">Raporlar</h1>
+          <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Raporlar</h1>
           <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">İş analizleri ve raporlama</p>
         </div>
 
@@ -142,7 +147,7 @@ const Reports = () => {
                   <div className="p-2 sm:p-2.5 md:p-3 rounded-lg bg-primary/10 flex-shrink-0">
                     <report.icon className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-primary" />
                   </div>
-                  <CardTitle className="text-sm sm:text-base md:text-lg">{report.title}</CardTitle>
+                  <CardTitle className="text-[14px] sm:text-[15px]">{report.title}</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
@@ -162,11 +167,32 @@ const Reports = () => {
           ))}
         </div>
 
+        {/* Lazy load dialogs only when they are opened */}
+        {salesDialogOpen && (
+          <Suspense fallback={null}>
         <SalesReportDialog open={salesDialogOpen} onOpenChange={(open) => { setSalesDialogOpen(open); if (!open) fetchSavedReports(); }} />
+          </Suspense>
+        )}
+        {productionDialogOpen && (
+          <Suspense fallback={null}>
         <ProductionReportDialog open={productionDialogOpen} onOpenChange={(open) => { setProductionDialogOpen(open); if (!open) fetchSavedReports(); }} />
+          </Suspense>
+        )}
+        {customerDialogOpen && (
+          <Suspense fallback={null}>
         <CustomerReportDialog open={customerDialogOpen} onOpenChange={(open) => { setCustomerDialogOpen(open); if (!open) fetchSavedReports(); }} />
+          </Suspense>
+        )}
+        {financialDialogOpen && (
+          <Suspense fallback={null}>
         <FinancialReportDialog open={financialDialogOpen} onOpenChange={(open) => { setFinancialDialogOpen(open); if (!open) fetchSavedReports(); }} />
+          </Suspense>
+        )}
+        {quoteDialogOpen && (
+          <Suspense fallback={null}>
         <SalesQuoteForm open={quoteDialogOpen} onOpenChange={setQuoteDialogOpen} />
+          </Suspense>
+        )}
 
         {reportsIndexLink && (
           <div className="rounded-lg border border-amber-500 bg-amber-50 p-4 text-sm text-amber-900 space-y-2">
@@ -193,7 +219,7 @@ const Reports = () => {
 
         <Card>
           <CardHeader className="p-3 sm:p-4 md:p-6">
-            <CardTitle className="text-base sm:text-lg md:text-xl">Son Oluşturulan Raporlar</CardTitle>
+            <CardTitle className="text-[14px] sm:text-[15px]">Son Oluşturulan Raporlar</CardTitle>
           </CardHeader>
           <CardContent className="p-3 sm:p-4 md:p-6">
             {savedReports.length === 0 ? (
@@ -213,7 +239,9 @@ const Reports = () => {
                           {getReportTypeLabel(report.reportType)} • {report.createdAt 
                             ? (report.createdAt instanceof Date 
                                 ? report.createdAt 
-                                : (report.createdAt as any)?.toDate?.() || new Date()
+                                : (report.createdAt && typeof report.createdAt === 'object' && 'toDate' in report.createdAt && typeof (report.createdAt as { toDate: () => Date }).toDate === 'function') 
+                                  ? (report.createdAt as { toDate: () => Date }).toDate() 
+                                  : new Date()
                               ).toLocaleDateString('tr-TR')
                             : '-'}
                         </p>

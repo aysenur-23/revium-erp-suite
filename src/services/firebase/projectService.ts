@@ -56,12 +56,15 @@ export const getProjects = async (filters?: {
       id: doc.id,
       ...doc.data(),
     })) as Project[];
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Index hatası durumunda basit query dene
-    if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
+    const errorObj = error && typeof error === 'object' ? error as { code?: string; message?: string } : null;
+    if (errorObj?.code === 'failed-precondition' || errorObj?.message?.includes('index')) {
       // Sessizce fallback'e geç (sadece debug için log)
-      if (process.env.NODE_ENV === 'development') {
-        console.debug("Project index bulunamadı, basit query kullanılıyor");
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.debug("Project index bulunamadı, basit query kullanılıyor");
+        }
       }
       try {
         // Basit query - sadece orderBy ile
@@ -81,8 +84,12 @@ export const getProjects = async (filters?: {
         }
         
         return projects;
-      } catch (fallbackError) {
-        console.error("Fallback query de başarısız:", fallbackError);
+      } catch (fallbackError: unknown) {
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.error("Fallback query de başarısız:", fallbackError);
+          }
+        }
         // Son çare: filtreleme olmadan
         const snapshot = await getDocs(collection(firestore, PROJECTS_COLLECTION));
         let projects = snapshot.docs.map((doc) => ({
@@ -108,7 +115,11 @@ export const getProjects = async (filters?: {
         return projects;
       }
     }
-    console.error("Get projects error:", error);
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Get projects error:", error);
+      }
+    }
     throw error;
   }
 };
@@ -128,8 +139,10 @@ export const getProjectById = async (projectId: string): Promise<Project | null>
       id: projectDoc.id,
       ...projectDoc.data(),
     } as Project;
-  } catch (error) {
-    console.error("Get project by id error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get project by id error:", error);
+    }
     throw error;
   }
 };
@@ -141,10 +154,10 @@ export const createProject = async (
   projectData: Omit<Project, "id" | "createdAt" | "updatedAt">
 ): Promise<Project> => {
   try {
-    const projectDoc: any = {
+    const projectDoc: Omit<Project, "id"> = {
       ...projectData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp() as Timestamp,
+      updatedAt: serverTimestamp() as Timestamp,
     };
     
     const docRef = await addDoc(collection(firestore, PROJECTS_COLLECTION), projectDoc);
@@ -158,8 +171,10 @@ export const createProject = async (
     await logAudit("CREATE", "projects", docRef.id, projectData.createdBy, null, createdProject);
 
     return createdProject;
-  } catch (error) {
-    console.error("Create project error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Create project error:", error);
+    }
     throw error;
   }
 };
@@ -207,8 +222,10 @@ export const updateProject = async (
     if (userId) {
       await logAudit("UPDATE", "projects", projectId, userId, oldProject, newProject);
     }
-  } catch (error) {
-    console.error("Update project error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Update project error:", error);
+    }
     throw error;
   }
 };
@@ -241,8 +258,10 @@ export const getOrCreatePrivateTasksProject = async (userId: string): Promise<Pr
     });
 
     return newProject;
-  } catch (error) {
-    console.error("Get or create private tasks project error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get or create private tasks project error:", error);
+    }
     throw error;
   }
 };
@@ -290,8 +309,10 @@ export const deleteProject = async (projectId: string, userId?: string): Promise
     if (userId) {
       await logAudit("DELETE", "projects", projectId, userId, oldProject, null);
     }
-  } catch (error) {
-    console.error("Delete project error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Delete project error:", error);
+    }
     throw error;
   }
 };

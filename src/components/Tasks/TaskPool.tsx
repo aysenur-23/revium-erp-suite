@@ -21,6 +21,7 @@ import {
 } from "@/services/firebase/taskService";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { getProjects, Project } from "@/services/firebase/projectService";
+import { canViewPrivateProject } from "@/utils/permissions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,7 +80,48 @@ const getNextStatus = (currentStatus: string) => {
 };
 
 const TaskPool = () => {
-  const { user, isAdmin, isTeamLeader, isSuperAdmin } = useAuth();
+  const { user } = useAuth();
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [canUpdate, setCanUpdate] = useState(false);
+  
+  // Permission state'lerini Firestore'dan kontrol et
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user) {
+        setIsSuperAdmin(false);
+        setCanUpdate(false);
+        return;
+      }
+      try {
+        const { isMainAdmin, canUpdateResource } = await import("@/utils/permissions");
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: null,
+          dateOfBirth: null,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const [isMainAdminUser, hasUpdatePermission] = await Promise.all([
+          isMainAdmin(userProfile),
+          canUpdateResource(userProfile, "tasks"),
+        ]);
+        setIsSuperAdmin(isMainAdminUser);
+        setCanUpdate(hasUpdatePermission);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking permissions:", error);
+        }
+        setIsSuperAdmin(false);
+        setCanUpdate(false);
+      }
+    };
+    checkPermissions();
+  }, [user]);
   const [loading, setLoading] = useState(true);
   const [poolTasks, setPoolTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
@@ -149,12 +191,12 @@ const TaskPool = () => {
       const visibleProjects = await Promise.all(
         allProjects.map(async (project) => {
           if (!project.isPrivate) return project; // Gizli olmayan projeler herkes görebilir
-          if (isSuperAdmin) return project; // Üst yöneticiler tüm projeleri görebilir
-          if (isAdmin) return project; // Yöneticiler tüm projeleri görebilir
+          if (isSuperAdmin) return project; // Super Admin tüm projeleri görebilir
           if (user?.id && project.createdBy === user.id) return project; // Oluşturan görebilir
           
           // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
-          if (isTeamLeader) {
+          // Team Leader kontrolü - Firestore'dan (canUpdate projects)
+          if (canUpdate && !isSuperAdmin) {
             return null; // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
           }
           
@@ -179,9 +221,13 @@ const TaskPool = () => {
                 );
                 if (isAssigned) return project;
               }
-            } catch (error) {
+            } catch (error: unknown) {
               // Hata durumunda gösterilmesin
-              console.error("Error checking project tasks:", error);
+              if (import.meta.env.DEV) {
+                if (import.meta.env.DEV) {
+                  console.error("Error checking project tasks:", error);
+                }
+              }
             }
           }
           
@@ -216,8 +262,9 @@ const TaskPool = () => {
         usersMap[u.id] = u;
       });
       setUsers(usersMap);
-    } catch (error: any) {
-      toast.error("Görev havuzu yüklenirken hata: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Görev havuzu yüklenirken hata oluştu";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -233,8 +280,9 @@ const TaskPool = () => {
       await requestTaskFromPool(taskId, user.id);
       toast.success("Görev talebi gönderildi");
       fetchData();
-    } catch (error: any) {
-      toast.error("Talep hatası: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Talep hatası oluştu";
+      toast.error(errorMessage);
     }
   };
 
@@ -280,8 +328,9 @@ const TaskPool = () => {
 
       setConfirmApproveState(prev => ({ ...prev, isOpen: false }));
       fetchData();
-    } catch (error: any) {
-      toast.error("Onaylama hatası: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Onaylama hatası oluştu";
+      toast.error(errorMessage);
     }
   };
 
@@ -290,8 +339,9 @@ const TaskPool = () => {
       await rejectPoolRequest(taskId, userId);
       toast.success("Görev talebi reddedildi");
       fetchData();
-    } catch (error: any) {
-      toast.error("Reddetme hatası: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Reddetme hatası oluştu";
+      toast.error(errorMessage);
     }
   };
 
@@ -350,11 +400,11 @@ const TaskPool = () => {
     setFilteredTasks(filtered);
   };
 
-  const canManagePool = isAdmin || isTeamLeader || isSuperAdmin;
+  const canManagePool = isSuperAdmin || canUpdate;
 
   const boardTasks = useMemo(() => {
     return filteredTasks.map((task) => {
-      const toISO = (value: any) => {
+      const toISO = (value: Timestamp | Date | string | null | undefined) => {
         if (!value) return null;
         if (value instanceof Timestamp) return value.toDate().toISOString();
         if (typeof value?.toDate === "function") return value.toDate().toISOString();
@@ -367,14 +417,14 @@ const TaskPool = () => {
 
       let labels: Array<{ name: string; color: string }> = [];
       if (Array.isArray(task.labels)) {
-        labels = task.labels.map((label: any) =>
+        labels = task.labels.map((label: string | { name: string; color: string }) =>
           typeof label === "string" ? { name: label, color: "#61BD4F" } : label
         );
       } else if (typeof task.labels === "string") {
         try {
           const parsed = JSON.parse(task.labels);
           if (Array.isArray(parsed)) {
-            labels = parsed.map((label: any) =>
+            labels = parsed.map((label: string | { name: string; color: string }) =>
               typeof label === "string" ? { name: label, color: "#61BD4F" } : label
             );
           }
@@ -420,7 +470,7 @@ const TaskPool = () => {
       }
 
       // Yetki kontrolü: Sadece atanan kullanıcılar ve adminler durum değiştirebilir
-      if (!isAdmin && !isTeamLeader && !isSuperAdmin) {
+      if (!isSuperAdmin && !canUpdate) {
         // Görevin atanan kullanıcılarını kontrol et
         const taskAssignments = await getTaskAssignments(taskId);
         const assignedUserIds = taskAssignments.map(a => a.assignedTo);
@@ -433,7 +483,7 @@ const TaskPool = () => {
       }
 
       const isCreator = targetTask?.createdBy === user.id;
-      const canDirectComplete = isAdmin || isTeamLeader || isSuperAdmin || isCreator;
+      const canDirectComplete = isSuperAdmin || canUpdate || isCreator;
 
       if (normalizedStatus === "completed" && !canDirectComplete) {
         await requestTaskApproval(taskId, user.id);
@@ -445,9 +495,14 @@ const TaskPool = () => {
       await updateTaskStatus(taskId, normalizedStatus);
       toast.success("Görev durumu güncellendi");
       fetchData();
-    } catch (error: any) {
-      console.error("Task pool status change error:", error);
-      toast.error(error.message || "Durum güncellenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.error("Task pool status change error:", error);
+        }
+      }
+      const errorMessage = error instanceof Error ? error.message : "Durum güncellenemedi";
+      toast.error(errorMessage);
     }
   };
 
@@ -509,7 +564,7 @@ const TaskPool = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   containerClassName="flex-1 w-full"
                 />
-                <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+                <Select value={sortBy} onValueChange={(value: "title" | "dueDate" | "createdAt") => setSortBy(value)}>
                   <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="Sırala" />
                   </SelectTrigger>

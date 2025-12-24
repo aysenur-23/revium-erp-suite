@@ -65,21 +65,51 @@ export const ErrorPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
-      <Card className="w-full max-w-2xl border shadow-sm">
-        <CardHeader className="text-center pb-3">
-          <div className="flex justify-center mb-3">
-            <AlertTriangle className="h-10 w-10 text-destructive" />
+    <div 
+      className="bg-background" 
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        zIndex: 9999
+      }}
+    >
+      <div className="min-h-full py-8 px-4">
+        <div className="max-w-4xl mx-auto w-full">
+          <Card className="w-full border shadow-sm">
+          <CardHeader className="text-center pb-3">
+            <div className="flex justify-center mb-3">
+              <AlertTriangle className="h-10 w-10 text-destructive" />
+            </div>
+            <CardTitle className="text-xl font-semibold mb-2">
+              {errorTitle}
+            </CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">
+              {errorMessage}
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent className="space-y-3">
+          {/* Ayşenur Aslan'a Özel Mesaj */}
+          <div className="bg-blue-50 dark:bg-blue-950/20 border-2 border-blue-500 rounded-lg p-4 mb-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-bold text-blue-900 dark:text-blue-100 mb-1">
+                  📸 Ekran Görüntüsü Alın!
+                </p>
+                <p className="text-xs text-blue-800 dark:text-blue-200 leading-relaxed">
+                  <strong>Ayşenur Aslan</strong>'a bu ekran görüntüsünü iletirsen bu sorun hallolacak. 
+                  Lütfen aşağıdaki hata detaylarının tamamını ekran görüntüsüne dahil et.
+                </p>
+              </div>
+            </div>
           </div>
-          <CardTitle className="text-xl font-semibold mb-2">
-            {errorTitle}
-          </CardTitle>
-          <CardDescription className="text-sm text-muted-foreground">
-            {errorMessage}
-          </CardDescription>
-        </CardHeader>
-        
-        <CardContent className="space-y-3">
+
           {/* Hata Detayları */}
           <div className="bg-muted/50 border rounded-lg p-3">
             <p className="text-xs font-semibold text-foreground mb-2">Hata Detayları:</p>
@@ -104,14 +134,20 @@ export const ErrorPage = () => {
             
             {error instanceof Error && (
               <div className="space-y-1 pt-2 border-t">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 mb-2">
                   <span className="text-xs font-medium text-foreground">Ad:</span>
                   <span className="text-xs font-mono text-destructive bg-destructive/10 px-1.5 py-0.5 rounded">{error.name}</span>
+                </div>
+                <div className="space-y-1 mb-2">
+                  <span className="text-xs font-medium text-foreground">Mesaj:</span>
+                  <div className="text-xs font-mono text-muted-foreground bg-background p-2 rounded border break-words">
+                    {error.message}
+                  </div>
                 </div>
                 {error.stack && (
                   <div className="space-y-1">
                     <span className="text-xs font-medium text-foreground">Stack:</span>
-                    <pre className="text-xs font-mono text-muted-foreground bg-background p-2 rounded border break-words max-h-32 overflow-auto">
+                    <pre className="text-xs font-mono text-muted-foreground bg-background p-2 rounded border break-words max-h-96 overflow-auto">
                       {error.stack}
                     </pre>
                   </div>
@@ -120,8 +156,8 @@ export const ErrorPage = () => {
             )}
           </div>
 
-          {/* Aksiyon butonları */}
-          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+          {/* Aksiyon butonları - Hata detaylarının altında, scroll ile görünecek */}
+          <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t">
             <Button
               onClick={handleGoHome}
               className="flex-1 gap-2"
@@ -140,8 +176,10 @@ export const ErrorPage = () => {
               <span>Sayfayı Yenile</span>
             </Button>
           </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        </div>
+      </div>
     </div>
   );
 };

@@ -61,3 +61,10 @@ revpad-functions/
 # Google OAuth credentials
 client_secret_*.json
 *.apps.googleusercontent.com.json
+
+# Temporary files
+tmp/
+test-email.html
+
+# Cursor plans (old plans)
+.cursor/plans/*.plan.md

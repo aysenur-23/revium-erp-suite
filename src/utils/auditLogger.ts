@@ -13,14 +13,16 @@ export const logAudit = async (
   tableName: string,
   recordId: string | null,
   userId: string | null,
-  oldData: any = null,
-  newData: any = null
+  oldData: unknown = null,
+  newData: unknown = null
 ): Promise<void> => {
   try {
     await createAuditLog(action, tableName, recordId, oldData, newData, userId);
-  } catch (error) {
+  } catch (error: unknown) {
     // Audit log hataları ana işlemi etkilememeli
-    console.warn("Audit log oluşturulamadı:", error);
+    if (import.meta.env.DEV) {
+      console.warn("Audit log oluşturulamadı:", error);
+    }
   }
 };
 

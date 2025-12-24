@@ -47,6 +47,7 @@
     <meta name="twitter:site" content="@ReviumTech" />
     
     <!-- Favicon & Icons -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/rev-favicon.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/rev-favicon.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/rev-favicon.png" />
@@ -58,7 +59,7 @@
     <link rel="apple-touch-icon" sizes="72x72" href="/rev-favicon.png" />
     <link rel="apple-touch-icon" sizes="60x60" href="/rev-favicon.png" />
     <link rel="apple-touch-icon" sizes="57x57" href="/rev-favicon.png" />
-    <link rel="shortcut icon" href="/rev-favicon.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="manifest" href="/manifest.json" />
     
     <!-- Preconnect for Performance -->
@@ -221,17 +222,10 @@
     </script>
     
     <!-- Global Error Handler -->
+    <!-- Note: Global error handling is done in main.tsx with proper DEV checks -->
     <script>
-      // Global error handler for better device compatibility
-      window.addEventListener('error', function(event) {
-        console.error('Global error:', event.error);
-        // Don't prevent default - let error boundary handle it
-      });
-      
-      window.addEventListener('unhandledrejection', function(event) {
-        console.error('Unhandled promise rejection:', event.reason);
-        // Don't prevent default - let error boundary handle it
-      });
+      // Error handlers are in main.tsx - this script is kept for compatibility
+      // but actual error logging is handled by main.tsx with if (import.meta.env.DEV) checks
       
       // Check for required features
       function checkBrowserSupport() {

@@ -37,6 +37,29 @@ export interface WarrantyRecord {
   updatedAt: Timestamp;
 }
 
+export interface WarrantyComment {
+  id: string;
+  warrantyId: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  content: string;
+  createdAt: Timestamp | Date | string;
+  updatedAt?: Timestamp | Date | string | null;
+}
+
+export interface WarrantyActivity {
+  id: string;
+  warrantyId: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  action: string;
+  description: string;
+  metadata?: Record<string, any>;
+  createdAt: Timestamp | Date | string;
+}
+
 const WARRANTY_COLLECTION = "warranty";
 
 /**
@@ -63,7 +86,11 @@ export const getWarrantyRecords = async (filters?: {
       ...doc.data(),
     })) as WarrantyRecord[];
   } catch (error) {
-    console.error("Get warranty records error:", error);
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Get warranty records error:", error);
+      }
+    }
     throw error;
   }
 };
@@ -84,7 +111,11 @@ export const getWarrantyRecordById = async (warrantyId: string): Promise<Warrant
       ...warrantyDoc.data(),
     } as WarrantyRecord;
   } catch (error) {
-    console.error("Get warranty record by id error:", error);
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Get warranty record by id error:", error);
+      }
+    }
     throw error;
   }
 };
@@ -96,7 +127,7 @@ export const createWarrantyRecord = async (
   warrantyData: Omit<WarrantyRecord, "id" | "createdAt" | "updatedAt">
 ): Promise<WarrantyRecord> => {
   try {
-    const warrantyDoc: any = {
+    const warrantyDoc: Partial<WarrantyRecord> & { receivedDate: Timestamp; createdAt: ReturnType<typeof serverTimestamp>; updatedAt: ReturnType<typeof serverTimestamp> } = {
       ...warrantyData,
       receivedDate: warrantyData.receivedDate || Timestamp.now(),
       createdAt: serverTimestamp(),
@@ -113,9 +144,39 @@ export const createWarrantyRecord = async (
     // Audit log
     await logAudit("CREATE", "warranty", docRef.id, warrantyData.createdBy, null, createdWarranty);
 
+    // Aktivite log ekle
+    if (warrantyData.createdBy) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(warrantyData.createdBy);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addWarrantyActivity(
+          docRef.id,
+          warrantyData.createdBy,
+          "created",
+          `bu garanti kaydını oluşturdu`,
+          { reason: warrantyData.reason },
+          userName,
+          userEmail
+        );
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.error("Add warranty activity error:", error);
+          }
+        }
+      }
+    }
+
     return createdWarranty;
   } catch (error) {
-    console.error("Create warranty record error:", error);
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Create warranty record error:", error);
+      }
+    }
     throw error;
   }
 };
@@ -132,7 +193,7 @@ export const updateWarrantyRecord = async (
     // Eski veriyi al
     const oldWarranty = await getWarrantyRecordById(warrantyId);
     
-    const updateData: any = {
+    const updateData: Partial<WarrantyRecord> & { updatedAt: ReturnType<typeof serverTimestamp> } = {
       ...updates,
       updatedAt: serverTimestamp(),
     };
@@ -154,8 +215,44 @@ export const updateWarrantyRecord = async (
     if (userId) {
       await logAudit("UPDATE", "warranty", warrantyId, userId, oldWarranty, newWarranty);
     }
+
+    // Aktivite log ekle
+    if (userId && oldWarranty && newWarranty) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(userId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+
+        const changedFields = Object.keys(updates).filter(key => {
+          const oldValue = (oldWarranty as Record<string, unknown>)[key];
+          const newValue = (updates as Record<string, unknown>)[key];
+          return oldValue !== newValue;
+        });
+        
+        if (changedFields.length > 0) {
+          await addWarrantyActivity(
+            warrantyId,
+            userId,
+            "updated",
+            `bu garanti kaydını güncelledi`,
+            { changedFields },
+            userName,
+            userEmail
+          );
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.error("Add warranty activity error:", error);
+          }
+        }
+      }
+    }
   } catch (error) {
-    console.error("Update warranty record error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Update warranty record error:", error);
+    }
     throw error;
   }
 };
@@ -168,6 +265,32 @@ export const deleteWarrantyRecord = async (warrantyId: string, userId?: string):
     // Eski veriyi al
     const oldWarranty = await getWarrantyRecordById(warrantyId);
     
+    // Aktivite log ekle (silmeden önce)
+    if (userId && oldWarranty) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(userId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addWarrantyActivity(
+          warrantyId,
+          userId,
+          "deleted",
+          `bu garanti kaydını sildi`,
+          { reason: oldWarranty.reason },
+          userName,
+          userEmail
+        );
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.error("Add warranty activity error:", error);
+          }
+        }
+      }
+    }
+    
     await deleteDoc(doc(firestore, WARRANTY_COLLECTION, warrantyId));
     
     // Audit log
@@ -175,7 +298,155 @@ export const deleteWarrantyRecord = async (warrantyId: string, userId?: string):
       await logAudit("DELETE", "warranty", warrantyId, userId, oldWarranty, null);
     }
   } catch (error) {
-    console.error("Delete warranty record error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Delete warranty record error:", error);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Garanti kaydına yorum ekle
+ */
+export const addWarrantyComment = async (
+  warrantyId: string,
+  userId: string,
+  content: string,
+  userName?: string,
+  userEmail?: string
+): Promise<WarrantyComment> => {
+  try {
+    const commentData: Omit<WarrantyComment, "id"> = {
+      warrantyId,
+      userId,
+      userName,
+      userEmail,
+      content,
+      createdAt: Timestamp.now(),
+      updatedAt: null,
+    };
+
+    const docRef = await addDoc(
+      collection(firestore, WARRANTY_COLLECTION, warrantyId, "comments"),
+      commentData
+    );
+
+    // Activity log ekle
+    await addWarrantyActivity(warrantyId, userId, "commented", `yorum ekledi`, { commentId: docRef.id }, userName, userEmail);
+
+    // Garanti kaydını oluşturan kişiye bildirim gönder (yorum ekleyen kişi hariç)
+    try {
+      const warranty = await getWarrantyRecordById(warrantyId);
+      if (warranty?.createdBy && warranty.createdBy !== userId) {
+        const { createNotification } = await import("@/services/firebase/notificationService");
+        await createNotification({
+          userId: warranty.createdBy,
+          type: "comment_added",
+          title: "Garanti Kaydınıza Yorum Eklendi",
+          message: `${userName || userEmail || "Bir kullanıcı"} garanti kaydınıza yorum ekledi: ${content.substring(0, 100)}${content.length > 100 ? "..." : ""}`,
+          read: false,
+          relatedId: warrantyId,
+          metadata: { commentId: docRef.id, commenterId: userId, commenterName: userName, commenterEmail: userEmail },
+        });
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("Send comment notification error:", error);
+      }
+    }
+
+    return {
+      id: docRef.id,
+      ...commentData,
+    };
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Add warranty comment error:", error);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Garanti kaydı yorumlarını al
+ */
+export const getWarrantyComments = async (warrantyId: string): Promise<WarrantyComment[]> => {
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, WARRANTY_COLLECTION, warrantyId, "comments"),
+        orderBy("createdAt", "desc")
+      )
+    );
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as WarrantyComment[];
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Get warranty comments error:", error);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Garanti kaydı aktivite log ekle
+ */
+export const addWarrantyActivity = async (
+  warrantyId: string,
+  userId: string,
+  action: string,
+  description: string,
+  metadata?: Record<string, any>,
+  userName?: string,
+  userEmail?: string
+): Promise<string> => {
+  try {
+    const activityData: Omit<WarrantyActivity, "id"> = {
+      warrantyId,
+      userId,
+      userName,
+      userEmail,
+      action,
+      description,
+      metadata: metadata || {},
+      createdAt: Timestamp.now(),
+    };
+
+    const docRef = await addDoc(
+      collection(firestore, WARRANTY_COLLECTION, warrantyId, "activities"),
+      activityData
+    );
+
+    return docRef.id;
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Add warranty activity error:", error);
+    }
+    return "";
+  }
+};
+
+/**
+ * Garanti kaydı aktivite loglarını al
+ */
+export const getWarrantyActivities = async (warrantyId: string): Promise<WarrantyActivity[]> => {
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, WARRANTY_COLLECTION, warrantyId, "activities"),
+        orderBy("createdAt", "desc")
+      )
+    );
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as WarrantyActivity[];
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Get warranty activities error:", error);
+    }
     throw error;
   }
 };

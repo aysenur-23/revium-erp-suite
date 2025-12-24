@@ -31,9 +31,11 @@ export const setSuperAdmin = async (email: string) => {
 
     toast.success(`${email} kullanıcısı süper yönetici olarak ayarlandı.`);
     console.log(`${email} kullanıcısı süper yönetici olarak ayarlandı.`);
-  } catch (error: any) {
-    console.error("Süper yönetici atama hatası:", error);
-    toast.error(`Süper yönetici atama hatası: ${error.message}`);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Süper yönetici atama hatası:", error);
+    }
+    toast.error(`Süper yönetici atama hatası: ${error instanceof Error ? error.message : String(error)}`);
   }
 };
 

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/ui/search-input";
 
-import { Plus, Loader2, Edit, Trash2, Package, DollarSign, X, Save, ShieldCheck, User } from "lucide-react";
+import { Plus, Loader2, Edit, Trash2, Package, DollarSign, X, Save, ShieldCheck, User, MoreVertical, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getWarrantyRecords,
@@ -15,6 +15,8 @@ import {
   WarrantyRecord,
 } from "@/services/firebase/warrantyService";
 import { useAuth } from "@/contexts/AuthContext";
+import { canCreateResource, canUpdateResource, canDeleteResource } from "@/utils/permissions";
+import { UserProfile } from "@/services/firebase/authService";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   Dialog,
@@ -28,16 +30,23 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { getCustomers, Customer } from "@/services/firebase/customerService";
 import { getProducts, Product } from "@/services/firebase/productService";
 import { getOrders, Order } from "@/services/firebase/orderService";
 import { getAllUsers } from "@/services/firebase/authService";
 import { Timestamp } from "firebase/firestore";
 import { LoadingState } from "@/components/ui/loading-state";
+import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
+import { cn } from "@/lib/utils";
+import { addWarrantyComment, getWarrantyComments, getWarrantyActivities } from "@/services/firebase/warrantyService";
 
 const Warranty = () => {
   const { user } = useAuth();
   const [records, setRecords] = useState<WarrantyRecord[]>([]);
+  const [canCreate, setCanCreate] = useState(false);
+  const [canUpdate, setCanUpdate] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -64,6 +73,48 @@ const Warranty = () => {
     fetchData();
   }, []);
 
+  // Yetki kontrolleri
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user) {
+        setCanCreate(false);
+        setCanUpdate(false);
+        setCanDelete(false);
+        return;
+      }
+      try {
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
+          role: user.roles,
+          createdAt: null,
+          updatedAt: null,
+        };
+        const [canCreateWarranty, canUpdateWarranty, canDeleteWarranty] = await Promise.all([
+          canCreateResource(userProfile, "warranty"),
+          canUpdateResource(userProfile, "warranty"),
+          canDeleteResource(userProfile, "warranty"),
+        ]);
+        setCanCreate(canCreateWarranty);
+        setCanUpdate(canUpdateWarranty);
+        setCanDelete(canDeleteWarranty);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Warranty permission check error:", error);
+        }
+        setCanCreate(false);
+        setCanUpdate(false);
+        setCanDelete(false);
+      }
+    };
+    checkPermissions();
+  }, [user]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -84,9 +135,12 @@ const Warranty = () => {
         userMap[u.id] = u.fullName || u.displayName || u.email || "Bilinmeyen";
       });
       setUsersMap(userMap);
-    } catch (error: any) {
-      console.error("Fetch warranty records error:", error);
-      toast.error(error.message || "Kayıtlar yüklenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Fetch warranty records error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(errorMessage || "Kayıtlar yüklenirken hata oluştu");
     } finally {
       setLoading(false);
     }
@@ -95,6 +149,12 @@ const Warranty = () => {
   const handleCreate = async () => {
     if (!formData.customerId || !formData.productId || !formData.reason.trim()) {
       toast.error("Müşteri, ürün ve neden gereklidir");
+      return;
+    }
+
+    // Yetki kontrolü
+    if (!canCreate) {
+      toast.error("Garanti kaydı oluşturma yetkiniz yok.");
       return;
     }
 
@@ -119,15 +179,25 @@ const Warranty = () => {
       setCreateDialogOpen(false);
       resetForm();
       fetchData();
-    } catch (error: any) {
-      console.error("Create warranty record error:", error);
-      toast.error(error.message || "Kayıt oluşturulurken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Create warranty record error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(errorMessage || "Kayıt oluşturulurken hata oluştu");
     }
   };
 
   const handleStatusChange = async (recordId: string, newStatus: WarrantyRecord["status"]) => {
     if (!user?.id) {
       toast.error("Kullanıcı bilgisi bulunamadı");
+      return;
+    }
+
+    // Yetki kontrolü
+    const record = records.find(r => r.id === recordId);
+    if (!canUpdate && record?.createdBy !== user.id) {
+      toast.error("Garanti kaydı durumunu değiştirme yetkiniz yok.");
       return;
     }
 
@@ -150,15 +220,23 @@ const Warranty = () => {
           record.id === recordId ? { ...record, status: newStatus } : record
         )
       );
-    } catch (error: any) {
-      console.error("Update warranty status error:", error);
-      toast.error(error.message || "Durum güncellenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Update warranty status error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(errorMessage || "Durum güncellenirken hata oluştu");
     }
   };
 
   const handleEdit = async () => {
     if (!selectedRecord) {
       toast.error("Kayıt seçilmedi");
+      return;
+    }
+
+    // Yetki kontrolü
+    if (!canUpdate && selectedRecord.createdBy !== user?.id) {
+      toast.error("Garanti kaydı düzenleme yetkiniz yok.");
+      setEditDialogOpen(false);
       return;
     }
 
@@ -187,7 +265,7 @@ const Warranty = () => {
     }
 
     try {
-      const updateData: any = {
+      const updateData: Partial<WarrantyRecord> = {
         customerId: customerId,
         productId: productId,
         orderId: formData.orderId?.trim() || null,
@@ -212,9 +290,10 @@ const Warranty = () => {
       setSelectedRecord(null);
       resetForm();
       fetchData();
-    } catch (error: any) {
-      console.error("Update warranty record error:", error);
-      toast.error(error.message || "Kayıt güncellenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Update warranty record error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(errorMessage || "Kayıt güncellenirken hata oluştu");
     }
   };
 
@@ -232,9 +311,10 @@ const Warranty = () => {
       fetchData();
       setDeleteDialogOpen(false);
       setSelectedRecord(null);
-    } catch (error: any) {
-      console.error("Delete warranty record error:", error);
-      toast.error(error.message || "Kayıt silinirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Delete warranty record error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(errorMessage || "Kayıt silinirken hata oluştu");
     }
   };
 
@@ -333,22 +413,24 @@ const Warranty = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[80%] max-w-[80%] mx-auto">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">Satış Sonrası Takip</h1>
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Satış Sonrası Takip</h1>
             <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
               Garantiye gelen ürünleri takip edin
             </p>
           </div>
-          <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={() => {
-            resetForm();
-            setCreateDialogOpen(true);
-          }}>
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Yeni Kayıt</span>
-            <span className="sm:hidden">Yeni</span>
-          </Button>
+          {canCreate && (
+            <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={() => {
+              resetForm();
+              setCreateDialogOpen(true);
+            }}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Yeni Kayıt</span>
+              <span className="sm:hidden">Yeni</span>
+            </Button>
+          )}
         </div>
 
         {/* Filtreler */}
@@ -369,7 +451,7 @@ const Warranty = () => {
         {/* Kayıtlar */}
         <Card>
           <CardContent className="p-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5 lg:gap-6 p-3 sm:p-4 md:p-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-3 sm:gap-4 md:gap-5 lg:gap-6 p-3 sm:p-4 md:p-6">
               {loading ? (
                 <div className="col-span-full text-center py-12 text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
@@ -384,48 +466,67 @@ const Warranty = () => {
                 filteredRecords.map((record) => (
                   <Card
                     key={record.id}
-                    className="group cursor-pointer hover:shadow-md transition-shadow h-full flex flex-col"
+                    className="group hover:shadow-lg transition-all duration-200 cursor-pointer border border-border/80 hover:border-primary/60 flex flex-col h-full overflow-hidden bg-card"
                     onClick={() => openDetailDialog(record)}
                   >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1 min-w-0 pr-2">
-                          <h3 className="font-bold text-base sm:text-lg text-foreground mb-1 break-words line-clamp-3" title={getProductName(record.productId)}>
-                            {getProductName(record.productId)}
-                          </h3>
-                          <p className="text-xs sm:text-sm text-muted-foreground break-words line-clamp-1" title={getCustomerName(record.customerId)}>
-                            {getCustomerName(record.customerId)}
-                          </p>
+                    <CardContent className="p-4 sm:p-5 flex flex-col flex-1 gap-4 min-h-[280px]">
+                      {/* Header Section */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="flex items-start gap-2 flex-wrap">
+                            <h3 className="font-semibold text-[14px] sm:text-[15px] leading-tight text-foreground break-words" title={getProductName(record.productId)}>
+                              {getProductName(record.productId)}
+                            </h3>
+                          </div>
+                          <div className="flex items-center gap-1.5 min-h-[20px]">
+                            <Building2 className="h-3.5 w-3.5 text-muted-foreground/70 flex-shrink-0" />
+                            <p className="text-xs text-muted-foreground truncate" title={getCustomerName(record.customerId)}>
+                              {getCustomerName(record.customerId)}
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 flex-shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => {
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 hover:bg-muted rounded-md" 
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={(e) => {
                               e.stopPropagation();
-                              openEditDialog(record);
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDeleteDialog(record);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                              openDetailDialog(record);
+                            }}>
+                              <Edit className="mr-2 h-4 w-4" /> Detayları Görüntüle
+                            </DropdownMenuItem>
+                            {(canUpdate || record.createdBy === user?.id) && (
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                openEditDialog(record);
+                              }}>
+                                <Edit className="mr-2 h-4 w-4" /> Düzenle
+                              </DropdownMenuItem>
+                            )}
+                            {canDelete && (
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => {
+                                e.stopPropagation();
+                                openDeleteDialog(record);
+                              }}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Sil
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                       
-                      <div className="space-y-2 mb-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs sm:text-sm text-muted-foreground">Durum</span>
+                      {/* Status and Description Section */}
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center justify-between px-3 py-2.5 bg-muted/40 rounded-md border border-border/50 min-h-[44px]">
+                          <span className="text-xs font-medium text-muted-foreground">Durum</span>
                           <Select
                             value={record.status}
                             onValueChange={(value: WarrantyRecord["status"]) => {
@@ -433,7 +534,7 @@ const Warranty = () => {
                             }}
                           >
                             <SelectTrigger 
-                              className="w-[140px] h-8 text-xs sm:text-sm min-h-[32px]"
+                              className="w-[140px] h-7 text-xs border-0 bg-transparent p-0 focus:ring-0"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <SelectValue />
@@ -446,33 +547,70 @@ const Warranty = () => {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="rounded-lg border bg-muted/30 px-3 py-2">
-                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Neden</p>
-                          <p className="text-sm sm:text-base font-medium text-foreground line-clamp-2">{record.reason}</p>
+                        <div className="px-3 py-2.5 bg-muted/40 rounded-md border border-border/50 min-h-[44px]">
+                          <p className="text-xs text-muted-foreground mb-1">Neden</p>
+                          <p className="text-sm font-medium text-foreground line-clamp-2">{record.reason || "-"}</p>
                         </div>
-                        {record.repairDescription && (
-                          <div className="rounded-lg border bg-muted/30 px-3 py-2">
-                            <p className="text-xs sm:text-sm text-muted-foreground mb-1">Yapılan İşlem</p>
-                            <p className="text-sm sm:text-base font-medium text-foreground line-clamp-2">{record.repairDescription}</p>
+                        {record.repairDescription ? (
+                          <div className="px-3 py-2.5 bg-muted/40 rounded-md border border-border/50 min-h-[44px]">
+                            <p className="text-xs text-muted-foreground mb-1">Yapılan İşlem</p>
+                            <p className="text-sm font-medium text-foreground line-clamp-2">{record.repairDescription}</p>
                           </div>
+                        ) : (
+                          <div className="min-h-[44px]"></div>
                         )}
                       </div>
-                      
-                      <div className="flex items-center justify-between pt-3 border-t">
-                        <div className="flex items-center gap-1 text-sm sm:text-base font-semibold">
-                          <span>₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(record.cost)}</span>
+
+                      {/* Statistics Section */}
+                      <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border/60">
+                        <div className="flex flex-col gap-1.5 min-h-[60px] justify-center">
+                          <div className="flex items-center gap-1.5 min-h-[20px]">
+                            <DollarSign className="h-3.5 w-3.5 text-muted-foreground/70 flex-shrink-0" />
+                            <span className="text-xs font-medium text-muted-foreground">Maliyet</span>
+                          </div>
+                          <span className="text-xl font-bold text-foreground leading-none">
+                            ₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(record.cost)}
+                          </span>
                         </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <p className="text-xs sm:text-sm text-muted-foreground">
-                            {record.receivedDate.toDate().toLocaleDateString("tr-TR")}
-                          </p>
-                          {record.createdBy && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <User className="h-3 w-3 flex-shrink-0" />
-                              <span className="truncate">{getUserName(record.createdBy)}</span>
-                            </div>
+                        <div className="flex flex-col gap-1.5 min-h-[60px] justify-center">
+                          <div className="flex items-center gap-1.5 min-h-[20px]">
+                            <Package className="h-3.5 w-3.5 text-muted-foreground/70 flex-shrink-0" />
+                            <span className="text-xs font-medium text-muted-foreground">Tarih</span>
+                          </div>
+                          <span className="text-xl font-bold text-foreground leading-none">
+                            {record.receivedDate.toDate().toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit" })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Footer Section */}
+                      <div className="pt-2 border-t border-border/60 space-y-2 mt-auto">
+                        {/* Status Badge */}
+                        <Badge 
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-center text-xs font-medium py-1.5",
+                            record.status === "completed" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+                            record.status === "in_repair" && "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+                            record.status === "returned" && "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
+                            record.status === "received" && "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
                           )}
-                        </div>
+                        >
+                          {record.status === "received" ? "Alındı" : 
+                           record.status === "in_repair" ? "Onarımda" : 
+                           record.status === "completed" ? "Tamamlandı" : 
+                           record.status === "returned" ? "İade Edildi" : record.status}
+                        </Badge>
+                        
+                        {/* Created By */}
+                        {record.createdBy ? (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70 min-h-[20px]">
+                            <User className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">{getUserName(record.createdBy)}</span>
+                          </div>
+                        ) : (
+                          <div className="min-h-[20px]"></div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -609,7 +747,7 @@ const Warranty = () => {
                       {/* Detaylar */}
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-base sm:text-lg">Detaylar</CardTitle>
+                          <CardTitle className="text-[14px] sm:text-[15px]">Detaylar</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -661,6 +799,32 @@ const Warranty = () => {
                           )}
                         </CardContent>
                       </Card>
+
+                      {/* Activity Comments Panel */}
+                      {selectedRecord?.id && user && (
+                        <ActivityCommentsPanel
+                          entityId={selectedRecord.id}
+                          entityType="warranty"
+                          onAddComment={async (content: string) => {
+                            await addWarrantyComment(
+                              selectedRecord.id,
+                              user.id,
+                              content,
+                              user.fullName || user.email?.split("@")[0] || "Kullanıcı",
+                              user.email
+                            );
+                          }}
+                          onGetComments={async () => {
+                            return await getWarrantyComments(selectedRecord.id);
+                          }}
+                          onGetActivities={async () => {
+                            return await getWarrantyActivities(selectedRecord.id);
+                          }}
+                          currentUserId={user.id}
+                          currentUserName={user.fullName || user.email?.split("@")[0] || "Kullanıcı"}
+                          currentUserEmail={user.email}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
@@ -715,7 +879,7 @@ const Warranty = () => {
                 <div className="max-w-full mx-auto h-full overflow-y-auto">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base sm:text-lg">Garanti Bilgileri</CardTitle>
+                      <CardTitle className="text-[14px] sm:text-[15px]">Garanti Bilgileri</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -885,15 +1049,17 @@ const Warranty = () => {
                       <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
                       İptal
                     </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0 text-white"
-                      onClick={handleEdit}
-                    >
-                      <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
-                      Kaydet
-                    </Button>
+                    {(canUpdate || selectedRecord?.createdBy === user?.id) && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0 text-white"
+                        onClick={handleEdit}
+                      >
+                        <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
+                        Kaydet
+                      </Button>
+                    )}
                   </div>
                 </div>
               </DialogHeader>
@@ -903,7 +1069,7 @@ const Warranty = () => {
                 <div className="max-w-full mx-auto h-full overflow-y-auto">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base sm:text-lg">Garanti Bilgileri</CardTitle>
+                      <CardTitle className="text-[14px] sm:text-[15px]">Garanti Bilgileri</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -59,9 +59,9 @@ export const CustomerCombobox = memo(({ value, onChange, placeholder = "Müşter
       const firebaseCustomers = await getCustomers();
       const convertedCustomers = firebaseCustomers.map(convertFirebaseCustomerToUI);
       setCustomers(convertedCustomers);
-    } catch (error: any) {
+    } catch (error: unknown) {
       setCustomers([]);
-      toast.error("Müşteriler yüklenirken hata: " + (error.message || "Bilinmeyen hata"));
+      toast.error("Müşteriler yüklenirken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     } finally {
       setLoading(false);
     }

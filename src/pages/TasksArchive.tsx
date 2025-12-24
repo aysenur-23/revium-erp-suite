@@ -43,9 +43,11 @@ interface Task {
 const STORAGE_KEY = "taskBoardState_v1";
 
 const TasksArchive = () => {
-  const { user, isAdmin, isTeamLeader } = useAuth();
+  const { user } = useAuth();
+  const [canAccess, setCanAccess] = useState(false);
+  const [loadingAccess, setLoadingAccess] = useState(true);
   const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
-  const [archivedLists, setArchivedLists] = useState<any[]>([]);
+  const [archivedLists, setArchivedLists] = useState<Array<{ id: string; name: string; isArchived?: boolean; [key: string]: unknown }>>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"tasks" | "lists">("tasks");
@@ -54,8 +56,50 @@ const TasksArchive = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
 
+  // Erişim kontrolü - Firestore'dan
+  useEffect(() => {
+    const checkAccess = async () => {
+      if (!user) {
+        setCanAccess(false);
+        setLoadingAccess(false);
+        return;
+      }
+      try {
+        const { isMainAdmin, canUpdateResource } = await import("@/utils/permissions");
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
+          role: user.roles,
+          createdAt: null,
+          updatedAt: null,
+        };
+        const [isMainAdminUser, canUpdateTasks] = await Promise.all([
+          isMainAdmin(userProfile),
+          canUpdateResource(userProfile, "tasks"),
+        ]);
+        setCanAccess(isMainAdminUser || canUpdateTasks);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking archive access:", error);
+        }
+        setCanAccess(false);
+      } finally {
+        setLoadingAccess(false);
+      }
+    };
+    checkAccess();
+  }, [user]);
+
   // Sadece yönetici ve ekip lideri erişebilir
-  if (!isAdmin && !isTeamLeader) {
+  if (loadingAccess) {
+    return <div className="flex items-center justify-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  }
+  if (!canAccess) {
     return <Navigate to="/" replace />;
   }
 
@@ -104,15 +148,19 @@ const TasksArchive = () => {
         const savedState = localStorage.getItem(STORAGE_KEY);
         if (savedState) {
           const boardState = JSON.parse(savedState);
-          const archivedColumns = boardState.columns?.filter((col: any) => col.isArchived === true) || [];
+          const archivedColumns = boardState.columns?.filter((col: { id: string; name: string; isArchived?: boolean; [key: string]: unknown }) => col.isArchived === true) || [];
           setArchivedLists(archivedColumns);
         }
       } catch (error) {
-        console.error("Error loading archived lists:", error);
+        if (import.meta.env.DEV) {
+          console.error("Error loading archived lists:", error);
+        }
       }
-    } catch (error: any) {
-      console.error("Fetch archive data error:", error);
-      toast.error(error.message || "Arşiv verileri yüklenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Fetch archive data error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Arşiv verileri yüklenirken hata oluştu");
     } finally {
       setLoading(false);
     }
@@ -124,9 +172,11 @@ const TasksArchive = () => {
       await unarchiveTask(taskId, user.id);
       toast.success("Görev arşivden çıkarıldı");
       await fetchData();
-    } catch (error: any) {
-      console.error("Unarchive task error:", error);
-      toast.error(error.message || "Görev arşivden çıkarılamadı");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Unarchive task error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Görev arşivden çıkarılamadı");
     }
   };
 
@@ -138,9 +188,11 @@ const TasksArchive = () => {
       setDeleteDialogOpen(false);
       setTaskToDelete(null);
       await fetchData();
-    } catch (error: any) {
-      console.error("Delete task error:", error);
-      toast.error(error.message || "Görev silinemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete task error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Görev silinemedi");
     }
   };
 
@@ -157,7 +209,7 @@ const TasksArchive = () => {
       const savedState = localStorage.getItem(STORAGE_KEY);
       if (savedState) {
         const boardState = JSON.parse(savedState);
-        const updatedColumns = boardState.columns.map((col: any) =>
+        const updatedColumns = boardState.columns.map((col: { id: string; name: string; isArchived?: boolean; [key: string]: unknown }) =>
           col.id === listId ? { ...col, isArchived: false } : col
         );
         boardState.columns = updatedColumns;
@@ -202,7 +254,7 @@ const TasksArchive = () => {
     <MainLayout>
       <div className="space-y-3 sm:space-y-4 md:space-y-6">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground flex items-center gap-1.5 sm:gap-2">
+          <h1 className="text-[20px] sm:text-[24px] font-bold text-foreground flex items-center gap-1.5 sm:gap-2">
             <Archive className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" />
             Arşiv
           </h1>
@@ -224,12 +276,12 @@ const TasksArchive = () => {
                   />
                 </div>
                 <TabsList className="w-full sm:w-auto">
-                  <TabsTrigger value="tasks" className="gap-1 sm:gap-2 flex-1 sm:flex-initial min-h-[44px] sm:min-h-0 text-xs sm:text-sm">
+                  <TabsTrigger value="tasks" className="gap-1 sm:gap-2 flex-1 sm:flex-initial min-h-[44px] sm:min-h-0 text-[14px] sm:text-[15px]">
                     <CheckSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
                     <span>Görevler</span>
                     <span className="ml-1">({filteredTasks.length})</span>
                   </TabsTrigger>
-                  <TabsTrigger value="lists" className="gap-1 sm:gap-2 flex-1 sm:flex-initial min-h-[44px] sm:min-h-0 text-xs sm:text-sm">
+                  <TabsTrigger value="lists" className="gap-1 sm:gap-2 flex-1 sm:flex-initial min-h-[44px] sm:min-h-0 text-[14px] sm:text-[15px]">
                     <FolderKanban className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
                     <span>Listeler</span>
                     <span className="ml-1">({filteredLists.length})</span>

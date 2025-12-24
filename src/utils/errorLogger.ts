@@ -8,19 +8,20 @@ interface OperationContext {
   collection?: string; // Firestore collection name
   documentId?: string; // Document ID if applicable
   userId?: string; // User ID attempting the operation
-  data?: any; // Data being written (sanitized)
+  data?: unknown; // Data being written (sanitized)
 }
 
 /**
  * Permission hatasını logla
  */
 export const logPermissionError = (
-  error: any,
+  error: unknown,
   context: OperationContext
 ) => {
+  const errorObj = error && typeof error === 'object' ? error as { code?: string | number; message?: string } : null;
   const errorInfo = {
-    code: error?.code || "unknown",
-    message: error?.message || "Unknown error",
+    code: errorObj?.code || "unknown",
+    message: errorObj?.message || "Unknown error",
     operation: context.operation,
     collection: context.collection,
     documentId: context.documentId,
@@ -30,13 +31,14 @@ export const logPermissionError = (
     data: sanitizeData(context.data),
   };
 
-  console.error("🚫 Permission Error:", {
-    ...errorInfo,
-    fullError: error,
-  });
+  if (import.meta.env.DEV) {
+    console.error("🚫 Permission Error:", {
+      ...errorInfo,
+      fullError: error,
+    });
 
-  // Detaylı hata mesajı
-  const detailedMessage = `
+    // Detaylı hata mesajı
+    const detailedMessage = `
 Permission Hatası Detayları:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 İşlem: ${context.operation}
@@ -49,21 +51,22 @@ Zaman: ${errorInfo.timestamp}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
 
-  console.error(detailedMessage);
+    console.error(detailedMessage);
 
-  // Firebase Console linki
-  if (context.collection) {
-    console.warn("📋 Firebase Console'da Security Rules'u kontrol edin:");
-    console.warn(`   https://console.firebase.google.com/project/revpad-15232/firestore/rules`);
-    console.warn(`   Collection: ${context.collection}`);
-    console.warn(`   Operation: ${context.operation}`);
+    // Firebase Console linki
+    if (context.collection) {
+      console.warn("📋 Firebase Console'da Security Rules'u kontrol edin:");
+      console.warn(`   https://console.firebase.google.com/project/revpad-15232/firestore/rules`);
+      console.warn(`   Collection: ${context.collection}`);
+      console.warn(`   Operation: ${context.operation}`);
+    }
   }
 };
 
 /**
  * Data'yı sanitize et - sensitive bilgileri kaldır
  */
-const sanitizeData = (data: any): any => {
+const sanitizeData = (data: unknown): unknown => {
   if (!data || typeof data !== "object") {
     return data;
   }
@@ -91,16 +94,17 @@ const sanitizeData = (data: any): any => {
  * Permission hatasını yakala ve logla
  */
 export const handlePermissionError = (
-  error: any,
+  error: unknown,
   context: OperationContext
 ): Error => {
+  const errorObj = error && typeof error === 'object' ? error as { code?: string | number; message?: string } : null;
   // Permission hatası kontrolü
   if (
-    error?.code === "permission-denied" ||
-    error?.code === 7 || // PERMISSION_DENIED
-    error?.message?.includes("Missing or insufficient permissions") ||
-    error?.message?.includes("permission-denied") ||
-    error?.message?.includes("PERMISSION_DENIED")
+    errorObj?.code === "permission-denied" ||
+    errorObj?.code === 7 || // PERMISSION_DENIED
+    errorObj?.message?.includes("Missing or insufficient permissions") ||
+    errorObj?.message?.includes("permission-denied") ||
+    errorObj?.message?.includes("PERMISSION_DENIED")
   ) {
     logPermissionError(error, context);
     
@@ -119,19 +123,20 @@ export const handlePermissionError = (
   }
 
   // Diğer hatalar için normal error döndür
-  return error instanceof Error ? error : new Error(error?.message || "Bilinmeyen hata");
+  return error instanceof Error ? error : new Error(errorObj?.message || "Bilinmeyen hata");
 };
 
 /**
  * Permission hatasını kontrol et ve kullanıcı dostu mesaj döndür
  */
-export const isPermissionError = (error: any): boolean => {
+export const isPermissionError = (error: unknown): boolean => {
+  const errorObj = error && typeof error === 'object' ? error as { code?: string | number; message?: string } : null;
   return (
-    error?.code === "permission-denied" ||
-    error?.code === 7 ||
-    error?.message?.includes("Missing or insufficient permissions") ||
-    error?.message?.includes("permission-denied") ||
-    error?.message?.includes("PERMISSION_DENIED")
+    errorObj?.code === "permission-denied" ||
+    errorObj?.code === 7 ||
+    errorObj?.message?.includes("Missing or insufficient permissions") ||
+    errorObj?.message?.includes("permission-denied") ||
+    errorObj?.message?.includes("PERMISSION_DENIED")
   );
 };
 

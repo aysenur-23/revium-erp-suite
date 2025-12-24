@@ -9,13 +9,15 @@ service cloud.firestore {
         userDoc(uid).data.role.hasAny(roles);
     }
     function isAdmin() {
-      return request.auth != null && hasRole(request.auth.uid, ['admin', 'super_admin']);
+      // Admin rolü kaldırıldı, sadece super_admin geçerlidir
+      return request.auth != null && hasRole(request.auth.uid, ['super_admin']);
     }
     function isSuperAdmin() {
       return request.auth != null && hasRole(request.auth.uid, ['super_admin']);
     }
     function isTeamLeader() {
-      return request.auth != null && hasRole(request.auth.uid, ['team_leader', 'admin', 'super_admin']);
+      // Admin rolü kaldırıldı, team_leader ve super_admin desteklenir
+      return request.auth != null && hasRole(request.auth.uid, ['team_leader', 'super_admin']);
     }
     
     // Users collection - Herkes tüm kullanıcıları görebilir, yazma yetkileri sınırlı
@@ -26,8 +28,17 @@ service cloud.firestore {
       // onAuthStateChanged kullanarak auth state'in güncellenmesini beklediğimiz için
       // request.auth artık null olmamalı
       allow create: if request.auth != null && request.auth.uid == userId;
+      
+      // Ekip onay işlemleri için: Ekip liderleri pendingTeams, approvedTeams ve role alanlarını güncelleyebilir
+      function isTeamApprovalUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['pendingTeams', 'approvedTeams', 'role', 'updatedAt']);
+      }
+      
       // Kullanıcı kendi profilini güncelleyebilir (sadece belirli alanlar)
       allow update: if request.auth != null && request.auth.uid == userId;
+      // Ekip liderleri ekip onay işlemleri için pendingTeams ve approvedTeams alanlarını güncelleyebilir
+      allow update: if request.auth != null && isTeamLeader() && isTeamApprovalUpdate();
       // Sadece Süper Admin tüm kullanıcıları güncelleyebilir/silebilir
       allow update, delete: if isSuperAdmin();
     }
@@ -301,6 +312,34 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
       allow update, delete: if request.auth != null && (
         resource.data.createdBy == request.auth.uid || 
+        isAdmin() ||
+        isTeamLeader()
+      );
+    }
+    
+    // Requests collection - Herkes talep oluşturabilir
+    match /requests/{requestId} {
+      // Kullanıcılar kendi taleplerini veya kendilerine atanan talepleri görebilir
+      // Admin ve Team Leader tüm talepleri görebilir
+      allow read: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid ||
+        resource.data.assignedTo == request.auth.uid ||
+        isAdmin() ||
+        isTeamLeader()
+      );
+      // Herkes talep oluşturabilir
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+      // Kullanıcılar kendi taleplerini güncelleyebilir (sadece pending durumunda)
+      // Admin ve Team Leader atanan talepleri onaylayabilir/reddedebilir
+      allow update: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid ||
+        resource.data.assignedTo == request.auth.uid ||
+        isAdmin() ||
+        isTeamLeader()
+      );
+      // Silme sadece oluşturan veya admin/team leader
+      allow delete: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid ||
         isAdmin() ||
         isTeamLeader()
       );

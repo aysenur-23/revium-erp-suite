@@ -22,9 +22,12 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     if (!authProviderMounted) {
       setAuthProviderMounted(true);
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // If AuthProvider is not available, show loading state
     // This can happen during initial render before providers are mounted
+    if (import.meta.env.DEV) {
+      console.warn("AuthProvider not available:", error instanceof Error ? error.message : String(error));
+    }
     user = null;
     loading = true;
   }
@@ -35,7 +38,9 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
       timeoutRef.current = setTimeout(() => {
         setMaxTimeoutReached(true);
         if (import.meta.env.DEV) {
-          console.warn("ProtectedRoute: Maksimum timeout (10 saniye) aşıldı");
+          if (import.meta.env.DEV) {
+            console.warn("ProtectedRoute: Maksimum timeout (10 saniye) aşıldı");
+          }
         }
       }, 10000);
     }

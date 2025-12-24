@@ -176,13 +176,17 @@ export const GlobalSearch = () => {
                 });
               });
           } catch (error) {
-            console.error("Search error:", error);
+            if (import.meta.env.DEV) {
+              console.error("Search error:", error);
+            }
           }
         }
 
         setSearchResults(results);
       } catch (error) {
-        console.error("Global search error:", error);
+        if (import.meta.env.DEV) {
+          console.error("Global search error:", error);
+        }
       } finally {
         setSearching(false);
       }

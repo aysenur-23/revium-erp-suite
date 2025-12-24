@@ -19,6 +19,7 @@ import {
   Timestamp,
   onSnapshot,
   Unsubscribe,
+  QueryConstraint,
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase";
 import { sendNotificationEmail } from "@/services/emailService";
@@ -26,7 +27,7 @@ import { sendNotificationEmail } from "@/services/emailService";
 export interface Notification {
   id: string;
   userId: string;
-  type: "task_assigned" | "task_updated" | "task_completed" | "task_created" | "task_deleted" | "task_pool_request" | "order_created" | "order_updated" | "role_changed" | "system" | "task_approval";
+  type: "task_assigned" | "task_updated" | "task_completed" | "task_created" | "task_deleted" | "task_pool_request" | "order_created" | "order_updated" | "role_changed" | "system" | "task_approval" | "comment_added";
   title: string;
   message: string;
   read: boolean;
@@ -62,8 +63,10 @@ export const getNotifications = async (
       id: doc.id,
       ...doc.data(),
     })) as Notification[];
-  } catch (error) {
-    console.error("Get notifications error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get notifications error:", error);
+    }
     
     const isIndexError =
       typeof error === "object" &&
@@ -78,8 +81,10 @@ export const getNotifications = async (
       const message = (error as { message: string }).message;
       const indexUrl = message.match(/https:\/\/[^\s]+/)?.[0];
       if (indexUrl) {
-        console.warn("⚠️ Firestore index gerekiyor! Lütfen şu linke tıklayarak index'i oluşturun:");
-        console.warn(indexUrl);
+        if (import.meta.env.DEV) {
+          console.warn("⚠️ Firestore index gerekiyor! Lütfen şu linke tıklayarak index'i oluşturun:");
+          console.warn(indexUrl);
+        }
         const friendlyError = new Error("Firestore index gerekiyor. Lütfen index'i oluşturun.");
         (friendlyError as { indexUrl?: string }).indexUrl = indexUrl;
         (friendlyError as { code?: string }).code = "index-required";
@@ -103,8 +108,8 @@ export const getUnreadNotificationCount = async (userId: string): Promise<number
     );
     const snapshot = await getDocs(q);
     return snapshot.size;
-  } catch (error) {
-    console.error("Get unread notification count error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) console.error("Get unread notification count error:", error);
     throw error;
   }
 };
@@ -146,7 +151,8 @@ export const createNotification = async (
               notificationData.title,
               notificationData.message,
               notificationData.type,
-              notificationData.relatedId || null
+              notificationData.relatedId || null,
+              notificationData.metadata || null
             );
             
             // Başarılı olsa bile sadece development'ta log göster (debug)
@@ -156,7 +162,7 @@ export const createNotification = async (
               // Hata olsa bile sessizce devam et, kullanıcıya gösterme
               console.debug(`ℹ️ Bildirim maili gönderilemedi (backend kapalı veya ayarlar eksik): ${userData.email}`);
             }
-          } catch (emailError: any) {
+          } catch (emailError: unknown) {
              // Sessizce devam et
           }
         }
@@ -170,8 +176,8 @@ export const createNotification = async (
     }
 
     return notification;
-  } catch (error) {
-    console.error("Create notification error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) console.error("Create notification error:", error);
     throw error;
   }
 };
@@ -185,8 +191,8 @@ export const updateNotification = async (
 ): Promise<void> => {
   try {
     await updateDoc(doc(firestore, "notifications", notificationId), updates);
-  } catch (error) {
-    console.error("Update notification error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) console.error("Update notification error:", error);
     throw error;
   }
 };
@@ -199,8 +205,8 @@ export const markNotificationAsRead = async (notificationId: string): Promise<vo
     await updateDoc(doc(firestore, "notifications", notificationId), {
       read: true,
     });
-  } catch (error) {
-    console.error("Mark notification as read error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) console.error("Mark notification as read error:", error);
     throw error;
   }
 };
@@ -222,8 +228,8 @@ export const markAllNotificationsAsRead = async (userId: string): Promise<void> 
     );
     
     await Promise.all(batch);
-  } catch (error) {
-    console.error("Mark all notifications as read error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) console.error("Mark all notifications as read error:", error);
     throw error;
   }
 };
@@ -234,8 +240,8 @@ export const markAllNotificationsAsRead = async (userId: string): Promise<void> 
 export const deleteNotification = async (notificationId: string): Promise<void> => {
   try {
     await deleteDoc(doc(firestore, "notifications", notificationId));
-  } catch (error) {
-    console.error("Delete notification error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) console.error("Delete notification error:", error);
     throw error;
   }
 };
@@ -256,7 +262,7 @@ export const subscribeToNotifications = (
     const notificationsRef = collection(firestore, "notifications");
     
     const buildQuery = () => {
-      const constraints: any[] = [
+      const constraints: QueryConstraint[] = [
         where("userId", "==", userId),
         orderBy("createdAt", "desc")
       ];
@@ -285,8 +291,8 @@ export const subscribeToNotifications = (
           })) as Notification[];
           
           callback(notifications);
-        } catch (error) {
-          console.error("Subscribe to notifications error:", error);
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) console.error("Subscribe to notifications error:", error);
           callback([]);
         }
       },
@@ -334,19 +340,19 @@ export const subscribeToNotifications = (
                   }
                   
                   callback(notifications);
-                } catch (err) {
-                  console.error("Fallback subscribe to notifications error:", err);
+                } catch (err: unknown) {
+                  if (import.meta.env.DEV) console.error("Fallback subscribe to notifications error:", err);
                   callback([]);
                 }
               },
-              (err) => {
-                console.error("Fallback notifications snapshot error:", err);
+              (err: unknown) => {
+                if (import.meta.env.DEV) console.error("Fallback notifications snapshot error:", err);
                 callback([]);
               }
             );
             return fallbackUnsubscribe;
-          } catch (fallbackError) {
-            console.error("Fallback query setup error:", fallbackError);
+          } catch (fallbackError: unknown) {
+            if (import.meta.env.DEV) console.error("Fallback query setup error:", fallbackError);
             callback([]);
           }
         } else {
@@ -356,8 +362,8 @@ export const subscribeToNotifications = (
     );
     
     return unsubscribe;
-  } catch (error: any) {
-    console.error("Subscribe to notifications setup error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) console.error("Subscribe to notifications setup error:", error);
     return () => {};
   }
 };

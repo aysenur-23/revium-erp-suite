@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
+import { Timestamp } from "firebase/firestore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { getOrderItems, requestOrderCompletion, approveOrderCompletion, rejectOrderCompletion } from "@/services/firebase/orderService";
-import { getCustomerById } from "@/services/firebase/customerService";
+import { getCustomerById, Customer } from "@/services/firebase/customerService";
 import type { LucideIcon } from "lucide-react";
 import {
   Edit,
@@ -32,11 +33,13 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { updateOrder } from "@/services/firebase/orderService";
+import { updateOrder, addOrderComment, getOrderComments, getOrderActivities, Order, OrderItem } from "@/services/firebase/orderService";
 import { useAuth } from "@/contexts/AuthContext";
+import { canUpdateResource, canDeleteResource, UserProfile } from "@/utils/permissions";
 import { formatPhoneForDisplay, formatPhoneForTelLink } from "@/utils/phoneNormalizer";
 import { getAllUsers } from "@/services/firebase/authService";
 import { CURRENCY_SYMBOLS, Currency } from "@/utils/currency";
+import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
 
 type StatusItem = {
   value: string;
@@ -59,11 +62,21 @@ const statusWorkflow: StatusItem[] = [
 
 const normalizeStatusValue = (status?: string) => {
   if (!status) return "draft";
-  if (status === "in_progress") return "in_production";
-  return status;
+  // column_ prefix'ini kaldır (örn: "column_1764448226762" -> "1764448226762")
+  let normalized = status;
+  if (normalized.startsWith("column_")) {
+    normalized = normalized.replace("column_", "");
+  }
+  // Eğer sayısal bir ID ise, default olarak "pending" döndür
+  if (/^\d+$/.test(normalized)) {
+    return "pending";
+  }
+  // in_progress -> in_production dönüşümü
+  if (normalized === "in_progress") return "in_production";
+  return normalized;
 };
 
-const resolveDateValue = (value?: any): Date | string | null => {
+const resolveDateValue = (value?: unknown): Date | string | null => {
   if (!value) return null;
   if (typeof value === "string") return value;
   if (value instanceof Date) return value;
@@ -91,30 +104,40 @@ const formatCurrency = (value?: number | null, currency?: Currency | string) => 
   }
 };
 
-const formatDateSafe = (dateInput?: string | Date | null) => {
-  if (!dateInput) return "-";
-  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
-};
-
 interface OrderDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  order: any;
+  order: Order;
   onEdit?: () => void;
   onDelete?: () => void;
 }
 
 export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }: OrderDetailModalProps) => {
   const { user, isAdmin } = useAuth();
-  const [orderItems, setOrderItems] = useState<any[]>([]);
-  const [customer, setCustomer] = useState<any>(null);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<string>(normalizeStatusValue(order?.status));
   const [approvalStatus, setApprovalStatus] = useState<string | undefined>(order?.approvalStatus);
   const [usersMap, setUsersMap] = useState<Record<string, string>>({});
+  
+  // Personel kontrolü - Personel sipariş detayını görebilir ama düzenleyemez
+  const isPersonnel = user?.roles?.includes("personnel") || false;
+
+  const formatDateSafe = (dateInput?: string | Date | Timestamp | null) => {
+    if (!dateInput) return "-";
+    let date: Date;
+    if (dateInput instanceof Timestamp) {
+      date = dateInput.toDate();
+    } else if (dateInput instanceof Date) {
+      date = dateInput;
+    } else {
+      date = new Date(dateInput);
+    }
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
+  };
 
   const orderNumber = order?.order_number || order?.orderNumber || order?.id;
   const orderDateValue = resolveDateValue(order?.order_date || order?.orderDate);
@@ -133,10 +156,73 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
   const taxValue = Number(order?.tax ?? order?.taxAmount ?? 0);
   const totalValue = Number(order?.total ?? order?.totalAmount ?? subtotalValue + taxValue - totalDiscount);
   
+  const [canUpdate, setCanUpdate] = useState(false);
+  const [canDeleteState, setCanDeleteState] = useState(false);
+  const [canApprove, setCanApprove] = useState(false);
+
+  // Order değiştiğinde currentStatus'u güncelle (column_ prefix'ini kaldır)
+  useEffect(() => {
+    if (order?.status) {
+      const normalized = normalizeStatusValue(order.status);
+      setCurrentStatus(normalized);
+      if (import.meta.env.DEV) {
+        console.log("OrderDetailModal: Status güncellendi", {
+          original: order.status,
+          normalized,
+        });
+      }
+    }
+    if (order?.approvalStatus !== undefined) {
+      setApprovalStatus(order.approvalStatus);
+    }
+  }, [order?.status, order?.approvalStatus]);
+
+  // Yetki kontrolleri - Firestore'dan kontrol et
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user || !order) {
+        setCanUpdate(false);
+        setCanDeleteState(false);
+        setCanApprove(false);
+        return;
+      }
+      try {
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: null,
+          dateOfBirth: null,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const [canUpdateOrder, canDeleteOrder] = await Promise.all([
+          canUpdateResource(userProfile, "orders"),
+          canDeleteResource(userProfile, "orders"),
+        ]);
+        setCanUpdate(canUpdateOrder);
+        setCanDeleteState(canDeleteOrder);
+        
+        // Onaylama yetkisi: Güncelleme yetkisi varsa veya oluşturan kişi ise
+        const isCreator = user.id === order.createdBy;
+        setCanApprove(canUpdateOrder || isCreator);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking order permissions:", error);
+        }
+        setCanUpdate(false);
+        setCanDeleteState(false);
+        setCanApprove(false);
+      }
+    };
+    checkPermissions();
+  }, [user, order]);
+
   const isManager = user?.roles?.includes('manager') || isAdmin;
   const isCreator = user?.id === order?.createdBy;
-  const canDelete = isManager || isAdmin; // Sadece yönetici veya ekip lideri silebilir
-  const canApprove = isManager || isAdmin || isCreator; // Tanımlayan kişi, yönetici veya ekip lideri onaylayabilir
 
   const highlightCards = [
     {
@@ -174,21 +260,21 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
   ];
   const orderSummaryRows = [
     { label: "Sipariş No", value: orderNumber },
-    { label: "Sipariş Edilen Tarih", value: formatDateSafe(orderDateValue as any) },
-    { label: "Teslimat Tarihi", value: formatDateSafe(deliveryDateValue as any) },
-    { label: "Teslim Alınan Tarih", value: formatDateSafe(receivedDateValue as any) },
-    { label: "Son Ödeme", value: formatDateSafe(dueDateValue as any) },
+    { label: "Sipariş Edilen Tarih", value: formatDateSafe(orderDateValue as Date | string | Timestamp | null) },
+    { label: "Teslimat Tarihi", value: formatDateSafe(deliveryDateValue as Date | string | Timestamp | null) },
+    { label: "Teslim Alınan Tarih", value: formatDateSafe(receivedDateValue as Date | string | Timestamp | null) },
+    { label: "Son Ödeme", value: formatDateSafe(dueDateValue as Date | string | Timestamp | null) },
     { label: "Para Birimi", value: currency },
     { label: "Ödeme Şartı", value: paymentTerms },
     { label: "Oluşturan", value: order?.createdBy 
       ? (usersMap[order.createdBy] || order?.creator?.full_name || "-")
       : (order?.creator?.full_name || "-") },
-    { label: "Son Güncelleme", value: formatDateSafe(updatedAtValue as any) },
+    { label: "Son Güncelleme", value: formatDateSafe(updatedAtValue as Date | string | Timestamp | null) },
   ];
   const quickMetaChips = [
     orderNumber && { label: "Sipariş No", value: orderNumber },
-    createdAtValue && { label: "Oluşturulma", value: formatDateSafe(createdAtValue as any) },
-    dueDateValue && { label: "Son Ödeme", value: formatDateSafe(dueDateValue as any) },
+    createdAtValue && { label: "Oluşturulma", value: formatDateSafe(createdAtValue as Date | string | Timestamp | null) },
+    dueDateValue && { label: "Son Ödeme", value: formatDateSafe(dueDateValue as Date | string | Timestamp | null) },
     currency && { label: "Para Birimi", value: currency },
   ].filter(Boolean) as { label: string; value: string }[];
 
@@ -234,9 +320,10 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
         const customerData = await getCustomerById(customerId);
         setCustomer(customerData);
       }
-    } catch (error: any) {
-      console.error("Fetch order details error:", error);
-      toast.error("Detaylar yüklenirken hata: " + (error.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Fetch order details error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Detaylar yüklenirken hata: " + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -267,6 +354,8 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
   };
 
   const getStatusLabel = (status: string) => {
+    // Önce status'ü normalize et
+    const normalized = normalizeStatusValue(status);
     const labels: Record<string, string> = {
       draft: "Taslak",
       pending: "Beklemede",
@@ -281,21 +370,53 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
       cancelled: "İptal Edildi",
       on_hold: "Beklemede",
     };
-    return labels[status] || status;
+    return labels[normalized] || normalized;
   };
 
   const getCurrentStatusIndex = () => {
+    // currentStatus zaten normalize edilmiş olmalı ama yine de normalize et
     const normalized = normalizeStatusValue(currentStatus);
     const index = statusWorkflow.findIndex((statusItem) => statusItem.value === normalized);
-    return index === -1 ? 0 : index;
+    // Eğer bulunamazsa, "pending" olarak kabul et (index 1)
+    if (index === -1) {
+      if (import.meta.env.DEV) {
+        console.warn("OrderDetailModal: Status workflow'da bulunamadı:", {
+          original: order?.status,
+          currentStatus,
+          normalized,
+          availableStatuses: statusWorkflow.map(s => s.value),
+        });
+      }
+      // "pending" index'i 1 (draft'tan sonra)
+      return 1;
+    }
+    return index;
   };
 
   const getNextStatus = () => {
     const currentIndex = getCurrentStatusIndex();
-    if (currentIndex === -1 || currentIndex >= statusWorkflow.length - 1) {
+    // currentIndex artık -1 dönmeyecek (minimum 1 döner), ama yine de kontrol et
+    if (currentIndex < 0 || currentIndex >= statusWorkflow.length - 1) {
+      if (import.meta.env.DEV) {
+        console.log("OrderDetailModal: getNextStatus null döndü", {
+          currentIndex,
+          workflowLength: statusWorkflow.length,
+          currentStatus,
+          normalizedStatus: normalizeStatusValue(currentStatus),
+        });
+      }
       return null;
     }
-    return statusWorkflow[currentIndex + 1];
+    const nextStatus = statusWorkflow[currentIndex + 1];
+    if (import.meta.env.DEV) {
+      console.log("OrderDetailModal: getNextStatus", {
+        currentIndex,
+        currentStatus: normalizeStatusValue(currentStatus),
+        nextStatus: nextStatus?.value,
+        nextLabel: nextStatus?.label,
+      });
+    }
+    return nextStatus;
   };
 
   const handleStatusChange = async (nextStatus: string) => {
@@ -305,9 +426,16 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
 
     setUpdatingStatus(true);
     try {
+      // Yetki kontrolü
+      if (!canUpdate && !isCreator) {
+        toast.error("Sipariş durumunu değiştirme yetkiniz yok.");
+        setUpdatingStatus(false);
+        return;
+      }
+
       // Eğer tamamlandı durumuna geçiliyorsa ve yetkili değilse onaya gönder
       if (nextStatus === "completed") {
-        const canCompleteDirectly = isAdmin || isManager || isCreator;
+        const canCompleteDirectly = canUpdate || isCreator;
         
         if (!canCompleteDirectly) {
           await requestOrderCompletion(order.id, user.id);
@@ -329,16 +457,17 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
       await updateOrder(
         order.id,
         {
-        status: nextStatus as any,
+        status: nextStatus as Order["status"],
         },
         user.id,
-        isAdmin // Üst yöneticiler için durum geçiş validasyonunu atla
+        canUpdate // Yetkili kullanıcılar için durum geçiş validasyonunu atla
       );
       setCurrentStatus(nextStatus);
       toast.success(`Sipariş durumu ${getStatusLabel(nextStatus)} olarak güncellendi.`);
-    } catch (error: any) {
-      console.error("Order status update error:", error);
-      toast.error("Durum güncellenemedi: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Order status update error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Durum güncellenemedi: " + errorMessage);
     } finally {
       setUpdatingStatus(false);
     }
@@ -351,8 +480,9 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
       setCurrentStatus("completed");
       setApprovalStatus("approved");
       toast.success("Sipariş onayı kabul edildi.");
-    } catch (error: any) {
-      toast.error("Onaylama başarısız: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Onaylama başarısız: " + errorMessage);
     }
   };
 
@@ -363,13 +493,20 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
       setCurrentStatus("in_production"); // Geri döndür
       setApprovalStatus("rejected");
       toast.success("Sipariş onayı reddedildi.");
-    } catch (error: any) {
-      toast.error("Reddetme başarısız: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Reddetme başarısız: " + errorMessage);
     }
   };
 
   const handleRevertStatus = async (targetStatus: string) => {
-    if (!order?.id || !user?.id || (!isAdmin && !isManager)) {
+    if (!order?.id || !user?.id) {
+      return;
+    }
+    
+    // Yetki kontrolü
+    if (!canUpdate && !isCreator) {
+      toast.error("Sipariş durumunu değiştirme yetkiniz yok.");
       return;
     }
 
@@ -378,16 +515,17 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
       await updateOrder(
         order.id,
         {
-          status: targetStatus as any,
+          status: targetStatus as Order["status"],
         },
         user.id,
-        isAdmin
+        canUpdate
       );
       setCurrentStatus(targetStatus);
       toast.success(`Sipariş durumu ${getStatusLabel(targetStatus)} olarak güncellendi.`);
-    } catch (error: any) {
-      console.error("Order status revert error:", error);
-      toast.error("Durum güncellenemedi: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Order status revert error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Durum güncellenemedi: " + errorMessage);
     } finally {
       setUpdatingStatus(false);
     }
@@ -395,7 +533,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
             <div className="flex items-center justify-between gap-3">
@@ -403,7 +541,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                   Sipariş Detayı - {orderNumber}
                 </DialogTitle>
                 <DialogDescription className="sr-only">
@@ -416,8 +554,8 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                     Onay Bekliyor
                   </Badge>
                 )}
-                <Badge variant={getStatusVariant(currentStatus)} className="text-xs px-2 sm:px-3 py-1 relative z-10">
-                  {getStatusLabel(currentStatus)}
+                <Badge variant={getStatusVariant(normalizeStatusValue(currentStatus))} className="text-xs px-2 sm:px-3 py-1 relative z-10">
+                  {getStatusLabel(normalizeStatusValue(currentStatus))}
                 </Badge>
               </div>
             </div>
@@ -510,11 +648,16 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
               <CardHeader className="space-y-1">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <CardTitle className="text-lg">Sipariş Durumu</CardTitle>
+                    <CardTitle className="text-lg sm:text-xl font-semibold">Sipariş Durumu</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      {getNextStatus()
-                        ? `${getStatusLabel(currentStatus)} aşamasındasınız. Sıradaki adım: ${getNextStatus()!.label}`
-                        : "Workflow tamamlandı."}
+                      {(() => {
+                        const normalizedStatus = normalizeStatusValue(currentStatus);
+                        const nextStatus = getNextStatus();
+                        if (nextStatus) {
+                          return `${getStatusLabel(normalizedStatus)} aşamasındasınız. Sıradaki adım: ${nextStatus.label}`;
+                        }
+                        return "Workflow tamamlandı.";
+                      })()}
                     </p>
                   </div>
                   <div className="text-xs text-muted-foreground text-right">
@@ -523,7 +666,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                       : (user?.fullName || "-")}
                     <br />
                     <span className="text-[11px]">
-                      {order?.statusUpdatedAt ? formatDateSafe(order.statusUpdatedAt as any) : ""}
+                      {order?.statusUpdatedAt ? formatDateSafe(order.statusUpdatedAt as Timestamp | Date | string | null) : ""}
                     </span>
                   </div>
                 </div>
@@ -537,7 +680,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                       const currentIndex = getCurrentStatusIndex();
                       const isActive = index === currentIndex;
                       const isCompleted = index < currentIndex;
-                      const isClickable = (isAdmin || isManager) && isCompleted && statusItem.value !== "cancelled" && approvalStatus !== "pending";
+                      const isClickable = !isPersonnel && (canUpdate || isCreator) && isCompleted && statusItem.value !== "cancelled" && approvalStatus !== "pending";
                       
                       return (
                         <div key={statusItem.value} className="flex items-center flex-1 min-w-0">
@@ -580,30 +723,56 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                   </div>
                   
                   {/* Next Status Button */}
-                  {getNextStatus() && currentStatus !== "delivered" && currentStatus !== "cancelled" && approvalStatus !== "pending" && (
-                    <div className="flex justify-center pt-4 border-t">
-                      <Button
-                        onClick={() => handleStatusChange(getNextStatus()!.value)}
-                        disabled={updatingStatus}
-                        className="gap-2"
-                      >
-                        {updatingStatus ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            Güncelleniyor...
-                          </>
-                        ) : (
-                          <>
-                            {(() => {
-                              const NextIcon = getNextStatus()!.icon;
-                              return <NextIcon className="h-4 w-4" />;
-                            })()}
-                            {getNextStatus()!.label} Durumuna Geç
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
+                  {(() => {
+                    const nextStatus = getNextStatus();
+                    const normalizedCurrentStatus = normalizeStatusValue(currentStatus);
+                    // Buton gösterilme koşulları: next status var, delivered/cancelled değil, approval pending değil
+                    const shouldShowButton = nextStatus && 
+                      normalizedCurrentStatus !== "delivered" && 
+                      normalizedCurrentStatus !== "cancelled" && 
+                      approvalStatus !== "pending" &&
+                      !isPersonnel && // Personel durum değiştiremez
+                      (canUpdate || isCreator); // Yetki kontrolü
+                    
+                    if (!shouldShowButton) {
+                      // Debug için konsola yaz (sadece dev modda)
+                      if (import.meta.env.DEV && nextStatus) {
+                        console.log("Buton gösterilmedi:", {
+                          nextStatus: nextStatus.value,
+                          normalizedCurrentStatus,
+                          approvalStatus,
+                          canUpdate,
+                          isCreator,
+                        });
+                      }
+                      return null;
+                    }
+                    
+                    return (
+                      <div className="flex justify-center pt-4 border-t">
+                        <Button
+                          onClick={() => handleStatusChange(nextStatus.value)}
+                          disabled={updatingStatus}
+                          className="gap-2"
+                        >
+                          {updatingStatus ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              Güncelleniyor...
+                            </>
+                          ) : (
+                            <>
+                              {(() => {
+                                const NextIcon = nextStatus.icon;
+                                return <NextIcon className="h-4 w-4" />;
+                              })()}
+                              {nextStatus.label} Durumuna Geç
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>
@@ -612,7 +781,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
               {/* Customer Information */}
               <Card>
                 <CardHeader className="space-y-1">
-                  <CardTitle className="text-lg">Müşteri Bilgileri</CardTitle>
+                  <CardTitle className="text-lg sm:text-xl font-semibold">Müşteri Bilgileri</CardTitle>
                   <p className="text-sm text-muted-foreground">
                     İletişim ve teslimat detayları
                   </p>
@@ -689,7 +858,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
             {/* Order Information */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Sipariş Bilgileri</CardTitle>
+                <CardTitle className="text-lg sm:text-xl font-semibold">Sipariş Bilgileri</CardTitle>
               </CardHeader>
                 <CardContent className="space-y-3 sm:space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -716,7 +885,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
             {/* Order Items */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Ürünler</CardTitle>
+                <CardTitle className="text-lg sm:text-xl font-semibold">Ürünler</CardTitle>
               </CardHeader>
               <CardContent className="p-4 sm:p-6">
                 {orderItems.length ? (
@@ -765,7 +934,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
             {/* Financial Summary */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Finansal Özet</CardTitle>
+                <CardTitle className="text-lg sm:text-xl font-semibold">Finansal Özet</CardTitle>
               </CardHeader>
               <CardContent className="p-4 sm:p-6">
                 <div className="space-y-2">
@@ -798,13 +967,13 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
 
                   {/* Action Buttons */}
                   <div className="flex justify-end gap-2">
-                    {canDelete && onDelete && (
+                    {!isPersonnel && canDeleteState && onDelete && (
                       <Button variant="outline" onClick={onDelete} className="gap-2 h-10">
                         <Trash2 className="h-4 w-4" />
                         Sil
                       </Button>
                     )}
-                    {onEdit && (
+                    {!isPersonnel && onEdit && (
                       <Button onClick={onEdit} className="gap-2 h-10 bg-primary hover:bg-primary/90 text-white">
                         <Edit className="h-4 w-4" />
                         Düzenle
@@ -816,6 +985,32 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
             </div>
           </div>
         </div>
+        
+        {/* Activity Comments Panel */}
+        {order?.id && user && (
+          <ActivityCommentsPanel
+            entityId={order.id}
+            entityType="order"
+            onAddComment={async (content: string) => {
+              await addOrderComment(
+                order.id,
+                user.id,
+                content,
+                user.fullName || user.displayName,
+                user.email
+              );
+            }}
+            onGetComments={async () => {
+              return await getOrderComments(order.id);
+            }}
+            onGetActivities={async () => {
+              return await getOrderActivities(order.id);
+            }}
+            currentUserId={user.id}
+            currentUserName={user.fullName || user.displayName}
+            currentUserEmail={user.email}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

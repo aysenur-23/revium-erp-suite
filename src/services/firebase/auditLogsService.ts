@@ -22,12 +22,12 @@ export interface AuditLog {
   action: "CREATE" | "UPDATE" | "DELETE";
   tableName: string;
   recordId: string | null;
-  oldData: any;
-  newData: any;
+  oldData: unknown;
+  newData: unknown;
   createdAt: Timestamp;
   userName?: string;
   userEmail?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 const AUDIT_LOGS_COLLECTION = "audit_logs";
@@ -39,8 +39,8 @@ export const createAuditLog = async (
   action: "CREATE" | "UPDATE" | "DELETE",
   tableName: string,
   recordId: string | null,
-  oldData: any = null,
-  newData: any = null,
+  oldData: unknown = null,
+  newData: unknown = null,
   userId: string | null = null
 ): Promise<string> => {
   try {
@@ -57,8 +57,10 @@ export const createAuditLog = async (
     
     const docRef = await addDoc(logsRef, newLog);
     return docRef.id;
-  } catch (error: any) {
-    console.error("Error creating audit log:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error creating audit log:", error);
+    }
     // Don't throw - audit logs shouldn't break the main flow
     return "";
   }
@@ -125,8 +127,10 @@ export const getAuditLogs = async (options?: {
             });
           }
         });
-      } catch (error) {
-        console.error("Error fetching users:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error fetching users:", error);
+        }
       }
     }
     
@@ -142,7 +146,7 @@ export const getAuditLogs = async (options?: {
     });
     
     return logs;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Index hatası durumunda basit query dene
     if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
       console.warn("Audit logs index bulunamadı, basit query kullanılıyor");
@@ -190,8 +194,10 @@ export const getAuditLogs = async (options?: {
                 });
               }
             });
-          } catch (error) {
-            console.error("Error fetching users:", error);
+          } catch (error: unknown) {
+            if (import.meta.env.DEV) {
+              console.error("Error fetching users:", error);
+            }
           }
         }
         
@@ -207,13 +213,18 @@ export const getAuditLogs = async (options?: {
         });
         
         return logs;
-      } catch (fallbackError) {
-        console.error("Fallback query de başarısız:", fallbackError);
+      } catch (fallbackError: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Fallback query de başarısız:", fallbackError);
+        }
         return [];
       }
     }
-    console.error("Error getting audit logs:", error);
-    throw new Error(error.message || "Audit logları yüklenemedi");
+    if (import.meta.env.DEV) {
+      console.error("Error getting audit logs:", error);
+    }
+    const errorMessage = error instanceof Error ? error.message : "Audit logları yüklenemedi";
+    throw new Error(errorMessage);
   }
 };
 
@@ -314,8 +325,10 @@ export const getTeamMemberLogs = async (teamLeaderId: string): Promise<{
               });
             }
           });
-        } catch (error) {
-          console.error("Error fetching users:", error);
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Error fetching users:", error);
+          }
         }
       }
       
@@ -331,7 +344,7 @@ export const getTeamMemberLogs = async (teamLeaderId: string): Promise<{
       });
       
       return { logs, teamInfo };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Index hatası durumunda basit query dene
       if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
         console.warn("Team member logs index bulunamadı, basit query kullanılıyor");
@@ -369,7 +382,7 @@ export const getTeamMemberLogs = async (teamLeaderId: string): Promise<{
                   });
                 }
               });
-              } catch (error) {
+              } catch (error: unknown) {
               console.error("Error fetching users:", error);
               }
           }
@@ -386,15 +399,19 @@ export const getTeamMemberLogs = async (teamLeaderId: string): Promise<{
           });
           
           return { logs, teamInfo };
-        } catch (fallbackError) {
-          console.error("Fallback query de başarısız:", fallbackError);
+        } catch (fallbackError: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Fallback query de başarısız:", fallbackError);
+          }
           return { logs: [], teamInfo };
         }
       }
       throw error;
     }
-  } catch (error: any) {
-    console.error("Error getting team member logs:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error getting team member logs:", error);
+    }
     return { logs: [], teamInfo: { managedTeams: [], teamMembers: [] } };
   }
 };
@@ -428,8 +445,8 @@ export const getUserLogsWithPermission = async (
       return getAuditLogs({ userId: targetUserId });
     }
     
-    // Adminler tüm logları görebilir
-    if (viewer.role?.includes("admin")) {
+    // Super Admin tüm logları görebilir
+    if (viewer.role?.includes("super_admin") || viewer.role?.includes("main_admin")) {
       return getAuditLogs({ userId: targetUserId });
     }
     
@@ -451,8 +468,10 @@ export const getUserLogsWithPermission = async (
     
     // Yetki yok
     throw new Error("Bu kullanıcının loglarını görüntüleme yetkiniz yok");
-  } catch (error: any) {
-    console.error("Error getting user logs with permission:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error getting user logs with permission:", error);
+    }
     throw error;
   }
 };
@@ -482,8 +501,10 @@ export const deleteUserLogs = async (userId: string): Promise<void> => {
       
       await batch.commit();
     }
-  } catch (error: any) {
-    console.error("Error deleting user logs:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error deleting user logs:", error);
+    }
     // Log silme hatası kullanıcı silme işlemini engellemez
     throw error;
   }

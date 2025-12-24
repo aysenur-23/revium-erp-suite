@@ -89,45 +89,50 @@ export const getRawMaterials = async (includeDeleted: boolean = false): Promise<
       
       // Silinmiş hammaddeleri atla (eğer includeDeleted false ise)
       if (!includeDeleted) {
-        if ((data as any).deleted === true || (data as any).isDeleted === true) {
+        const deleted = data.deleted === true || data.isDeleted === true;
+        if (deleted) {
           continue;
         }
       }
       
       const material: RawMaterial = {
         id: docSnapshot.id,
-        name: (data as any).name || "",
-        code: (data as any).code || (data as any).sku || null,
-        sku: (data as any).sku || (data as any).code || null,
-        category: (data as any).category || "other",
-        unit: (data as any).unit || "Adet",
-        currentStock: (data as any).currentStock !== undefined ? (data as any).currentStock : ((data as any).stock || 0),
-        stock: (data as any).stock !== undefined ? (data as any).stock : ((data as any).currentStock || 0),
-        minStock: (data as any).minStock !== undefined ? (data as any).minStock : ((data as any).min_stock || 0),
-        min_stock: (data as any).min_stock !== undefined ? (data as any).min_stock : ((data as any).minStock || 0),
-        maxStock: (data as any).maxStock !== undefined ? (data as any).maxStock : ((data as any).max_stock || null),
-        max_stock: (data as any).max_stock !== undefined ? (data as any).max_stock : ((data as any).maxStock || null),
-        cost: (data as any).cost !== undefined ? (data as any).cost : ((data as any).unitPrice || null),
-        unitPrice: (data as any).unitPrice !== undefined ? (data as any).unitPrice : ((data as any).cost || null),
-        totalPrice: (data as any).totalPrice !== undefined ? (data as any).totalPrice : null,
-        brand: (data as any).brand || null,
-        link: (data as any).link || null,
-        purchasedBy: (data as any).purchasedBy || null,
-        location: (data as any).location || null,
-        currency: (data as any).currency || null,
-        currencies: (data as any).currencies || null,
-        notes: (data as any).notes || null,
-        description: (data as any).description || null,
-        createdBy: (data as any).createdBy || null,
-        createdAt: (data as any).createdAt || Timestamp.now(),
-        updatedAt: (data as any).updatedAt || Timestamp.now(),
+        name: data.name || "",
+        code: data.code || data.sku || null,
+        sku: data.sku || data.code || null,
+        category: data.category || "other",
+        unit: data.unit || "Adet",
+        currentStock: data.currentStock !== undefined ? data.currentStock : (data.stock || 0),
+        stock: data.stock !== undefined ? data.stock : (data.currentStock || 0),
+        minStock: data.minStock !== undefined ? data.minStock : (data.min_stock || 0),
+        min_stock: data.min_stock !== undefined ? data.min_stock : (data.minStock || 0),
+        maxStock: data.maxStock !== undefined ? data.maxStock : (data.max_stock || null),
+        max_stock: data.max_stock !== undefined ? data.max_stock : (data.maxStock || null),
+        cost: data.cost !== undefined ? data.cost : (data.unitPrice || null),
+        unitPrice: data.unitPrice !== undefined ? data.unitPrice : (data.cost || null),
+        totalPrice: data.totalPrice !== undefined ? data.totalPrice : null,
+        brand: data.brand || null,
+        link: data.link || null,
+        purchasedBy: data.purchasedBy || null,
+        location: data.location || null,
+        currency: data.currency || null,
+        currencies: data.currencies || null,
+        notes: data.notes || null,
+        description: data.description || null,
+        createdBy: data.createdBy || null,
+        createdAt: data.createdAt || Timestamp.now(),
+        updatedAt: data.updatedAt || Timestamp.now(),
       };
       materials.push(material);
     }
     
     return materials;
-  } catch (error: any) {
-    console.error("Get raw materials error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Get raw materials error:", error);
+      }
+    }
     if (isPermissionError(error)) {
       throw handlePermissionError(error, {
         operation: "read",
@@ -150,7 +155,7 @@ export const getRawMaterialById = async (materialId: string): Promise<RawMateria
       return null;
     }
 
-    const data = materialDoc.data() as any;
+    const data = materialDoc.data() as Omit<RawMaterial, "id">;
     return {
       id: materialDoc.id,
       name: data.name || "",
@@ -179,8 +184,12 @@ export const getRawMaterialById = async (materialId: string): Promise<RawMateria
       createdAt: data.createdAt || Timestamp.now(),
       updatedAt: data.updatedAt || Timestamp.now(),
     } as RawMaterial;
-  } catch (error: any) {
-    console.error("Get raw material by id error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Get raw material by id error:", error);
+      }
+    }
     if (isPermissionError(error)) {
       throw handlePermissionError(error, {
         operation: "read",
@@ -219,9 +228,38 @@ export const createRawMaterial = async (
       await logAudit("CREATE", "raw_materials", docRef.id, userId, null, createdMaterial);
     }
 
+    // Aktivite log ekle
+    const finalUserId = userId || materialData.createdBy || auth?.currentUser?.uid;
+    if (finalUserId) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(finalUserId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addMaterialActivity(
+          docRef.id,
+          finalUserId,
+          "created",
+          `bu hammadeyi oluşturdu`,
+          { materialName: materialData.name },
+          userName,
+          userEmail
+        );
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Add material activity error:", error);
+        }
+      }
+    }
+
     return createdMaterial;
-  } catch (error: any) {
-    console.error("Create raw material error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Create raw material error:", error);
+      }
+    }
     if (isPermissionError(error)) {
       throw handlePermissionError(error, {
         operation: "create",
@@ -258,8 +296,45 @@ export const updateRawMaterial = async (
     if (userId) {
       await logAudit("UPDATE", "raw_materials", materialId, userId, oldMaterial, newMaterial);
     }
-  } catch (error: any) {
-    console.error("Update raw material error:", error);
+
+    // Aktivite log ekle
+    const finalUserId = userId || auth?.currentUser?.uid;
+    if (finalUserId && oldMaterial) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(finalUserId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+
+        const changedFields = Object.keys(updates).filter(key => {
+          const oldValue = (oldMaterial as Record<string, unknown>)[key];
+          const newValue = (updates as Record<string, unknown>)[key];
+          return oldValue !== newValue;
+        });
+        
+        if (changedFields.length > 0) {
+          await addMaterialActivity(
+            materialId,
+            finalUserId,
+            "updated",
+            `bu hammadeyi güncelledi`,
+            { changedFields },
+            userName,
+            userEmail
+          );
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Add material activity error:", error);
+        }
+      }
+    }
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Update raw material error:", error);
+      }
+    }
     if (isPermissionError(error)) {
       throw handlePermissionError(error, {
         operation: "update",
@@ -281,14 +356,41 @@ export const deleteRawMaterial = async (materialId: string, userId?: string): Pr
     // Eski veriyi al
     const oldMaterial = await getRawMaterialById(materialId);
     
+    // Aktivite log ekle (silmeden önce)
+    const finalUserId = userId || auth?.currentUser?.uid;
+    if (finalUserId && oldMaterial) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(finalUserId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addMaterialActivity(
+          materialId,
+          finalUserId,
+          "deleted",
+          `bu hammadeyi sildi`,
+          { materialName: oldMaterial.name },
+          userName,
+          userEmail
+        );
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Add material activity error:", error);
+        }
+      }
+    }
+    
     await deleteDoc(doc(firestore, "rawMaterials", materialId));
     
     // Audit log
     if (userId) {
       await logAudit("DELETE", "raw_materials", materialId, userId, oldMaterial, null);
     }
-  } catch (error: any) {
-    console.error("Delete raw material error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Delete raw material error:", error);
+    }
     if (isPermissionError(error)) {
       throw handlePermissionError(error, {
         operation: "delete",
@@ -347,8 +449,10 @@ export const addMaterialTransaction = async (
       createdBy: transactionData.createdBy,
       createdAt: Timestamp.now(),
     } as MaterialTransaction;
-  } catch (error: any) {
-    console.error("Add material transaction error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Add material transaction error:", error);
+    }
     if (isPermissionError(error)) {
       throw handlePermissionError(error, {
         operation: "create",
@@ -370,7 +474,7 @@ export const getMaterialTransactions = async (materialId: string): Promise<Mater
       collection(firestore, "rawMaterials", materialId, "transactions")
     );
     return snapshot.docs.map((doc) => {
-      const data = doc.data() as any;
+      const data = doc.data() as Omit<MaterialTransaction, "id">;
       return {
         id: doc.id,
         materialId: data.materialId || "",
@@ -382,8 +486,10 @@ export const getMaterialTransactions = async (materialId: string): Promise<Mater
         createdBy: data.createdBy || "",
       } as MaterialTransaction;
     });
-  } catch (error: any) {
-    console.error("Get material transactions error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get material transactions error:", error);
+    }
     if (isPermissionError(error)) {
       throw handlePermissionError(error, {
         operation: "read",
@@ -391,6 +497,167 @@ export const getMaterialTransactions = async (materialId: string): Promise<Mater
         userId: auth?.currentUser?.uid,
       });
     }
+    throw error;
+  }
+};
+
+// Material Comments and Activities
+
+export interface MaterialComment {
+  id: string;
+  materialId: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  content: string;
+  createdAt: Timestamp;
+  updatedAt?: Timestamp | null;
+}
+
+export interface MaterialActivity {
+  id: string;
+  materialId: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  action: string;
+  description: string;
+  metadata?: Record<string, any>;
+  createdAt: Timestamp;
+}
+
+/**
+ * Hammadde yorumu ekle
+ */
+export const addMaterialComment = async (
+  materialId: string,
+  userId: string,
+  content: string,
+  userName?: string,
+  userEmail?: string
+): Promise<MaterialComment> => {
+  try {
+    const commentData: Omit<MaterialComment, "id"> = {
+      materialId,
+      userId,
+      userName,
+      userEmail,
+      content,
+      createdAt: Timestamp.now(),
+      updatedAt: null,
+    };
+
+    const docRef = await addDoc(
+      collection(firestore, "rawMaterials", materialId, "comments"),
+      commentData
+    );
+
+    // Activity log ekle
+    await addMaterialActivity(materialId, userId, "commented", `yorum ekledi`, { commentId: docRef.id }, userName, userEmail);
+
+    // Hammadeyi oluşturan kişiye bildirim gönder (yorum ekleyen kişi hariç)
+    try {
+      const material = await getRawMaterialById(materialId);
+      if (material?.createdBy && material.createdBy !== userId) {
+        const { createNotification } = await import("@/services/firebase/notificationService");
+        await createNotification({
+          userId: material.createdBy,
+          type: "comment_added",
+          title: "Hammadenize Yorum Eklendi",
+          message: `${userName || userEmail || "Bir kullanıcı"} "${material.name}" hammadenize yorum ekledi: ${content.substring(0, 100)}${content.length > 100 ? "..." : ""}`,
+          read: false,
+          relatedId: materialId,
+          metadata: { commentId: docRef.id, commenterId: userId, commenterName: userName, commenterEmail: userEmail },
+        });
+      }
+    } catch (error) {
+      console.error("Send comment notification error:", error);
+    }
+
+    return {
+      id: docRef.id,
+      ...commentData,
+    };
+  } catch (error) {
+    console.error("Add material comment error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Hammadde yorumlarını al
+ */
+export const getMaterialComments = async (materialId: string): Promise<MaterialComment[]> => {
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, "rawMaterials", materialId, "comments"),
+        orderBy("createdAt", "desc")
+      )
+    );
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as MaterialComment[];
+  } catch (error) {
+    console.error("Get material comments error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Hammadde aktivite log ekle
+ */
+export const addMaterialActivity = async (
+  materialId: string,
+  userId: string,
+  action: string,
+  description: string,
+  metadata?: Record<string, any>,
+  userName?: string,
+  userEmail?: string
+): Promise<string> => {
+  try {
+    const activityData: Omit<MaterialActivity, "id"> = {
+      materialId,
+      userId,
+      userName,
+      userEmail,
+      action,
+      description,
+      metadata: metadata || {},
+      createdAt: Timestamp.now(),
+    };
+
+    const docRef = await addDoc(
+      collection(firestore, "rawMaterials", materialId, "activities"),
+      activityData
+    );
+
+    return docRef.id;
+  } catch (error) {
+    console.error("Add material activity error:", error);
+    return "";
+  }
+};
+
+/**
+ * Hammadde aktivite loglarını al
+ */
+export const getMaterialActivities = async (materialId: string): Promise<MaterialActivity[]> => {
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, "rawMaterials", materialId, "activities"),
+        orderBy("createdAt", "desc")
+      )
+    );
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as MaterialActivity[];
+  } catch (error) {
+    console.error("Get material activities error:", error);
     throw error;
   }
 };

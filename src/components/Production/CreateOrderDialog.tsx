@@ -77,7 +77,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
   const [productItems, setProductItems] = useState<ProductItem[]>([
     { product_id: "", product_name: "", quantity: "1", unit: "Adet" }
   ]);
-  const [errors, setErrors] = useState<any>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
 
@@ -106,7 +106,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
         }
         return { ...prev, order_number: nextNumber };
       });
-    } catch (error) {
+    } catch (error: unknown) {
       const nextNumber = `PROD-${Date.now()}`;
       setFormData((prev) => {
         if (orderNumberTouched && prev.order_number) {
@@ -122,8 +122,10 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
       setProductsLoading(true);
       const productData = await getProducts();
       setProducts(productData);
-    } catch (error) {
-      console.error("Fetch products error:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Fetch products error:", error);
+      }
       toast.error("Ürün listesi alınamadı");
     } finally {
       setProductsLoading(false);
@@ -184,7 +186,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const nextErrors: any = {};
+    const nextErrors: Record<string, string> = {};
     if (!formData.order_number.trim()) {
       nextErrors.order_number = "Sipariş numarası zorunludur";
     }
@@ -243,7 +245,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
         customer_id: formData.customer_id || null,
         customerName: formData.customer_name || null,
         customer_name: formData.customer_name || null,
-        status: (formData.status || "planned") as any,
+        status: (formData.status || "planned") as "planned" | "in_production" | "completed" | "cancelled",
         totalAmount: 0,
         total_amount: 0,
         currency: "TRY",
@@ -278,9 +280,11 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
       });
       setProductItems([{ product_id: "", product_name: "", quantity: "1", unit: "Adet" }]);
       setErrors({});
-    } catch (error: any) {
-      console.error("Create production order error:", error);
-      toast.error("Hata: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Create production order error:", error);
+      }
+      toast.error("Hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     } finally {
       setLoading(false);
     }
@@ -288,9 +292,9 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl w-[80vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Yeni Üretim Siparişi</DialogTitle>
+          <DialogTitle className="text-[18px] sm:text-[20px] font-semibold">Yeni Üretim Siparişi</DialogTitle>
           <DialogDescription>
             Üretim için yeni bir sipariş oluşturun
           </DialogDescription>

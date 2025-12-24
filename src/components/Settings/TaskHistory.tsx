@@ -6,12 +6,12 @@ import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
-import { getTasks, Task as FirebaseTask } from "@/services/firebase/taskService";
+import { getTasks, Task as FirebaseTask, Task } from "@/services/firebase/taskService";
 import { getTaskAssignments } from "@/services/firebase/taskService";
 
 export const TaskHistory = () => {
   const { user } = useAuth();
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,9 +30,11 @@ export const TaskHistory = () => {
           }
         }
         setTasks(userTasks);
-      } catch (error: any) {
-        console.error("Görevler yüklenirken hata:", error);
-        toast.error("Görevler yüklenirken hata: " + error.message);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Görevler yüklenirken hata:", error);
+        }
+        toast.error("Görevler yüklenirken hata: " + (error instanceof Error ? error.message : String(error)));
       } finally {
         setLoading(false);
       }

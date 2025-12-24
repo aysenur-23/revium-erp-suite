@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/ui/search-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -20,12 +19,20 @@ import {
   deleteTaskAssignment,
   createChecklist,
   archiveTask,
+  requestTaskApproval,
+  requestTaskFromPool,
+  removeTaskFromPool,
+  addTaskComment,
+  getTaskComments,
+  getTaskActivities,
 } from "@/services/firebase/taskService";
 import { createNotification } from "@/services/firebase/notificationService";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
-import { getOrders } from "@/services/firebase/orderService";
+import { getOrders, Order } from "@/services/firebase/orderService";
 import { getProjects, Project } from "@/services/firebase/projectService";
+import { getDepartments } from "@/services/firebase/departmentService";
 import { useAuth } from "@/contexts/AuthContext";
+import { canCreateTask, canUpdateResource, canPerformSubPermission, isMainAdmin } from "@/utils/permissions";
 import { Timestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
@@ -53,6 +60,9 @@ import {
   Folder,
   CircleDot,
   Clock,
+  AlertCircle,
+  XCircle,
+  Minus,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -71,6 +81,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
 
 type Task = {
   id: string;
@@ -96,6 +107,8 @@ type Task = {
     dueDate?: string | null;
     status?: string | null;
   };
+  isInPool?: boolean;
+  poolRequests?: string[];
 };
 
 type Column = {
@@ -141,6 +154,8 @@ type BoardTaskInput = {
   approvalStatus?: "pending" | "approved" | "rejected";
   createdBy?: string;
   created_by?: string;
+  isInPool?: boolean;
+  poolRequests?: string[];
 };
 
 interface TaskBoardProps {
@@ -181,15 +196,37 @@ const taskStatusWorkflow: StatusItem[] = [
   { value: "approved", label: "Onaylandı", icon: CheckCircle2, color: "text-green-600" },
 ];
 
+// Normalize status - remove "column_" prefix if present
+const normalizeStatus = (status: string | undefined | null): string => {
+  if (!status) return "pending";
+  // Eğer "column_" ile başlıyorsa, bu bir column ID'sidir (sayısal olabilir)
+  if (status.startsWith("column_")) {
+    const statusFromColumn = status.replace("column_", "");
+    // Geçerli status değerlerini kontrol et (pending, in_progress, completed, approved, cancelled)
+    if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(statusFromColumn)) {
+      return statusFromColumn === "cancelled" ? "pending" : statusFromColumn;
+    }
+    // Sayısal ID veya geçersiz değer ise "pending" olarak kabul et
+    return "pending";
+  }
+  // Geçerli status değerlerini kontrol et
+  if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(status)) {
+    return status === "cancelled" ? "pending" : status;
+  }
+  return "pending"; // Fallback
+};
+
 // Status helper fonksiyonları
 const getStatusLabel = (status: string) => {
+  // Önce status'ü normalize et (column_ prefix'ini kaldır)
+  const normalized = normalizeStatus(status);
   const labels: Record<string, string> = {
     pending: "Yapılacak",
     in_progress: "Devam Ediyor",
     completed: "Tamamlandı",
     approved: "Onaylandı",
   };
-  return labels[status] || status;
+  return labels[normalized] || normalized;
 };
 
 // Sabit kolonlar - 4 aşama
@@ -200,8 +237,62 @@ const defaultColumns: Column[] = [
   { id: "approved", title: "Onaylandı", taskIds: [] }, // Onaylanmış ve tamamlanmış görevler (status: completed, approvalStatus: approved)
 ];
 
+// Helper function to extract error message
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return "Bilinmeyen hata";
+};
+
 export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilter = true, projectId: propProjectId, showArchived = false }: TaskBoardProps) => {
-  const { user, isAdmin, isTeamLeader, isSuperAdmin } = useAuth();
+  const { user, isTeamLeader, isSuperAdmin } = useAuth();
+  const [canCreate, setCanCreate] = useState(false);
+  const [canEditTasks, setCanEditTasks] = useState(false);
+  // Görev atamalarını saklamak için state (taskId -> assignments map)
+  const [taskAssignmentsMap, setTaskAssignmentsMap] = useState<Record<string, Array<{ assignedTo: string; status: string }>>>({});
+  
+  // Görev oluşturma yetkisi - Firestore'dan kontrol et
+  useEffect(() => {
+    const checkPermission = async () => {
+      if (!user) {
+        setCanCreate(false);
+        setCanEditTasks(false);
+        return;
+      }
+      try {
+        const departments = await getDepartments();
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: null,
+          dateOfBirth: null,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const [createResult, updateResult] = await Promise.all([
+          canCreateTask(userProfile, departments),
+          canUpdateResource(userProfile, "tasks"),
+        ]);
+        setCanCreate(createResult);
+        setCanEditTasks(updateResult);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking permissions:", error);
+        }
+        setCanCreate(false);
+        setCanEditTasks(false);
+      }
+    };
+    checkPermission();
+  }, [user]);
   
   // Status helper fonksiyonları - component içinde tanımlı
   const getCurrentStatusIndex = (status: string) => {
@@ -231,8 +322,10 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
         const q = query(collection(db, "departments"), where("managerId", "==", user.id));
         const snapshot = await getDocs(q);
         setIsTeamLeader(!snapshot.empty);
-      } catch (error) {
-        console.error("Error checking team leader status:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking team leader status:", error);
+        }
       }
     };
     checkTeamLeader();
@@ -270,7 +363,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
   const [showMemberAssignment, setShowMemberAssignment] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   // Filtreler kaldırıldı - boardSearch, memberFilter, priorityFilter, projectFilter artık kullanılmıyor
-  const [productionOrders, setProductionOrders] = useState<any[]>([]);
+  const [productionOrders, setProductionOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [selectedOrderLink, setSelectedOrderLink] = useState("none");
   const [projects, setProjects] = useState<Map<string, Project>>(new Map());
@@ -287,14 +380,18 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
 
   const quickTitleSuggestions = ["Acil Kontrol", "Hızlı Geri Bildirim", "Toplantı Notu", "Hata Düzeltme"];
 
-  // Tüm kullanıcıları yükle
+  // Tüm kullanıcıları yükle - Her render'da yeniden yükle (performans için optimize edilebilir)
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const users = await getAllUsers();
         setAllUsers(users);
-      } catch (error) {
-        console.error("Kullanıcılar yüklenirken hata:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Kullanıcılar yüklenirken hata:", error);
+        }
+        // Hata durumunda boş array set et
+        setAllUsers([]);
       }
     };
     fetchUsers();
@@ -406,6 +503,44 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
     // Filtre localStorage işlemleri kaldırıldı
   }, []);
 
+  // Görev atamalarını yükle (Firestore'dan)
+  useEffect(() => {
+    const loadAssignments = async () => {
+      if (!tasks || tasks.length === 0 || !user) {
+        setTaskAssignmentsMap({});
+        return;
+      }
+      
+      try {
+        const assignmentsMap: Record<string, Array<{ assignedTo: string; status: string }>> = {};
+        
+        // Her görev için atamaları yükle
+        await Promise.all(
+          tasks.map(async (task) => {
+            try {
+              const assignments = await getTaskAssignments(task.id);
+              assignmentsMap[task.id] = assignments.map(a => ({
+                assignedTo: a.assignedTo,
+                status: a.status,
+              }));
+            } catch (error) {
+              // Hata durumunda boş array
+              assignmentsMap[task.id] = [];
+            }
+          })
+        );
+        
+        setTaskAssignmentsMap(assignmentsMap);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Error loading task assignments:", error);
+        }
+      }
+    };
+    
+    loadAssignments();
+  }, [tasks, user]);
+  
   // Sync tasks from props to board state
   useEffect(() => {
     // tasks boş olsa bile boardState'i temizlemeliyiz
@@ -432,18 +567,18 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
             try {
               const parsed = JSON.parse(task.labels);
               parsedLabels = Array.isArray(parsed) 
-                ? (Array.isArray(parsed) ? parsed : []).map((l: any) => 
+                ? (Array.isArray(parsed) ? parsed : []).map((l: string | { name: string; color?: string }) => 
                     typeof l === "string" 
                       ? { name: l, color: LABEL_COLORS[0].value }
-                      : l
+                      : { name: l.name, color: l.color || LABEL_COLORS[0].value }
                   )
                 : [];
             } catch {
               parsedLabels = [];
             }
           } else if (Array.isArray(task.labels)) {
-            parsedLabels = (Array.isArray(task.labels) ? task.labels : []).map((l: any) =>
-              typeof l === "string" ? { name: l, color: LABEL_COLORS[0].value } : l
+            parsedLabels = (Array.isArray(task.labels) ? task.labels : []).map((l: string | { name: string; color?: string }) =>
+              typeof l === "string" ? { name: l, color: LABEL_COLORS[0].value } : { name: l.name, color: l.color || LABEL_COLORS[0].value }
             );
           }
         }
@@ -458,7 +593,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
           status: task.status,
           priority: task.priority || 0,
           projectId: task.projectId || null,
-          assignedUsers: (Array.isArray(task.assignments) ? task.assignments : []).map((assignment: any) => ({
+          assignedUsers: (Array.isArray(task.assignments) ? task.assignments : []).map((assignment: { assigned_to?: string; assigned_to_name?: string; assigned_to_email?: string }) => ({
             id: assignment.assigned_to,
             full_name: assignment.assigned_to_name || assignment.assigned_to_email || "Kullanıcı",
           })),
@@ -477,6 +612,9 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                 status: task.production_order_status,
               }
             : undefined,
+          // Görev havuzu bilgilerini ekle
+          isInPool: task.isInPool === true,
+          poolRequests: Array.isArray(task.poolRequests) ? task.poolRequests : [],
         };
         newTasks[task.id] = taskData;
 
@@ -485,33 +623,38 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
           return; // Arşivlenmiş görevleri board'da gösterme (archive filtresi aktif değilse)
         }
 
+        // Status'ü normalize et (column_ prefix'ini kaldır)
+        const normalizedStatus = normalizeStatus(task.status);
+
         // Onaylanmış görevler için "Onaylandı" kolonu (status: completed, approvalStatus: approved)
         // Ayrıca eski "cancelled" durumundaki görevleri de "Onaylandı" kolonuna taşı
-        if (task.status === "completed" && task.approvalStatus === "approved") {
+        // approvalStatus kontrolünü daha güvenli yap (undefined, null, "approved" kontrolü)
+        const isApproved = (task.approvalStatus as string) === "approved";
+        if (normalizedStatus === "completed" && isApproved) {
           const approvedCol = newColumns.find((c) => c.id === "approved");
           if (approvedCol) {
             approvedCol.taskIds.push(task.id);
+            return; // Bu görevi yerleştirdik, devam etme
           }
         }
         // Eski "cancelled" durumundaki görevleri "Onaylandı" kolonuna taşı
-        else if (task.status === "cancelled") {
+        if (normalizedStatus === "cancelled" || task.status === "cancelled") {
           const approvedCol = newColumns.find((c) => c.id === "approved");
           if (approvedCol) {
             approvedCol.taskIds.push(task.id);
+            return; // Bu görevi yerleştirdik, devam etme
           }
         }
-        // Diğer görevler normal status kolonlarına
-        else {
-          const col = newColumns.find((c) => c.id === task.status);
-          if (col) {
-            col.taskIds.push(task.id);
-          } else {
-            // Eğer status defaultColumns içinde yoksa, "pending" kolonuna ekle
-            // Bu, bilinmeyen status'lerin de görünmesini sağlar
-            const pendingCol = newColumns.find((c) => c.id === "pending");
-            if (pendingCol) {
-              pendingCol.taskIds.push(task.id);
-            }
+        // Diğer görevler normalize edilmiş status kolonlarına
+        const col = newColumns.find((c) => c.id === normalizedStatus);
+        if (col) {
+          col.taskIds.push(task.id);
+        } else {
+          // Eğer normalize edilmiş status defaultColumns içinde yoksa, "pending" kolonuna ekle
+          // Bu, bilinmeyen status'lerin de görünmesini sağlar
+          const pendingCol = newColumns.find((c) => c.id === "pending");
+          if (pendingCol) {
+            pendingCol.taskIds.push(task.id);
           }
         }
       });
@@ -537,8 +680,12 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
       try {
         const orders = await getOrders({ status: undefined }); // Tüm siparişler
         setProductionOrders(orders);
-      } catch (error: any) {
-        console.error("Fetch production orders error:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.error("Fetch production orders error:", error);
+          }
+        }
         toast.error("Siparişler yüklenirken hata oluştu");
       } finally {
         setOrdersLoading(false);
@@ -557,8 +704,10 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
           projectsMap.set(p.id, p);
         });
         setProjects(projectsMap);
-      } catch (error) {
-        console.error("Fetch projects error:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Fetch projects error:", error);
+        }
       }
     };
     fetchProjects();
@@ -582,24 +731,90 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
         return;
       }
 
-      // Yetki kontrolü: Sadece yöneticiler, ekip liderleri ve atanan kişiler
+      // Yetki kontrolü: SISTEM_YETKILERI.md'ye göre
+      // - Super Admin: Tüm görevlerin durumunu değiştirebilir
+      // - Team Leader: Tüm görevlerin durumunu değiştirebilir
+      // - Personnel: Sadece atanan görevlerin durumunu değiştirebilir (accepted veya pending durumunda)
+      // - Görevi oluşturan: Her zaman durum değiştirebilir
       const task = boardState.tasks[taskId];
       if (!task) return;
 
-      const canMoveTask = isAdmin || isTeamLeader || isSuperAdmin;
-      if (!canMoveTask) {
-        const isAssigned = task.assignedUsers?.some((u) => u.id === user?.id) || false;
-        if (!isAssigned && task.createdBy !== user?.id) {
-          toast.error("Bu görevi taşıma yetkiniz yok. Sadece size atanan görevleri taşıyabilirsiniz.");
-          return;
+      // Atamaları kontrol et - göreve üye edilen herkes (rejected hariç) buton görebilir
+      // Kullanıcı isteği: Ekip lideri, personel, yönetici - göreve üye edilen herkes butonu görebilmeli
+      let isAssigned = false;
+      try {
+        const assignments = await getTaskAssignments(taskId);
+        // Rejected hariç tüm durumlar (pending, accepted, completed) için kontrol
+        isAssigned = assignments.some(
+          (a) => a.assignedTo === user?.id && a.status !== "rejected"
+        );
+      } catch (error) {
+        // Fallback: task.assignedUsers array'inden kontrol et
+        isAssigned = task.assignedUsers?.some((u) => u.id === user?.id) || false;
+      }
+      
+      const isCreator = task.createdBy === user?.id || (task as { created_by?: string }).created_by === user?.id;
+      
+      // Firestore'dan yetki kontrolü
+      let canMoveTask = isAssigned || isCreator;
+      if (!canMoveTask && user) {
+        try {
+          const userProfile: UserProfile = {
+            id: user.id,
+            email: user.email,
+            emailVerified: user.emailVerified,
+            fullName: user.fullName,
+            displayName: user.fullName,
+            phone: null,
+            dateOfBirth: null,
+            role: user.roles || [],
+            createdAt: null,
+            updatedAt: null,
+          };
+          const isMainAdminUser = await isMainAdmin(userProfile);
+          const canUpdate = await canUpdateResource(userProfile, "tasks");
+          const canChangeStatus = await canPerformSubPermission(userProfile, "tasks", "canChangeStatus");
+          canMoveTask = isMainAdminUser || (canUpdate && canChangeStatus) || isAssigned || isCreator;
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Error checking move task permission:", error);
+          }
         }
+      }
+      
+      if (!canMoveTask) {
+        toast.error("Bu görevi taşıma yetkiniz yok. Sadece size atanan görevleri veya oluşturduğunuz görevleri taşıyabilirsiniz.");
+        return;
       }
 
       // Tamamlandı durumuna geçerken onaya gönder
       if (nextStatus === "completed" && currentStatus === "in_progress") {
-        // Yönetici veya oluşturan direkt tamamlayabilir, diğerleri onaya gönderir
+        // SISTEM_YETKILERI.md'ye göre: Super Admin, Team Leader, görevi oluşturan direkt tamamlayabilir
         const isCreator = task.createdBy === user?.id;
-        const canDirectComplete = isAdmin || isTeamLeader || isSuperAdmin || isCreator;
+        let canDirectComplete = isCreator;
+        if (!canDirectComplete && user) {
+          try {
+            const userProfile: UserProfile = {
+              id: user.id,
+              email: user.email,
+              emailVerified: user.emailVerified,
+              fullName: user.fullName,
+              displayName: user.fullName,
+              phone: null,
+              dateOfBirth: null,
+              role: user.roles || [],
+              createdAt: null,
+              updatedAt: null,
+            };
+            const isMainAdminUser = await isMainAdmin(userProfile);
+            const canUpdate = await canUpdateResource(userProfile, "tasks");
+            canDirectComplete = isMainAdminUser || canUpdate || isCreator;
+          } catch (error: unknown) {
+            if (import.meta.env.DEV) {
+              console.error("Error checking direct complete permission:", error);
+            }
+          }
+        }
         
         if (!canDirectComplete) {
           // Normal kullanıcı onaya gönderir
@@ -616,12 +831,48 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
     }
   };
 
+  // Onaya gönder fonksiyonu
+  const handleRequestApproval = async (taskId: string) => {
+    try {
+      if (!user?.id) {
+        toast.error("Kullanıcı bilgisi bulunamadı");
+        return;
+      }
+
+      await requestTaskApproval(taskId, user.id);
+      toast.success("Görev onay için yöneticiye gönderildi.");
+      
+      // Görevi yeniden yükle
+      const task = boardState.tasks[taskId];
+      if (task) {
+        try {
+          const updatedTask = await getTaskById(taskId);
+          if (updatedTask) {
+            setBoardState((prev) => ({
+              ...prev,
+              tasks: {
+                ...prev.tasks,
+                [taskId]: updatedTask as unknown as Task,
+              },
+            }));
+          }
+        } catch (error) {
+          console.error("Error refreshing task:", error);
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error("Onay isteği gönderilemedi: " + (errorMessage || "Bilinmeyen hata"));
+    }
+  };
+
   // clearBoardFilters fonksiyonu kaldırıldı - filtreler yok
 
   // Liste ekleme/düzenleme/arşivleme/silme özellikleri kaldırıldı - sabit 4 kolon kullanılıyor
 
   const handleAddTask = async (columnId: string, quickAdd: boolean = false) => {
-    if (!isAdmin && !isTeamLeader) {
+    // Firestore'dan yetki kontrolü
+    if (!canCreate) {
       toast.error("Görev ekleme yetkiniz yok. Sadece yönetici veya ekip lideri ekleyebilir.");
       return;
     }
@@ -642,6 +893,29 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
 
     setSaving(true);
     try {
+      // Yetki kontrolü: Görev oluşturma yetkisi var mı?
+      if (!canCreate) {
+        const departments = await getDepartments();
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: null,
+          dateOfBirth: null,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const canCreateResult = await canCreateTask(userProfile, departments);
+        if (!canCreateResult) {
+          toast.error("Görev oluşturma yetkiniz yok. Sadece yöneticiler ve ekip liderleri görev oluşturabilir.");
+          setSaving(false);
+          return;
+        }
+      }
+
       const task = await createTask({
         title: trimmedTitle,
         description: trimmedDescription || null,
@@ -674,12 +948,41 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
             updatedAt: null,
           };
           const hasPermission = await canPerformSubPermission(userProfile, "tasks", "canAssign");
-          if (!hasPermission && !isAdmin && !isTeamLeader && !isSuperAdmin) {
-            toast.error("Görev atama yetkiniz yok");
-            return;
+          // SISTEM_YETKILERI.md'ye göre: Super Admin ve Team Leader görev atayabilir
+          // Firestore'dan yetki kontrolü
+          if (!hasPermission && user) {
+            try {
+              const userProfile: UserProfile = {
+                id: user.id,
+                email: user.email,
+                emailVerified: user.emailVerified,
+                fullName: user.fullName,
+                displayName: user.fullName,
+                phone: null,
+                dateOfBirth: null,
+                role: user.roles || [],
+                createdAt: null,
+                updatedAt: null,
+              };
+              const isMainAdminUser = await isMainAdmin(userProfile);
+              const canUpdate = await canUpdateResource(userProfile, "tasks");
+              const canAssign = await canPerformSubPermission(userProfile, "tasks", "canAssign");
+              if (!isMainAdminUser && !canUpdate && !canAssign) {
+                toast.error("Görev atama yetkiniz yok");
+                return;
+              }
+            } catch (error: unknown) {
+              if (import.meta.env.DEV) {
+                console.error("Error checking assign permission:", error);
+              }
+              toast.error("Görev atama yetkiniz yok");
+              return;
+            }
           }
-        } catch (error) {
-          console.error("Permission check error:", error);
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Permission check error:", error);
+          }
           // Hata durumunda devam et (eski davranış)
         }
 
@@ -709,8 +1012,10 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
               }
             })
           );
-        } catch (assignError: any) {
-          console.error("Assignment error:", assignError);
+        } catch (assignError: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Assignment error:", assignError);
+          }
           // Continue even if assignment fails
         }
       }
@@ -719,8 +1024,10 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
       if (newTaskChecklistItems.length > 0) {
         try {
           await createChecklist(taskId, "Checklist", newTaskChecklistItems);
-        } catch (checklistError: any) {
-          console.error("Checklist creation error:", checklistError);
+        } catch (checklistError: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Checklist creation error:", checklistError);
+          }
           // Continue even if checklist creation fails
         }
       }
@@ -794,7 +1101,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
             ),
           }));
           }
-        } catch (fetchError: any) {
+        } catch (fetchError: unknown) {
           // Fallback to basic task if fetch fails
           console.error("Fetch task details error:", fetchError);
           const newTask: Task = {
@@ -859,8 +1166,12 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
           });
         }
       });
-    } catch (error: any) {
-      toast.error("Kart eklenemedi: " + (error.response?.data?.message || error.message));
+    } catch (err: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Add task error:", err);
+      }
+      const errorMessage = getErrorMessage(err);
+      toast.error("Kart eklenemedi: " + errorMessage);
     } finally {
       setSaving(false);
     }
@@ -871,7 +1182,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
     try {
       const orders = await getOrders({ status: undefined }); // Tüm siparişler
       setProductionOrders(orders);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Fetch production orders error:", error);
       toast.error("Siparişler yüklenirken hata oluştu");
     } finally {
@@ -940,9 +1251,12 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
       }));
       setSelectedOrderLink(orderId || "none");
       toast.success(orderId ? "Sipariş bağlantısı güncellendi" : "Bağlantı kaldırıldı");
-    } catch (error: any) {
-      console.error("Link production order error:", error);
-      toast.error("Bağlantı güncellenemedi: " + (error.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Link production order error:", error);
+      }
+      const errorMessage = getErrorMessage(error);
+      toast.error("Bağlantı güncellenemedi: " + errorMessage);
     } finally {
       setSaving(false);
     }
@@ -979,9 +1293,12 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
       setShowTaskModal(false);
       setSelectedTask(null);
       toast.success("Kart güncellendi");
-    } catch (error: any) {
-      console.error("Edit task error:", error);
-      toast.error("Kart güncellenemedi: " + (error.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Edit task error:", error);
+      }
+      const errorMessage = getErrorMessage(error);
+      toast.error("Kart güncellenemedi: " + errorMessage);
     } finally {
       setSaving(false);
     }
@@ -1003,9 +1320,12 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
         }));
       }
       toast.success("Kart silindi");
-    } catch (error: any) {
-      console.error("Delete task error:", error);
-      toast.error("Kart silinemedi: " + (error.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete task error:", error);
+      }
+      const errorMessage = getErrorMessage(error);
+      toast.error("Kart silinemedi: " + errorMessage);
     }
   };
 
@@ -1024,14 +1344,54 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
         }));
       }
       toast.success("Görev arşivlendi");
-    } catch (error: any) {
-      console.error("Archive task error:", error);
-      toast.error("Görev arşivlenemedi: " + (error.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Archive task error:", error);
+      }
+      const errorMessage = getErrorMessage(error);
+      toast.error("Görev arşivlenemedi: " + errorMessage);
     }
   };
 
   const openTaskModal = (task: Task) => {
     onTaskClick(task.id, task.status);
+  };
+
+  const handleRequestTaskFromPool = async (taskId: string) => {
+    if (!user?.id) {
+      toast.error("Görev talep etmek için giriş yapmalısınız");
+      return;
+    }
+
+    try {
+      await requestTaskFromPool(taskId, user.id);
+      toast.success("Görev talebi gönderildi");
+      // Modal açmaya gerek yok, sadece başarı mesajı yeterli
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Request task from pool error:", error);
+      }
+      const errorMessage = getErrorMessage(error);
+      toast.error("Görev talebi gönderilemedi: " + errorMessage);
+    }
+  };
+
+  const handleRemoveFromPool = async (taskId: string) => {
+    if (!user?.id) {
+      toast.error("Görev havuzundan kaldırmak için giriş yapmalısınız");
+      return;
+    }
+
+    try {
+      await removeTaskFromPool(taskId);
+      toast.success("Görev havuzundan kaldırıldı");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Remove task from pool error:", error);
+      }
+      const errorMessage = getErrorMessage(error);
+      toast.error("Görev havuzundan kaldırılamadı: " + errorMessage);
+    }
   };
 
   const handleAssignMembers = async () => {
@@ -1050,7 +1410,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
       for (const userId of toAdd) {
         try {
           await assignTask(selectedTask.id, userId, user.id);
-        } catch (error) {
+        } catch (error: unknown) {
           console.error("Assignment error:", error);
           // Continue even if assignment fails
         }
@@ -1064,7 +1424,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
           if (userAssignment) {
             await deleteTaskAssignment(selectedTask.id, userAssignment.id, user.id);
           }
-        } catch (error) {
+        } catch (error: unknown) {
           if (import.meta.env.DEV) {
             console.error("Delete assignment error:", error);
           }
@@ -1101,9 +1461,12 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
           tasks: { ...prev.tasks, [selectedTask.id]: updatedTask },
         }));
       }
-    } catch (error: any) {
-      console.error("Assign members error:", error);
-      toast.error("Üye atama hatası: " + (error.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Assign members error:", error);
+      }
+      const errorMessage = getErrorMessage(error);
+      toast.error("Üye atama hatası: " + errorMessage);
     } finally {
       setSaving(false);
     }
@@ -1147,6 +1510,15 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
       return { text: "Yarın", className: "bg-[#F5D90A] text-[#172B4D]" };
     }
     return { text: format(date, "dd MMM", { locale: tr }), className: "bg-[#DFE1E6] text-[#172B4D]" };
+  };
+
+  const getPriorityDisplay = (priority: number | undefined) => {
+    if (!priority || priority === 1) return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
+    if (priority === 2) return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
+    if (priority === 3) return { label: "Orta", icon: Minus, color: "text-gray-600 dark:text-gray-400" };
+    if (priority === 4) return { label: "Yüksek", icon: ChevronUp, color: "text-red-600 dark:text-red-400" };
+    if (priority >= 5) return { label: "Yüksek", icon: ChevronUp, color: "text-red-600 dark:text-red-400" };
+    return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
   };
 
   const quickActionButtons = [
@@ -1245,7 +1617,16 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                       {/* Column Header - Sabit kolonlar, düzenleme yok */}
                       <div className="flex items-center justify-between mb-2 px-2 py-1">
                         <h3 className="font-semibold text-sm text-[#172B4D] flex-1 px-2 py-1">
-                          {column.title}
+                          {(() => {
+                            // Eğer column.id teknik bir ID ise (column_ ile başlıyorsa), defaultColumns'dan title'ı al
+                            if (column.id.startsWith("column_")) {
+                              const defaultColumn = defaultColumns.find(c => c.id === column.id.replace("column_", ""));
+                              return defaultColumn?.title || column.title;
+                            }
+                            // Eğer column.id defaultColumns'da yoksa, defaultColumns'dan title'ı al
+                            const defaultColumn = defaultColumns.find(c => c.id === column.id);
+                            return defaultColumn?.title || column.title;
+                          })()}
                         </h3>
                         <div className="flex items-center gap-1">
                           <span className="text-xs text-[#5E6C84] font-medium px-1.5 py-0.5 bg-white/60 rounded">
@@ -1270,308 +1651,241 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => e.preventDefault()}
                       className={cn(
-                        "relative group bg-white dark:bg-gray-800 rounded-lg p-4",
-                        "shadow-sm hover:shadow-md border border-gray-200 dark:border-gray-700",
-                        "transition-all duration-300 ease-in-out cursor-pointer",
-                        "hover:border-primary/30 hover:-translate-y-0.5",
-                        "active:scale-[0.98]"
+                        "relative group bg-white dark:bg-gray-800 rounded-lg p-2 flex flex-col",
+                        "shadow-sm hover:shadow-md border border-gray-200/40 dark:border-gray-700/40",
+                        "transition-all duration-150 ease-in-out cursor-pointer",
+                        "hover:border-gray-300 dark:hover:border-gray-600",
+                        "active:scale-[0.99]"
                       )}
                       onClick={() => openTaskModal(task)}
                     >
-                      {/* 3 Nokta Menü - Sağ Üst Köşe */}
-                      {(isAdmin || isTeamLeader || isSuperAdmin || task.createdBy === user?.id) && (
-                        <div className="absolute top-3 right-3 z-[9999]">
-                          <DropdownMenu
-                            open={openDropdownMenuId === task.id}
-                            onOpenChange={(open) => {
-                              if (open) {
-                                setOpenDropdownMenuId(task.id);
-                              } else {
-                                setOpenDropdownMenuId(null);
-                              }
-                            }}
-                          >
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                id={`task-menu-trigger-${task.id}`}
-                                data-menu-open={openDropdownMenuId === task.id ? "true" : "false"}
-                                className={cn(
-                                  "task-menu-trigger",
-                                  "inline-flex items-center justify-center",
-                                  "h-7 w-7 rounded-md",
-                                  "transition-colors duration-200",
-                                  "border border-transparent",
-                                  openDropdownMenuId === task.id
-                                    ? "border-border bg-muted/80"
-                                    : "hover:bg-muted/50 hover:border-border/50",
-                                  "focus:bg-muted/50 focus:border-border/50 focus:outline-none focus:ring-0",
-                                  "active:bg-muted/50 active:border-border/50"
-                                )}
-                                style={{
-                                  WebkitTapHighlightColor: 'transparent',
-                                  backgroundColor: openDropdownMenuId === task.id ? 'hsl(var(--muted) / 0.8)' : 'transparent',
-                                  borderColor: openDropdownMenuId === task.id ? 'hsl(var(--border))' : 'transparent',
-                                  opacity: 1,
-                                  visibility: 'visible',
-                                  display: 'inline-flex',
-                                  pointerEvents: 'auto',
-                                  position: 'relative',
-                                  zIndex: 9999,
-                                } as React.CSSProperties}
-                              >
-                                <MoreVertical
-                                  className="h-3.5 w-3.5 stroke-[2.5] text-foreground"
-                                  style={{
-                                    opacity: 1,
-                                    visibility: 'visible',
-                                    display: 'block',
-                                  }}
-                                />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              align="end"
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-44 rounded-lg shadow-lg border border-border bg-popover p-1.5 z-[10000]"
-                              onCloseAutoFocus={(e) => e.preventDefault()}
+                      {/* Title and Menu Row - Menu moved to top */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-tight break-words flex-1">
+                          {task.title}
+                        </h3>
+                        
+                        {/* Menu Icon - Moved to top right */}
+                        {(canEditTasks || task.createdBy === user?.id) && (
+                          <div className="opacity-100 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu
+                              open={openDropdownMenuId === task.id}
+                              onOpenChange={(open) => {
+                                if (open) {
+                                  setOpenDropdownMenuId(task.id);
+                                } else {
+                                  setOpenDropdownMenuId(null);
+                                }
+                              }}
                             >
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenDropdownMenuId(null);
-                                  openTaskModal(task);
-                                }}
-                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
-                              >
-                                <Edit className="h-4 w-4 mr-2.5 stroke-[2]" />
-                                Düzenle
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenDropdownMenuId(null);
-                                  handleArchiveTask(task.id);
-                                }}
-                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
-                              >
-                                <Archive className="h-4 w-4 mr-2.5 stroke-[2]" />
-                                {(task as any).isArchived || (task as any).is_archived ? "Arşivden Çıkar" : "Arşivle"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenDropdownMenuId(null);
-                                  if (confirm(`"${task.title}" görevini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
-                                    handleDeleteTask(task.id);
-                                  }
-                                }}
-                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium text-destructive focus:text-destructive hover:bg-destructive/10 focus:bg-destructive/10 transition-colors"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2.5 stroke-[2]" />
-                                Sil
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  className={cn(
+                                    "inline-flex items-center justify-center h-5 w-5 rounded transition-colors duration-200 border border-transparent",
+                                    openDropdownMenuId === task.id
+                                      ? "border-border bg-muted/80"
+                                      : "hover:bg-muted/50 hover:border-border/50"
                                   )}
-                                  
-                                  {/* Labels - Improved design */}
-                                      {Array.isArray(task.labels) && task.labels.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5 mb-3 -mx-1 -mt-1">
-                                      {task.labels.map((label, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="h-2 rounded-full flex-1 min-w-[60px] shadow-sm"
-                                          style={{ 
-                                            backgroundColor: label.color,
-                                            opacity: 0.9,
-                                          }}
-                                          title={label.name}
-                                        />
-                                      ))}
-                                    </div>
-                                  )}
+                                >
+                                  <MoreVertical className="h-3 w-3 stroke-[2] text-gray-500 dark:text-gray-400" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenDropdownMenuId(null);
+                                    openTaskModal(task);
+                                  }}
+                                  className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+                                >
+                                  <Edit className="h-4 w-4 mr-2.5 stroke-[2]" />
+                                  Düzenle
+                                </DropdownMenuItem>
+                                {task.isInPool === true && task.createdBy === user?.id && (
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenDropdownMenuId(null);
+                                      if (confirm(`"${task.title}" görevini havuzdan kaldırmak istediğinize emin misiniz?`)) {
+                                        handleRemoveFromPool(task.id);
+                                      }
+                                    }}
+                                    className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+                                  >
+                                    <XCircle className="h-4 w-4 mr-2.5 stroke-[2]" />
+                                    Havuzdan Kaldır
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenDropdownMenuId(null);
+                                    handleArchiveTask(task.id);
+                                  }}
+                                  className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+                                >
+                                  <Archive className="h-4 w-4 mr-2.5 stroke-[2]" />
+                                  {(task as BoardTaskInput).isArchived || (task as BoardTaskInput).is_archived ? "Arşivden Çıkar" : "Arşivle"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenDropdownMenuId(null);
+                                    if (confirm(`"${task.title}" görevini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
+                                      handleDeleteTask(task.id);
+                                    }
+                                  }}
+                                  className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium text-destructive focus:text-destructive hover:bg-destructive/10 focus:bg-destructive/10 transition-colors"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2.5 stroke-[2]" />
+                                  Sil
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        )}
+                      </div>
 
-                                  {/* Project info - Improved design */}
-                                  {task.projectId && projects.has(task.projectId) && (
-                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-md px-2 py-1 mb-2.5 text-[10px] text-blue-700 dark:text-blue-300 flex items-center gap-1.5 shadow-sm hover:shadow transition-shadow">
-                                      <Folder className="h-3 w-3 flex-shrink-0" />
-                                      <span className="font-medium truncate">
-                                        {projects.get(task.projectId)?.name}
-                                      </span>
-                                    </div>
-                                  )}
+                      {/* Priority and Date Row */}
+                      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                        {/* Öncelik Göstergesi */}
+                        {(() => {
+                          const taskPriority = task.priority || (task as BoardTaskInput).production_order_priority || 2;
+                          const priorityDisplay = getPriorityDisplay(taskPriority);
+                          const Icon = priorityDisplay.icon;
+                          return (
+                            <div className="flex items-center gap-1">
+                              <Icon className={cn("h-3 w-3", priorityDisplay.color)} />
+                              <span className={cn("text-[10px] font-medium", priorityDisplay.color)}>
+                                {priorityDisplay.label}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                        
+                        {/* Date Row - Only show if overdue */}
+                        {(() => {
+                          const dueDate = task.dueDate || (task as BoardTaskInput).due_date;
+                          if (!dueDate) return null;
+                          
+                          let date: Date | null = null;
+                          try {
+                            // Type guard for Timestamp
+                            const dueDateObj = dueDate as unknown;
+                            if (dueDateObj && typeof dueDateObj === 'object' && 'toDate' in dueDateObj) {
+                              date = (dueDateObj as Timestamp).toDate();
+                            } else if (typeof dueDate === 'string') {
+                              date = new Date(dueDate);
+                            }
+                          } catch {
+                            return null;
+                          }
+                          
+                          if (!date) return null;
+                          
+                          // Sadece gecikmiş tarihleri göster
+                          if (isPast(date) && !isToday(date)) {
+                            return (
+                              <div className="flex items-center gap-1 px-2 py-1 rounded bg-[#EC9488] text-white text-[10px] font-medium">
+                                <Clock className="h-3 w-3" />
+                                <span>{format(date, "d MMM yyyy", { locale: tr })}</span>
+                              </div>
+                            );
+                          }
+                          
+                          return null;
+                        })()}
+                      </div>
 
-                                  {task.linkedProductionOrder && (
-                                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-md px-2.5 py-2 mb-2.5 text-xs text-gray-700 dark:text-gray-300 flex items-start gap-2 border border-gray-200 dark:border-gray-700 shadow-sm">
-                                      <Package className="h-4 w-4 text-gray-600 dark:text-gray-400 flex-shrink-0 mt-0.5" />
-                                      <div className="min-w-0 flex-1">
-                                        <p className="text-xs text-gray-900 dark:text-gray-100 font-semibold truncate">
-                                          {task.linkedProductionOrder.orderNumber || "Bağlı sipariş"}
-                                        </p>
-                                        <p className="text-[11px] text-gray-600 dark:text-gray-400 truncate">
-                                          {task.linkedProductionOrder.customerName || "-"}
-                                          {task.linkedProductionOrder.dueDate && (
-                                            <>
-                                              {" • "}
-                                              {format(new Date(task.linkedProductionOrder.dueDate), "dd MMM", { locale: tr })}
-                                            </>
+                                  {/* Assigned users or Request button - Bottom right */}
+                                  {(() => {
+                                    const isInPool = task.isInPool === true;
+                                    const poolRequests = task.poolRequests || [];
+                                    const hasUserRequest = user?.id && Array.isArray(poolRequests) && poolRequests.includes(user.id);
+                                    
+                                    // Atanan kullanıcıları taskAssignmentsMap ve allUsers'dan al
+                                    const assignments = taskAssignmentsMap[task.id] || [];
+                                    const assignedUserIds = assignments
+                                      .filter(a => a.status !== "rejected")
+                                      .map(a => a.assignedTo);
+                                    const assignedUsers = allUsers
+                                      .filter(u => assignedUserIds.includes(u.id))
+                                      .map(u => ({
+                                        id: u.id,
+                                        full_name: u.fullName || u.displayName || u.email || "Kullanıcı"
+                                      }));
+                                    
+                                    // Fallback: task.assignedUsers varsa onu kullan
+                                    const finalAssignedUsers = assignedUsers.length > 0 
+                                      ? assignedUsers 
+                                      : (Array.isArray(task.assignedUsers) ? task.assignedUsers : []);
+                                    
+                                    const hasAssignedUsers = finalAssignedUsers.length > 0;
+                                    const canRequest = isInPool && user?.id && !hasUserRequest && !hasAssignedUsers;
+                                    
+                                    // Eğer atanmış kullanıcılar varsa, onları göster
+                                    if (hasAssignedUsers) {
+                                      return (
+                                        <div className="flex items-center justify-end -space-x-1 mt-auto">
+                                          {finalAssignedUsers.slice(0, 4).map((assignedUser) => (
+                                            <div
+                                              key={assignedUser.id}
+                                              className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-[9px] font-semibold flex items-center justify-center border border-white dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                                              title={assignedUser.full_name}
+                                            >
+                                              {getInitials(assignedUser.full_name)}
+                                            </div>
+                                          ))}
+                                          {finalAssignedUsers.length > 4 && (
+                                            <div className="w-5 h-5 rounded-full bg-gray-400 text-white text-[9px] font-semibold flex items-center justify-center border border-white dark:border-gray-800 shadow-sm" title={`+${finalAssignedUsers.length - 4} kişi daha`}>
+                                              +{finalAssignedUsers.length - 4}
+                                            </div>
                                           )}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Title */}
-                                  <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-5 mb-2 break-words">
-                                    {task.title}
-                                  </p>
-
-                                  {/* Description preview */}
-                                  {task.description && (
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-4 mb-3 break-words">
-                                      {task.description}
-                                    </p>
-                                  )}
-
-                                  {/* Footer - Icons and metadata */}
-                                  {(task.dueDate || (task.attachments && task.attachments > 0) || (task.comments && task.comments > 0) || (task.checklists && task.checklists.length > 0) || (task.assignedUsers && task.assignedUsers.length > 0) || task.createdBy || task.createdAt) && (
-                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        {/* Due date */}
-                                        {task.dueDate && (
-                                          <div
-                                            className={cn(
-                                              "flex items-center gap-1 text-xs px-2 py-1 rounded-md font-medium shadow-sm",
-                                              getDueDateDisplay(task.dueDate).className
-                                            )}
-                                          >
-                                            {getDueDateDisplay(task.dueDate).text}
-                                          </div>
-                                        )}
-                                        
-                                      {/* Attachments */}
-                                      {task.attachments > 0 && (
-                                        <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
-                                          <Paperclip className="h-3.5 w-3.5" />
-                                          <span className="font-medium">{task.attachments}</span>
                                         </div>
-                                      )}
-
-                                      {/* Comments */}
-                                      {task.comments > 0 && (
-                                        <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
-                                          <MessageSquare className="h-3.5 w-3.5" />
-                                          <span className="font-medium">{task.comments}</span>
-                                        </div>
-                                      )}
-
-                                        {/* Checklists */}
-                                        {Array.isArray(task.checklists) && task.checklists.length > 0 && task.checklists.some(c => c.total > 0) && (
-                                          <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
-                                            <CheckCircle2 className="h-3.5 w-3.5" />
-                                            <span className="font-medium">
-                                              {task.checklists.reduce((acc, c) => acc + (c.completed || 0), 0)}/
-                                              {task.checklists.reduce((acc, c) => acc + (c.total || 0), 0)}
-                                            </span>
-                                          </div>
-                                        )}
-
-                                        {/* Created date */}
-                                        {task.createdAt && (
-                                          <time 
-                                            dateTime={task.createdAt}
-                                            className="flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-400"
-                                            title={`Oluşturulma: ${new Date(task.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                                      );
+                                    }
+                                    
+                                    // Talep butonu veya talep gönderildi mesajı
+                                    if (canRequest) {
+                                      return (
+                                        <div className="flex justify-end mt-auto">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-5 px-1.5 text-[9px] bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 whitespace-nowrap"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleRequestTaskFromPool(task.id);
+                                            }}
                                           >
-                                            <Clock className="h-3 w-3" />
-                                            <span>{new Date(task.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</span>
-                                          </time>
-                                        )}
-
-                                        {/* Creator */}
-                                        {task.createdBy && (() => {
-                                          const creator = allUsers.find(u => u.id === task.createdBy);
-                                          if (creator) {
+                                            Talep Et
+                                          </Button>
+                                        </div>
+                                      );
+                                    }
+                                    
+                                    if (hasUserRequest && !hasAssignedUsers) {
                                             return (
-                                              <div className="flex items-center gap-1 text-[11px] text-[#5E6C84] hover:text-[#172B4D]" title={`Oluşturan: ${creator.fullName || creator.displayName || creator.email || "Bilinmeyen"}`}>
-                                                <User className="h-3.5 w-3.5" />
-                                                <span className="truncate max-w-[80px]">{creator.fullName || creator.displayName || creator.email || "Bilinmeyen"}</span>
+                                        <div className="flex justify-end mt-auto">
+                                          <span className="text-[9px] px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded whitespace-nowrap flex-shrink-0 inline-block">
+                                            Talep Gönderildi
+                                          </span>
                                               </div>
                                             );
                                           }
+                                    
                                           return null;
                                         })()}
-                                      </div>
 
-                                      {/* Assigned users - Improved design */}
-                                      {Array.isArray(task.assignedUsers) && task.assignedUsers.length > 0 && (
-                                        <div className="flex items-center -space-x-2">
-                                          {task.assignedUsers.slice(0, 3).map((user) => (
-                                            <div
-                                              key={user.id}
-                                              className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-semibold flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:scale-110 transition-transform"
-                                              title={user.full_name}
-                                            >
-                                              {getInitials(user.full_name)}
-                                            </div>
-                                          ))}
-                                          {task.assignedUsers.length > 3 && (
-                                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 text-white text-xs font-semibold flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:scale-110 transition-transform">
-                                              +{task.assignedUsers.length - 3}
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
 
-                                  {/* Sonraki Aşamaya Geç Butonu */}
-                                  {(() => {
-                                    // Eğer görev onaylanmışsa (completed + approved), buton gösterilmez
-                                    if (task.status === "completed" && task.approvalStatus === "approved") {
-                                      return null;
-                                    }
-                                    
-                                    const statusFlow: Record<string, string> = {
-                                      pending: "in_progress",
-                                      in_progress: "completed",
-                                      // completed durumunda onaya gönderilir, burada buton gösterilmez
-                                    };
-                                    const nextStatus = statusFlow[task.status];
-                                    const canMove = isAdmin || isTeamLeader || isSuperAdmin || 
-                                                   task.assignedUsers?.some((u) => u.id === user?.id) || 
-                                                   task.createdBy === user?.id;
-                                    
-                                    if (!nextStatus || !canMove) return null;
-                                    
-                                    const statusLabels: Record<string, string> = {
-                                      in_progress: "Devam Ediyor",
-                                      completed: "Tamamlandı",
-                                    };
-                                    
-                                    return (
-                                      <div className="mt-3 pt-3 border-t border-[#DFE1E6]" onClick={(e) => e.stopPropagation()}>
-                                        <Button
-                                          size="sm"
-                                          className="w-full text-xs bg-[#0079BF] hover:bg-[#005A8B] text-white"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleNextStage(task.id, task.status);
-                                          }}
-                                        >
-                                          {`${statusLabels[nextStatus]} Aşamasına Geç`}
-                                        </Button>
-                                      </div>
-                                    );
-                                  })()}
                                 </div>
                           ))}
                 </div>
 
-                {/* Add Card Button - Trello style (İyileştirilmiş) */}
-                {showAddTask === column.id ? (
+                {/* Add Card Button - Trello style (İyileştirilmiş) - Sadece yetkili kullanıcılar görebilir */}
+                {canCreate && showAddTask === column.id ? (
                   <div className="mt-3 rounded-lg bg-white border-2 border-[#0079BF]/20 shadow-lg p-4 space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
                           {/* Başlık */}
                           <div className="space-y-1.5">
@@ -1742,13 +2056,9 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                             </Button>
                           </div>
                         </div>
-                      ) : (
+                      ) : canCreate ? (
                         <button
                           onClick={() => {
-                            if (!isAdmin && !isTeamLeader) {
-                              toast.error("Görev ekleme yetkiniz yok. Sadece yönetici veya ekip lideri ekleyebilir.");
-                              return;
-                            }
                             onTaskClick("new", column.id);
                           }}
                           className="w-full mt-2 text-left text-sm text-[#5E6C84] hover:text-[#172B4D] hover:bg-white/80 py-2.5 px-3 rounded-md transition-all flex items-center gap-2 font-medium group border border-transparent hover:border-[#DFE1E6] shadow-sm hover:shadow-md"
@@ -1758,7 +2068,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                           </div>
                           <span className="group-hover:font-semibold transition-all">Kart ekle</span>
                         </button>
-                      )}
+                      ) : null}
               </div>
             );
           })}
@@ -1770,7 +2080,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
       {/* Task Edit Modal - Trello side panel style */}
       {selectedTask && (
         <Dialog open={showTaskModal} onOpenChange={setShowTaskModal}>
-          <DialogContent className="max-w-3xl max-h-[90vh] sm:max-h-[90vh] overflow-hidden p-0" aria-describedby="task-edit-description">
+          <DialogContent className="max-w-3xl w-[80vw] max-h-[90vh] sm:max-h-[90vh] overflow-hidden p-0" aria-describedby="task-edit-description">
             <DialogHeader className="sr-only">
               <DialogTitle>Kart Düzenle</DialogTitle>
               <DialogDescription id="task-edit-description">
@@ -2069,6 +2379,40 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                 Kaydet
               </Button>
             </DialogFooter>
+            
+            {/* Yorumlar ve Etkinlikler Bölümü */}
+            {selectedTask?.id && user && (
+              <div className="border-t border-gray-200 p-4 bg-white">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold text-[#172B4D] flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-[#5E6C84]" />
+                    Yorumlar ve Etkinlikler
+                  </h3>
+                </div>
+                <ActivityCommentsPanel
+                  entityId={selectedTask.id}
+                  entityType="task"
+                  onAddComment={async (content: string) => {
+                    await addTaskComment(
+                      selectedTask.id,
+                      user.id,
+                      content,
+                      user.fullName || user.email?.split("@")[0] || "Kullanıcı",
+                      user.email || ""
+                    );
+                  }}
+                  onGetComments={async () => {
+                    return await getTaskComments(selectedTask.id);
+                  }}
+                  onGetActivities={async () => {
+                    return await getTaskActivities(selectedTask.id);
+                  }}
+                  currentUserId={user.id}
+                  currentUserName={user.fullName || user.email?.split("@")[0] || "Kullanıcı"}
+                  currentUserEmail={user.email || ""}
+                />
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       )}

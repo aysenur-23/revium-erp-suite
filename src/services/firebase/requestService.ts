@@ -54,9 +54,50 @@ export const createRequest = async (data: Omit<Request, "id" | "createdAt" | "up
     });
 
     const docRef = await addDoc(collection(firestore, REQUESTS_COLLECTION), requestData);
+    const requestId = docRef.id;
+
+    // Talep oluşturulduğunda atanan kişiye bildirim ve mail gönder
+    if (requestData.assignedTo) {
+      try {
+        const creatorProfile = await getUserProfile(requestData.createdBy);
+        const creatorName = creatorProfile?.fullName || creatorProfile?.displayName || creatorProfile?.email || "Bir kullanıcı";
+        
+        const typeLabels: Record<string, string> = {
+          leave: "İzin",
+          purchase: "Satın Alma",
+          advance: "Avans",
+          expense: "Gider",
+          other: "Diğer",
+        };
+        
+        const requestTypeLabel = typeLabels[requestData.type] || requestData.type;
+        
+        await createNotification({
+          userId: requestData.assignedTo,
+          type: "system",
+          title: "Yeni Talep",
+          message: `${creatorName} size "${requestData.title}" adlı bir ${requestTypeLabel} talebi gönderdi.`,
+          read: false,
+          relatedId: requestId,
+          metadata: {
+            requestType: requestData.type,
+            requestTitle: requestData.title,
+            requestDescription: requestData.description,
+            amount: requestData.amount || null,
+            currency: requestData.currency || null,
+            createdBy: requestData.createdBy,
+            creatorName: creatorName,
+            createdAt: new Date().toISOString(),
+          },
+        });
+      } catch (notifError) {
+        // Bildirim hatası talep oluşturmayı engellemez
+        console.error("Request notification error:", notifError);
+      }
+    }
 
     return {
-      id: docRef.id,
+      id: requestId,
       ...requestData,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
@@ -106,7 +147,7 @@ export const updateRequestStatus = async (
   reason?: string
 ): Promise<void> => {
   try {
-    const updates: any = {
+    const updates: Partial<Request> = {
       status,
       approvedBy,
       approvedAt: serverTimestamp(),

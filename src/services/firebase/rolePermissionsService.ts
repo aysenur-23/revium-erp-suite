@@ -86,7 +86,6 @@ const RESOURCES = [
 // Default System Roles
 const DEFAULT_ROLES: RoleDefinition[] = [
   { id: "super_admin", key: "super_admin", label: "Süper Yönetici", color: "bg-red-500", isSystem: true },
-  { id: "admin", key: "admin", label: "Yönetici", color: "bg-orange-500", isSystem: true },
   { id: "team_leader", key: "team_leader", label: "Ekip Lideri", color: "bg-blue-500", isSystem: true },
   { id: "personnel", key: "personnel", label: "Personel", color: "bg-green-500", isSystem: true },
 ];
@@ -105,7 +104,9 @@ const initializeDefaultRoles = async (): Promise<void> => {
       }
     }
   } catch (error) {
-    console.error("Error initializing default roles:", error);
+    if (import.meta.env.DEV) {
+      console.error("Error initializing default roles:", error);
+    }
   }
 };
 
@@ -119,7 +120,9 @@ export const getRoles = async (): Promise<RoleDefinition[]> => {
     const snapshot = await getDocs(rolesRef);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoleDefinition));
   } catch (error) {
-    console.error("Error getting roles:", error);
+    if (import.meta.env.DEV) {
+      console.error("Error getting roles:", error);
+    }
     return DEFAULT_ROLES;
   }
 };
@@ -142,7 +145,7 @@ export const addRole = async (role: Omit<RoleDefinition, "id" | "isSystem">): Pr
     const permissionsRef = collection(db, ROLE_PERMISSIONS_COLLECTION);
     for (const resource of RESOURCES) {
       // Alt yetkileri al (yeni roller için varsayılan olarak boş)
-      const permissionData: any = {
+      const permissionData: Record<string, unknown> = {
         role: roleKey,
         resource,
         canCreate: false,
@@ -160,9 +163,11 @@ export const addRole = async (role: Omit<RoleDefinition, "id" | "isSystem">): Pr
       
       await addDoc(permissionsRef, cleanPermission);
     }
-  } catch (error: any) {
-    console.error("Error adding role:", error);
-    throw new Error(error.message || "Rol eklenemedi");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error adding role:", error);
+    }
+    throw new Error(error instanceof Error ? error.message : "Rol eklenemedi");
   }
 };
 
@@ -227,9 +232,11 @@ export const deleteRole = async (roleKey: string): Promise<void> => {
     for (const docSnap of permissionsSnapshot.docs) {
       await deleteDoc(doc(db, ROLE_PERMISSIONS_COLLECTION, docSnap.id));
     }
-  } catch (error: any) {
-    console.error("Error deleting role:", error);
-    throw new Error(error.message || "Rol silinemedi");
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error deleting role:", error);
+    }
+    throw new Error(error instanceof Error ? error.message : "Rol silinemedi");
   }
 };
 
@@ -267,7 +274,7 @@ const initializeDefaultPermissions = async (): Promise<void> => {
           const subPerms = getSubPermissionsForResource(resource);
           const subPermKeys = Object.keys(subPerms);
           
-          if (role === "super_admin" || role === "admin") {
+          if (role === "super_admin") {
             canCreate = true;
             canRead = true;
             canUpdate = true;
@@ -290,22 +297,24 @@ const initializeDefaultPermissions = async (): Promise<void> => {
               });
             }
           } else if (role === "personnel") {
-            canCreate = ["tasks", "production_orders"].includes(resource);
+            // Personnel tasks oluşturamaz, sadece production_orders oluşturabilir
+            canCreate = ["production_orders"].includes(resource);
             canRead = true;
+            // Personnel sadece atanan görevlerin durumunu güncelleyebilir (canUpdate kontrolü taskService'de yapılır)
             canUpdate = ["tasks", "production_orders"].includes(resource);
             canDelete = false;
             // Personel için sınırlı alt yetkiler
             if (resource === "tasks") {
-              subPermissions.canEditOwn = true;
-              subPermissions.canDeleteOwn = true;
+              // Personnel sadece atanan görevlerde bu yetkilere sahip
               subPermissions.canAddComment = true;
               subPermissions.canAddAttachment = true;
+              subPermissions.canChangeStatus = true; // Sadece atanan görevler için
             } else if (resource === "production_orders") {
               subPermissions.canViewSchedule = true;
             }
           }
           
-          const permissionData: any = {
+          const permissionData: Omit<RolePermission, "id"> & { subPermissions?: SubPermissions } = {
             role,
             resource,
             canCreate,
@@ -330,7 +339,7 @@ const initializeDefaultPermissions = async (): Promise<void> => {
     if (missingPermissions.length > 0) {
       for (const permission of missingPermissions) {
         // undefined değerleri kaldır (Firestore undefined kabul etmez)
-        const cleanPermission: any = {};
+        const cleanPermission: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(permission)) {
           if (value !== undefined) {
             // Eğer value bir obje ise, içindeki undefined değerleri de temizle
@@ -363,12 +372,12 @@ const initializeDefaultPermissions = async (): Promise<void> => {
           let subPermissions: SubPermissions = {};
           
           // Super Admin and Admin have all permissions
-          if (role === "super_admin" || role === "admin") {
+          if (role === "super_admin") {
             // Süper yönetici ve admin için tüm alt yetkileri true yap
             subPermKeys.forEach(key => {
               subPermissions[key] = true;
             });
-            const permissionData: any = {
+            const permissionData: Omit<RolePermission, "id"> & { subPermissions?: SubPermissions } = {
               role,
               resource,
               canCreate: true,
@@ -394,7 +403,7 @@ const initializeDefaultPermissions = async (): Promise<void> => {
                 subPermissions[key] = true;
               });
             }
-            const permissionData: any = {
+            const permissionData: Omit<RolePermission, "id"> & { subPermissions?: SubPermissions } = {
               role,
               resource,
               canCreate: resource !== "role_permissions",
@@ -423,7 +432,7 @@ const initializeDefaultPermissions = async (): Promise<void> => {
             } else if (resource === "production_orders") {
               subPermissions.canViewSchedule = true;
             }
-            const permissionData: any = {
+            const permissionData: Omit<RolePermission, "id"> & { subPermissions?: SubPermissions } = {
               role,
               resource,
               canCreate: ["tasks", "production_orders"].includes(resource),
@@ -461,7 +470,7 @@ const initializeDefaultPermissions = async (): Promise<void> => {
       // Add all permissions to Firestore
       for (const permission of defaultPermissions) {
         // undefined değerleri kaldır (Firestore undefined kabul etmez)
-        const cleanPermission: any = {};
+        const cleanPermission: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(permission)) {
           if (value !== undefined) {
             // Eğer value bir obje ise, içindeki undefined değerleri de temizle
@@ -481,7 +490,9 @@ const initializeDefaultPermissions = async (): Promise<void> => {
       }
     }
   } catch (error) {
-    console.error("Error initializing default permissions:", error);
+    if (import.meta.env.DEV) {
+      console.error("Error initializing default permissions:", error);
+    }
   }
 };
 
@@ -503,8 +514,8 @@ export const updatePermissionsWithSubPermissions = async (): Promise<void> => {
       let needsUpdate = false;
       let updatedSubPermissions: SubPermissions = { ...(permission.subPermissions || {}) };
       
-      // Süper yönetici ve admin için tüm alt yetkileri true yap
-      if ((permission.role === "super_admin" || permission.role === "admin") && subPermKeys.length > 0) {
+      // Süper yönetici için tüm alt yetkileri true yap
+      if (permission.role === "super_admin" && subPermKeys.length > 0) {
         subPermKeys.forEach(key => {
           if (updatedSubPermissions[key] !== true) {
             updatedSubPermissions[key] = true;
@@ -555,7 +566,7 @@ export const updatePermissionsWithSubPermissions = async (): Promise<void> => {
       
       // Güncelleme gerekiyorsa yap
       if (needsUpdate) {
-        const updateData: any = {
+        const updateData: Partial<RolePermission> = {
           updatedAt: Timestamp.now(),
         };
         
@@ -587,7 +598,9 @@ export const updatePermissionsWithSubPermissions = async (): Promise<void> => {
       }
     }
   } catch (error) {
-    console.error("Error updating permissions with sub-permissions:", error);
+    if (import.meta.env.DEV) {
+      console.error("Error updating permissions with sub-permissions:", error);
+    }
   }
 };
 
@@ -596,6 +609,9 @@ export const updatePermissionsWithSubPermissions = async (): Promise<void> => {
  */
 export const getRolePermissions = async (): Promise<RolePermission[]> => {
   try {
+    // Initialize default roles first
+    await initializeDefaultRoles();
+    
     // Initialize default permissions if needed
     await initializeDefaultPermissions();
     
@@ -605,13 +621,25 @@ export const getRolePermissions = async (): Promise<RolePermission[]> => {
     const permissionsRef = collection(db, ROLE_PERMISSIONS_COLLECTION);
     const snapshot = await getDocs(permissionsRef);
     
-    return snapshot.docs.map((docSnap) => ({
+    const permissions = snapshot.docs.map((docSnap) => ({
       id: docSnap.id,
       ...docSnap.data(),
     })) as RolePermission[];
-  } catch (error: any) {
-    console.error("Error getting role permissions:", error);
-    throw new Error(error.message || "Rol yetkileri yüklenemedi");
+    
+    // Pre-populate cache with all permissions for faster access
+    permissions.forEach(permission => {
+      const cacheKey = `${permission.role}:${permission.resource}`;
+      if (!permissionCache.has(cacheKey)) {
+        permissionCache.set(cacheKey, permission);
+      }
+    });
+    
+    return permissions;
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error getting role permissions:", error);
+    }
+    throw new Error(error instanceof Error ? error.message : "Rol yetkileri yüklenemedi");
   }
 };
 
@@ -635,8 +663,42 @@ export const getPermission = async (
       where("resource", "==", resource)
     );
     
+    // If cache is disabled, get directly from Firestore
+    if (!useCache) {
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) {
+        return null;
+      }
+      const docSnap = snapshot.docs[0];
+      return {
+        id: docSnap.id,
+        ...docSnap.data(),
+      } as RolePermission;
+    }
+    
+    // If cache already has value, return it immediately
+    if (permissionCache.has(cacheKey)) {
+      return permissionCache.get(cacheKey) || null;
+    }
+    
     // Set up real-time listener if not already set
     if (!permissionListeners.has(cacheKey)) {
+      // First, get initial value synchronously to avoid race condition
+      const initialSnapshot = await getDocs(q);
+      let initialPermission: RolePermission | null = null;
+      
+      if (!initialSnapshot.empty) {
+        const docSnap = initialSnapshot.docs[0];
+        initialPermission = {
+          id: docSnap.id,
+          ...docSnap.data(),
+        } as RolePermission;
+      }
+      
+      // Cache the initial value immediately
+      permissionCache.set(cacheKey, initialPermission);
+      
+      // Then set up real-time listener for future updates
       const unsubscribe = onSnapshot(q, (snapshot) => {
         if (snapshot.empty) {
           permissionCache.set(cacheKey, null);
@@ -651,44 +713,24 @@ export const getPermission = async (
         // Notify all callbacks about cache change
         cacheCallbacks.forEach(callback => callback());
       }, (error) => {
-        console.error(`Error listening to permission ${cacheKey}:`, error);
+        if (import.meta.env.DEV) {
+          console.error(`Error listening to permission ${cacheKey}:`, error);
+        }
       });
       
       permissionListeners.set(cacheKey, unsubscribe);
       
-      // Get initial value and cache it
-      const initialSnapshot = await getDocs(q);
-      if (initialSnapshot.empty) {
-        permissionCache.set(cacheKey, null);
-      } else {
-        const docSnap = initialSnapshot.docs[0];
-        const permission = {
-          id: docSnap.id,
-          ...docSnap.data(),
-        } as RolePermission;
-        permissionCache.set(cacheKey, permission);
-      }
+      // Return the initial value we just cached
+      return initialPermission;
     }
     
-    // Return cached value (always up-to-date thanks to real-time listener)
-    if (useCache && permissionCache.has(cacheKey)) {
-      return permissionCache.get(cacheKey) || null;
+    // Listener already exists, return cached value (should be available now)
+    return permissionCache.get(cacheKey) || null;
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error getting permission:", error);
     }
-    
-    // Fallback: Get value directly if cache is disabled
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) {
-      return null;
-    }
-    
-    const docSnap = snapshot.docs[0];
-    return {
-      id: docSnap.id,
-      ...docSnap.data(),
-    } as RolePermission;
-  } catch (error: any) {
-    console.error("Error getting permission:", error);
-    throw new Error(error.message || "Yetki yüklenemedi");
+    throw new Error(error instanceof Error ? error.message : "Yetki yüklenemedi");
   }
 };
 
@@ -715,6 +757,10 @@ export const getSubPermissionsForResource = (resource: string): Record<string, s
       canViewAll: "Tüm görevleri görme",
       canEditOwn: "Kendi görevlerini düzenleme",
       canDeleteOwn: "Kendi görevlerini silme",
+      canApprove: "Görev onaylama",
+      canAddChecklist: "Checklist ekleme",
+      canEditChecklist: "Checklist düzenleme/silme",
+      canViewPrivate: "Gizli görevleri görme",
     },
     users: {
       canChangeRole: "Rol değiştirme",
@@ -725,6 +771,8 @@ export const getSubPermissionsForResource = (resource: string): Record<string, s
       canAssignMembers: "Üye atama",
       canChangeLeader: "Lider değiştirme",
       canViewAll: "Tüm departmanları görme",
+      canApproveTeamRequest: "Ekip taleplerini onaylama",
+      canViewTeamManagement: "Ekip yönetimi menüsünü görme",
     },
     orders: {
       canApprove: "Onaylama",
@@ -757,6 +805,7 @@ export const getSubPermissionsForResource = (resource: string): Record<string, s
       canChangeStatus: "Durum değiştirme",
       canViewAll: "Tüm projeleri görme",
       canEditBudget: "Bütçe düzenleme",
+      canViewPrivate: "Gizli projeleri görme",
     },
     audit_logs: {
       canViewAll: "Tüm kayıtları görme",
@@ -767,6 +816,7 @@ export const getSubPermissionsForResource = (resource: string): Record<string, s
       canCreateRoles: "Rol oluşturma",
       canDeleteRoles: "Rol silme",
       canEditSystemRoles: "Sistem rollerini düzenleme",
+      canViewAdminPanel: "Admin paneli menüsünü görme",
     },
     raw_materials: {
       canEditStock: "Stok düzenleme",
@@ -803,14 +853,27 @@ export const updatePermission = async (
     if (currentPermission.exists()) {
       const data = currentPermission.data() as RolePermission;
       const cacheKey = `${data.role}:${data.resource}`;
-      // Clear cache for this permission
+      // Invalidate cache for this permission - listener will update it
       permissionCache.delete(cacheKey);
     }
     
     // undefined değerleri kaldır (Firestore undefined kabul etmez)
-    const cleanUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([_, value]) => value !== undefined)
-    );
+    const cleanUpdates: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        // Eğer value bir obje ise (subPermissions gibi), içindeki undefined değerleri de temizle
+        if (typeof value === 'object' && value !== null && !(value instanceof Timestamp)) {
+          const cleanValue = Object.fromEntries(
+            Object.entries(value).filter(([_, v]) => v !== undefined)
+          );
+          if (Object.keys(cleanValue).length > 0) {
+            cleanUpdates[key] = cleanValue;
+          }
+        } else {
+          cleanUpdates[key] = value;
+        }
+      }
+    }
     
     await updateDoc(permissionRef, {
       ...cleanUpdates,
@@ -818,8 +881,11 @@ export const updatePermission = async (
     });
     
     // Cache will be updated by real-time listener automatically
-  } catch (error: any) {
-    console.error("Error updating permission:", error);
-    throw new Error(error.message || "Yetki güncellenemedi");
+    // No need to manually update cache
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error updating permission:", error);
+    }
+    throw new Error(error instanceof Error ? error.message : "Yetki güncellenemedi");
   }
 };

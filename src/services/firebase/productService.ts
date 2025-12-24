@@ -57,7 +57,9 @@ export const getProducts = async (): Promise<Product[]> => {
   } catch (error) {
     // Sadece development'ta log göster
     if (import.meta.env.DEV) {
-      console.error("Get products error:", error);
+      if (import.meta.env.DEV) {
+        console.error("Get products error:", error);
+      }
     }
     throw error;
   }
@@ -81,7 +83,9 @@ export const getProductById = async (productId: string): Promise<Product | null>
   } catch (error) {
     // Sadece development'ta log göster
     if (import.meta.env.DEV) {
-      console.error("Get product by id error:", error);
+      if (import.meta.env.DEV) {
+        console.error("Get product by id error:", error);
+      }
     }
     throw error;
   }
@@ -108,11 +112,39 @@ export const createProduct = async (
     // Audit log
     await logAudit("CREATE", "products", docRef.id, productData.createdBy, null, createdProduct);
 
+    // Aktivite log ekle
+    if (productData.createdBy) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(productData.createdBy);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addProductActivity(
+          docRef.id,
+          productData.createdBy,
+          "created",
+          `bu ürünü oluşturdu`,
+          { productName: productData.name },
+          userName,
+          userEmail
+        );
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.error("Add product activity error:", error);
+          }
+        }
+      }
+    }
+
     return createdProduct;
   } catch (error) {
     // Sadece development'ta log göster
     if (import.meta.env.DEV) {
-      console.error("Create product error:", error);
+      if (import.meta.env.DEV) {
+        console.error("Create product error:", error);
+      }
     }
     throw error;
   }
@@ -142,6 +174,40 @@ export const updateProduct = async (
     if (userId) {
       await logAudit("UPDATE", "products", productId, userId, oldProduct, newProduct);
     }
+
+    // Aktivite log ekle
+    if (userId && oldProduct) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(userId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+
+        const changedFields = Object.keys(updates).filter(key => {
+          const oldValue = (oldProduct as Record<string, unknown>)[key];
+          const newValue = (updates as Record<string, unknown>)[key];
+          return oldValue !== newValue;
+        });
+        
+        if (changedFields.length > 0) {
+          await addProductActivity(
+            productId,
+            userId,
+            "updated",
+            `bu ürünü güncelledi`,
+            { changedFields },
+            userName,
+            userEmail
+          );
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.error("Add product activity error:", error);
+          }
+        }
+      }
+    }
   } catch (error) {
     // Sadece development'ta log göster
     if (import.meta.env.DEV) {
@@ -159,6 +225,32 @@ export const deleteProduct = async (productId: string, userId?: string): Promise
     // Eski veriyi al
     const oldProduct = await getProductById(productId);
     
+    // Aktivite log ekle (silmeden önce)
+    if (userId && oldProduct) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(userId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addProductActivity(
+          productId,
+          userId,
+          "deleted",
+          `bu ürünü sildi`,
+          { productName: oldProduct.name },
+          userName,
+          userEmail
+        );
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.error("Add product activity error:", error);
+          }
+        }
+      }
+    }
+    
     await deleteDoc(doc(firestore, "products", productId));
     
     // Audit log
@@ -169,6 +261,177 @@ export const deleteProduct = async (productId: string, userId?: string): Promise
     // Sadece development'ta log göster
     if (import.meta.env.DEV) {
       console.error("Delete product error:", error);
+    }
+    throw error;
+  }
+};
+
+// Product Comments and Activities
+
+export interface ProductComment {
+  id: string;
+  productId: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  content: string;
+  createdAt: Timestamp;
+  updatedAt?: Timestamp | null;
+}
+
+export interface ProductActivity {
+  id: string;
+  productId: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  action: string;
+  description: string;
+  metadata?: Record<string, any>;
+  createdAt: Timestamp;
+}
+
+/**
+ * Ürün yorumu ekle
+ */
+export const addProductComment = async (
+  productId: string,
+  userId: string,
+  content: string,
+  userName?: string,
+  userEmail?: string
+): Promise<ProductComment> => {
+  try {
+    const commentData: Omit<ProductComment, "id"> = {
+      productId,
+      userId,
+      userName,
+      userEmail,
+      content,
+      createdAt: Timestamp.now(),
+      updatedAt: null,
+    };
+
+    const docRef = await addDoc(
+      collection(firestore, "products", productId, "comments"),
+      commentData
+    );
+
+    // Activity log ekle
+    await addProductActivity(productId, userId, "commented", `yorum ekledi`, { commentId: docRef.id }, userName, userEmail);
+
+    // Ürünü oluşturan kişiye bildirim gönder (yorum ekleyen kişi hariç)
+    try {
+      const product = await getProductById(productId);
+      if (product?.createdBy && product.createdBy !== userId) {
+        const { createNotification } = await import("@/services/firebase/notificationService");
+        await createNotification({
+          userId: product.createdBy,
+          type: "comment_added",
+          title: "Ürününüze Yorum Eklendi",
+          message: `${userName || userEmail || "Bir kullanıcı"} "${product.name}" ürününüze yorum ekledi: ${content.substring(0, 100)}${content.length > 100 ? "..." : ""}`,
+          read: false,
+          relatedId: productId,
+          metadata: { commentId: docRef.id, commenterId: userId, commenterName: userName, commenterEmail: userEmail },
+        });
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("Send comment notification error:", error);
+      }
+    }
+
+    return {
+      id: docRef.id,
+      ...commentData,
+    };
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Add product comment error:", error);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Ürün yorumlarını al
+ */
+export const getProductComments = async (productId: string): Promise<ProductComment[]> => {
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, "products", productId, "comments"),
+        orderBy("createdAt", "desc")
+      )
+    );
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as ProductComment[];
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Get product comments error:", error);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Ürün aktivite log ekle
+ */
+export const addProductActivity = async (
+  productId: string,
+  userId: string,
+  action: string,
+  description: string,
+  metadata?: Record<string, any>,
+  userName?: string,
+  userEmail?: string
+): Promise<string> => {
+  try {
+    const activityData: Omit<ProductActivity, "id"> = {
+      productId,
+      userId,
+      userName,
+      userEmail,
+      action,
+      description,
+      metadata: metadata || {},
+      createdAt: Timestamp.now(),
+    };
+
+    const docRef = await addDoc(
+      collection(firestore, "products", productId, "activities"),
+      activityData
+    );
+
+    return docRef.id;
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Add product activity error:", error);
+    }
+    return "";
+  }
+};
+
+/**
+ * Ürün aktivite loglarını al
+ */
+export const getProductActivities = async (productId: string): Promise<ProductActivity[]> => {
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, "products", productId, "activities"),
+        orderBy("createdAt", "desc")
+      )
+    );
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as ProductActivity[];
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Get product activities error:", error);
     }
     throw error;
   }

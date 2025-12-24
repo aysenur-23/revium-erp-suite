@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -40,6 +41,10 @@ import {
   rejectTaskApproval,
   archiveTask,
   unarchiveTask,
+  requestTaskFromPool,
+  approvePoolRequest,
+  rejectPoolRequest,
+  removeTaskFromPool,
   Task as FirebaseTask,
   TaskComment,
   TaskActivity,
@@ -48,8 +53,11 @@ import {
 } from "@/services/firebase/taskService";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { createNotification } from "@/services/firebase/notificationService";
-import { getOrderById } from "@/services/firebase/orderService";
-import { canEditTask, canInteractWithTask, canViewTask } from "@/utils/permissions";
+import { getOrderById, Order } from "@/services/firebase/orderService";
+import { Project } from "@/services/firebase/projectService";
+import { getDepartments } from "@/services/firebase/departmentService";
+import { canEditTask, canInteractWithTask, canViewTask, canCreateTask, canUpdateResource, canDeleteResource, isMainAdmin, canAddChecklist, canEditChecklist, canViewPrivateProject } from "@/utils/permissions";
+import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
 import { Timestamp } from "firebase/firestore";
 import {
   CheckCircle2,
@@ -62,6 +70,7 @@ import {
   X,
   XCircle,
   ArrowLeft,
+  ArrowRight,
   Send,
   Paperclip,
   Archive,
@@ -148,9 +157,59 @@ const formatDateSafe = (dateInput?: string | Date | Timestamp | null) => {
 };
 
 export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialStatus = "pending", projectId: propProjectId }: TaskDetailModalProps) => {
-  const { user, isAdmin, isSuperAdmin, isTeamLeader } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [task, setTask] = useState<any>(null);
+  const [canCreate, setCanCreate] = useState(false);
+  const [canUpdate, setCanUpdate] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  
+  // Permission state'lerini Firestore'dan kontrol et
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user) {
+        setCanCreate(false);
+        setCanUpdate(false);
+        setCanDelete(false);
+        setIsSuperAdmin(false);
+        return;
+      }
+      try {
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: null,
+          dateOfBirth: null,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const [createResult, updateResult, deleteResult, isMainAdminResult] = await Promise.all([
+          canCreateTask(userProfile, []),
+          canUpdateResource(userProfile, "tasks"),
+          canDeleteResource(userProfile, "tasks"),
+          isMainAdmin(userProfile),
+        ]);
+        setCanCreate(createResult);
+        setCanUpdate(updateResult);
+        setCanDelete(deleteResult);
+        setIsSuperAdmin(isMainAdminResult);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking permissions:", error);
+        }
+        setCanCreate(false);
+        setCanUpdate(false);
+        setCanDelete(false);
+        setIsSuperAdmin(false);
+      }
+    };
+    checkPermissions();
+  }, [user]);
+  const [task, setTask] = useState<FirebaseTask | null>(null);
   const [assignedUsers, setAssignedUsers] = useState<AssignedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [myAssignment, setMyAssignment] = useState<AssignedUser | null>(null);
@@ -169,7 +228,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   const [loadingChecklists, setLoadingChecklists] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [orderModalOpen, setOrderModalOpen] = useState(false);
-  const [orderDetail, setOrderDetail] = useState<any>(null);
+  const [orderDetail, setOrderDetail] = useState<Order | null>(null);
   const [orderLoading, setOrderLoading] = useState(false);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
   const [showAddAttachmentDialog, setShowAddAttachmentDialog] = useState(false);
@@ -191,6 +250,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   const [commentInput, setCommentInput] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   
   // Yeni görev oluşturma için state'ler
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -202,9 +262,10 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   const [newTaskLabelInput, setNewTaskLabelInput] = useState("");
   const [newTaskLabelColor, setNewTaskLabelColor] = useState("#61BD4F");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState<1 | 2 | 3 | 4 | 5>(2);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(propProjectId || null);
   const [isPrivate, setIsPrivate] = useState(false);
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
 
   const [creatingTask, setCreatingTask] = useState(false);
   const [canView, setCanView] = useState(false);
@@ -234,10 +295,28 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  // Personnel veya Viewer kontrolü
+  const isPersonnelOrViewer = useMemo(() => {
+    if (!user?.roles || user.roles.length === 0) return false;
+    return user.roles.some(role => role === "personnel" || role === "viewer");
+  }, [user?.roles]);
+
+  // Personnel ve İzleyici için yeni görev oluşturma modunu engelle
+  useEffect(() => {
+    if (!taskId && open && isPersonnelOrViewer) {
+      onOpenChange(false);
+      toast.error("Görev oluşturma yetkiniz yok. Sadece yönetici veya ekip lideri görev oluşturabilir.");
+    }
+  }, [taskId, open, isPersonnelOrViewer, onOpenChange]);
+
   useEffect(() => {
     if (open && taskId) {
       fetchTaskDetails();
     } else if (open && !taskId) {
+      // Personnel veya İzleyici ise modal'ı açma
+      if (isPersonnelOrViewer) {
+        return;
+      }
       // Yeni görev modu - state'leri sıfırla
       setNewTaskTitle("");
       setNewTaskDescription("");
@@ -248,6 +327,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       setNewTaskLabelInput("");
       setNewTaskLabelColor("#61BD4F");
       setNewTaskDueDate("");
+      setNewTaskPriority(2);
       setSelectedProjectId(propProjectId || null);
       setIsPrivate(false);
       setLoading(false);
@@ -264,54 +344,60 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         if (propProjectId && !taskId) {
           try {
             const currentProject = await getProjectById(propProjectId);
-            // Gizli proje kontrolü: Eğer gizli projeyse ve kullanıcı yetkili değilse, boş liste göster
-            // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir
+            // Gizli proje kontrolü: canViewPrivateProject kullan
             if (currentProject.isPrivate) {
-              if (isSuperAdmin) {
-                setProjects([currentProject]);
-                return;
-              }
-              if (isAdmin) {
-                setProjects([currentProject]);
-                return;
-              }
-              if (user?.id && currentProject.createdBy === user.id) {
-                setProjects([currentProject]);
-                return;
-              }
-              // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
-              const isTeamLeader = user?.roles?.includes("team_leader");
-              if (isTeamLeader) {
-                // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
-                setProjects([]);
-                return;
-              }
-              // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
-              if (user?.id) {
+              if (user) {
                 try {
-                  const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");
-                  const projectTasks = await getTasks({ projectId: propProjectId });
+                  const userProfile: UserProfile = {
+                    id: user.id,
+                    email: user.email,
+                    emailVerified: user.emailVerified,
+                    fullName: user.fullName,
+                    displayName: user.fullName,
+                    phone: null,
+                    dateOfBirth: null,
+                    role: user.roles || [],
+                    createdAt: null,
+                    updatedAt: null,
+                  };
+                  const canView = await canViewPrivateProject(currentProject, userProfile);
+                  if (canView) {
+                    setProjects([currentProject]);
+                    return;
+                  }
                   
-                  for (const task of projectTasks) {
-                    if (task.createdBy === user.id) {
-                      setProjects([currentProject]);
-                      return;
+                  // Projede görevi olan kullanıcılar görebilir (canViewPrivateProject false döndüyse)
+                  try {
+                    const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");
+                    const projectTasks = await getTasks({ projectId: propProjectId });
+                    
+                    for (const task of projectTasks) {
+                      if (task.createdBy === user.id) {
+                        setProjects([currentProject]);
+                        return;
+                      }
+                      if (task.assignedUsers && task.assignedUsers.includes(user.id)) {
+                        setProjects([currentProject]);
+                        return;
+                      }
+                      const assignments = await getTaskAssignments(task.id);
+                      const isAssigned = assignments.some(
+                        (a) => a.assignedTo === user.id && (a.status === "accepted" || a.status === "pending")
+                      );
+                      if (isAssigned) {
+                        setProjects([currentProject]);
+                        return;
+                      }
                     }
-                    if (task.assignedUsers && task.assignedUsers.includes(user.id)) {
-                      setProjects([currentProject]);
-                      return;
-                    }
-                    const assignments = await getTaskAssignments(task.id);
-                    const isAssigned = assignments.some(
-                      (a) => a.assignedTo === user.id && (a.status === "accepted" || a.status === "pending")
-                    );
-                    if (isAssigned) {
-                      setProjects([currentProject]);
-                      return;
+                  } catch (error) {
+                    if (import.meta.env.DEV) {
+                      console.error("Error checking project tasks:", error);
                     }
                   }
-                } catch (error) {
-                  console.error("Error checking project tasks:", error);
+                } catch (error: unknown) {
+                  if (import.meta.env.DEV) {
+                    console.error("Error checking private project visibility:", error);
+                  }
                 }
               }
               // Yetkisiz kullanıcı - boş liste
@@ -323,7 +409,9 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
               return;
             }
           } catch (error) {
-            console.error("Proje yüklenemedi", error);
+            if (import.meta.env.DEV) {
+              console.error("Proje yüklenemedi", error);
+            }
             setProjects([]);
             return;
           }
@@ -357,40 +445,48 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
             }
             
             if (!project.isPrivate) return project; // Gizli olmayan projeler herkes görebilir
-            if (isSuperAdmin) return project; // Üst yöneticiler tüm projeleri görebilir
-            if (isAdmin) return project; // Yöneticiler tüm projeleri görebilir
-            if (user?.id && project.createdBy === user.id) return project; // Oluşturan görebilir
             
-            // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
-            const isTeamLeader = user?.roles?.includes("team_leader");
-            if (isTeamLeader) {
-              return null; // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
-            }
-            
-            // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
-            if (user?.id) {
+            // Gizli projeler için canViewPrivateProject kontrolü
+            if (user) {
               try {
-                const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");
-                const projectTasks = await getTasks({ projectId: project.id });
+                const userProfile: UserProfile = {
+                  id: user.id,
+                  email: user.email,
+                  emailVerified: user.emailVerified,
+                  fullName: user.fullName,
+                  displayName: user.fullName,
+                  phone: null,
+                  dateOfBirth: null,
+                  role: user.roles || [],
+                  createdAt: null,
+                  updatedAt: null,
+                };
+                const canView = await canViewPrivateProject(project, userProfile);
+                if (canView) return project;
                 
-                // Kullanıcının bu projede görevi var mı kontrol et
-                for (const task of projectTasks) {
-                  // Görevi oluşturan kişi
-                  if (task.createdBy === user.id) return project;
+                // Projede görevi olan kullanıcılar görebilir (canViewPrivateProject false döndüyse)
+                try {
+                  const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");
+                  const projectTasks = await getTasks({ projectId: project.id });
                   
-                  // Atanan kullanıcılar
-                  if (task.assignedUsers && task.assignedUsers.includes(user.id)) return project;
-                  
-                  // Assignments kontrolü
-                  const assignments = await getTaskAssignments(task.id);
-                  const isAssigned = assignments.some(
-                    (a) => a.assignedTo === user.id && (a.status === "accepted" || a.status === "pending")
-                  );
-                  if (isAssigned) return project;
+                  for (const task of projectTasks) {
+                    if (task.createdBy === user.id) return project;
+                    if (task.assignedUsers && task.assignedUsers.includes(user.id)) return project;
+                    const assignments = await getTaskAssignments(task.id);
+                    const isAssigned = assignments.some(
+                      (a) => a.assignedTo === user.id && (a.status === "accepted" || a.status === "pending")
+                    );
+                    if (isAssigned) return project;
+                  }
+                } catch (error: unknown) {
+                  if (import.meta.env.DEV) {
+                    console.error("Error checking project tasks:", error);
+                  }
                 }
-              } catch (error) {
-                // Hata durumunda gösterilmesin
-                console.error("Error checking project tasks:", error);
+              } catch (error: unknown) {
+                if (import.meta.env.DEV) {
+                  console.error("Error checking private project visibility:", error);
+                }
               }
             }
             
@@ -407,7 +503,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     if (open) {
       loadProjects();
     }
-  }, [open, taskId, isAdmin, isSuperAdmin, user?.id, propProjectId]);
+  }, [open, taskId, isSuperAdmin, user?.id, propProjectId]);
 
 
   // Gizlilik değiştiğinde projeleri yeniden yükle (sadece gizli projeleri göstermek için)
@@ -418,30 +514,52 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         try {
           const { getProjects } = await import("@/services/firebase/projectService");
           const allProjects = await getProjects({ status: "active" });
-          // Sadece gizli projeleri göster
+          // Sadece gizli projeleri göster - canViewPrivateProject kullan
           const visibleProjects = await Promise.all(
             allProjects.map(async (project) => {
               if (!project.isPrivate) return null; // Gizli olmayan projeler gizli görevler için gösterilmez
-              if (isSuperAdmin) return project; // Üst yöneticiler tüm gizli projeleri görebilir
-              if (user?.id && project.createdBy === user.id) return project; // Oluşturan görebilir
               
-              // Projede görevi olan kullanıcılar görebilir
-              if (user?.id) {
+              // Gizli projeler için canViewPrivateProject kontrolü
+              if (user) {
                 try {
-                  const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");
-                  const projectTasks = await getTasks({ projectId: project.id });
+                  const userProfile: UserProfile = {
+                    id: user.id,
+                    email: user.email,
+                    emailVerified: user.emailVerified,
+                    fullName: user.fullName,
+                    displayName: user.fullName,
+                    phone: null,
+                    dateOfBirth: null,
+                    role: user.roles || [],
+                    createdAt: null,
+                    updatedAt: null,
+                  };
+                  const canView = await canViewPrivateProject(project, userProfile);
+                  if (canView) return project;
                   
-                  for (const task of projectTasks) {
-                    if (task.createdBy === user.id) return project;
-                    if (task.assignedUsers && task.assignedUsers.includes(user.id)) return project;
-                    const assignments = await getTaskAssignments(task.id);
-                    const isAssigned = assignments.some(
-                      (a) => a.assignedTo === user.id && (a.status === "accepted" || a.status === "pending")
-                    );
-                    if (isAssigned) return project;
+                  // Projede görevi olan kullanıcılar görebilir (canViewPrivateProject false döndüyse)
+                  try {
+                    const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");
+                    const projectTasks = await getTasks({ projectId: project.id });
+                    
+                    for (const task of projectTasks) {
+                      if (task.createdBy === user.id) return project;
+                      if (task.assignedUsers && task.assignedUsers.includes(user.id)) return project;
+                      const assignments = await getTaskAssignments(task.id);
+                      const isAssigned = assignments.some(
+                        (a) => a.assignedTo === user.id && (a.status === "accepted" || a.status === "pending")
+                      );
+                      if (isAssigned) return project;
+                    }
+                  } catch (error) {
+                    if (import.meta.env.DEV) {
+                      console.error("Error checking project tasks:", error);
+                    }
                   }
-                } catch (error) {
-                  console.error("Error checking project tasks:", error);
+                } catch (error: unknown) {
+                  if (import.meta.env.DEV) {
+                    console.error("Error checking private project visibility:", error);
+                  }
                 }
               }
               
@@ -457,7 +575,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       
       reloadProjects();
     }
-  }, [isPrivate, open, taskId, isAdmin, isSuperAdmin, user?.id]);
+  }, [isPrivate, open, taskId, isSuperAdmin, user?.id]);
 
   // Proje seçildiğinde veya propProjectId geldiğinde, eğer proje gizli ise isPrivate'ı otomatik true yap
   useEffect(() => {
@@ -474,7 +592,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
   const fetchTaskDetails = async () => {
     try {
-      const [taskData, assignments, allUsers, taskComments, taskActivities, taskChecklists, taskAttachments] = await Promise.all([
+      const [taskData, assignments, fetchedAllUsers, taskComments, taskActivities, taskChecklists, taskAttachments] = await Promise.all([
         getTaskById(taskId),
         getTaskAssignments(taskId),
         getAllUsers(),
@@ -483,6 +601,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         getChecklists(taskId).catch(() => []),
         getTaskAttachments(taskId).catch(() => []),
       ]);
+      
+      // allUsers'ı state'e kaydet
+      setAllUsers(fetchedAllUsers);
+      
+      // allUsers'ı kullan
+      const allUsers = fetchedAllUsers;
 
       if (!taskData) {
         toast.error("Görev bulunamadı");
@@ -517,17 +641,19 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         checklists: taskChecklists, // Checklists'i ekle
         createdBy: taskData.createdBy, // Ensure createdBy is included
         approvalStatus: taskData.approvalStatus, // Ensure approvalStatus is included
-        due_date: taskData.dueDate
+        isInPool: taskData.isInPool, // Ensure isInPool is included
+        poolRequests: taskData.poolRequests || [], // Ensure poolRequests is included
+          dueDate: taskData.dueDate
           ? taskData.dueDate instanceof Timestamp
             ? taskData.dueDate.toDate().toISOString()
             : new Date(taskData.dueDate).toISOString()
           : null,
-        created_at: taskData.createdAt instanceof Timestamp
+        createdAt: taskData.createdAt instanceof Timestamp
           ? taskData.createdAt.toDate().toISOString()
           : new Date(taskData.createdAt).toISOString(),
       };
 
-      setTask(taskUI);
+      setTask(taskUI as any);
       setDescriptionValue(taskData.description || "");
       setDueDateValue(
         taskData.dueDate
@@ -577,9 +703,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       
       // Yetki kontrollerini güncelle
       await updatePermissions(taskData as FirebaseTask, users.map(u => u.id));
-    } catch (error: any) {
-      console.error("Fetch task details error:", error);
-      toast.error(error.message || "Görev detayları yüklenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Fetch task details error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Görev detayları yüklenirken hata oluştu");
     } finally {
       setLoading(false);
     }
@@ -604,37 +733,133 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
       setCanView(viewPermission);
       setCanEdit(editPermission);
+      
+      // canInteract değerini set et, ama ek kontroller yapılacak
+      // (görev üyesi kontrolü için)
       setCanInteract(interactPermission);
+      
+      if (import.meta.env.DEV) {
+        console.log("TaskDetailModal: updatePermissions sonucu", {
+          viewPermission,
+          editPermission,
+          interactPermission,
+          assignedUserIds,
+          taskIsPrivate: (taskData as { isPrivate?: boolean }).isPrivate,
+        });
+      }
     } catch (error) {
-      console.error("Error checking permissions:", error);
+        if (import.meta.env.DEV) {
+          console.error("Error checking permissions:", error);
+        }
       setCanView(false);
       setCanEdit(false);
       setCanInteract(false);
     }
   };
 
+  // Task status değiştiğinde currentStatus'u güncelle
+  useEffect(() => {
+    if (task?.status) {
+      const normalized = normalizeStatus(task.status);
+      setCurrentStatus(prevStatus => {
+        const normalizedPrev = normalizeStatus(prevStatus);
+        if (normalized !== normalizedPrev) {
+          if (import.meta.env.DEV) {
+            console.log("TaskDetailModal: currentStatus güncelleniyor", {
+              oldStatus: prevStatus,
+              normalizedPrev,
+              newStatus: normalized,
+              taskStatus: task.status,
+            });
+          }
+          return normalized;
+        }
+        return prevStatus;
+      });
+    }
+  }, [task?.status]);
+
   // Task veya assignedUsers değiştiğinde yetkileri güncelle
   useEffect(() => {
     if (task && user) {
       const assignedUserIds = assignedUsers.map(u => u.id);
-      updatePermissions(task as FirebaseTask, assignedUserIds);
+      
+      // ÖNCE updatePermissions'ı çağır - bu Firestore'dan doğru yetkileri alır
+      // (gizli görevler için özel kontroller yapar)
+      const updateAndCheck = async () => {
+        await updatePermissions(task as FirebaseTask, assignedUserIds);
+        
+        // updatePermissions içinde canInteract set ediliyor, ama ek kontroller yapalım
+        if (isSuperAdmin) {
+          if (import.meta.env.DEV) {
+            console.log("TaskDetailModal: Super Admin - canInteract otomatik true");
+          }
+          setCanInteract(true);
+          setCanEdit(true);
+          return;
+        }
+        
+        // Kullanıcının göreve atanıp atanmadığını kontrol et
+        // Hem myAssignment hem de assignedUsers listesini kontrol et
+        // Göreve atanan kullanıcılar (status ne olursa olsun, rejected hariç) görevi ilerletebilir
+        // "rejected" durumundaki kullanıcılar görevi ilerletemez
+        const isAssignedInList = assignedUsers.some(u => 
+          u.id === user.id && u.status !== "rejected"
+      );
+        const isAssignedViaMyAssignment = myAssignment && myAssignment.status !== "rejected";
+        const isAssigned = isAssignedInList || !!isAssignedViaMyAssignment;
+        
+        const isCreator = task.createdBy === user.id;
+        
+        // updatePermissions'tan gelen canInteract değerini kontrol et
+        // Eğer görev üyesi (rejected hariç) veya oluşturan ise, canInteract true olmalı
+        // updatePermissions zaten bunu yapıyor ama status kontrolü için tekrar kontrol ediyoruz
+        if (isAssigned || isCreator) {
+          setCanInteract(true);
+        }
+        // Eğer updatePermissions false döndüyse ve görev üyesi değilse, false kalmalı
+        // (Bu durumda updatePermissions'ın sonucu korunur)
+        
+        if (import.meta.env.DEV) {
+          console.log("TaskDetailModal: canInteract hesaplanıyor", {
+            isAssignedInList,
+            isAssignedViaMyAssignment,
+            isAssigned,
+            isCreator,
+            canUpdate,
+            isSuperAdmin,
+            userId: user.id,
+            taskCreatedBy: task.createdBy,
+            myAssignment: myAssignment ? { id: myAssignment.id, status: myAssignment.status } : null,
+            assignedUsersCount: assignedUsers.length,
+            assignedUserIds: assignedUsers.map(u => ({ id: u.id, status: u.status })),
+            taskIsPrivate: (task as { isPrivate?: boolean }).isPrivate,
+            assignedUserIdsArray: assignedUserIds,
+          });
+        }
+      };
+      
+      updateAndCheck();
     }
-  }, [task, user, assignedUsers]);
+  }, [task, user, assignedUsers, myAssignment, isSuperAdmin, canUpdate]);
 
   const handleOpenOrderDetail = async () => {
-    if (!task?.production_order_id) return;
+    if (!task?.productionOrderId) return;
     setOrderLoading(true);
     try {
-      const order = await getOrderById(task.production_order_id);
+      const order = await getOrderById(task.productionOrderId);
       if (order) {
         setOrderDetail(order);
         setOrderModalOpen(true);
       } else {
         toast.error("Sipariş bulunamadı");
       }
-    } catch (error: any) {
-      console.error("Get order detail error:", error);
-      toast.error(error.message || "Sipariş detayları alınamadı");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Get order detail error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Sipariş detayları alınamadı");
     } finally {
       setOrderLoading(false);
     }
@@ -664,12 +889,17 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         updatedAt: null,
       };
       const hasPermission = await canPerformSubPermission(userProfile, "tasks", "canChangeStatus");
-      if (!hasPermission && !isAdmin && !isSuperAdmin && task?.createdBy !== user?.id) {
-        toast.error("Durum değiştirme yetkiniz yok");
+      // SISTEM_YETKILERI.md'ye göre: Super Admin, Team Leader, görevi oluşturan ve görevi kabul eden kullanıcılar durum değiştirebilir
+      const isAssignedAndAccepted = assignedUsers.some(u => u.id === user?.id && u.status === "accepted");
+      const isCreator = task?.createdBy === user?.id;
+      if (!hasPermission && !isSuperAdmin && !canUpdate && !isCreator && !isAssignedAndAccepted) {
+        toast.error("Durum değiştirme yetkiniz yok. Sadece görevi kabul ettiğiniz görevlerin durumunu değiştirebilirsiniz.");
         return;
       }
     } catch (error) {
-      console.error("Permission check error:", error);
+      if (import.meta.env.DEV) {
+        console.error("Permission check error:", error);
+      }
       // Hata durumunda devam et (eski davranış)
     }
 
@@ -677,7 +907,9 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       // Eğer görev "completed" durumuna geçiyorsa, onay kontrolü yap
       if (newStatus === "completed" && user?.id) {
         const isCreator = task?.createdBy === user.id;
-        const canDirectComplete = isAdmin || isSuperAdmin || isCreator;
+        const isAssigned = assignedUsers.some(u => u.id === user.id);
+        // SISTEM_YETKILERI.md'ye göre: Super Admin, Team Leader, görevi oluşturan direkt tamamlayabilir
+        const canDirectComplete = isSuperAdmin || canUpdate || isCreator;
         
         // Yönetici veya oluşturan kişi direkt tamamlayabilir
         if (canDirectComplete) {
@@ -699,12 +931,15 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         );
         toast.success("Görev durumu güncellendi");
       }
-      setTask({ ...task, status: newStatus });
+      setTask({ ...task, status: newStatus } as any);
       await fetchTaskDetails(); // Approval status'u da almak için
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Update task status error:", error);
-      toast.error(error.message || "Durum güncellenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Update task status error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Durum güncellenirken hata oluştu");
     }
   };
 
@@ -719,7 +954,17 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     }
   };
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status: string | undefined | null) => {
+    // Önce status'ü normalize et (column_ prefix'ini kaldır ve geçerli status'e çevir)
+    if (!status) return "Yapılacak";
+    const normalized = normalizeStatus(status);
+    
+    // Eğer görev "completed" durumunda ve onaylandıysa, "Onaylandı" göster
+    // Ama sadece task objesi mevcut ve approvalStatus kontrol edilebiliyorsa
+    if (normalized === "completed" && task?.approvalStatus === "approved") {
+      return "Onaylandı";
+    }
+    
     const labels: Record<string, string> = {
       pending: "Yapılacak",
       in_progress: "Devam Ediyor",
@@ -727,57 +972,177 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       approved: "Onaylandı",
       cancelled: "Yapılacak", // cancelled durumu yok, pending olarak göster
     };
-    return labels[status] || status;
+    return labels[normalized] || "Yapılacak"; // Fallback to "Yapılacak" instead of showing raw status
   };
 
-  const [currentStatus, setCurrentStatus] = useState<string>(task?.status || initialStatus || "pending");
+  // Normalize status - remove "column_" prefix if present
+  // "column_" ile başlayan değerler column ID'leridir ve sayısal olabilir, bunları "pending" olarak kabul et
+  const normalizeStatus = (status: string | undefined | null): string => {
+    if (!status) return "pending";
+    // Eğer "column_" ile başlıyorsa, bu bir column ID'sidir (sayısal olabilir)
+    if (status.startsWith("column_")) {
+      const statusFromColumn = status.replace("column_", "");
+      // Geçerli status değerlerini kontrol et (pending, in_progress, completed, approved, cancelled)
+      if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(statusFromColumn)) {
+        return statusFromColumn === "cancelled" ? "pending" : statusFromColumn;
+      }
+      // Sayısal ID veya geçersiz değer ise "pending" olarak kabul et
+      return "pending";
+    }
+    // Geçerli status değerlerini kontrol et
+    if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(status)) {
+      return status === "cancelled" ? "pending" : status;
+    }
+    return "pending"; // Fallback
+  };
+
+  const [currentStatus, setCurrentStatus] = useState<string>(normalizeStatus(task?.status || initialStatus));
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [usersMap, setUsersMap] = useState<Record<string, string>>({});
 
   // Mevcut durumun index'ini bul
   const getCurrentStatusIndex = () => {
+    // Status'ü normalize et - "column_" prefix'ini kaldır
+    const normalizedCurrentStatus = normalizeStatus(currentStatus);
+    
     // Eğer görev tamamlandı ve onaylandıysa, "Onaylandı" aşamasını göster
-    if (currentStatus === "completed" && task?.approvalStatus === "approved") {
+    if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "approved") {
       return 3; // "Onaylandı" index'i
     }
     // Eğer görev tamamlandı ama onaylanmadıysa, "Tamamlandı" aşamasını göster
-    if (currentStatus === "completed") {
+    if (normalizedCurrentStatus === "completed") {
       return 2; // "Tamamlandı" index'i
     }
     // "cancelled" durumunu "pending" olarak handle et (cancelled durumu yok)
-    const normalized = currentStatus === "cancelled" ? "pending" : currentStatus;
+    const normalized = normalizedCurrentStatus === "cancelled" ? "pending" : normalizedCurrentStatus;
     const index = taskStatusWorkflow.findIndex((statusItem) => statusItem.value === normalized);
     return index === -1 ? 0 : index;
   };
 
   // Bir sonraki durumu bul
   const getNextStatus = () => {
+    const normalizedCurrentStatus = normalizeStatus(currentStatus);
     const currentIndex = getCurrentStatusIndex();
-    if (currentIndex === -1 || currentIndex >= taskStatusWorkflow.length - 1) {
+    
+    // DEBUG: getNextStatus çağrısı (HER ZAMAN göster)
+    console.log("🔍 getNextStatus çağrıldı", {
+      currentStatus,
+      normalizedCurrentStatus,
+      currentIndex,
+      approvalStatus: task?.approvalStatus,
+      taskStatus: task?.status,
+      taskId: task?.id,
+    });
+    
+    // Eğer görev onaylandıysa, sonraki durum yok
+    if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "approved") {
+      console.log("❌ getNextStatus: Görev onaylandı, null döndürülüyor");
       return null;
     }
-    return taskStatusWorkflow[currentIndex + 1];
+    
+    // Eğer görev tamamlandı ama onaylanmadıysa, "Onaya Gönder" butonu gösterilecek
+    // Bu durumda nextStatusItem null dönebilir, ama butonlar yine de gösterilecek
+    if (currentIndex === -1) {
+      console.log("✅ getNextStatus: currentIndex -1, ilk durum döndürülüyor");
+      return taskStatusWorkflow[0]; // İlk durum
+    }
+    
+    // Eğer görev tamamlandı ama onaylanmadıysa, null döndür (çünkü "Onaya Gönder" butonu gösterilecek)
+    // Bu kontrol buton render mantığında yapılıyor, burada null döndürmek yeterli
+    if (normalizedCurrentStatus === "completed" && task?.approvalStatus !== "approved") {
+      console.log("⚠️ getNextStatus: Görev tamamlandı ama onaylanmadı, null döndürülüyor (Onaya Gönder butonu gösterilecek)");
+      return null;
+    }
+    
+    // Eğer son aşamadaysa (approved), null döndür
+    if (currentIndex >= taskStatusWorkflow.length - 1) {
+      console.log("❌ getNextStatus: Son aşamada, null döndürülüyor");
+      return null;
+    }
+    
+    const nextStatus = taskStatusWorkflow[currentIndex + 1];
+    console.log("✅ getNextStatus: Sonraki durum bulundu", {
+      nextStatusValue: nextStatus.value,
+      nextStatusLabel: nextStatus.label,
+      currentIndex,
+      nextIndex: currentIndex + 1,
+    });
+    return nextStatus;
   };
 
   // Durum geçiş validasyonu - sadece sıradaki aşamaya geçiş
   const isValidStatusTransition = (currentStatus: string, newStatus: string): boolean => {
+    // Status'leri normalize et
+    const normalizedCurrent = normalizeStatus(currentStatus);
+    const normalizedNew = normalizeStatus(newStatus);
+    
+    // Debug log
+    if (import.meta.env.DEV) {
+    }
+    
     // Sadece sıradaki aşamaya geçiş mümkün
     const statusFlow: Record<string, string> = {
       pending: "in_progress",
       in_progress: "completed",
     };
     
-    return statusFlow[currentStatus] === newStatus;
+    const isValid = statusFlow[normalizedCurrent] === normalizedNew;
+    
+    return isValid;
   };
 
   // Durum değişikliği handler'ı (workflow ile)
   const handleStatusChange = async (nextStatus: string) => {
     if (!taskId || !user?.id) {
+      if (import.meta.env.DEV) {
+        console.error("handleStatusChange: taskId veya user.id yok", { taskId, userId: user?.id });
+      }
+      return;
+    }
+
+    // Debug log
+    if (import.meta.env.DEV) {
+      console.log("handleStatusChange başladı:", {
+        taskId,
+        userId: user.id,
+        currentStatus,
+        nextStatus,
+        canInteract,
+        isSuperAdmin,
+        isAssigned: assignedUsers.some(u => u.id === user.id),
+        isCreator: task?.createdBy === user.id,
+      });
+    }
+
+    // Yetki kontrolü: canInteract kontrolü
+    if (!canInteract) {
+      if (import.meta.env.DEV) {
+        console.warn("handleStatusChange: canInteract false", {
+          canInteract,
+          isSuperAdmin,
+          canUpdate,
+          isAssigned: assignedUsers.some(u => u.id === user.id),
+          isCreator: task?.createdBy === user.id,
+        });
+      }
+      const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
+      showPermissionErrorToast("interact", "task");
       return;
     }
 
     // Validasyon kontrolü
     if (!isValidStatusTransition(currentStatus, nextStatus)) {
+      const normalizedCurrent = normalizeStatus(currentStatus);
+      const normalizedNext = normalizeStatus(nextStatus);
+      if (import.meta.env.DEV) {
+        console.error("handleStatusChange: Geçersiz durum geçişi", {
+          currentStatus,
+          nextStatus,
+          normalizedCurrent,
+          normalizedNext,
+          expectedNext: normalizedCurrent === "pending" ? "in_progress" : normalizedCurrent === "in_progress" ? "completed" : null,
+        });
+      }
       toast.error(`Geçersiz durum geçişi: ${getStatusLabel(currentStatus)} → ${getStatusLabel(nextStatus)}`);
       return;
     }
@@ -790,15 +1155,18 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         nextStatus as "pending" | "in_progress" | "completed"
       );
       
-      setCurrentStatus(nextStatus);
+      setCurrentStatus(normalizeStatus(nextStatus));
       toast.success(`Görev durumu ${getStatusLabel(nextStatus)} olarak güncellendi.`);
       
       // Görev detaylarını yeniden yükle
       await fetchTaskDetails();
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Task status update error:", error);
-      toast.error("Durum güncellenemedi: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Task status update error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error("Durum güncellenemedi: " + (errorMessage || "Bilinmeyen hata"));
     } finally {
       setUpdatingStatus(false);
     }
@@ -816,9 +1184,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       toast.success("Görev onay için yöneticiye gönderildi.");
       await fetchTaskDetails();
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Request approval error:", error);
-      toast.error("Onay isteği gönderilemedi: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Request approval error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error("Onay isteği gönderilemedi: " + (errorMessage || "Bilinmeyen hata"));
     } finally {
       setUpdatingStatus(false);
     }
@@ -830,7 +1201,8 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       return;
     }
 
-    if (!isAdmin && !isSuperAdmin) {
+    // SISTEM_YETKILERI.md'ye göre: Super Admin ve Team Leader durumu geri alabilir
+    if (!isSuperAdmin && !canUpdate) {
       toast.error("Sadece yöneticiler durumu geri alabilir.");
       return;
     }
@@ -856,7 +1228,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         // Approval status'u null yap
         const { updateTask } = await import("@/services/firebase/taskService");
         await updateTask(taskId, { approvalStatus: null }, user.id);
-        setCurrentStatus("completed");
+        setCurrentStatus(normalizeStatus("completed"));
         toast.success("Görev durumu Tamamlandı olarak geri alındı.");
       } else {
         const targetIndex = taskStatusWorkflow.findIndex(s => s.value === targetStatus);
@@ -879,26 +1251,33 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
           taskId,
           targetStatusItem.value as "pending" | "in_progress" | "completed"
         );
-        setCurrentStatus(targetStatusItem.value);
+        setCurrentStatus(normalizeStatus(targetStatusItem.value));
         toast.success(`Görev durumu ${targetStatusItem.label} olarak geri alındı.`);
       }
       
       await fetchTaskDetails();
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Revert status error:", error);
-      toast.error("Durum geri alınamadı: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Revert status error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error("Durum geri alınamadı: " + (errorMessage || "Bilinmeyen hata"));
     } finally {
       setUpdatingStatus(false);
     }
   };
 
-  // Task değiştiğinde currentStatus'u güncelle
+  // Task değiştiğinde currentStatus'u güncelle - her zaman normalize edilmiş tut
   useEffect(() => {
     if (task?.status) {
-      setCurrentStatus(task.status);
+      const normalized = normalizeStatus(task.status);
+      setCurrentStatus(normalized);
+    } else if (initialStatus) {
+      const normalized = normalizeStatus(initialStatus);
+      setCurrentStatus(normalized);
     }
-  }, [task?.status]);
+  }, [task?.status, initialStatus]);
 
   const handleAcceptTask = async () => {
     if (!myAssignment) return;
@@ -909,9 +1288,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       toast.success("Görev kabul edildi");
       fetchTaskDetails();
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Accept task error:", error);
-      toast.error(error.message || "Görev kabul edilemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Accept task error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Görev kabul edilemedi");
     } finally {
       setProcessing(false);
     }
@@ -931,9 +1313,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       setRejectionReason("");
       fetchTaskDetails();
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Reject task error:", error);
-      toast.error(error.message || "Görev reddedilemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Reject task error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Görev reddedilemedi");
     } finally {
       setProcessing(false);
     }
@@ -942,6 +1327,13 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   const handleAttachmentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    // Yetki kontrolü: canInteract kontrolü
+    if (!canInteract) {
+      toast.error("Dosya ekleme yetkiniz yok");
+      event.target.value = "";
+      return;
+    }
 
     setUploadingAttachment(true);
     try {
@@ -962,8 +1354,9 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
       toast.success("Dosya yüklendi");
       fetchTaskDetails();
-    } catch (error: any) {
-      toast.error(error.message || "Dosya yüklenirken hata oluştu");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Dosya yüklenirken hata oluştu");
     } finally {
       setUploadingAttachment(false);
       event.target.value = "";
@@ -975,6 +1368,13 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       toast.error("Görev bulunamadı");
       return;
     }
+    
+    // Yetki kontrolü: canInteract kontrolü
+    if (!canInteract) {
+      toast.error("Dosya ekleme yetkiniz yok");
+      return;
+    }
+    
     if (!driveLink.trim() || !driveLinkName.trim()) {
       toast.error("Lütfen Drive linki ve isim girin");
       return;
@@ -1005,8 +1405,9 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       setDriveLinkName("");
       setAttachmentType("file");
       fetchTaskDetails();
-    } catch (error: any) {
-      toast.error(error.message || "Drive linki eklenirken hata oluştu");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Drive linki eklenirken hata oluştu");
     } finally {
       setUploadingAttachment(false);
     }
@@ -1023,8 +1424,9 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       await deleteTaskAttachment(taskId, attachment.id);
       toast.success("Dosya silindi");
       fetchTaskDetails();
-    } catch (error: any) {
-      toast.error(error.message || "Dosya silinirken hata oluştu");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Dosya silinirken hata oluştu");
     }
   };
 
@@ -1036,9 +1438,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       toast.success("Görev onaylandı ve kapatıldı");
       await fetchTaskDetails();
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Approve task error:", error);
-      toast.error(error.message || "Görev onaylanamadı");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Approve task error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Görev onaylanamadı");
     } finally {
       setProcessing(false);
     }
@@ -1063,9 +1468,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       setRejectionApprovalReason("");
       await fetchTaskDetails();
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Reject task approval error:", error);
-      toast.error(error.message || "Görev onayı reddedilemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Reject task approval error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Görev onayı reddedilemedi");
     } finally {
       setProcessing(false);
     }
@@ -1092,30 +1500,59 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       setNewChecklistTitle("");
       setChecklistItemInputs({});
       await fetchTaskDetails();
-    } catch (error: any) {
-      console.error("Add checklist error:", error);
-      toast.error(error.message || "Checklist eklenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Add checklist error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Checklist eklenemedi");
     } finally {
       setLoadingChecklists(false);
     }
   };
 
   const handleDeleteChecklist = async (checklistId: string) => {
-    // Yetki kontrolü: Sadece atanan kullanıcılar ve adminler checklist silebilir
-    if (!canInteract) {
-      const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
-      showPermissionErrorToast("delete", "checklist");
+    if (!user || !task) return;
+    
+    // Yetki kontrolü: Firestore'dan kontrol et
+    try {
+      const userProfile: UserProfile = {
+        id: user.id,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        fullName: user.fullName,
+        displayName: user.fullName,
+        phone: null,
+        dateOfBirth: null,
+        role: user.roles || [],
+        createdAt: null,
+        updatedAt: null,
+      };
+      const assignedUserIds = assignedUsers.map(u => u.id);
+      const canEdit = await canEditChecklist(task, userProfile, assignedUserIds);
+      if (!canEdit) {
+        toast.error("Checklist silme yetkiniz yok. Sadece göreve atanan kullanıcılar veya yöneticiler checklist silebilir.");
+        return;
+      }
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Error checking checklist permission:", error);
+      }
+      toast.error("Yetki kontrolü yapılamadı");
       return;
     }
     
     setLoadingChecklists(true);
     try {
-      await deleteChecklist(taskId, checklistId);
+      await deleteChecklist(taskId, checklistId, user.id);
       toast.success("Checklist silindi");
       await fetchTaskDetails();
-    } catch (error: any) {
-      console.error("Delete checklist error:", error);
-      toast.error(error.message || "Checklist silinemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete checklist error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Checklist silinemedi");
     } finally {
       setLoadingChecklists(false);
     }
@@ -1123,12 +1560,33 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
   const handleAddChecklistItem = async (checklistId: string) => {
     const itemText = checklistItemInputs[checklistId]?.trim();
-    if (!itemText) return;
+    if (!itemText || !user || !task) return;
     
-    // Yetki kontrolü: Sadece atanan kullanıcılar ve adminler checklist öğesi ekleyebilir
-    if (!canInteract) {
-      const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
-      showPermissionErrorToast("create", "checklist");
+    // Yetki kontrolü: Firestore'dan kontrol et
+    try {
+      const userProfile: UserProfile = {
+        id: user.id,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        fullName: user.fullName,
+        displayName: user.fullName,
+        phone: null,
+        dateOfBirth: null,
+        role: user.roles || [],
+        createdAt: null,
+        updatedAt: null,
+      };
+      const assignedUserIds = assignedUsers.map(u => u.id);
+      const canAdd = await canAddChecklist(task, userProfile, assignedUserIds);
+      if (!canAdd) {
+        toast.error("Checklist öğesi ekleme yetkiniz yok. Sadece göreve atanan kullanıcılar veya yöneticiler ekleyebilir.");
+        return;
+      }
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Error checking checklist permission:", error);
+      }
+      toast.error("Yetki kontrolü yapılamadı");
       return;
     }
     
@@ -1138,9 +1596,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       toast.success("Checklist öğesi eklendi");
       setChecklistItemInputs(prev => ({ ...prev, [checklistId]: "" }));
       await fetchTaskDetails();
-    } catch (error: any) {
-      console.error("Add checklist item error:", error);
-      toast.error(error.message || "Checklist öğesi eklenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Add checklist item error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Checklist öğesi eklenemedi");
     } finally {
       setLoadingChecklists(false);
     }
@@ -1160,19 +1621,45 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     try {
       await updateChecklistItem(taskId, checklistId, itemId, completed, user.id);
       await fetchTaskDetails();
-    } catch (error: any) {
-      console.error("Toggle checklist item error:", error);
-      toast.error(error.message || "Checklist öğesi güncellenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Toggle checklist item error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Checklist öğesi güncellenemedi");
     } finally {
       setLoadingChecklists(false);
     }
   };
 
   const handleDeleteChecklistItem = async (checklistId: string, itemId: string) => {
-    // Yetki kontrolü: Sadece atanan kullanıcılar ve adminler checklist öğesi silebilir
-    if (!canInteract) {
-      const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
-      showPermissionErrorToast("delete", "checklist");
+    if (!user || !task) return;
+    
+    // Yetki kontrolü: Firestore'dan kontrol et
+    try {
+      const userProfile: UserProfile = {
+        id: user.id,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        fullName: user.fullName,
+        displayName: user.fullName,
+        phone: null,
+        dateOfBirth: null,
+        role: user.roles || [],
+        createdAt: null,
+        updatedAt: null,
+      };
+      const assignedUserIds = assignedUsers.map(u => u.id);
+      const canEdit = await canEditChecklist(task, userProfile, assignedUserIds);
+      if (!canEdit) {
+        toast.error("Checklist öğesi silme yetkiniz yok. Sadece göreve atanan kullanıcılar veya yöneticiler silebilir.");
+        return;
+      }
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Error checking checklist permission:", error);
+      }
+      toast.error("Yetki kontrolü yapılamadı");
       return;
     }
     
@@ -1181,9 +1668,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       await deleteChecklistItem(taskId, checklistId, itemId);
       toast.success("Checklist öğesi silindi");
       await fetchTaskDetails();
-    } catch (error: any) {
-      console.error("Delete checklist item error:", error);
-      toast.error(error.message || "Checklist öğesi silinemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete checklist item error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Checklist öğesi silinemedi");
     } finally {
       setLoadingChecklists(false);
     }
@@ -1206,9 +1696,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       setTask({ ...task, description: descriptionValue });
       setEditingDescription(false);
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Update description error:", error);
-      toast.error(error.message || "Açıklama güncellenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Update description error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Açıklama güncellenemedi");
     } finally {
       setSaving(false);
     }
@@ -1217,15 +1710,25 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   const handleAddLabel = () => {
     if (!labelInput.trim()) return;
     const currentLabels = task?.labels || [];
+    // Mevcut labels'ı normalize et (string ise object'e çevir)
+    const normalizedLabels: Array<{ name: string; color?: string }> = currentLabels.map((l: string | { name: string; color?: string }) => {
+      if (typeof l === 'string') return { name: l, color: "#475569" };
+      return l;
+    });
     const newLabel = { name: labelInput.trim(), color: labelColor };
-    const updatedLabels = [...currentLabels, newLabel];
+    const updatedLabels: Array<{ name: string; color?: string }> = [...normalizedLabels, newLabel];
     handleUpdateLabels(updatedLabels);
     setLabelInput("");
   };
 
   const handleRemoveLabel = (labelName: string) => {
     const currentLabels = task?.labels || [];
-    const updatedLabels = currentLabels.filter((l: any) => l.name !== labelName);
+    // Mevcut labels'ı normalize et (string ise object'e çevir)
+    const normalizedLabels: Array<{ name: string; color?: string }> = currentLabels.map((l: string | { name: string; color?: string }) => {
+      if (typeof l === 'string') return { name: l, color: "#475569" };
+      return l;
+    });
+    const updatedLabels = normalizedLabels.filter((l) => l.name !== labelName);
     handleUpdateLabels(updatedLabels);
   };
 
@@ -1255,12 +1758,15 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       }
       
       toast.success("Etiketler güncellendi");
-      setTask({ ...task, labels });
+      setTask({ ...task, labels } as any);
       setEditingLabels(false);
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Update labels error:", error);
-      toast.error(error.message || "Etiketler güncellenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Update labels error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Etiketler güncellenemedi");
     } finally {
       setSaving(false);
     }
@@ -1285,12 +1791,15 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         updatedAt: null,
       };
       const hasPermission = await canPerformSubPermission(userProfile, "tasks", "canAssign");
-      if (!hasPermission && !isAdmin && !isSuperAdmin) {
+      // SISTEM_YETKILERI.md'ye göre: Super Admin ve Team Leader görev atayabilir
+      if (!hasPermission && !isSuperAdmin && !canUpdate) {
         toast.error("Görev atama yetkiniz yok");
         return;
       }
     } catch (error) {
-      console.error("Permission check error:", error);
+      if (import.meta.env.DEV) {
+        console.error("Permission check error:", error);
+      }
       // Hata durumunda devam et (eski davranış)
     }
     
@@ -1317,9 +1826,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       fetchTaskDetails();
       setEditingMembers(false);
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Assign members error:", error);
-      toast.error(error.message || "Üyeler güncellenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Assign members error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Üyeler güncellenemedi");
     } finally {
       setSaving(false);
     }
@@ -1338,7 +1850,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
           user.id,
           "updated",
           `bu kartın bitiş tarihini ${dueDateValue ? format(new Date(dueDateValue), "d MMM yyyy HH:mm", { locale: tr }) : "kaldırdı"} olarak ayarladı`,
-          { field: "dueDate", oldValue: task.due_date, newValue: dueDateValue },
+          { field: "dueDate", oldValue: task.dueDate, newValue: dueDateValue },
           user.fullName,
           user.email
         );
@@ -1365,14 +1877,17 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       toast.success("Tarih güncellendi");
       setTask({
         ...task,
-        due_date: dueDateValue ? `${dueDateValue}T00:00:00.000Z` : null,
-      });
+        dueDate: dueDateValue ? Timestamp.fromDate(new Date(`${dueDateValue}T00:00:00.000Z`)) : null,
+      } as any);
       setEditingDueDate(false);
       fetchTaskDetails(); // Refresh activities
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Update due date error:", error);
-      toast.error(error.message || "Tarih güncellenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Update due date error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Tarih güncellenemedi");
     } finally {
       setSaving(false);
     }
@@ -1393,9 +1908,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       setCommentInput("");
       fetchTaskDetails(); // Refresh comments and activities
       toast.success("Yorum eklendi");
-    } catch (error: any) {
-      console.error("Send comment error:", error);
-      toast.error(error.message || "Yorum eklenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Send comment error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Yorum eklenemedi");
     } finally {
       setSendingComment(false);
     }
@@ -1438,7 +1956,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     if (!user?.id || !taskId) return;
     setProcessing(true);
     try {
-      if (task?.is_archived) {
+      if (task?.isArchived) {
         await unarchiveTask(taskId, user.id);
         toast.success("Görev arşivden çıkarıldı");
       } else {
@@ -1447,9 +1965,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       }
       await fetchTaskDetails();
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Archive task error:", error);
-      toast.error(error.message || "Görev arşivlenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Archive task error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Görev arşivlenemedi");
     } finally {
       setProcessing(false);
     }
@@ -1509,6 +2030,29 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         }
       }
 
+      // Yetki kontrolü: Görev oluşturma yetkisi var mı?
+      if (!canCreate && !isSuperAdmin) {
+        const departments = await getDepartments();
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: null,
+          dateOfBirth: null,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const canCreateResult = await canCreateTask(userProfile, departments);
+        if (!canCreateResult) {
+          toast.error("Görev oluşturma yetkiniz yok. Sadece yöneticiler ve ekip liderleri görev oluşturabilir.");
+          setCreatingTask(false);
+          return;
+        }
+      }
+
       const labelNames = newTaskLabels.map((label) => label.name);
       const dueDateTimestamp = newTaskDueDate ? Timestamp.fromDate(new Date(newTaskDueDate)) : null;
 
@@ -1516,7 +2060,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         title: newTaskTitle.trim(),
         description: newTaskDescription.trim() || null,
         status: initialStatus,
-        priority: 2,
+        priority: newTaskPriority,
         dueDate: dueDateTimestamp,
         labels: labelNames.length > 0 ? labelNames : null,
         projectId: finalProjectId || null,
@@ -1532,8 +2076,10 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       if (newTaskMembers.length > 0) {
         try {
           await Promise.all(newTaskMembers.map((userId) => assignTask(taskId, userId, user.id)));
-        } catch (assignError: any) {
-          console.error("Assignment error:", assignError);
+        } catch (assignError: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Assignment error:", assignError);
+          }
         }
       }
 
@@ -1541,8 +2087,10 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       if (newTaskChecklistItems.length > 0) {
         try {
           await createChecklist(taskId, "Checklist", newTaskChecklistItems);
-        } catch (checklistError: any) {
-          console.error("Checklist creation error:", checklistError);
+        } catch (checklistError: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Checklist creation error:", checklistError);
+          }
         }
       }
 
@@ -1558,14 +2106,18 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       setNewTaskLabelInput("");
       setNewTaskLabelColor("#61BD4F");
       setNewTaskDueDate("");
+      setNewTaskPriority(2);
       setSelectedProjectId(propProjectId || null);
       setIsPrivate(false);
       
       onUpdate?.();
       onOpenChange(false);
-    } catch (error: any) {
-      console.error("Create task error:", error);
-      toast.error(error.message || "Görev oluşturulamadı");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Create task error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Görev oluşturulamadı");
     } finally {
       setCreatingTask(false);
     }
@@ -1586,56 +2138,87 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     setNewTaskLabels((prev) => prev.filter((label) => label.name !== name));
   };
 
-  const actionButtons = [
-    {
-      id: "members",
-      title: "Üye Ekle",
-      description: "Göreve kişi ata",
-      icon: UserPlus,
-      accent: "bg-[#E8F5FF] text-[#0B69C6]",
-      action: focusMembersSection,
-    },
-    {
-      id: "labels",
-      title: "Etiketler",
-      description: "Renklerle kategorize et",
-      icon: Tag,
-      accent: "bg-[#FFF5D9] text-[#D39B00]",
-      action: focusLabelsSection,
-    },
-    {
-      id: "checklist",
-      title: "Checklist",
-      description: "Adım adım ilerle",
-      icon: ListChecks,
-      accent: "bg-[#EBF8F2] text-[#1B7F5D]",
-      action: focusChecklistSection,
-    },
-    {
-      id: "dates",
-      title: "Tarih",
-      description: "Termin planla",
-      icon: CalendarDays,
-      accent: "bg-[#F5EBFF] text-[#6F2DBD]",
-      action: focusDateSection,
-    },
-    {
-      id: "attachments",
-      title: "Ek",
-      description: "Dosya paylaş",
-      icon: Paperclip,
-      accent: "bg-[#FFEDEA] text-[#C13828]",
-      action: focusAttachmentSection,
-    },
-  ];
+  const actionButtons = useMemo(() => {
+    const buttons = [
+      {
+        id: "members",
+        title: "Üye Ekle",
+        description: "Göreve kişi ata",
+        icon: UserPlus,
+        accent: "bg-[#E8F5FF] text-[#0B69C6]",
+        action: focusMembersSection,
+      },
+      {
+        id: "labels",
+        title: "Etiketler",
+        description: "Renklerle kategorize et",
+        icon: Tag,
+        accent: "bg-[#FFF5D9] text-[#D39B00]",
+        action: focusLabelsSection,
+      },
+      {
+        id: "checklist",
+        title: "Checklist",
+        description: "Adım adım ilerle",
+        icon: ListChecks,
+        accent: "bg-[#EBF8F2] text-[#1B7F5D]",
+        action: focusChecklistSection,
+      },
+      {
+        id: "dates",
+        title: "Tarih",
+        description: "Termin planla",
+        icon: CalendarDays,
+        accent: "bg-[#F5EBFF] text-[#6F2DBD]",
+        action: focusDateSection,
+      },
+      {
+        id: "attachments",
+        title: "Ek",
+        description: "Dosya paylaş",
+        icon: Paperclip,
+        accent: "bg-[#FFEDEA] text-[#C13828]",
+        action: focusAttachmentSection,
+      },
+    ];
+
+    // Görev havuzundan kaldır - Sadece görevi oluşturan kişi görebilir
+    if (task?.isInPool === true && task?.createdBy === user?.id) {
+      buttons.push({
+        id: "remove-from-pool",
+        title: "Havuzdan Kaldır",
+        description: "Görevi havuzdan çıkar",
+        icon: XCircle,
+        accent: "bg-[#FFF4E6] text-[#D97706]",
+        action: async () => {
+          if (!task?.id) return;
+          try {
+            setProcessing(true);
+            await removeTaskFromPool(task.id);
+            toast.success("Görev havuzdan kaldırıldı");
+            fetchTaskDetails();
+          } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : "Havuzdan kaldırma hatası oluştu";
+            toast.error(errorMessage);
+          } finally {
+            setProcessing(false);
+          }
+        },
+      });
+    }
+
+    return buttons;
+  }, [task?.isInPool, task?.createdBy, task?.id, user?.id, focusMembersSection, focusLabelsSection, focusChecklistSection, focusDateSection, focusAttachmentSection, removeTaskFromPool, fetchTaskDetails]);
 
   if (loading && taskId) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
+          <DialogTitle className="sr-only">Görev yükleniyor</DialogTitle>
+          <DialogDescription className="sr-only">Görev detayları hazırlanıyor</DialogDescription>
           <DialogHeader className="sr-only">
-            <DialogTitle>Görev yükleniyor</DialogTitle>
-            <DialogDescription>Görev detayları hazırlanıyor</DialogDescription>
+            <h2>Görev yükleniyor</h2>
+            <p>Görev detayları hazırlanıyor</p>
           </DialogHeader>
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -1645,24 +2228,29 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     );
   }
 
-  // Yeni görev oluşturma modu
+  // Yeni görev oluşturma modu - Personnel ve İzleyici için erişim yok
   if (!taskId) {
+    // Personnel veya İzleyici ise modal'ı gösterme (useEffect zaten kapatıyor)
+    if (isPersonnelOrViewer) {
+      return null;
+    }
+    
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent 
-          className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border"
+          className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border"
           data-task-modal
         >
           <div className="flex flex-col h-full min-h-0">
             <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
-              <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground">Yeni Görev Oluştur</DialogTitle>
+              <DialogTitle className="text-[18px] sm:text-[20px] font-semibold text-foreground">Yeni Görev Oluştur</DialogTitle>
               <DialogDescription className="sr-only">
                 Yeni görev oluşturmak için formu doldurun
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
-              <div className="max-w-full mx-auto h-full overflow-y-auto">
+            <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0 flex flex-col">
+              <div className="max-w-full mx-auto flex-1 overflow-y-auto overscroll-contain min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
                 <div className="space-y-6">
                 <div className="space-y-3">
                   <Label className="text-sm sm:text-base font-bold text-[#172B4D] flex items-center gap-2 sm:gap-3">
@@ -1972,6 +2560,30 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                   />
                 </div>
 
+                {/* Öncelik */}
+                <div className="space-y-3">
+                  <Label className="text-base font-bold text-[#172B4D] flex items-center gap-3">
+                    <Tag className="h-5 w-5 text-[#0079BF]" />
+                    Öncelik
+                  </Label>
+                  <Select
+                    value={newTaskPriority.toString()}
+                    onValueChange={(value) => setNewTaskPriority(Number(value) as 1 | 2 | 3 | 4 | 5)}
+                    disabled={creatingTask}
+                  >
+                    <SelectTrigger className="h-12 border-2 border-[#DFE1E6] focus:border-[#0079BF] focus:ring-2 focus:ring-[#0079BF]/20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Çok Düşük</SelectItem>
+                      <SelectItem value="2">Düşük</SelectItem>
+                      <SelectItem value="3">Orta</SelectItem>
+                      <SelectItem value="4">Yüksek</SelectItem>
+                      <SelectItem value="5">Kritik</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* Butonlar */}
                 <div className="flex items-center gap-4 pt-6 border-t-2 border-[#DFE1E6]">
                   <Button
@@ -2009,7 +2621,10 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     );
   }
 
-  if (!task) return null;
+  // Modal render kontrolü
+  if (!task) {
+    return null;
+  }
   
   // Görüntüleme yetkisi kontrolü - görev yoksa veya görüntüleme yetkisi yoksa modal'ı kapat
   if (!canView) {
@@ -2057,8 +2672,8 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   // Quick meta chips
   const quickMetaChips = [
     task?.id && { label: "Görev ID", value: task.id.substring(0, 8) },
-    task?.created_at && { label: "Oluşturulma", value: formatDateSafe(new Date(task.created_at)) },
-    task?.due_date && { label: "Termin", value: formatDateSafe(new Date(task.due_date)) },
+      task?.createdAt && { label: "Oluşturulma", value: formatDateSafe(task.createdAt) },
+      task?.dueDate && { label: "Termin", value: formatDateSafe(task.dueDate) },
     task?.priority && { label: "Öncelik", value: task.priority.toString() },
   ].filter(Boolean) as { label: string; value: string }[];
 
@@ -2075,14 +2690,28 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     }
   };
 
+  console.log("🟢 TaskDetailModal: Dialog render ediliyor", {
+    open,
+    taskId,
+    taskExists: !!task,
+    canView,
+  });
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent 
-          className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border" 
-          aria-describedby="task-detail-description"
+          className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border" 
           data-task-modal
         >
+          {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+          <DialogTitle className="sr-only" id="task-detail-title">
+            Görev Detayı - {task?.title || "Yeni Görev"}
+          </DialogTitle>
+          <DialogDescription className="sr-only" id="task-detail-description">
+            Görev detayları ve bilgileri
+          </DialogDescription>
+          
           <div className="flex flex-col h-full min-h-0">
             <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
               <div className="flex items-center justify-between gap-3">
@@ -2090,12 +2719,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                   <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                     <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                  <h2 className="text-lg sm:text-xl font-semibold text-foreground truncate">
                     Görev Detayı - {task?.title || "Yeni Görev"}
-                  </DialogTitle>
-                  <DialogDescription className="sr-only" id="task-detail-description">
+                  </h2>
+                  <p className="sr-only">
                     Görev detayları ve bilgileri
-                  </DialogDescription>
+                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2 flex-shrink-0 relative z-10 pr-10 sm:pr-12">
                   {task?.approvalStatus === "pending" && (
@@ -2105,7 +2734,14 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                   )}
                   {task && (
                     <Badge variant={getStatusVariant(task.status)} className="text-xs px-2 sm:px-3 py-1 relative z-10">
-                      {getStatusLabel(task.status)}
+                      {(() => {
+                        // Status label'ını gösterirken approvalStatus'u da kontrol et
+                        const normalizedStatus = normalizeStatus(task.status);
+                        if (normalizedStatus === "completed" && task?.approvalStatus === "approved") {
+                          return "Onaylandı";
+                        }
+                        return getStatusLabel(task.status);
+                      })()}
                     </Badge>
                   )}
                   {task?.priority && (
@@ -2130,15 +2766,16 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
               </div>
             )}
             
-          <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
-            <div className="max-w-full mx-auto h-full overflow-y-auto">
-                {loading ? (
+          <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0 flex flex-col">
+            <div className="max-w-full mx-auto flex-1 overflow-y-auto overscroll-contain min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                {loading && (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                   </div>
-                ) : (
-                  <div className="space-y-6">
-                    {task?.approvalStatus === "pending" && user && ((task.createdBy || task.created_by) === user.id || isAdmin || isSuperAdmin || isTeamLeader) && (
+                )}
+                <div className="space-y-6">
+                    {/* SISTEM_YETKILERI.md'ye göre: Super Admin, Team Leader ve görevi oluşturan onaylayabilir */}
+                    {task?.approvalStatus === "pending" && user && (task.createdBy === user.id || isSuperAdmin || canUpdate) && (
                       <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                           <div>
@@ -2172,6 +2809,228 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                       </div>
                     )}
 
+                    {/* Görev Havuzu Talepleri Yönetimi - Sadece görevi oluşturan kişi görebilir */}
+                    {(() => {
+                      const isInPool = task?.isInPool === true;
+                      const poolRequests = task?.poolRequests || [];
+                      const isTaskCreator = task?.createdBy === user?.id;
+                      const hasPendingRequests = Array.isArray(poolRequests) && poolRequests.length > 0;
+                      
+                      return isInPool && isTaskCreator && hasPendingRequests;
+                    })() && (
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div className="space-y-3">
+                          <div>
+                            <h4 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
+                              <UserPlus className="h-4 w-4" />
+                              Görev Havuzu Talepleri
+                            </h4>
+                            <p className="text-sm text-amber-700 mt-1">
+                              Bu görev için {task?.poolRequests?.length || 0} talep var. Talepleri onaylayabilir veya reddedebilirsiniz.
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            {task?.poolRequests?.map((requestingUserId: string) => {
+                              const requestingUser = allUsers.find(u => u.id === requestingUserId);
+                              const userName = requestingUser?.fullName || requestingUser?.displayName || requestingUser?.email?.split("@")[0] || "Bilinmeyen Kullanıcı";
+                              
+                              return (
+                                <div key={requestingUserId} className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200">
+                                  <div className="flex items-center gap-3">
+                                    <Avatar className="h-8 w-8">
+                                      <AvatarFallback className="bg-amber-100 text-amber-700 text-xs">
+                                        {userName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                      <p className="text-sm font-medium text-gray-900">{userName}</p>
+                                      <p className="text-xs text-gray-500">Görevi talep etti</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="border-red-300 text-red-700 hover:bg-red-50"
+                                      onClick={async () => {
+                                        if (!user?.id || !task?.id) return;
+                                        try {
+                                          setProcessing(true);
+                                          await rejectPoolRequest(task.id, requestingUserId);
+                                          toast.success("Talep reddedildi");
+                                          fetchTaskDetails();
+                                        } catch (error: unknown) {
+                                          const errorMessage = error instanceof Error ? error.message : "Reddetme hatası oluştu";
+                                          toast.error(errorMessage);
+                                        } finally {
+                                          setProcessing(false);
+                                        }
+                                      }}
+                                      disabled={processing}
+                                    >
+                                      <X className="h-4 w-4 mr-1" />
+                                      Reddet
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      className="bg-amber-600 hover:bg-amber-700 text-white border-none"
+                                      onClick={async () => {
+                                        if (!user?.id || !task?.id) return;
+                                        try {
+                                          setProcessing(true);
+                                          // Onayla ve havuzda tut (keepInPool: true) - diğer talepler de kalabilir
+                                          await approvePoolRequest(task.id, requestingUserId, user.id, true);
+                                          toast.success("Talep onaylandı");
+                                          fetchTaskDetails();
+                                        } catch (error: unknown) {
+                                          const errorMessage = error instanceof Error ? error.message : "Onaylama hatası oluştu";
+                                          toast.error(errorMessage);
+                                        } finally {
+                                          setProcessing(false);
+                                        }
+                                      }}
+                                      disabled={processing}
+                                    >
+                                      <Check className="h-4 w-4 mr-1" />
+                                      Onayla
+                                    </Button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Görev Havuzunda - Görevi Oluşturan Kişi İçin Havuzdan Kaldır Butonu */}
+                    {(() => {
+                      const isInPool = task?.isInPool === true;
+                      const isTaskCreator = task?.createdBy === user?.id;
+                      return isInPool && isTaskCreator;
+                    })() && (
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                          <div>
+                            <h4 className="text-sm font-semibold text-amber-900">Görev Havuzunda</h4>
+                            <p className="text-sm text-amber-700">
+                              Bu görev görev havuzunda. İsterseniz görevi havuzdan kaldırabilirsiniz.
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 sm:flex-none border-amber-300 text-amber-700 hover:bg-amber-100"
+                            onClick={async () => {
+                              if (!task?.id) return;
+                              try {
+                                setProcessing(true);
+                                await removeTaskFromPool(task.id);
+                                toast.success("Görev havuzdan kaldırıldı");
+                                fetchTaskDetails();
+                              } catch (error: unknown) {
+                                const errorMessage = error instanceof Error ? error.message : "Havuzdan kaldırma hatası oluştu";
+                                toast.error(errorMessage);
+                              } finally {
+                                setProcessing(false);
+                              }
+                            }}
+                            disabled={processing}
+                          >
+                            {processing ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <X className="h-4 w-4 mr-1" />
+                            )}
+                            Havuzdan Kaldır
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Görev Havuzu Talebi */}
+                    {(() => {
+                      const isInPool = task?.isInPool === true;
+                      const poolRequests = task?.poolRequests || [];
+                      const hasUserRequest = user?.id && Array.isArray(poolRequests) && poolRequests.includes(user.id);
+                      const canRequest = isInPool && user?.id && !hasUserRequest && task?.createdBy !== user?.id; // Görevi oluşturan kişi talep edemez
+                      
+                      if (import.meta.env.DEV && task) {
+                        console.log("🔍 Görev Havuzu Kontrolü:", {
+                          taskId: task.id,
+                          taskTitle: task.title,
+                          isInPool: task.isInPool,
+                          poolRequests: task.poolRequests,
+                          userId: user?.id,
+                          hasUserRequest,
+                          canRequest,
+                        });
+                      }
+                      
+                      return canRequest;
+                    })() && (
+                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                          <div>
+                            <h4 className="text-sm font-semibold text-blue-900">Görev Havuzunda</h4>
+                            <p className="text-sm text-blue-700">
+                              Bu görev görev havuzunda. Bu görevi talep edebilirsiniz.
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white border-none"
+                            onClick={async () => {
+                              if (!user?.id || !task?.id) return;
+                              try {
+                                setProcessing(true);
+                                await requestTaskFromPool(task.id, user.id);
+                                toast.success("Görev talebi gönderildi");
+                                fetchTaskDetails();
+                              } catch (error: unknown) {
+                                const errorMessage = error instanceof Error ? error.message : "Talep hatası oluştu";
+                                toast.error(errorMessage);
+                              } finally {
+                                setProcessing(false);
+                              }
+                            }}
+                            disabled={processing}
+                          >
+                            {processing ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <UserPlus className="h-4 w-4 mr-1" />
+                            )}
+                            Talep Et
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Görev Havuzu Talebi Bekleniyor - Sadece kullanıcı atanmamışsa göster */}
+                    {(() => {
+                      const isInPool = task?.isInPool === true;
+                      const poolRequests = task?.poolRequests || [];
+                      const hasUserRequest = user?.id && Array.isArray(poolRequests) && poolRequests.includes(user.id);
+                      // Kullanıcının kendisi atanmış mı kontrol et
+                      const hasAssignedUsers = Array.isArray(assignedUsers) && assignedUsers.length > 0;
+                      const isUserAssigned = user?.id && hasAssignedUsers && assignedUsers.some((au) => au.id === user.id);
+                      // "Talep Gönderildi" mesajını sadece kullanıcı atanmamışsa göster
+                      return isInPool && user?.id && hasUserRequest && !isUserAssigned;
+                    })() && (
+                      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-yellow-600" />
+                          <div>
+                            <h4 className="text-sm font-semibold text-yellow-900">Talep Gönderildi</h4>
+                            <p className="text-sm text-yellow-700">
+                              Bu görev için talep gönderdiniz. Onay bekleniyor.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 auto-rows-fr">
                       {highlightCards.map((card) => {
                         const Icon = card.icon;
@@ -2200,43 +3059,63 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                     </div>
 
                     {/* Status Timeline */}
+                    {(() => {
+                      console.log("🔍 TaskDetailModal: Görev Durumu Card render ediliyor", {
+                        task: task ? "VAR" : "YOK",
+                        taskId: task?.id,
+                        loading,
+                        open,
+                      });
+                      return null;
+                    })()}
                     <Card>
                       <CardHeader className="space-y-1">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <CardTitle className="text-lg">Görev Durumu</CardTitle>
+                            <CardTitle className="text-[14px] sm:text-[15px] font-semibold">Görev Durumu</CardTitle>
                             <p className="text-sm text-muted-foreground">
                               {(() => {
+                                // Status'ü normalize et - "column_" prefix'ini kaldır
+                                // task?.status'ü direkt normalize et, çünkü bu ham değer olabilir
+                                const rawStatus = task?.status || currentStatus || "pending";
+                                const normalizedCurrentStatus = normalizeStatus(rawStatus);
+                                
                                 // Eğer görev onaylandıysa
-                                if (currentStatus === "completed" && task?.approvalStatus === "approved") {
+                                if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "approved") {
                                   return "Görev onaylandı ve tamamlandı.";
                                 }
                                 // Eğer görev tamamlandı ve onaya gönderildiyse
-                                if (currentStatus === "completed" && task?.approvalStatus === "pending") {
+                                if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "pending") {
                                   return "Görev tamamlandı ve onay bekleniyor.";
                                 }
                                 // Eğer görev tamamlandı ama onaya gönderilmediyse
-                                if (currentStatus === "completed") {
+                                if (normalizedCurrentStatus === "completed") {
                                   return "Görev tamamlandı. Onaya göndermek için butona tıklayın.";
                                 }
-                                // "cancelled" durumunu "pending" olarak göster
-                                const normalizedStatus = currentStatus === "cancelled" ? "pending" : currentStatus;
-                                // Diğer durumlar için normal mesaj
+                                // Diğer durumlar için normal mesaj - getStatusLabel zaten normalize ediyor
+                                // Eğer görev onaylandıysa, "Workflow tamamlandı" göster
+                                if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "approved") {
+                                  return "Görev onaylandı ve tamamlandı. Workflow tamamlandı.";
+                                }
+                                
                                 const nextStatus = getNextStatus();
                                 if (nextStatus) {
-                                  return `${getStatusLabel(normalizedStatus)} aşamasındasınız. Sıradaki adım: ${nextStatus.label}`;
+                                  // getStatusLabel içinde normalize ediliyor, ham değer gönderebiliriz
+                                  // rawStatus'ü string'e çevir ve getStatusLabel'a gönder
+                                  const statusLabel = getStatusLabel(String(rawStatus || "pending"));
+                                  return `${statusLabel} aşamasındasınız. Sıradaki adım: ${nextStatus.label}`;
                                 }
                                 return "Workflow tamamlandı.";
                               })()}
                             </p>
                           </div>
                           <div className="text-xs text-muted-foreground text-right">
-                            Son güncelleyen: {task?.statusUpdatedBy 
-                              ? (usersMap[task.statusUpdatedBy] || task.statusUpdatedBy)
+                            Son güncelleyen: {(task as any)?.statusUpdatedBy 
+                              ? (usersMap[(task as any).statusUpdatedBy] || (task as any).statusUpdatedBy)
                               : (user?.fullName || "-")}
                             <br />
                             <span className="text-[11px]">
-                              {task?.statusUpdatedAt ? formatDateSafe(task.statusUpdatedAt as any) : ""}
+                              {(task as any)?.statusUpdatedAt ? formatDateSafe((task as any).statusUpdatedAt as Timestamp | Date | string | null) : ""}
                             </span>
                           </div>
                         </div>
@@ -2244,15 +3123,16 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                     <CardContent className="p-4 sm:p-6">
                       <div className="space-y-4">
                         {/* Status Timeline */}
-                        <div className="flex items-center justify-between overflow-x-auto overflow-y-visible pt-2 pb-4">
-                          {taskStatusWorkflow.map((statusItem, index) => {
+                        <div>
+                          <div className="flex items-center justify-between overflow-x-auto overflow-y-visible pt-2 pb-4">
+                            {taskStatusWorkflow.map((statusItem, index) => {
                             const Icon = statusItem.icon;
                             const currentIndex = getCurrentStatusIndex();
                             const isActive = index === currentIndex;
                             const isCompleted = index < currentIndex;
-                            // Yöneticiler tüm eski adımlara geri dönebilir (onay bekleyen görevler hariç)
+                            // SISTEM_YETKILERI.md'ye göre: Super Admin ve Team Leader tüm eski adımlara geri dönebilir (onay bekleyen görevler hariç)
                             // "approved" durumuna tıklanırsa "completed" durumuna geri alınır
-                            const canRevert = (isAdmin || isSuperAdmin) && index < currentIndex && 
+                            const canRevert = (isSuperAdmin || canUpdate) && index < currentIndex && 
                                               task?.approvalStatus !== "pending";
                             
                             return (
@@ -2274,6 +3154,53 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                                   <p className={`text-xs mt-2 text-center font-medium ${isActive ? "text-primary" : isCompleted ? "text-green-600" : "text-muted-foreground"}`}>
                                     {statusItem.label}
                                   </p>
+                                  {/* Aşama geçmişi - bu aşamaya geçiş tarihleri */}
+                                  {task?.statusHistory && (() => {
+                                    const statusHistory = task.statusHistory?.filter((entry) => entry.status === statusItem.value) || [];
+                                    if (statusHistory.length === 0) return null;
+                                    
+                                    // Tarihe göre sırala (en yeni en üstte)
+                                    const sortedHistory = [...statusHistory].sort((a, b) => {
+                                      const dateA = a.changedAt?.toDate ? a.changedAt.toDate() : (a.changedAt?.seconds ? new Date(a.changedAt.seconds * 1000) : new Date(0));
+                                      const dateB = b.changedAt?.toDate ? b.changedAt.toDate() : (b.changedAt?.seconds ? new Date(b.changedAt.seconds * 1000) : new Date(0));
+                                      return dateB.getTime() - dateA.getTime();
+                                    });
+                                    
+                                    return (
+                                      <div className="mt-1 space-y-0.5">
+                                        {sortedHistory.map((entry, historyIndex: number) => {
+                                          let changedAt: Date | null = null;
+                                          
+                                          // Timestamp tipini kontrol et
+                                          if (entry.changedAt) {
+                                            if (entry.changedAt.toDate && typeof entry.changedAt.toDate === 'function') {
+                                              changedAt = entry.changedAt.toDate();
+                                            } else if (entry.changedAt.seconds) {
+                                              changedAt = new Date(entry.changedAt.seconds * 1000);
+                                            } else if (entry.changedAt instanceof Date) {
+                                              changedAt = entry.changedAt;
+                                            } else if (typeof entry.changedAt === 'string' || typeof entry.changedAt === 'number') {
+                                              changedAt = new Date(entry.changedAt);
+                                            }
+                                          }
+                                          
+                                          if (!changedAt || isNaN(changedAt.getTime())) return null;
+                                          
+                                          return (
+                                            <p 
+                                              key={historyIndex}
+                                              className="text-[10px] text-muted-foreground text-center leading-tight"
+                                              title={format(changedAt, "dd MMMM yyyy, HH:mm", { locale: tr })}
+                                            >
+                                              {format(changedAt, "dd.MM.yyyy", { locale: tr })}
+                                              <br />
+                                              {format(changedAt, "HH:mm", { locale: tr })}
+                                            </p>
+                                          );
+                                        })}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                                 {index < taskStatusWorkflow.length - 1 && (
                                   <div className={`flex-1 h-0.5 mx-2 ${isCompleted ? "bg-green-500" : "bg-muted"}`} />
@@ -2281,32 +3208,236 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                               </div>
                             );
                           })}
-                        </div>
-                        
-                        {/* Next Status Button / Onaya Gönder Button */}
-                        {(() => {
-                          // Eğer görev onaylandıysa, buton gösterilmez
-                          if (currentStatus === "completed" && task?.approvalStatus === "approved") {
+                          </div>
+                          
+                          {/* Next Status Button / Onaya Gönder Button / Accept/Reject Buttons */}
+                          {(() => {
+                            console.log("🔍 TaskDetailModal: Buton bölümü başlangıcı - CardContent içinde", {
+                              task: task ? "VAR" : "YOK",
+                              taskId: task?.id,
+                            });
                             return null;
+                          })()}
+                          <div className="pt-4 border-t mt-4">
+                          {!task ? (
+                            (() => {
+                              // Debug: Her zaman log göster
+                              console.log("🔍 TaskDetailModal: Görev yükleniyor", {
+                                taskId,
+                                currentStatus,
+                              });
+                              return (
+                                <div className="p-4 bg-yellow-100 border border-yellow-400 rounded">
+                                  <p className="text-sm text-yellow-800 text-center">⚠️ Görev yükleniyor...</p>
+                                </div>
+                              );
+                            })()
+                          ) : (() => {
+                            // Debug: Her zaman log göster
+                            console.log("🔍 TaskDetailModal: Buton bölümü render ediliyor", {
+                              task: task ? "VAR" : "YOK",
+                              taskId: task?.id,
+                              currentStatus,
+                              taskStatus: task?.status,
+                            });
+                            
+                            // Status'ü normalize et
+                          const normalizedCurrentStatus = normalizeStatus(currentStatus);
+                          
+                          // Eğer görev onaylandıysa, buton gösterilmez - sadece bilgi mesajı göster
+                          if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "approved") {
+                            return (
+                              <div className="p-4 bg-green-50 border border-green-200 rounded">
+                                <p className="text-sm text-green-800 text-center">✅ Görev onaylandı ve tamamlandı</p>
+                              </div>
+                            );
                           }
                           
-                          // Tamamlandı durumunda ve onaya gönderilmemişse "Onaya Gönder" butonu göster
-                          if (currentStatus === "completed" && task?.approvalStatus !== "pending" && task?.approvalStatus !== "approved") {
+                          const isCreator = task?.createdBy === user?.id;
+                          // Göreve atanan kullanıcı kontrolü - tüm durumlar için (rejected hariç)
+                          const isAssigned = myAssignment || assignedUsers.some(u => u.id === user?.id);
+                          const isAssignedAndAccepted = myAssignment?.status === "accepted" || 
+                            assignedUsers.some(u => u.id === user?.id && u.status === "accepted");
+                          const isAssignedAndPending = myAssignment?.status === "pending" || 
+                            assignedUsers.some(u => u.id === user?.id && u.status === "pending");
+                          // task.assignedUsers array'inden de kontrol et (fallback)
+                          const isInTaskAssignedUsersArray = task?.assignedUsers?.some((uid: string) => uid === user?.id) || false;
+                          
+                          // Eğer göreve atanmış ama henüz kabul etmemişse, "Kabul Et" ve "Reddet" butonları göster
+                          if (isAssigned && isAssignedAndPending && !isAssignedAndAccepted) {
                             return (
-                              <div className="flex justify-center pt-4 border-t">
+                              <div className="flex flex-col gap-2">
+                                <Button
+                                  onClick={handleAcceptTask}
+                                  disabled={processing}
+                                  className="gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md hover:shadow-lg transition-all w-full"
+                                  size="lg"
+                                >
+                                  {processing ? (
+                                    <>
+                                      <Loader2 className="h-5 w-5 animate-spin" />
+                                      İşleniyor...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="h-5 w-5" />
+                                      Görevi Kabul Et
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  onClick={() => setShowRejectDialog(true)}
+                                  disabled={processing}
+                                  variant="destructive"
+                                  className="gap-2 font-semibold shadow-md hover:shadow-lg transition-all w-full"
+                                  size="lg"
+                                >
+                                  <XCircle className="h-5 w-5" />
+                                  Görevi Reddet
+                                </Button>
+                                <p className="text-xs text-muted-foreground text-center">
+                                  Görevi kabul etmek veya reddetmek için yukarıdaki butonları kullanın
+                                </p>
+                              </div>
+                            );
+                          }
+                          
+                          // Kullanıcı isteği: Buton SADECE görev üyeleri tarafından görülebilmeli
+                          // Göreve atanan kullanıcılar (status ne olursa olsun, rejected hariç) görevi ilerletebilir
+                          
+                          // ÖNCE: assignedUsers listesinden kontrol et (rejected hariç)
+                          const isAssignedInList = assignedUsers.some(u => {
+                            const matches = u.id === user?.id;
+                            const notRejected = u.status !== "rejected";
+                            return matches && notRejected;
+                          });
+                          
+                          // İKİNCİ: myAssignment'dan kontrol et (rejected hariç)
+                          const isAssignedViaMyAssignment = myAssignment && myAssignment.status !== "rejected";
+                          
+                          // ÜÇÜNCÜ: task.assignedUsers array'inden kontrol et (fallback - status kontrolü yok, direkt kontrol)
+                          const isInTaskAssignedUsers = task?.assignedUsers?.some((uid: string) => uid === user?.id) || false;
+                          
+                          // DÖRDÜNCÜ: task.assignedUsers field'ından kontrol et (eğer string array ise)
+                          const isInTaskAssignedUsersField = Array.isArray(task?.assignedUsers) && task.assignedUsers.includes(user?.id || "");
+                          
+                          // Göreve atanan herkes (pending, accepted, completed durumlarında) butonu görebilmeli
+                          // Creator, admin ve team leader'lar da görebilmeli
+                          const isAssignedForButton = isAssignedInList || !!isAssignedViaMyAssignment || isInTaskAssignedUsers || isInTaskAssignedUsersField;
+                          const isCreatorForButton = task?.createdBy === user?.id;
+                          
+                          // Buton görünürlük kontrolü: Görev üyeleri (rejected hariç), creator, admin ve team leader
+                          const hasPermission = isAssignedForButton || isCreatorForButton || canUpdate || isSuperAdmin;
+                          
+                          // DEBUG: Buton görünürlük kontrolü için detaylı log (HER ZAMAN göster)
+                          console.log("🔍 TaskDetailModal: Buton görünürlük kontrolü - DETAYLI", {
+                            userId: user?.id,
+                            taskId: task?.id,
+                            isAssignedInList,
+                            isAssignedViaMyAssignment,
+                            isInTaskAssignedUsers,
+                            isInTaskAssignedUsersField,
+                            isAssignedForButton,
+                            isCreatorForButton,
+                            canInteract,
+                            isSuperAdmin,
+                            hasPermission,
+                            assignedUsers: assignedUsers.map(u => ({ id: u.id, status: u.status })),
+                            myAssignment: myAssignment ? { id: myAssignment.id, status: myAssignment.status } : null,
+                            taskAssignedUsers: task?.assignedUsers,
+                            taskCreatedBy: task?.createdBy,
+                            taskStatus: task?.status,
+                            currentStatus,
+                            normalizedCurrentStatus: normalizeStatus(currentStatus),
+                          });
+                          
+                          // hasPermission kontrolü kaldırıldı - butonlar her zaman görünür, sadece disabled olur
+                          // HER AŞAMADA BUTON GÖSTER - görev üyeleri tüm aşamaları ilerletebilmeli
+                          const nextStatusItem = getNextStatus();
+                          
+                          // DEBUG: nextStatusItem ve durum bilgilerini logla (HER ZAMAN göster)
+                          console.log("🔍 TaskDetailModal: Buton render kontrolü - HER ZAMAN", {
+                            currentStatus,
+                            normalizedCurrentStatus,
+                            nextStatusItem: nextStatusItem ? { value: nextStatusItem.value, label: nextStatusItem.label } : null,
+                            approvalStatus: task?.approvalStatus,
+                            hasPermission,
+                            taskStatus: task?.status,
+                            taskId: task?.id,
+                            userId: user?.id,
+                            currentIndex: getCurrentStatusIndex(),
+                          });
+                          
+                          // Tamamlandı durumunda ve onaya gönderilmemişse "Onaya Gönder" butonu göster
+                          // Ama eğer görev üyesi/admin ise, normal geçiş butonu da gösterilebilir
+                          if (normalizedCurrentStatus === "completed" && task?.approvalStatus !== "pending" && task?.approvalStatus !== "approved") {
+                            if (import.meta.env.DEV) {
+                              console.log("✅ TaskDetailModal: Completed durumunda 'Onaya Gönder' butonu gösteriliyor");
+                            }
+                            // Hem "Onaya Gönder" hem de normal geçiş butonu göster (eğer nextStatusItem varsa)
+                            if (nextStatusItem) {
+                              return (
+                                <div className="flex flex-col gap-2">
+                                  <Button
+                                    onClick={() => handleStatusChange(nextStatusItem.value)}
+                                    disabled={updatingStatus || !hasPermission}
+                                    className="gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                                    size="lg"
+                                  >
+                                    {updatingStatus ? (
+                                      <>
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                        Güncelleniyor...
+                                      </>
+                                    ) : (
+                                      <>
+                                        {(() => {
+                                          const NextIcon = nextStatusItem.icon;
+                                          return <NextIcon className="h-5 w-5" />;
+                                        })()}
+                                        <ArrowRight className="h-4 w-4" />
+                                        {nextStatusItem.label} Aşamasına Geç
+                                      </>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    onClick={handleRequestApproval}
+                                    disabled={updatingStatus}
+                                    className="gap-2 bg-secondary hover:bg-secondary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all w-full"
+                                    size="lg"
+                                  >
+                                    {updatingStatus ? (
+                                      <>
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                        Gönderiliyor...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Send className="h-5 w-5" />
+                                        Onaya Gönder
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              );
+                            }
+                            // Sadece "Onaya Gönder" butonu göster
+                            return (
+                              <div className="flex justify-center">
                                 <Button
                                   onClick={handleRequestApproval}
-                                  disabled={updatingStatus}
-                                  className="gap-2"
+                                  disabled={updatingStatus || !hasPermission}
+                                  className="gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                  size="lg"
                                 >
                                   {updatingStatus ? (
                                     <>
-                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                      <Loader2 className="h-5 w-5 animate-spin" />
                                       Gönderiliyor...
                                     </>
                                   ) : (
                                     <>
-                                      <Send className="h-4 w-4" />
+                                      <Send className="h-5 w-5" />
                                       Onaya Gönder
                                     </>
                                   )}
@@ -2316,36 +3447,97 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                           }
                           
                           // Diğer durumlar için normal geçiş butonu (pending -> in_progress, in_progress -> completed)
-                          if (getNextStatus() && task?.approvalStatus !== "pending" && task?.approvalStatus !== "approved") {
+                          // Görev üyeleri (assigned users) tüm aşamaları ilerletebilmeli
+                          // HER AŞAMADA BUTON GÖSTER - nextStatusItem varsa göster, hasPermission kontrolü butonun disabled durumunu belirler
+                          if (nextStatusItem) {
+                            if (import.meta.env.DEV) {
+                              console.log("✅ TaskDetailModal: nextStatusItem var, buton gösteriliyor", {
+                                nextStatusValue: nextStatusItem.value,
+                                nextStatusLabel: nextStatusItem.label,
+                              });
+                            }
                             // Tüm durum geçişleri için buton göster
+                            // hasPermission false ise buton disabled olur ama yine de görünür
                             return (
-                              <div className="flex justify-center pt-4 border-t">
+                              <div className="flex flex-col gap-2">
                                 <Button
-                                  onClick={() => handleStatusChange(getNextStatus()!.value)}
-                                  disabled={updatingStatus}
-                                  className="gap-2"
+                                  onClick={() => handleStatusChange(nextStatusItem.value)}
+                                  disabled={updatingStatus || !hasPermission}
+                                  className="gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                                  size="lg"
                                 >
                                   {updatingStatus ? (
                                     <>
-                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                      <Loader2 className="h-5 w-5 animate-spin" />
                                       Güncelleniyor...
                                     </>
                                   ) : (
                                     <>
                                       {(() => {
-                                        const NextIcon = getNextStatus()!.icon;
-                                        return <NextIcon className="h-4 w-4" />;
+                                        const NextIcon = nextStatusItem.icon;
+                                        return <NextIcon className="h-5 w-5" />;
                                       })()}
-                                      {getNextStatus()!.label} Durumuna Geç
+                                      <ArrowRight className="h-4 w-4" />
+                                      {nextStatusItem.label} Aşamasına Geç
                                     </>
                                   )}
                                 </Button>
+                                {!hasPermission && (
+                                  <p className="text-xs text-muted-foreground text-center">
+                                    Bu görevin durumunu değiştirme yetkiniz yok
+                                  </p>
+                                )}
+                                {hasPermission && (
+                                  <p className="text-xs text-muted-foreground text-center">
+                                    {normalizeStatus(currentStatus) === "pending" && "Görevi başlatmak için tıklayın"}
+                                    {normalizeStatus(currentStatus) === "in_progress" && "Görevi tamamlamak için tıklayın"}
+                                  </p>
+                                )}
                               </div>
                             );
                           }
                           
-                          return null;
+                          // nextStatusItem null ise, duruma göre mesaj veya buton göster
+                          // Not: Completed durumunda "Onaya Gönder" butonu yukarıda (satır 3032) handle ediliyor
+                          console.log("⚠️ TaskDetailModal: nextStatusItem null, durum kontrolü yapılıyor", {
+                            normalizedCurrentStatus,
+                            approvalStatus: task?.approvalStatus,
+                            nextStatusItem: null,
+                            currentStatus,
+                            taskStatus: task?.status,
+                            currentIndex: getCurrentStatusIndex(),
+                            taskId: task?.id,
+                          });
+                          
+                          // Eğer görev onaylandıysa, bilgi mesajı göster
+                          if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "approved") {
+                            return (
+                              <div className="p-4 bg-green-50 border border-green-200 rounded">
+                                <p className="text-sm text-green-800 text-center">✅ Görev onaylandı ve tamamlandı</p>
+                              </div>
+                            );
+                          }
+                          
+                          // Eğer görev tamamlandı ve onay bekliyorsa, bilgi mesajı göster
+                          if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "pending") {
+                            return (
+                              <div className="p-4 bg-blue-50 border border-blue-200 rounded">
+                                <p className="text-sm text-blue-800 text-center">Görev tamamlandı ve onay bekleniyor</p>
+                              </div>
+                            );
+                          }
+                          
+                          // Diğer durumlar için bilgi mesajı göster
+                          return (
+                            <div className="p-4 bg-gray-50 border border-gray-200 rounded">
+                              <p className="text-sm text-gray-600 text-center">
+                                Görev durumu değiştirilemez - son aşamada
+                              </p>
+                            </div>
+                          );
                         })()}
+                          </div>
+                        </div>
 
                         {/* Reddin Notu - Görev alan kişilere göster */}
                         {task?.approvalStatus === "rejected" && task?.rejectionReason && (
@@ -2361,7 +3553,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                                       Reddeden: {usersMap[task.rejectedBy]}
                                       {task.rejectedAt && (
                                         <span className="ml-2">
-                                          • {formatDateSafe(task.rejectedAt as any)}
+                                          • {formatDateSafe(task.rejectedAt as Timestamp | Date | string | null)}
                                         </span>
                                       )}
                                     </p>
@@ -2382,7 +3574,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                       <CardHeader className="space-y-1">
                         <div className="flex items-center justify-between">
                           <div>
-                            <CardTitle className="text-lg">Açıklama</CardTitle>
+                            <CardTitle className="text-[14px] sm:text-[15px] font-semibold">Açıklama</CardTitle>
                             <p className="text-sm text-muted-foreground">
                               Görev detayları ve notlar
                             </p>
@@ -2448,7 +3640,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                         <CardHeader className="space-y-1">
                           <div className="flex items-center justify-between">
                             <div>
-                              <CardTitle className="text-lg flex items-center gap-2">
+                              <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                                 <Tag className="h-4 w-4" />
                                 Etiketler
                               </CardTitle>
@@ -2474,17 +3666,21 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                               <div className="space-y-4">
                                 <div className="flex flex-wrap gap-2.5 mb-4">
                                   {task.labels && task.labels.length > 0 ? (
-                                    task.labels.map((label: any, idx: number) => (
+                                    task.labels?.map((label: string | { name: string; color?: string }, idx: number) => {
+                                      const labelName = typeof label === "string" ? label : label.name;
+                                      const labelColor = typeof label === "string" ? "#475569" : (label.color || "#475569");
+                                      return (
                                       <div
-                                        key={`${label.name}-${idx}`}
+                                        key={`${labelName}-${idx}`}
                                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white cursor-pointer hover:opacity-90 transition-opacity"
-                                        style={{ backgroundColor: label.color || "#475569" }}
-                                        onClick={() => handleRemoveLabel(label.name)}
+                                        style={{ backgroundColor: labelColor }}
+                                        onClick={() => handleRemoveLabel(labelName)}
                                       >
-                                        <span>{label.name}</span>
+                                        <span>{labelName}</span>
                                         <X className="h-3 w-3" />
                                       </div>
-                                    ))
+                                    );
+                                    })
                                   ) : (
                                     <p className="text-sm text-[#5E6C84]">Etiket bulunmuyor.</p>
                                   )}
@@ -2547,15 +3743,19 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                             ) : (
                               <div className="flex flex-wrap gap-2.5">
                                 {task.labels && task.labels.length > 0 ? (
-                                  task.labels.map((label: any, idx: number) => (
+                                  task.labels.map((label: string | { name: string; color?: string }, idx: number) => {
+                                    const labelName = typeof label === "string" ? label : label.name;
+                                    const labelColor = typeof label === "string" ? "#475569" : (label.color || "#475569");
+                                    return (
                                     <span
-                                      key={`${label.name}-${idx}`}
+                                      key={`${labelName}-${idx}`}
                                       className="px-4 py-1.5 rounded-full text-xs font-semibold text-white shadow-sm"
-                                      style={{ backgroundColor: label.color || "#475569" }}
+                                      style={{ backgroundColor: labelColor }}
                                     >
-                                      {label.name}
+                                      {labelName}
                                     </span>
-                                  ))
+                                  );
+                                  })
                                 ) : (
                                   <p className="text-sm text-muted-foreground italic">Etiket bulunmuyor.</p>
                                 )}
@@ -2570,7 +3770,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                     <CardHeader className="space-y-1">
                       <div className="flex items-center justify-between">
                         <div>
-                          <CardTitle className="text-lg flex items-center gap-2">
+                          <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                             <Paperclip className="h-4 w-4" />
                             Ekler
                           </CardTitle>
@@ -2646,7 +3846,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                       <CardHeader className="space-y-1">
                         <div className="flex items-center justify-between">
                           <div>
-                            <CardTitle className="text-lg flex items-center gap-2">
+                            <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                               <ListChecks className="h-4 w-4" />
                               Checklistler
                             </CardTitle>
@@ -2684,20 +3884,24 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                       )}
                     </div>
                     <div className="space-y-4">
-                      {task.checklists && task.checklists.length > 0 ? (
-                        task.checklists.map((checklist: any) => (
+                      {(task as any).checklists && (task as any).checklists.length > 0 ? (
+                        (task as any).checklists?.map((checklist: Checklist) => {
+                          const items = (checklist as any).items || [];
+                          const completedItems = items.filter((item: any) => item.completed).length;
+                          const totalItems = items.length;
+                          return (
                           <div key={checklist.id} className="border border-[#DFE1E6] rounded-xl p-5 space-y-4 bg-[#F4F5F7] shadow-sm">
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="font-medium text-sm text-[#172B4D]">{checklist.title}</p>
+                                <p className="font-medium text-sm text-[#172B4D]">{(checklist as any).title || "Checklist"}</p>
                                 <p className="text-xs text-[#5E6C84]">
-                                  {checklist.completed_items || 0}/{checklist.total_items || 0} tamamlandı
+                                  {completedItems}/{totalItems} tamamlandı
                                 </p>
-                                {checklist.total_items ? (
+                                {totalItems > 0 ? (
                                   <Progress
                                     value={
-                                      checklist.total_items > 0
-                                        ? ((checklist.completed_items || 0) / checklist.total_items) * 100
+                                      totalItems > 0
+                                        ? (completedItems / totalItems) * 100
                                         : 0
                                     }
                                     className="h-2 mt-2"
@@ -2716,17 +3920,17 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                               )}
                             </div>
                             <div className="space-y-2.5">
-                              {checklist.items && checklist.items.length > 0 ? (
-                                checklist.items.map((item: any) => (
+                              {items && items.length > 0 ? (
+                                items?.map((item: { id: string; text: string; completed: boolean; createdAt?: Timestamp; completedAt?: Timestamp | null }) => (
                                   <div key={item.id} className="flex items-center gap-3 text-sm p-2.5 rounded-lg hover:bg-white/50 transition-colors">
-                                    <input
-                                      type="checkbox"
+                                    <Checkbox
                                       checked={!!item.completed}
-                                      onChange={(e) => handleToggleChecklistItem(checklist.id, item.id, e.target.checked)}
-                                      className="h-4 w-4 accent-[#0079BF] cursor-pointer"
+                                      onCheckedChange={(checked) => handleToggleChecklistItem(checklist.id, item.id, checked === true)}
+                                      disabled={!canInteract}
+                                      className="h-4 w-4 cursor-pointer"
                                     />
                                     <span className={cn("flex-1", item.completed ? "line-through text-[#5E6C84]" : "text-[#172B4D]")}>
-                                      {item.text || item.title}
+                                      {item.text}
                                     </span>
                                     {canInteract && (
                                     <Button
@@ -2771,7 +3975,8 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                             </div>
                             )}
                           </div>
-                        ))
+                        );
+                      })
                       ) : (
                         <div className="text-center py-8 text-[#5E6C84] text-sm rounded-xl border border-dashed border-[#DFE1E6] bg-[#F4F5F7]">
                           <ListChecks className="h-8 w-8 mx-auto mb-2 text-[#A5ADBA]" />
@@ -2822,7 +4027,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                       <CardHeader className="space-y-1">
                         <div className="flex items-center justify-between">
                           <div>
-                            <CardTitle className="text-lg">Görevdeki Kişiler</CardTitle>
+                            <CardTitle className="text-[14px] sm:text-[15px] font-semibold">Görevdeki Kişiler</CardTitle>
                             <p className="text-sm text-muted-foreground">
                               Atanan kullanıcılar ve durumları
                             </p>
@@ -2915,8 +4120,9 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                                           toast.success("Görev reddi onaylandı");
                                           await fetchTaskDetails();
                                           onUpdate?.();
-                                        } catch (error: any) {
-                                          toast.error(error.message || "Red onaylanamadı");
+                                        } catch (error: unknown) {
+                                          const errorMessage = error instanceof Error ? error.message : String(error);
+                                          toast.error(errorMessage || "Red onaylanamadı");
                                         } finally {
                                           setProcessing(false);
                                         }
@@ -2966,7 +4172,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                     <CardHeader className="space-y-1">
                       <div className="flex items-center justify-between">
                         <div>
-                          <CardTitle className="text-lg">Detaylar</CardTitle>
+                          <CardTitle className="text-[14px] sm:text-[15px] font-semibold">Detaylar</CardTitle>
                           <p className="text-sm text-muted-foreground">
                             Tarih ve durum bilgileri
                           </p>
@@ -2989,7 +4195,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                         <div className="rounded-lg border bg-muted/30 px-3 py-2">
                           <p className="text-xs text-muted-foreground uppercase tracking-wide">Oluşturulma</p>
                           <p className="text-sm font-medium mt-1">
-                            {format(new Date(task.created_at), "dd MMM yyyy HH:mm", { locale: tr })}
+                            {task.createdAt ? format(task.createdAt instanceof Timestamp ? task.createdAt.toDate() : new Date(task.createdAt), "dd MMM yyyy HH:mm", { locale: tr }) : "-"}
                           </p>
                         </div>
                         <div className="rounded-lg border bg-muted/30 px-3 py-2">
@@ -3015,7 +4221,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                                 variant="ghost"
                                 onClick={() => {
                                   setEditingDueDate(false);
-                                  setDueDateValue(task.due_date ? task.due_date.split("T")[0] : "");
+                                  setDueDateValue(task.dueDate ? (task.dueDate instanceof Timestamp ? task.dueDate.toDate().toISOString().split("T")[0] : new Date(task.dueDate).toISOString().split("T")[0]) : "");
                                 }}
                                 className="h-8 px-2"
                               >
@@ -3024,13 +4230,22 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                             </div>
                           ) : (
                             <p className="text-sm font-medium mt-1">
-                              {task.due_date ? format(new Date(task.due_date), "dd MMM yyyy HH:mm", { locale: tr }) : "-"}
+                              {task.dueDate ? format(task.dueDate instanceof Timestamp ? task.dueDate.toDate() : new Date(task.dueDate), "dd MMM yyyy HH:mm", { locale: tr }) : "-"}
                             </p>
                           )}
                         </div>
                         <div className="rounded-lg border bg-muted/30 px-3 py-2">
                           <p className="text-xs text-muted-foreground uppercase tracking-wide">Durum</p>
-                          <p className="text-sm font-medium mt-1">{getStatusLabel(task.status)}</p>
+                          <p className="text-sm font-medium mt-1">
+                            {(() => {
+                              // Status label'ını gösterirken approvalStatus'u da kontrol et
+                              const normalizedStatus = normalizeStatus(task.status);
+                              if (normalizedStatus === "completed" && task?.approvalStatus === "approved") {
+                                return "Onaylandı";
+                              }
+                              return getStatusLabel(task.status);
+                            })()}
+                          </p>
                         </div>
                       </div>
                       
@@ -3048,7 +4263,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                                     Reddeden: {usersMap[task.rejectedBy]}
                                     {task.rejectedAt && (
                                       <span className="ml-2">
-                                        • {formatDateSafe(task.rejectedAt as any)}
+                                        • {formatDateSafe(task.rejectedAt as Timestamp | Date | string | null)}
                                       </span>
                                     )}
                                   </p>
@@ -3066,7 +4281,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                   {canEdit && (
                     <Card>
                       <CardHeader className="space-y-1">
-                        <CardTitle className="text-lg flex items-center gap-2">
+                            <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                           <MoreVertical className="h-4 w-4" />
                           Eylemler
                         </CardTitle>
@@ -3100,14 +4315,14 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                   {/* İlişkiler */}
                   <Card>
                     <CardHeader className="space-y-1">
-                      <CardTitle className="text-lg flex items-center gap-2">
+                      <CardTitle className="text-[14px] sm:text-[15px] flex items-center gap-2">
                         <Link2 className="h-4 w-4" />
                         İlişkiler
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <Select
-                        value={task.production_order_id ? "linked" : "none"}
+                        value={task.productionOrderId ? "linked" : "none"}
                         onValueChange={(value) => {
                           if (value === "link") {
                             handleLinkOrderClick();
@@ -3119,13 +4334,13 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                       >
                         <SelectTrigger className="border-2 border-[#E1E4EA] text-[#172B4D] bg-white h-12 shadow-sm hover:border-[#0079BF] transition-colors">
                           <SelectValue>
-                            {task.production_order_id ? `Sipariş #${task.production_order_number || task.production_order_id}` : "Bağlı sipariş yok"}
+                            {task.productionOrderId ? `Sipariş #${(task as any).productionOrderNumber || task.productionOrderId}` : "Bağlı sipariş yok"}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Bağlı sipariş yok</SelectItem>
-                          {task.production_order_id && (
-                            <SelectItem value="linked">Sipariş #{task.production_order_number || task.production_order_id}</SelectItem>
+                          {task.productionOrderId && (
+                            <SelectItem value="linked">Sipariş #{(task as any).productionOrderNumber || task.productionOrderId}</SelectItem>
                           )}
                           <SelectItem value="link">Sipariş bağla</SelectItem>
                         </SelectContent>
@@ -3138,17 +4353,17 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                           Yenile
                         </Button>
                       </div>
-                      {task.production_order_id && (
+                      {task.productionOrderId && (
                         <div className="mt-4 rounded-xl border border-[#DFE1E6] bg-gradient-to-br from-[#F4F5F7] to-white p-4 space-y-3 shadow-sm">
                           <div className="flex items-center gap-2 text-sm font-semibold text-[#172B4D]">
                             <Package className="h-4 w-4" />
                             Bağlı Sipariş
                           </div>
                           <p className="text-sm text-[#172B4D] font-medium">
-                            {task.production_order_number || task.production_order_id}
+                            {(task as any).productionOrderNumber || task.productionOrderId}
                           </p>
-                          {task.production_order_customer && (
-                            <p className="text-xs text-[#5E6C84]">{task.production_order_customer}</p>
+                          {(task as any).productionOrderCustomer && (
+                            <p className="text-xs text-[#5E6C84]">{(task as any).productionOrderCustomer}</p>
                           )}
                           <Button
                             variant="outline"
@@ -3165,55 +4380,72 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                   </Card>
 
                   {/* Action Buttons */}
-                  {canEdit && (
+                  {(canEdit || canDelete) && (
                     <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={handleArchiveTask}
-                        disabled={processing}
-                        className="gap-2 h-10"
-                      >
-                        <Archive className="h-4 w-4" />
-                        {task?.is_archived ? "Arşivden Çıkar" : "Arşivle"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={handleDeleteTask}
-                        className="gap-2 h-10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Sil
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          variant="outline"
+                          onClick={handleArchiveTask}
+                          disabled={processing}
+                          className="gap-2 h-10"
+                        >
+                          <Archive className="h-4 w-4" />
+                          {task?.isArchived ? "Arşivden Çıkar" : "Arşivle"}
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button
+                          variant="outline"
+                          onClick={handleDeleteTask}
+                          className="gap-2 h-10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Sil
+                        </Button>
+                      )}
                     </div>
                   )}
 
-                  <Card>
-                    <CardHeader className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            <MessageSquare className="h-4 w-4" />
-                            Yorumlar ve Etkinlik
-                          </CardTitle>
-                        </div>
-                        <Badge variant="outline" className="border-[#DFE1E6] text-[#5E6C84] font-medium">
-                          Yakında
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <Textarea
-                        placeholder="Yorum yaz..."
-                        className="bg-white border-[#DFE1E6] text-[#172B4D] resize-none"
-                        disabled
-                      />
-                      <p className="text-xs text-[#5E6C84]">
-                        Yorum altyapısı üzerinde çalışıyoruz.
-                      </p>
-                    </CardContent>
-                  </Card>
+                  {/* Yorumlar ve Etkinlikler Bölümü */}
+                  {task?.id && user && (
+                    <Card className="mt-4 border-2">
+                      <CardHeader className="pb-3">
+                            <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
+                          <MessageSquare className="h-5 w-5 text-primary" />
+                          Yorumlar ve Etkinlikler
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ActivityCommentsPanel
+                          entityId={task.id}
+                          entityType="task"
+                          onAddComment={async (content: string) => {
+                            await addTaskComment(
+                              task.id,
+                              user.id,
+                              content,
+                              user.fullName,
+                              user.email
+                            );
+                            // Yorum eklendikten sonra liste görünümündeki yorum sayısını güncelle
+                            if (onUpdate) {
+                              onUpdate();
+                            }
+                          }}
+                          onGetComments={async () => {
+                            return await getTaskComments(task.id);
+                          }}
+                          onGetActivities={async () => {
+                            return await getTaskActivities(task.id);
+                          }}
+                          currentUserId={user.id}
+                          currentUserName={user.fullName}
+                          currentUserEmail={user.email}
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
-              )}
             </div>
           </div>
         </div>
@@ -3222,12 +4454,16 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
     {/* Drive Linki Ekleme Dialog */}
     <Dialog open={showAddAttachmentDialog} onOpenChange={setShowAddAttachmentDialog}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Google Drive Linki Ekle</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="max-w-md w-[80vw]">
+        <DialogTitle className="sr-only">Google Drive Linki Ekle</DialogTitle>
+        <DialogDescription className="sr-only">
             Google Drive'dan bir dosya veya klasör linki ekleyin
           </DialogDescription>
+        <DialogHeader>
+          <h2>Google Drive Linki Ekle</h2>
+          <p>
+            Google Drive'dan bir dosya veya klasör linki ekleyin
+          </p>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
@@ -3284,11 +4520,15 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
     <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Görevi Reddet</DialogTitle>
-          <DialogDescription>
+        <DialogTitle className="sr-only">Görevi Reddet</DialogTitle>
+        <DialogDescription className="sr-only">
             Görevi reddetmek için lütfen en az 20 karakterlik bir sebep belirtin.
           </DialogDescription>
+        <DialogHeader>
+          <h2>Görevi Reddet</h2>
+          <p>
+            Görevi reddetmek için lütfen en az 20 karakterlik bir sebep belirtin.
+          </p>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -3331,11 +4571,15 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
     <Dialog open={showRejectApprovalDialog} onOpenChange={setShowRejectApprovalDialog}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Görev Onayını Reddet</DialogTitle>
-          <DialogDescription>
+        <DialogTitle className="sr-only">Görev Onayını Reddet</DialogTitle>
+        <DialogDescription className="sr-only">
             Görev onayını reddetmek için lütfen bir not ekleyin. Görev tekrar panoya dönecektir.
           </DialogDescription>
+        <DialogHeader>
+          <h2>Görev Onayını Reddet</h2>
+          <p>
+            Görev onayını reddetmek için lütfen bir not ekleyin. Görev tekrar panoya dönecektir.
+          </p>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -3376,11 +4620,15 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     {/* Reject Rejection Dialog */}
     <Dialog open={showRejectRejectionDialog} onOpenChange={setShowRejectRejectionDialog}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Görev Reddi Reddet</DialogTitle>
-          <DialogDescription>
+        <DialogTitle className="sr-only">Görev Reddi Reddet</DialogTitle>
+        <DialogDescription className="sr-only">
             Görev reddi reddedildiğinde görev tekrar atanan kişiye döner. Lütfen en az 20 karakterlik bir sebep belirtin.
           </DialogDescription>
+        <DialogHeader>
+          <h2>Görev Reddi Reddet</h2>
+          <p>
+            Görev reddi reddedildiğinde görev tekrar atanan kişiye döner. Lütfen en az 20 karakterlik bir sebep belirtin.
+          </p>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
@@ -3436,8 +4684,9 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                 setSelectedRejectionAssignment(null);
                 await fetchTaskDetails();
                 onUpdate?.();
-              } catch (error: any) {
-                toast.error(error.message || "Red reddedilemedi");
+              } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                toast.error(errorMessage || "Red reddedilemedi");
               } finally {
                 setProcessing(false);
               }

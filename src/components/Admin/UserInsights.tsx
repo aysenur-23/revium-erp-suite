@@ -16,7 +16,7 @@ import { tr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Loader2, Filter, UserCheck, ClipboardList, Download, Users, CheckCircle2, XCircle, FileText, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { generateUserStatsPDF } from "@/services/pdfGenerator";
+// pdfGenerator will be dynamically imported when needed
 import { useAuth } from "@/contexts/AuthContext";
 import { isAdmin, isMainAdmin } from "@/utils/permissions";
 import { getDepartments } from "@/services/firebase/departmentService";
@@ -73,17 +73,18 @@ const TABLE_LABELS: Record<string, string> = {
 };
 
 // Kayıt adını al
-const getRecordDisplayName = (data: any, tableName: string): string | null => {
-  if (!data) return null;
-  if (tableName === "orders" && data.orderNumber) return data.orderNumber;
-  if (tableName === "tasks" && data.title) return data.title;
-  if (tableName === "customers" && data.name) return data.name;
-  if (tableName === "products" && data.name) return data.name;
-  if (tableName === "projects" && data.name) return data.name;
-  if (tableName === "reports" && data.title) return data.title;
-  if (tableName === "task_assignments" && data.taskTitle) return data.taskTitle;
-  if (data.name) return data.name;
-  if (data.title) return data.title;
+const getRecordDisplayName = (data: unknown, tableName: string): string | null => {
+  if (!data || typeof data !== "object") return null;
+  const dataObj = data as Record<string, unknown>;
+  if (tableName === "orders" && typeof dataObj.orderNumber === "string") return dataObj.orderNumber;
+  if (tableName === "tasks" && typeof dataObj.title === "string") return dataObj.title;
+  if (tableName === "customers" && typeof dataObj.name === "string") return dataObj.name;
+  if (tableName === "products" && typeof dataObj.name === "string") return dataObj.name;
+  if (tableName === "projects" && typeof dataObj.name === "string") return dataObj.name;
+  if (tableName === "reports" && typeof dataObj.title === "string") return dataObj.title;
+  if (tableName === "task_assignments" && typeof dataObj.taskTitle === "string") return dataObj.taskTitle;
+  if (typeof dataObj.name === "string") return dataObj.name;
+  if (typeof dataObj.title === "string") return dataObj.title;
   return null;
 };
 
@@ -241,8 +242,10 @@ export const UserInsights = () => {
                   taskTitle: task.title,
                   taskStatus: task.status,
                 }));
-              } catch (error) {
-                console.error(`Error fetching assignments for task ${task.id}:`, error);
+              } catch (error: unknown) {
+                if (import.meta.env.DEV) {
+                  console.error(`Error fetching assignments for task ${task.id}:`, error);
+                }
                 return [];
               }
           })
@@ -251,9 +254,12 @@ export const UserInsights = () => {
         }
 
         setAssignments(assignmentArrays);
-      } catch (error: any) {
-        console.error("User insights fetch error:", error);
-        toast.error(error?.message || "Kullanıcı analiz verileri alınamadı");
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("User insights fetch error:", error);
+        }
+        const errorMessage = error instanceof Error ? error.message : "Kullanıcı analiz verileri alınamadı";
+        toast.error(errorMessage);
       } finally {
         setLoading(false);
       }
@@ -388,8 +394,9 @@ export const UserInsights = () => {
       }
       setPreviewData(stats);
       setPreviewOpen(true);
-    } catch (error: any) {
-      toast.error("Rapor yüklenemedi: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Rapor yüklenemedi";
+      toast.error(errorMessage);
     } finally {
       setLoadingPreview(false);
     }
@@ -404,6 +411,7 @@ export const UserInsights = () => {
         return;
       }
       
+      const { generateUserStatsPDF } = await import("@/services/pdfGenerator");
       const pdfBlob = await generateUserStatsPDF(stats);
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
@@ -414,9 +422,12 @@ export const UserInsights = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       toast.success("PDF başarıyla indirildi");
-    } catch (error: any) {
-      console.error("PDF export error:", error);
-      toast.error(error?.message || "PDF oluşturulurken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("PDF export error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : "PDF oluşturulurken hata oluştu";
+      toast.error(errorMessage);
     } finally {
       setGeneratingPdfId(null);
     }
@@ -426,6 +437,7 @@ export const UserInsights = () => {
     if (!previewData) return;
     setGeneratingPdfId("preview");
     try {
+      const { generateUserStatsPDF } = await import("@/services/pdfGenerator");
       const pdfBlob = await generateUserStatsPDF(previewData);
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
@@ -436,9 +448,12 @@ export const UserInsights = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       toast.success("PDF başarıyla indirildi");
-    } catch (error: any) {
-      console.error("PDF export error:", error);
-      toast.error("PDF oluşturulurken hata oluştu: " + error.message);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("PDF export error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : "PDF oluşturulurken hata oluştu";
+      toast.error(errorMessage);
     } finally {
       setGeneratingPdfId(null);
     }
@@ -980,19 +995,21 @@ export const UserInsights = () => {
 
       {/* Rapor Önizleme Modal */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="w-full max-w-[98vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0">
+        <DialogContent className="w-full max-w-[98vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Kullanıcı Raporu Önizleme</DialogTitle>
+          <DialogDescription className="sr-only">Kullanıcı istatistikleri ve görev detayları</DialogDescription>
           <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b">
-            <DialogTitle className="flex items-center gap-2">
+            <h2 className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
               Kullanıcı Performans Raporu - {previewData?.userName || previewData?.userEmail}
-            </DialogTitle>
-            <DialogDescription>
+            </h2>
+            <p>
               {previewData?.userEmail} - {new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })}
-            </DialogDescription>
+            </p>
           </DialogHeader>
 
           {previewData && (
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 min-h-0">
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 min-h-0 overscroll-contain">
               {/* İstatistik Kartları */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200">

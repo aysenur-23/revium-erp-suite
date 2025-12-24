@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import fs from "fs";
 import { cspPlugin } from "./vite-plugin-csp";
 
 // https://vitejs.dev/config/
@@ -11,7 +12,29 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 5173,
   },
-  plugins: [react(), cspPlugin()],
+  plugins: [
+    react(), 
+    cspPlugin(),
+    // Favicon plugin - rev-favicon.png'yi favicon.ico olarak kopyala
+    {
+      name: 'copy-favicon',
+      closeBundle() {
+        const src = path.resolve(__dirname, 'public/rev-favicon.png');
+        const dest = path.resolve(__dirname, 'dist/favicon.ico');
+        // Eski favicon.ico'yu sil (varsa)
+        if (fs.existsSync(dest)) {
+          fs.unlinkSync(dest);
+        }
+        // rev-favicon.png'yi favicon.ico olarak kopyala
+        if (fs.existsSync(src)) {
+          fs.copyFileSync(src, dest);
+          console.log('✅ favicon.ico oluşturuldu (rev-favicon.png\'den)');
+        } else {
+          console.warn('⚠️ rev-favicon.png bulunamadı!');
+        }
+      }
+    }
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -32,13 +55,52 @@ export default defineConfig(({ mode }) => ({
     cssCodeSplit: true,
     rollupOptions: {
       output: {
-        // Vendor chunk'ları - lucide-react'ı ayrı chunk'a ayır (export sorununu çözer)
+        // Vendor chunk'ları - Performans için chunk'ları ayır
         manualChunks: (id) => {
           // lucide-react'ı ayrı chunk'a ayır
           if (id.includes('lucide-react')) {
             return 'lucide-react';
           }
-          // Vendor chunk'larını kaldır - Tüm kod tek bundle'da (React yükleme sırası sorununu çözer)
+          
+          // React vendor chunk'ları
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'vendor-react';
+          }
+          
+          // React Router
+          if (id.includes('node_modules/react-router')) {
+            return 'vendor-router';
+          }
+          
+          // Firebase - tüm Firebase modüllerini bir chunk'a topla
+          if (id.includes('node_modules/firebase') || id.includes('firebase')) {
+            return 'vendor-firebase';
+          }
+          
+          // PDF Generator - büyük chunk, ayrı tut
+          if (id.includes('pdfGenerator') || id.includes('jspdf') || id.includes('html2canvas')) {
+            return 'vendor-pdf';
+          }
+          
+          // Admin sayfası - büyük chunk, ayrı tut
+          if (id.includes('pages/Admin') || id.includes('components/Admin')) {
+            return 'chunk-admin';
+          }
+          
+          // Diğer vendor kütüphaneleri
+          if (id.includes('node_modules')) {
+            // TanStack Query
+            if (id.includes('@tanstack')) {
+              return 'vendor-query';
+            }
+            // Radix UI
+            if (id.includes('@radix-ui')) {
+              return 'vendor-radix';
+            }
+            // Diğer vendor'lar
+            return 'vendor-other';
+          }
+          
           return undefined;
         },
         // Asset dosyalarını optimize et

@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Plus, Trash2, Download, X, Save } from "lucide-react";
-import { generateSalesOfferPDF } from "@/services/pdfGenerator";
+// pdfGenerator will be dynamically imported when needed
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -97,6 +97,8 @@ export const SalesQuoteDialog = ({ open, onOpenChange }: SalesQuoteDialogProps) 
     }
 
     try {
+      // Dynamically import pdfGenerator to avoid loading it on initial page load
+      const { generateSalesOfferPDF } = await import("@/services/pdfGenerator");
       const blob = await generateSalesOfferPDF({
         ...quote,
         totals,
@@ -132,7 +134,11 @@ export const SalesQuoteDialog = ({ open, onOpenChange }: SalesQuoteDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+        <DialogTitle className="sr-only">Satış Teklifi Oluştur</DialogTitle>
+        <DialogDescription className="sr-only">Satış teklifi oluşturun</DialogDescription>
+        
         <div className="flex flex-col h-full min-h-0">
           {/* Header */}
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -141,12 +147,9 @@ export const SalesQuoteDialog = ({ open, onOpenChange }: SalesQuoteDialogProps) 
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <Download className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                <h2 className="text-lg sm:text-xl font-semibold text-foreground truncate">
                   Satış Teklifi Oluştur
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Satış teklifi oluşturun
-                </DialogDescription>
+                </h2>
               </div>
               <div className="flex flex-wrap gap-2 flex-shrink-0">
                 <Button

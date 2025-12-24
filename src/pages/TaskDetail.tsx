@@ -24,7 +24,7 @@ interface AssignedUser {
 const TaskDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [task, setTask] = useState<any>(null);
+  const [task, setTask] = useState<Awaited<ReturnType<typeof getTaskById>>>(null);
   const [assignedUsers, setAssignedUsers] = useState<AssignedUser[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -85,9 +85,11 @@ const TaskDetail = () => {
       });
 
       setAssignedUsers(users);
-    } catch (error: any) {
-      console.error("Fetch task details error:", error);
-      toast.error("Görev detayları yüklenirken hata: " + (error.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Fetch task details error:", error);
+      }
+      toast.error("Görev detayları yüklenirken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
       navigate("/tasks");
     } finally {
       setLoading(false);
@@ -144,7 +146,7 @@ const TaskDetail = () => {
             <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">Görev Detayı</h1>
+            <h1 className="text-[20px] sm:text-[24px] font-bold text-foreground">Görev Detayı</h1>
           </div>
         </div>
 
@@ -155,7 +157,7 @@ const TaskDetail = () => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
                   <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                     <div className="flex-shrink-0">{getStatusIcon(task.status)}</div>
-                    <CardTitle className="text-lg sm:text-xl md:text-2xl truncate">{task.title}</CardTitle>
+                    <CardTitle className="text-[14px] sm:text-[15px] truncate">{task.title}</CardTitle>
                   </div>
                   <Badge variant={task.priority >= 3 ? "destructive" : "secondary"} className="text-xs sm:text-sm flex-shrink-0">
                     Öncelik {task.priority}
@@ -184,17 +186,17 @@ const TaskDetail = () => {
                       Oluşturulma Tarihi
                     </h3>
                     <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
-                      {format(new Date(task.created_at), "dd MMMM yyyy HH:mm")}
+                      {format(task.createdAt.toDate(), "dd MMMM yyyy HH:mm")}
                     </p>
                   </div>
-                  {task.due_date && (
+                  {task.dueDate && (
                     <div>
                       <h3 className="font-semibold mb-1.5 sm:mb-2 text-sm sm:text-base flex items-center gap-1.5 sm:gap-2">
                         <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         Bitiş Tarihi
                       </h3>
                       <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
-                        {format(new Date(task.due_date), "dd MMMM yyyy HH:mm")}
+                        {format(task.dueDate.toDate(), "dd MMMM yyyy HH:mm")}
                       </p>
                     </div>
                   )}
@@ -206,7 +208,7 @@ const TaskDetail = () => {
           <div>
             <Card>
               <CardHeader className="p-3 sm:p-4 md:p-6">
-                <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-base sm:text-lg md:text-xl">
+                <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-[14px] sm:text-[15px]">
                   <User className="h-4 w-4 sm:h-5 sm:w-5" />
                   Görevdeki Kişiler ({assignedUsers.length})
                 </CardTitle>

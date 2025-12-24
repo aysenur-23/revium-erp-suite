@@ -6,7 +6,7 @@ import { getProducts } from "@/services/firebase/productService";
 import { getTasks } from "@/services/firebase/taskService";
 import { getSavedReports, SavedReport } from "@/services/firebase/reportService";
 
-interface SalesQuoteMetadata {
+interface SalesQuoteMetadata extends Record<string, unknown> {
   grandTotal?: number | string;
 }
 
@@ -131,7 +131,9 @@ export const useDashboardStats = () => {
       try {
         salesQuotes = await getSavedReports({ reportType: "sales_quote" });
       } catch (error) {
-        console.warn("Sales quotes yüklenemedi, devam ediliyor:", error);
+        if (import.meta.env.DEV) {
+          console.warn("Sales quotes yüklenemedi, devam ediliyor:", error);
+        }
         salesQuotes = [];
       }
 
@@ -222,7 +224,7 @@ export const useDashboardStats = () => {
       salesQuotes.forEach((quote) => {
         // Metadata'dan customerId çıkarmaya çalış
         if (quote.metadata && typeof quote.metadata === 'object') {
-          const customerId = (quote.metadata as any).customerId;
+          const customerId = quote.metadata && typeof quote.metadata === 'object' && 'customerId' in quote.metadata && typeof quote.metadata.customerId === 'string' ? quote.metadata.customerId : null;
           if (customerId && typeof customerId === 'string') {
             quoteCustomerIds.add(customerId);
           }
@@ -286,16 +288,7 @@ export const useDashboardStats = () => {
     retry: 1, // Retry sayısını azalt (performans için)
     retryDelay: 2000, // Retry delay'i azalt (performans için - 2 saniye)
     staleTime: 120000, // 2 dakika stale time (performans için)
-    // İlk yüklemede daha hızlı render için placeholder data
-    placeholderData: (previousData) => previousData || {
-      customers: { total: 0, trend: 0 },
-      orders: { total: 0, active: 0, trend: 0 },
-      products: { total_stock: 0, low_stock_count: 0, trend: 0 },
-      revenue: { current_month: 0, trend: 0 },
-      recent_orders: [],
-      low_stock_products: [],
-      quotes: { total_amount: 0, count: 0 },
-      quote_conversion_rate: 0,
-    },
+    // Placeholder data kaldırıldı - loading state gösterilecek
+    // placeholderData kaldırıldı çünkü 0 değerleri gösteriyordu
   });
 };

@@ -1,5 +1,5 @@
-import { NavLink, useLocation } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { useRef, useState, useEffect, useCallback } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -19,7 +19,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { usePermissions } from "@/hooks/usePermissions";
+import { UserProfile } from "@/services/firebase/authService";
+import { getDepartments } from "@/services/firebase/departmentService";
+import { onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import logo from "@/assets/rev-logo.png";
 
@@ -31,35 +33,151 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: SidebarProps) => {
-  const { user, isSuperAdmin, isAdmin, isTeamLeader } = useAuth();
-  const { canRead } = usePermissions();
-  const location = useLocation();
-  const [canAccessTeamManagement, setCanAccessTeamManagement] = useState(false);
-  const [canAccessAdmin, setCanAccessAdmin] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const navRef = useRef<HTMLElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
-
-  // Check permissions for menu items
-  useEffect(() => {
-    const checkPermissions = async () => {
-      if (!user) {
-        setCanAccessTeamManagement(false);
-        setCanAccessAdmin(false);
-        return;
+  // Menü öğeleri state'te saklanır - sadece user.id değiştiğinde güncellenir
+  // localStorage'dan cache'lenmiş değerleri oku (sayfa yenilendiğinde hızlı gösterim için)
+  const getCachedPermissions = (userId: string | undefined) => {
+    if (!userId) return { teamManagement: false, admin: false };
+    try {
+      const cached = localStorage.getItem(`sidebar_permissions_${userId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Cache 5 dakikadan eskiyse geçersiz say
+        if (parsed.timestamp && Date.now() - parsed.timestamp < 5 * 60 * 1000) {
+          return { teamManagement: parsed.teamManagement || false, admin: parsed.admin || false };
+        }
       }
+    } catch (e) {
+      // Cache okuma hatası - sessizce devam et
+    }
+    return { teamManagement: false, admin: false };
+  };
 
-      // Team Management: can read departments or is team leader
-      const canReadDepts = await canRead("departments");
-      setCanAccessTeamManagement(canReadDepts || isTeamLeader);
+  const cachedPerms = getCachedPermissions(user?.id);
+  const [showTeamManagement, setShowTeamManagement] = useState(cachedPerms.teamManagement);
+  const [showAdminPanel, setShowAdminPanel] = useState(cachedPerms.admin);
+  const [permissionsLoading, setPermissionsLoading] = useState(false); // Cache'den okuduğumuz için başlangıçta false
+  const permissionsCheckedRef = useRef<string | null>(null); // Kullanıcı ID'sini cache'le
+  const permissionsCacheRef = useRef<{ teamManagement: boolean; admin: boolean } | null>(null);
 
-      // Admin Panel: can read audit_logs
-      const canReadAudit = await canRead("audit_logs");
-      setCanAccessAdmin(canReadAudit);
-    };
+  // Permission kontrol fonksiyonu - sadece user.id değiştiğinde çalışır
+  const checkPermissions = useCallback(async (userId: string | undefined, userRoles: string[] | undefined, userEmail?: string, userEmailVerified?: boolean, userFullName?: string) => {
+    if (!userId) {
+      setShowTeamManagement(false);
+      setShowAdminPanel(false);
+      setPermissionsLoading(false);
+      permissionsCheckedRef.current = null;
+      permissionsCacheRef.current = null;
+      return;
+    }
 
-    checkPermissions();
-  }, [user, isTeamLeader, canRead]);
+    // Aynı kullanıcı için cache'lenmiş sonuçları kullan
+    if (permissionsCheckedRef.current === userId && permissionsCacheRef.current) {
+      setShowTeamManagement(permissionsCacheRef.current.teamManagement);
+      setShowAdminPanel(permissionsCacheRef.current.admin);
+      setPermissionsLoading(false);
+      return;
+    }
 
+    // localStorage cache'i kontrol et
+    const cachedPerms = getCachedPermissions(userId);
+    if (cachedPerms.teamManagement || cachedPerms.admin) {
+      setShowTeamManagement(cachedPerms.teamManagement);
+      setShowAdminPanel(cachedPerms.admin);
+      // Cache'den okuduğumuz için loading false, ama arka planda güncelleme yapacağız
+    }
+
+    // Loading başlat (arka planda güncelleme için)
+    setPermissionsLoading(true);
+
+    try {
+      const { canViewTeamManagement, canViewAdminPanel } = await import("@/utils/permissions");
+      const userProfile: UserProfile = {
+        id: userId,
+        email: userEmail || "",
+        emailVerified: userEmailVerified || false,
+        fullName: userFullName || "",
+        displayName: userFullName || "",
+        phone: null,
+        dateOfBirth: null,
+        role: userRoles || [],
+        createdAt: null,
+        updatedAt: null,
+      };
+      const departments = await getDepartments();
+      const [canViewTeam, canViewAdmin] = await Promise.all([
+        canViewTeamManagement(userProfile, departments),
+        canViewAdminPanel(userProfile),
+      ]);
+      
+      // Sonuçları cache'le ve state'e kaydet
+      permissionsCacheRef.current = {
+        teamManagement: canViewTeam,
+        admin: canViewAdmin,
+      };
+      permissionsCheckedRef.current = userId;
+      
+      // localStorage'a da kaydet (sayfa yenilendiğinde hızlı gösterim için)
+      try {
+        localStorage.setItem(`sidebar_permissions_${userId}`, JSON.stringify({
+          teamManagement: canViewTeam,
+          admin: canViewAdmin,
+          timestamp: Date.now(),
+        }));
+      } catch (e) {
+        // localStorage yazma hatası - sessizce devam et
+      }
+      
+      // State'i güncelle - sadece bir kez, user.id değiştiğinde
+      setShowTeamManagement(canViewTeam);
+      setShowAdminPanel(canViewAdmin);
+      setPermissionsLoading(false);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Error checking sidebar permissions:", error);
+      }
+      setShowTeamManagement(false);
+      setShowAdminPanel(false);
+      setPermissionsLoading(false);
+      permissionsCheckedRef.current = userId; // Hata durumunda da cache'le ki tekrar denemesin
+      permissionsCacheRef.current = { teamManagement: false, admin: false };
+    }
+  }, []); // Hiçbir bağımlılık yok, fonksiyon sabit kalır
+
+  // Ekip Yönetimi ve Admin Paneli yetkilerini Firestore'dan kontrol et - Sadece user.id değiştiğinde
+  useEffect(() => {
+    const userId = user?.id;
+    const userRoles = user?.roles;
+    const userEmail = user?.email;
+    const userEmailVerified = user?.emailVerified;
+    const userFullName = user?.fullName;
+    
+    // Kullanıcı değiştiğinde cache'i temizle
+    if (permissionsCheckedRef.current !== userId) {
+      permissionsCheckedRef.current = null;
+      permissionsCacheRef.current = null;
+    }
+    
+    checkPermissions(userId, userRoles, userEmail, userEmailVerified, userFullName);
+  }, [user?.id, checkPermissions]); // Sadece user.id değiştiğinde çalış
+
+  // Permission cache değiştiğinde cache'i temizle ama state'i güncelleme
+  // Menü sadece user.id değiştiğinde güncellenmeli, cache değişikliklerinde sabit kalmalı
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const unsubscribe = onPermissionCacheChange(() => {
+      // Cache'i temizle ama state'i güncelleme - menü sabit kalmalı
+      // Sadece yeni bir kullanıcı giriş yaptığında veya user.id değiştiğinde menü güncellenir
+      permissionsCheckedRef.current = null;
+      permissionsCacheRef.current = null;
+    });
+    
+    return () => unsubscribe();
+  }, [user?.id]);
 
   const handleNavClick = () => {
     if (isMobile) {
@@ -71,10 +189,9 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
   // Bu kontrolü kaldırdık çünkü scroll edilebilir içerik olması sidebar'ın kapatılması için bir neden değil
   // Kullanıcı scroll yaparak tüm içeriği görebilir
 
-  const menuItems = [
-    { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-    ...(canAccessTeamManagement ? [{ icon: UserCog, label: "Ekip Yönetimi", path: "/team-management" }] : []),
-    ...(canAccessAdmin ? [{ icon: Shield, label: "Admin Paneli", path: "/admin" }] : []),
+  // Menü öğeleri - hemen oluşturulur, sadece Ekip Yönetimi ve Admin Paneli conditional
+  // Diğer menü öğeleri her zaman görünür
+  const baseMenuItems = [
     { icon: ShoppingCart, label: "Siparişler", path: "/orders" },
     { icon: Factory, label: "Üretim Siparişleri", path: "/production" },
     { icon: Users, label: "Müşteriler", path: "/customers" },
@@ -83,14 +200,26 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
     { icon: Package, label: "Satış Sonrası Takip", path: "/warranty" },
     { icon: FileText, label: "Raporlar", path: "/reports" },
     { icon: FileCheck, label: "Talepler", path: "/requests" },
-    { icon: Settings, label: "Ayarlar", path: "/settings" },
+    { icon: Settings, label: "Ayarlar", path: "/settings" }
   ];
 
   const content = (
     <div ref={sidebarRef} className="flex h-full w-64 flex-col bg-sidebar border-r border-sidebar-border overflow-hidden relative z-50">
       {/* Logo Section - Sidebar'ın en üstünde */}
       <div className="flex-shrink-0 bg-sidebar border-b border-sidebar-border pt-4 pb-2 z-[99999] relative">
-        <div className="flex items-center gap-2 px-3 sm:px-4">
+        <div 
+          className="flex items-center gap-2 px-3 sm:px-4 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => navigate("/")}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              navigate("/");
+            }
+          }}
+          title="Ana sayfaya git"
+        >
           <img src={logo} alt="Revium ERP" className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 rounded-lg object-contain bg-white p-1 flex-shrink-0" />
           <span className="text-base sm:text-lg md:text-xl font-bold text-sidebar-foreground">Revium ERP</span>
         </div>
@@ -114,8 +243,8 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
           <span className="font-medium text-xs">Dashboard</span>
         </NavLink>
 
-        {/* Ekip Yönetimi - 3. sıra */}
-        {canAccessTeamManagement && (
+        {/* Ekip Yönetimi - 3. sıra - state'ten okunur, sadece user.id değiştiğinde güncellenir */}
+        {showTeamManagement && (
           <NavLink
             to="/team-management"
             className={({ isActive }) =>
@@ -133,8 +262,8 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
           </NavLink>
         )}
 
-        {/* Admin Paneli - 4. sıra */}
-        {canAccessAdmin && (
+        {/* Admin Paneli - 4. sıra - state'ten okunur, sadece user.id değiştiğinde güncellenir */}
+        {showAdminPanel && (
           <NavLink
             to="/admin"
             className={({ isActive }) =>
@@ -169,14 +298,8 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
           <span className="font-medium text-xs">Görevler</span>
         </NavLink>
 
-        {/* Diğer menü öğeleri (Ekip Yönetimi ve Admin Paneli hariç) */}
-        {menuItems
-          .filter(item => 
-            item.path !== "/team-management" && 
-            item.path !== "/admin" && 
-            item.path !== "/"
-          )
-          .map((item) => (
+        {/* Diğer menü öğeleri - hemen görünür */}
+        {baseMenuItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}

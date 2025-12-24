@@ -18,18 +18,21 @@ import {
   subscribeToTasks,
   deleteTask,
   updateTaskStatus,
+  updateTask,
+  assignTask,
   getTaskAssignments,
   acceptTaskAssignment,
   rejectTaskAssignment,
   requestTaskApproval,
   archiveTask,
+  getTaskComments,
   Task as FirebaseTask,
   TaskAssignment as FirebaseTaskAssignment,
 } from "@/services/firebase/taskService";
 import { getRequests, Request as UserRequest } from "@/services/firebase/requestService";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { Timestamp } from "firebase/firestore";
-import { CheckCircle2, Clock, AlertCircle, Users, Trash2, Loader2, X, Flame, CalendarDays, Plus, Archive, Lock, CheckSquare, MoreVertical, CircleDot, Send, Edit, Check, Square, BarChart3, ChevronUp, ChevronLeft, Bell, Filter, Zap, LayoutGrid, ArrowLeft, Folder, ChevronDown, Home, ChevronRight, List, RefreshCw } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Users, Trash2, Loader2, X, Flame, CalendarDays, Plus, Archive, Lock, CheckSquare, MoreVertical, CircleDot, Send, Edit, Check, Square, BarChart3, ChevronUp, ChevronLeft, Bell, Filter, Zap, LayoutGrid, ArrowLeft, Folder, ChevronDown, Home, ChevronRight, List, RefreshCw, ArrowRight, MessageSquare, Activity, Minus } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -40,7 +43,7 @@ import { TaskInlineForm } from "@/components/Tasks/TaskInlineForm";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskBoard } from "@/components/Tasks/TaskBoard";
 import { addDays, isAfter, isBefore, startOfDay } from "date-fns";
-import { canCreateTask, canCreateProject, canDeleteProject } from "@/utils/permissions";
+import { canCreateTask, canCreateProject, canDeleteProject, isMainAdmin, canUpdateResource, canViewPrivateTask, canEditTask } from "@/utils/permissions";
 import { getDepartments } from "@/services/firebase/departmentService";
 import { onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
@@ -67,6 +70,12 @@ interface Task {
   isArchived?: boolean;
   is_archived?: boolean;
 }
+
+// Tam isimden sadece ismi çıkar (soyisim olmadan)
+const getFirstName = (fullName: string | null | undefined): string => {
+  if (!fullName) return "";
+  return fullName.split(" ")[0] || fullName;
+};
 
 // Firebase Task'i UI Task formatına çevir
 const convertFirebaseTaskToUITask = (
@@ -143,7 +152,47 @@ const taskStatusWorkflow: StatusItem[] = [
 ];
 
 const Tasks = () => {
-  const { user, isSuperAdmin, isAdmin, isTeamLeader } = useAuth();
+  const { user } = useAuth();
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [canUpdate, setCanUpdate] = useState(false);
+  
+  // Permission state'lerini Firestore'dan kontrol et
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user) {
+        setIsSuperAdmin(false);
+        setCanUpdate(false);
+        return;
+      }
+      try {
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
+          role: user.roles,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        };
+        const [isMainAdminUser, hasUpdatePermission] = await Promise.all([
+          isMainAdmin(userProfile),
+          canUpdateResource(userProfile, "tasks"),
+        ]);
+        setIsSuperAdmin(isMainAdminUser);
+        setCanUpdate(hasUpdatePermission);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking permissions:", error);
+        }
+        setIsSuperAdmin(false);
+        setCanUpdate(false);
+      }
+    };
+    checkPermissions();
+  }, [user]);
   const { canRead } = usePermissions();
   const { projectId } = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
@@ -189,7 +238,7 @@ const Tasks = () => {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
   const previousTaskStatusesRef = useRef<Map<string, string>>(new Map());
   // Undo özelliği için state
-  const [deletedTasks, setDeletedTasks] = useState<Array<{ task: any; timestamp: number }>>([]);
+  const [deletedTasks, setDeletedTasks] = useState<Array<{ task: FirebaseTask; timestamp: number }>>([]);
   const undoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Filtreler için collapsible state
   const [filtersExpanded, setFiltersExpanded] = useState(true);
@@ -203,6 +252,8 @@ const Tasks = () => {
   const [cachedProjects, setCachedProjects] = useState<Project[]>([]);
   const [usersCacheTimestamp, setUsersCacheTimestamp] = useState<number>(0);
   const [projectsCacheTimestamp, setProjectsCacheTimestamp] = useState<number>(0);
+  // Comment counts cache - taskId -> comment count
+  const [commentCounts, setCommentCounts] = useState<Map<string, number>>(new Map());
   // Assignment cache - taskId -> assignments mapping (ref kullanarak re-render'ı önle)
   const assignmentsCacheRef = useRef<Map<string, FirebaseTaskAssignment[]>>(new Map());
   const assignmentsCacheTimestampRef = useRef<number>(0);
@@ -249,6 +300,10 @@ const Tasks = () => {
       return;
     }
     
+    // Görev detayı açıldığında liste görünümüne geç
+    setViewMode("list");
+    setSelectedTaskId(taskId);
+    
     // Eski modal yerine inline form kullan
     openInlineForm("edit", taskId);
   }, [openInlineForm]);
@@ -260,15 +315,40 @@ const Tasks = () => {
   const [searchTerm, setSearchTerm] = useState("");
   // Arama geçmişi ve favori filtreler için state
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
-  const [favoriteFilters, setFavoriteFilters] = useState<Array<{ name: string; filters: any }>>([]);
+  const [favoriteFilters, setFavoriteFilters] = useState<Array<{ name: string; filters: Record<string, unknown> }>>([]);
   const [recentlyViewedTasks, setRecentlyViewedTasks] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("created_at");
+  // Jira tarzı sıralama için state'ler
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [openDropdownMenuId, setOpenDropdownMenuId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "board">(
     viewFromUrl === "list" ? "list" : (viewFromUrl === "board" ? "board" : "list")
   );
+  // Sütun genişlikleri - localStorage'dan yükle veya varsayılan değerleri kullan
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem('tasks-column-widths');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return {};
+      }
+    }
+    return {
+      title: 300,
+      status: 130,
+      assignee: 150,
+      people: 180,
+      priority: 90,
+      dueDate: 110,
+    };
+  });
+  const [resizingColumn, setResizingColumn] = useState<string | null>(null);
+  const resizeStartX = useRef<number>(0);
+  const resizeStartWidth = useRef<number>(0);
   const [focusFilter, setFocusFilter] = useState<"all" | "due_soon" | "overdue" | "high_priority">("all");
   // Filtre tipi: all, my-tasks, general, pool, archive
   const [activeFilter, setActiveFilter] = useState<"all" | "my-tasks" | "general" | "pool" | "archive">(
@@ -295,7 +375,7 @@ const Tasks = () => {
   const [canCreateProjectState, setCanCreateProjectState] = useState(false);
   const [canDeleteProjectState, setCanDeleteProjectState] = useState(false);
   const [canAccessTeamManagement, setCanAccessTeamManagement] = useState(false);
-  const [project, setProject] = useState<any>(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [projects, setProjects] = useState<Map<string, Project>>(new Map());
   const [filterableProjects, setFilterableProjects] = useState<Project[]>([]);
   // En son işlem yapılan projeyi takip et
@@ -339,11 +419,12 @@ const Tasks = () => {
   useEffect(() => {
     if (taskIdFromUrl && allTasks.length > 0) {
       const task = allTasks.find(t => t.id === taskIdFromUrl);
-      if (task) {
+      if (task && selectedTaskId !== taskIdFromUrl) {
+        // Sadece farklı bir görev seçildiyse aç (sonsuz döngüyü önle)
         openTaskDetail(taskIdFromUrl, task.status);
       }
     }
-  }, [taskIdFromUrl, allTasks, openTaskDetail]);
+  }, [taskIdFromUrl, allTasks, openTaskDetail, selectedTaskId]);
 
   // Klavye kısayolları ve navigasyon
   const [focusedTaskIndex, setFocusedTaskIndex] = useState<number>(-1);
@@ -356,9 +437,18 @@ const Tasks = () => {
       setViewMode("board");
     } else if (viewFromUrl === "list") {
       setViewMode("list");
+    } else {
+      // viewFromUrl yoksa varsayılan olarak list açılır
+      setViewMode("list");
     }
-    // viewFromUrl yoksa varsayılan olarak board kalır
   }, [viewFromUrl]);
+  
+  // Modal açıldığında liste görünümüne geç
+  useEffect(() => {
+    if (selectedTaskId && viewMode === "board") {
+      setViewMode("list");
+    }
+  }, [selectedTaskId, viewMode]);
 
   // View mode değiştiğinde URL'i güncelle
   useEffect(() => {
@@ -440,6 +530,165 @@ const Tasks = () => {
     }
   }, [user, projectId, taskTypeFromUrl]);
 
+  // Kullanıcıları ve projeleri yükle (subscription callback'inden ayrı)
+  useEffect(() => {
+    if (!user) return;
+    
+    const loadUsersAndProjects = async () => {
+      const now = Date.now();
+      const USERS_PROJECTS_CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
+      const shouldRefreshUsers = !cachedUsers.length || (now - usersCacheTimestamp) > USERS_PROJECTS_CACHE_DURATION;
+      const shouldRefreshProjects = !cachedProjects.length || (now - projectsCacheTimestamp) > USERS_PROJECTS_CACHE_DURATION;
+      
+      if (shouldRefreshUsers) {
+        try {
+          const allUsers = await getAllUsers();
+          setCachedUsers(allUsers);
+          setUsersCacheTimestamp(now);
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Error loading users:", error);
+          }
+        }
+      }
+      
+      if (shouldRefreshProjects) {
+        try {
+          const allProjectsData = await getProjects();
+          setCachedProjects(allProjectsData);
+          setProjectsCacheTimestamp(now);
+          
+          // Projeleri Map'e çevir (hızlı erişim için)
+          const projectsMap = new Map<string, Project>();
+          (Array.isArray(allProjectsData) ? allProjectsData : []).forEach((p) => {
+            if (p?.id) {
+              projectsMap.set(p.id, p);
+            }
+          });
+          setProjects(projectsMap);
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Error loading projects:", error);
+          }
+        }
+      }
+    };
+    
+    loadUsersAndProjects();
+  }, [user, cachedUsers.length, cachedProjects.length, usersCacheTimestamp, projectsCacheTimestamp]);
+
+  // Requests'i yükle
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const loadRequests = async () => {
+      try {
+        const myRequestsData = await getRequests({ createdBy: user.id });
+        setUserRequests(myRequestsData);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.error("Error loading requests:", error);
+          }
+        }
+      }
+    };
+    
+    loadRequests();
+  }, [user?.id]);
+
+  // Filtrelenebilir projeleri hesapla (ayrı useEffect - performans için)
+  useEffect(() => {
+    if (!user || !cachedProjects.length) return;
+    
+    const calculateFilterableProjects = async () => {
+      const now = Date.now();
+      const FILTERABLE_PROJECTS_CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
+      const shouldRefresh = !filterableProjectsCacheRef.current.length || 
+        (now - filterableProjectsCacheTimestampRef.current) > FILTERABLE_PROJECTS_CACHE_DURATION;
+      
+      if (!shouldRefresh) {
+        // Cache'den al
+        const lastUsedProjectId = localStorage.getItem('lastUsedProjectId');
+        if (lastUsedProjectId) {
+          lastUsedProjectRef.current = lastUsedProjectId;
+        }
+        const sortedProjects = [...filterableProjectsCacheRef.current].sort((a, b) => {
+          if (a.id === lastUsedProjectRef.current) return -1;
+          if (b.id === lastUsedProjectRef.current) return 1;
+          return 0;
+        });
+        setFilterableProjects(sortedProjects);
+        return;
+      }
+      
+      const filterableProjectsList = await Promise.allSettled(
+        cachedProjects.map(async (project) => {
+          if (!project?.id) return null;
+          
+          try {
+            if (project.name?.toLowerCase() === "gizli görevler") return null;
+            if (!project.isPrivate) return project;
+            if (isSuperAdmin) return project;
+            if (user?.id && project.createdBy === user.id) return project;
+            // Team Leader kontrolü - Firestore'dan (canUpdate projects)
+            // Bu kontrol async olduğu için burada yapılamaz, yukarıda zaten kontrol ediliyor
+            
+            if (user?.id) {
+              const cachedCheck = projectTaskChecksCacheRef.current.get(project.id);
+              if (cachedCheck !== undefined) {
+                return cachedCheck ? project : null;
+              }
+              
+              try {
+                const projectTasks = await getTasks({ projectId: project.id });
+                const hasTaskInProject = Array.isArray(projectTasks) && projectTasks.some((task) => {
+                  if (!task) return false;
+                  if (task.createdBy === user.id) return true;
+                  if (Array.isArray(task.assignedUsers) && task.assignedUsers.includes(user.id)) return true;
+                  return false;
+                });
+                projectTaskChecksCacheRef.current.set(project.id, hasTaskInProject);
+                if (hasTaskInProject) return project;
+              } catch {
+                projectTaskChecksCacheRef.current.set(project.id, false);
+              }
+            }
+            return null;
+          } catch (error: unknown) {
+            if (import.meta.env.DEV) {
+              console.error(`Error processing project ${project.id}:`, error);
+            }
+            return null;
+          }
+        })
+      );
+      
+      const validProjects = filterableProjectsList
+        .filter((result): result is PromiseFulfilledResult<Project | null> => result.status === 'fulfilled')
+        .map(result => result.value)
+        .filter((p): p is Project => p !== null);
+      
+      filterableProjectsCacheRef.current = validProjects;
+      filterableProjectsCacheTimestampRef.current = now;
+      
+      const lastUsedProjectId = localStorage.getItem('lastUsedProjectId');
+      if (lastUsedProjectId) {
+        lastUsedProjectRef.current = lastUsedProjectId;
+      }
+      
+      const sortedProjects = [...validProjects].sort((a, b) => {
+        if (a.id === lastUsedProjectRef.current) return -1;
+        if (b.id === lastUsedProjectRef.current) return 1;
+        return 0;
+      });
+      
+      setFilterableProjects(sortedProjects);
+    };
+    
+    calculateFilterableProjects();
+  }, [user, cachedProjects.length, isSuperAdmin]);
+
   // Gerçek zamanlı görev güncellemeleri için subscribe
   useEffect(() => {
     if (!user) return;
@@ -459,142 +708,10 @@ const Tasks = () => {
     // Gerçek zamanlı dinleme başlat
     const unsubscribe = subscribeToTasks(taskFilters, async (firebaseTasks) => {
       try {
-        // Kullanıcıları ve projeleri cache'den al veya yeniden yükle (cache 5 dakika geçerli)
         const now = Date.now();
-        const USERS_PROJECTS_CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
-        const shouldRefreshUsers = !cachedUsers.length || (now - usersCacheTimestamp) > USERS_PROJECTS_CACHE_DURATION;
-        const shouldRefreshProjects = !cachedProjects.length || (now - projectsCacheTimestamp) > USERS_PROJECTS_CACHE_DURATION;
         
-        // Cache'den veya API'den al
-        let allUsers = cachedUsers;
-        let allProjectsData = cachedProjects;
-        
-        if (shouldRefreshUsers) {
-          allUsers = await getAllUsers();
-          setCachedUsers(allUsers);
-          setUsersCacheTimestamp(now);
-        }
-        
-        if (shouldRefreshProjects) {
-          allProjectsData = await getProjects();
-          setCachedProjects(allProjectsData);
-          setProjectsCacheTimestamp(now);
-        }
-        
-        const myRequestsData = await getRequests({ createdBy: user.id });
-
-        // Projeleri Map'e çevir (hızlı erişim için)
-        const projectsMap = new Map<string, Project>();
-        (Array.isArray(allProjectsData) ? allProjectsData : []).forEach((p) => {
-          if (p?.id) {
-            projectsMap.set(p.id, p);
-          }
-        });
-        setProjects(projectsMap);
-
-        // Filtrelenebilir projeleri belirle (gizli projeler için yetki kontrolü) - Cache kullan
-        const FILTERABLE_PROJECTS_CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
-        const shouldRefreshFilterableProjects = !filterableProjectsCacheRef.current.length || 
-          (now - filterableProjectsCacheTimestampRef.current) > FILTERABLE_PROJECTS_CACHE_DURATION;
-        
-        let validProjects: Project[] = [];
-        
-        if (shouldRefreshFilterableProjects) {
-        const filterableProjectsList = await Promise.allSettled(
-          (Array.isArray(allProjectsData) ? allProjectsData : []).map(async (project) => {
-            if (!project?.id) return null;
-            
-            try {
-              // Otomatik oluşturulan "Gizli Görevler" projesini filtrele
-              if (project.name?.toLowerCase() === "gizli görevler") {
-                return null;
-              }
-              
-              // Gizli olmayan projeler herkes görebilir
-              if (!project.isPrivate) return project;
-              
-              // Üst yöneticiler tüm projeleri görebilir
-              if (isSuperAdmin) return project;
-              
-                // Yöneticiler tüm projeleri görebilir
-              const userIsAdmin = user?.roles?.includes("admin");
-              if (userIsAdmin) return project;
-              
-              // Oluşturan görebilir
-              if (user?.id && project.createdBy === user.id) return project;
-              
-                // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz
-              const isTeamLeader = user?.roles?.includes("team_leader");
-              if (isTeamLeader) {
-                  return null;
-              }
-              
-                // Projede görevi olan kullanıcılar görebilir - Cache kullan
-              if (user?.id) {
-                  // Cache'den kontrol et
-                  const cachedCheck = projectTaskChecksCacheRef.current.get(project.id);
-                  if (cachedCheck !== undefined) {
-                    return cachedCheck ? project : null;
-                  }
-                  
-                  try {
-                    // Sadece görevlerin varlığını kontrol et - assignments kontrolünü atla (performans için)
-                  const projectTasks = await getTasks({ projectId: project.id });
-                  const hasTaskInProject = Array.isArray(projectTasks) && projectTasks.some((task) => {
-                    if (!task) return false;
-                    if (task.createdBy === user.id) return true;
-                    if (Array.isArray(task.assignedUsers) && task.assignedUsers.includes(user.id)) return true;
-                    return false;
-                  });
-                  
-                    // Cache'e kaydet
-                    projectTaskChecksCacheRef.current.set(project.id, hasTaskInProject);
-                    
-                    if (hasTaskInProject) return project;
-                } catch {
-                  // Hata durumunda projeyi gösterme
-                    projectTaskChecksCacheRef.current.set(project.id, false);
-                }
-              }
-              
-              return null;
-            } catch (error) {
-              console.error(`Error processing project ${project.id}:`, error);
-              return null;
-            }
-          })
-        );
-        
-        // Promise.allSettled sonuçlarını işle
-          validProjects = filterableProjectsList
-          .filter((result): result is PromiseFulfilledResult<Project | null> => result.status === 'fulfilled')
-          .map(result => result.value)
-          .filter((p): p is Project => p !== null);
-        
-          // Cache'e kaydet
-          filterableProjectsCacheRef.current = validProjects;
-          filterableProjectsCacheTimestampRef.current = now;
-        } else {
-          // Cache'den al
-          validProjects = filterableProjectsCacheRef.current;
-        }
-        
-        // En son kullanılan projeyi localStorage'dan al
-        const lastUsedProjectId = localStorage.getItem('lastUsedProjectId');
-        if (lastUsedProjectId) {
-          lastUsedProjectRef.current = lastUsedProjectId;
-        }
-        
-        // Projeleri en son kullanılan projeye göre sırala
-        const sortedProjects = [...validProjects].sort((a, b) => {
-          if (a.id === lastUsedProjectRef.current) return -1;
-          if (b.id === lastUsedProjectRef.current) return 1;
-          return 0;
-        });
-        
-        setFilterableProjects(sortedProjects);
-
-        setUserRequests(myRequestsData);
+        // Kullanıcıları ve projeleri cache'den al (ayrı useEffect'lerde yükleniyor)
+        const allUsers = cachedUsers;
 
         // Her görev için assignments'ları al - Cache kullan ve sadece yeni/değişen görevler için al
         const ASSIGNMENTS_CACHE_DURATION = 2 * 60 * 1000; // 2 dakika
@@ -617,8 +734,10 @@ const Tasks = () => {
             try {
               const assignments = await getTaskAssignments(firebaseTask.id);
                 return { taskId: firebaseTask.id, assignments: Array.isArray(assignments) ? assignments : [] };
-            } catch (error) {
-              console.error(`Error fetching assignments for task ${firebaseTask.id}:`, error);
+            } catch (error: unknown) {
+              if (import.meta.env.DEV) {
+                console.error(`Error fetching assignments for task ${firebaseTask.id}:`, error);
+              }
                 return { taskId: firebaseTask.id, assignments: [] };
             }
           })
@@ -631,6 +750,36 @@ const Tasks = () => {
             }
           });
           assignmentsCacheTimestampRef.current = now;
+        }
+        
+        // Yorum sayılarını yükle (batch - performans için sadece görünen görevler için)
+        const commentCountsMap = new Map<string, number>();
+        try {
+          // Sadece görünen görevler için yorum sayısı yükle (ilk 50 görev)
+          const tasksToLoad = validFirebaseTasks.slice(0, Math.min(50, validFirebaseTasks.length));
+          const batchSize = 10;
+          for (let i = 0; i < tasksToLoad.length; i += batchSize) {
+            const batch = tasksToLoad.slice(i, i + batchSize);
+            await Promise.all(
+              batch.map(async (firebaseTask) => {
+                if (!firebaseTask?.id) return;
+                try {
+                  const comments = await getTaskComments(firebaseTask.id);
+                  commentCountsMap.set(firebaseTask.id, Array.isArray(comments) ? comments.length : 0);
+                } catch (error: unknown) {
+                  if (import.meta.env.DEV) {
+                    console.error(`Error fetching comments for task ${firebaseTask.id}:`, error);
+                  }
+                  commentCountsMap.set(firebaseTask.id, 0);
+                }
+              })
+            );
+          }
+          setCommentCounts(commentCountsMap);
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Error loading comment counts:", error);
+          }
         }
         
         // Tüm görevler için assignment'ları cache'den al
@@ -702,9 +851,13 @@ const Tasks = () => {
         setArchivedTasks(archivedTasksList);
         setAllTasks(allTasksList);
         setLoading(false);
-      } catch (error: any) {
-        console.error("Real-time tasks update error:", error);
-        const errorMessage = error.message || "Görevler güncellenirken hata oluştu";
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          if (import.meta.env.DEV) {
+            console.error("Real-time tasks update error:", error);
+          }
+        }
+        const errorMessage = error instanceof Error ? error.message : String(error) || "Görevler güncellenirken hata oluştu";
         setError(errorMessage);
         setLoading(false);
       }
@@ -716,15 +869,19 @@ const Tasks = () => {
     };
   }, [user, projectId, taskTypeFromUrl, filterFromUrl, isSuperAdmin]);
 
-
   const fetchProject = async () => {
     if (!projectId) return;
     try {
       const projectData = await getProjectById(projectId);
       setProject(projectData);
-    } catch (error: any) {
-      console.error("Fetch project error:", error);
-      toast.error(error.message || "Proje yüklenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.error("Fetch project error:", error);
+        }
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Proje yüklenirken hata oluştu");
     }
   };
 
@@ -737,14 +894,31 @@ const Tasks = () => {
       }
       try {
         const canReadDepts = await canRead("departments");
-        setCanAccessTeamManagement(canReadDepts || isTeamLeader);
+        // Team Leader kontrolü - Firestore'dan (canUpdate departments)
+        const { canUpdateResource } = await import("@/utils/permissions");
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
+          role: user.roles,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        };
+        const canUpdateDepts = await canUpdateResource(userProfile, "departments");
+        setCanAccessTeamManagement(canReadDepts || canUpdateDepts);
       } catch (error) {
-        console.error("Error checking team management permission:", error);
+        if (import.meta.env.DEV) {
+          console.error("Error checking team management permission:", error);
+        }
         setCanAccessTeamManagement(false);
       }
     };
     checkTeamManagementPermission();
-  }, [user, isTeamLeader, canRead]);
+  }, [user, canRead]);
 
   const checkCreatePermission = async () => {
     if (!user) {
@@ -769,7 +943,9 @@ const Tasks = () => {
       const hasPermission = await canCreateTask(userProfile, departments);
       setCanCreate(hasPermission);
     } catch (error) {
-      console.error("Permission check error:", error);
+      if (import.meta.env.DEV) {
+        console.error("Permission check error:", error);
+      }
       setCanCreate(false);
     }
   };
@@ -819,16 +995,18 @@ const Tasks = () => {
           updatedAt: Timestamp.now(),
         };
         const canDelete = await canDeleteProject(dummyProject, userProfile);
-        setCanCreateProjectState(canCreate || isAdmin || isTeamLeader);
-        setCanDeleteProjectState(canDelete || isAdmin || isTeamLeader);
+        setCanCreateProjectState(canCreate);
+        setCanDeleteProjectState(canDelete);
       } catch (error) {
-        console.error("Error checking project permissions:", error);
+        if (import.meta.env.DEV) {
+          console.error("Error checking project permissions:", error);
+        }
         setCanCreateProjectState(false);
         setCanDeleteProjectState(false);
       }
     };
     checkProjectPermissions();
-  }, [user, isAdmin, isTeamLeader]);
+  }, [user]);
 
   const fetchTasks = async () => {
     if (!user) return;
@@ -880,18 +1058,12 @@ const Tasks = () => {
             // Üst yöneticiler tüm projeleri görebilir
             if (isSuperAdmin) return project;
             
-            // Yöneticiler tüm projeleri görebilir
-            const userIsAdmin = user?.roles?.includes("admin");
-            if (userIsAdmin) return project;
-            
             // Oluşturan görebilir
             if (user?.id && project.createdBy === user.id) return project;
             
             // Ekip lideri için projede görevi olan kullanıcılar kontrolü yapılmaz (sadece kendi oluşturduğu gizli projeleri görebilir)
-            const isTeamLeader = user?.roles?.includes("team_leader");
-            if (isTeamLeader) {
-              return null; // Ekip lideri sadece kendi oluşturduğu gizli projeleri görebilir (yukarıda kontrol edildi)
-            }
+            // Team Leader kontrolü - Firestore'dan (canUpdate projects)
+            // Bu kontrol async olduğu için burada yapılamaz, yukarıda zaten kontrol ediliyor
             
             // Projede görevi olan kullanıcılar görebilir (ekip lideri hariç)
             if (user?.id) {
@@ -923,8 +1095,10 @@ const Tasks = () => {
             }
             
             return null;
-          } catch (error) {
-            console.error(`Error processing project ${project.id}:`, error);
+          } catch (error: unknown) {
+            if (import.meta.env.DEV) {
+              console.error(`Error processing project ${project.id}:`, error);
+            }
             return null;
           }
         })
@@ -947,8 +1121,10 @@ const Tasks = () => {
           try {
             const assignments = await getTaskAssignments(task.id);
             return { task, assignments: Array.isArray(assignments) ? assignments : [] };
-          } catch (error) {
-            console.error(`Error fetching assignments for task ${task.id}:`, error);
+          } catch (error: unknown) {
+            if (import.meta.env.DEV) {
+              console.error(`Error fetching assignments for task ${task.id}:`, error);
+            }
             return { task, assignments: [] };
           }
         })
@@ -1291,9 +1467,11 @@ const Tasks = () => {
 
       // Oluşturduğum görevler - BOŞ (artık gösterilmiyor, sadece proje altında ve "Tüm Görevler" sekmesinde gözüküyor)
       setCreatedTasks([]);
-    } catch (error: any) {
-      console.error("Fetch tasks error:", error);
-      const errorMessage = error.message || "Görevler yüklenirken hata oluştu";
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Fetch tasks error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error) || "Görevler yüklenirken hata oluştu";
       setError(errorMessage);
       setLoading(false);
       
@@ -1341,9 +1519,12 @@ const Tasks = () => {
       await deleteTask(taskId, user.id);
       toast.success("Görev başarıyla silindi");
       // Real-time subscribe otomatik güncelleyecek
-    } catch (error: any) {
-      console.error("Delete task error:", error);
-      toast.error(error?.message || "Görev silinirken hata oluştu", {
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete task error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Görev silinirken hata oluştu", {
         action: {
           label: "Tekrar Dene",
           onClick: () => handleDeleteTask(taskId),
@@ -1378,9 +1559,12 @@ const Tasks = () => {
       // Projeleri yeniden yükle
       const projects = await getProjects({ status: "active" });
       setFilterableProjects(projects);
-    } catch (error: any) {
-      console.error("Create project error:", error);
-      toast.error(error.message || "Proje oluşturulurken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Create project error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Proje oluşturulurken hata oluştu");
     }
   };
 
@@ -1399,9 +1583,12 @@ const Tasks = () => {
       // Projeleri yeniden yükle
       const projects = await getProjects({ status: "active" });
       setFilterableProjects(projects);
-    } catch (error: any) {
-      console.error("Delete project error:", error);
-      toast.error(error.message || "Proje silinirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete project error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Proje silinirken hata oluştu");
     }
   };
 
@@ -1418,9 +1605,11 @@ const Tasks = () => {
       await archiveTask(taskId, user.id);
       toast.success("Görev arşivlendi");
       // Real-time subscribe otomatik güncelleyecek
-    } catch (error: any) {
-      console.error("Archive task error:", error);
-      toast.error(error?.message || "Görev arşivlenirken hata oluştu", {
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Archive task error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Görev arşivlenirken hata oluştu", {
         action: {
           label: "Tekrar Dene",
           onClick: () => handleArchiveTask(taskId),
@@ -1445,9 +1634,11 @@ const Tasks = () => {
       setRejectionReason("");
       setRejectingAssignment(null);
       // Real-time subscribe otomatik güncelleyecek
-    } catch (error: any) {
-      console.error("Reject task error:", error);
-      toast.error(error.message || "Görev reddedilemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Reject task error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Görev reddedilemedi");
     } finally {
       setRejecting(false);
     }
@@ -1492,14 +1683,36 @@ const Tasks = () => {
     );
   };
 
+  // Normalize status - remove "column_" prefix if present
+  const normalizeStatus = (status: string | undefined | null): string => {
+    if (!status) return "pending";
+    // Eğer "column_" ile başlıyorsa, bu bir column ID'sidir (sayısal olabilir)
+    if (status.startsWith("column_")) {
+      const statusFromColumn = status.replace("column_", "");
+      // Geçerli status değerlerini kontrol et (pending, in_progress, completed, approved, cancelled)
+      if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(statusFromColumn)) {
+        return statusFromColumn === "cancelled" ? "pending" : statusFromColumn;
+      }
+      // Sayısal ID veya geçersiz değer ise "pending" olarak kabul et
+      return "pending";
+    }
+    // Geçerli status değerlerini kontrol et
+    if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(status)) {
+      return status === "cancelled" ? "pending" : status;
+    }
+    return "pending"; // Fallback
+  };
+
   const getStatusLabel = (status: string) => {
+    // Önce status'ü normalize et (column_ prefix'ini kaldır)
+    const normalized = normalizeStatus(status);
     const labels: Record<string, string> = {
       pending: "Yapılacak",
       in_progress: "Devam Ediyor",
       completed: "Tamamlandı",
       approved: "Onaylandı",
     };
-    return labels[status] || status;
+    return labels[normalized] || normalized;
   };
 
   // Tarih formatlama fonksiyonu
@@ -1523,15 +1736,23 @@ const Tasks = () => {
     return "text-muted-foreground";
   };
 
-  const isTaskOverdue = (task: Task) => {
-    if (!task.due_date) return false;
-    const dueDate = new Date(task.due_date);
+  const isTaskOverdue = (task: Task | FirebaseTask) => {
+    const dueDate = 'due_date' in task && task.due_date 
+      ? new Date(task.due_date) 
+      : ('dueDate' in task && task.dueDate 
+        ? (task.dueDate instanceof Timestamp ? task.dueDate.toDate() : new Date(task.dueDate))
+        : null);
+    if (!dueDate) return false;
     return isBefore(dueDate, new Date()) && task.status !== "completed";
   };
 
-  const isTaskDueSoon = (task: Task) => {
-    if (!task.due_date) return false;
-    const dueDate = new Date(task.due_date);
+  const isTaskDueSoon = (task: Task | FirebaseTask) => {
+    const dueDate = 'due_date' in task && task.due_date 
+      ? new Date(task.due_date) 
+      : ('dueDate' in task && task.dueDate 
+        ? (task.dueDate instanceof Timestamp ? task.dueDate.toDate() : new Date(task.dueDate))
+        : null);
+    if (!dueDate) return false;
     const today = startOfDay(new Date());
     const threeDaysAfter = addDays(today, 3);
     return (
@@ -1554,6 +1775,121 @@ const Tasks = () => {
     }
   };
 
+  // Sütun genişliği resize fonksiyonları
+  const handleResizeStart = (column: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizingColumn(column);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = columnWidths[column] || 100;
+  };
+
+  // Sütun sırası - yanındaki sütunu bulmak için
+  const getColumnOrder = () => ['title', 'status', 'assignee', 'people', 'priority', 'dueDate'];
+  
+  // Tablo toplam genişliğini hesapla
+  const totalTableWidth = useMemo(() => {
+    const columnOrder = getColumnOrder();
+    const defaultWidths: Record<string, number> = {
+      title: 300,
+      status: 130,
+      assignee: 150,
+      people: 180,
+      priority: 90,
+      dueDate: 110,
+    };
+    return columnOrder.reduce((sum, col) => {
+      return sum + (columnWidths[col] || defaultWidths[col] || 100);
+    }, 0);
+  }, [columnWidths]);
+
+  useEffect(() => {
+    const handleResizeMove = (e: MouseEvent) => {
+      if (!resizingColumn) return;
+      
+      const diff = e.clientX - resizeStartX.current;
+      const columnOrder = getColumnOrder();
+      const currentIndex = columnOrder.indexOf(resizingColumn);
+      
+      if (currentIndex === -1) return;
+      
+      const defaultWidths: Record<string, number> = {
+        title: 300,
+        status: 130,
+        assignee: 150,
+        people: 180,
+        priority: 90,
+        dueDate: 110,
+      };
+      
+      const minWidths: Record<string, number> = {
+        title: 100,
+        status: 100,
+        assignee: 100,
+        people: 120,
+        priority: 70,
+        dueDate: 90,
+      };
+      
+      setColumnWidths(prev => {
+        const updated = { ...prev };
+        const newWidth = Math.max(minWidths[resizingColumn] || 50, resizeStartWidth.current + diff);
+        const widthDiff = newWidth - resizeStartWidth.current;
+        
+        // Değişen sütunun genişliğini güncelle
+        updated[resizingColumn] = newWidth;
+        
+        // Sağındaki sütunu daralt (eğer varsa)
+        if (currentIndex < columnOrder.length - 1) {
+          const nextColumn = columnOrder[currentIndex + 1];
+          const nextWidth = prev[nextColumn] || defaultWidths[nextColumn] || 100;
+          const newNextWidth = Math.max(minWidths[nextColumn] || 50, nextWidth - widthDiff);
+          updated[nextColumn] = newNextWidth;
+          
+          // Eğer sağındaki sütun minimum genişliğe ulaştıysa, solundaki sütunu da etkile
+          if (newNextWidth === (minWidths[nextColumn] || 50) && currentIndex > 0) {
+            const prevColumn = columnOrder[currentIndex - 1];
+            const prevWidth = prev[prevColumn] || defaultWidths[prevColumn] || 100;
+            const remainingDiff = widthDiff - (nextWidth - newNextWidth);
+            if (remainingDiff > 0) {
+              const newPrevWidth = Math.max(minWidths[prevColumn] || 50, prevWidth - remainingDiff);
+              updated[prevColumn] = newPrevWidth;
+            }
+          }
+        } else {
+          // Son sütunsa, sadece solundaki sütunu daralt
+          if (currentIndex > 0) {
+            const prevColumn = columnOrder[currentIndex - 1];
+            const prevWidth = prev[prevColumn] || defaultWidths[prevColumn] || 100;
+            const newPrevWidth = Math.max(minWidths[prevColumn] || 50, prevWidth - widthDiff);
+            updated[prevColumn] = newPrevWidth;
+          }
+        }
+        
+        localStorage.setItem('tasks-column-widths', JSON.stringify(updated));
+        return updated;
+      });
+    };
+
+    const handleResizeEnd = () => {
+      setResizingColumn(null);
+    };
+
+    if (resizingColumn) {
+      document.addEventListener('mousemove', handleResizeMove);
+      document.addEventListener('mouseup', handleResizeEnd);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeEnd);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [resizingColumn, columnWidths]);
+
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -1563,19 +1899,55 @@ const Tasks = () => {
       .slice(0, 2);
   };
 
-  const filterTasks = (tasks: any[]) => {
+  // Jira tarzı Key formatı (örn: TASK-123)
+  const formatTaskKey = (taskId: string) => {
+    // ID'nin son 6 karakterini al ve büyük harfe çevir
+    const shortId = taskId.slice(-6).toUpperCase();
+    return `TASK-${shortId}`;
+  };
+
+  // Öncelik gösterimi için helper
+  const getPriorityDisplay = (priority: number | undefined) => {
+    if (!priority || priority === 1) return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
+    if (priority === 2) return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
+    if (priority === 3) return { label: "Orta", icon: Minus, color: "text-gray-600 dark:text-gray-400" };
+    if (priority === 4) return { label: "Yüksek", icon: ChevronUp, color: "text-red-600 dark:text-red-400" };
+    if (priority >= 5) return { label: "Yüksek", icon: ChevronUp, color: "text-red-600 dark:text-red-400" };
+    return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
+  };
+
+  const filterTasks = (tasks: (Task | FirebaseTask)[]) => {
     if (!Array.isArray(tasks)) {
       return [];
     }
     return tasks.filter(task => {
       if (!task) return false;
       
+      // Silinmiş görevleri filtrele: allFirebaseTasks içinde olmayan görevler silinmiş demektir
+      if (Array.isArray(allFirebaseTasks) && allFirebaseTasks.length > 0) {
+        const firebaseTaskIds = new Set(allFirebaseTasks.map(t => t?.id).filter((id): id is string => !!id));
+        if (!firebaseTaskIds.has(task.id)) {
+          return false; // Silinmiş görev
+        }
+      }
+      
       const searchLower = (searchTerm || "").toLocaleLowerCase('tr-TR');
       const taskTitle = (task.title || "").toLocaleLowerCase('tr-TR');
       const taskDesc = (task.description || "").toLocaleLowerCase('tr-TR');
       
       const matchesSearch = !searchTerm || searchTerm.trim() === "" || taskTitle.includes(searchLower) || taskDesc.includes(searchLower);
-      const matchesStatus = statusFilter === "all" || task.status === statusFilter;
+      
+      // Status filtresi: cancelled görevler "approved" kolonunda gösterildiği için özel kontrol
+      let matchesStatus = statusFilter === "all" || task.status === statusFilter;
+      if (statusFilter === "approved") {
+        // "approved" filtresi seçildiğinde, hem approved hem cancelled görevleri göster
+        matchesStatus = task.status === "approved" || task.status === "cancelled" || 
+          (task.status === "completed" && (task as any).approvalStatus === "approved");
+      } else if (statusFilter !== "all") {
+        // Diğer filtreler için normal kontrol
+        matchesStatus = task.status === statusFilter;
+      }
+      
       const matchesFocus = (
         focusFilter === "all" ||
         (focusFilter === "due_soon" && isTaskDueSoon(task)) ||
@@ -1602,7 +1974,7 @@ const Tasks = () => {
     });
   };
 
-  const sortTasks = (tasks: any[]) => {
+  const sortTasks = (tasks: (Task | FirebaseTask)[]) => {
     if (!Array.isArray(tasks)) {
       return [];
     }
@@ -1615,17 +1987,21 @@ const Tasks = () => {
         return bPriority - aPriority;
       }
       if (sortBy === "due_date") {
-        if (!a.due_date) return 1;
-        if (!b.due_date) return -1;
-        const aDate = new Date(a.due_date).getTime();
-        const bDate = new Date(b.due_date).getTime();
+        const aDueDate = 'due_date' in a && a.due_date ? a.due_date : ('dueDate' in a && a.dueDate ? (a.dueDate instanceof Timestamp ? a.dueDate.toDate().toISOString() : new Date(a.dueDate).toISOString()) : null);
+        const bDueDate = 'due_date' in b && b.due_date ? b.due_date : ('dueDate' in b && b.dueDate ? (b.dueDate instanceof Timestamp ? b.dueDate.toDate().toISOString() : new Date(b.dueDate).toISOString()) : null);
+        if (!aDueDate) return 1;
+        if (!bDueDate) return -1;
+        const aDate = typeof aDueDate === 'string' ? new Date(aDueDate).getTime() : 0;
+        const bDate = typeof bDueDate === 'string' ? new Date(bDueDate).getTime() : 0;
         if (isNaN(aDate)) return 1;
         if (isNaN(bDate)) return -1;
         return aDate - bDate;
       }
       // created_at sıralaması
-      const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+      const aCreatedVal = 'created_at' in a && a.created_at ? a.created_at : ('createdAt' in a && a.createdAt ? (a.createdAt instanceof Timestamp ? a.createdAt.toDate() : a.createdAt) : null);
+      const bCreatedVal = 'created_at' in b && b.created_at ? b.created_at : ('createdAt' in b && b.createdAt ? (b.createdAt instanceof Timestamp ? b.createdAt.toDate() : b.createdAt) : null);
+      const aCreated = aCreatedVal ? (aCreatedVal instanceof Date ? aCreatedVal.getTime() : (typeof aCreatedVal === 'string' ? new Date(aCreatedVal).getTime() : 0)) : 0;
+      const bCreated = bCreatedVal ? (bCreatedVal instanceof Date ? bCreatedVal.getTime() : (typeof bCreatedVal === 'string' ? new Date(bCreatedVal).getTime() : 0)) : 0;
       if (isNaN(aCreated)) return 1;
       if (isNaN(bCreated)) return -1;
       return bCreated - aCreated;
@@ -1636,7 +2012,7 @@ const Tasks = () => {
   // Bu görev seti, istatistiklerin hesaplandığı ve görevlerin gösterildiği aynı kaynak olmalı
   const tasksForStatsAndDisplay = useMemo(() => {
     // Filtre tipine göre görev listesini belirle
-    let tasks: any[] = [];
+    let tasks: (Task | FirebaseTask)[] = [];
     if (activeFilter === "archive") {
       tasks = Array.isArray(archivedTasks) ? archivedTasks.filter(t => t) : [];
     } else if (activeFilter === "my-tasks") {
@@ -1645,8 +2021,9 @@ const Tasks = () => {
         .filter(t => t)
         .map((task) => {
           if (!task) return null;
-        const { assignment, ...taskWithoutAssignment } = task;
-        return taskWithoutAssignment;
+          const taskWithAssignment = task as Task & { assignment?: TaskAssignment; assignedUsers?: Profile[] };
+          const { assignment, ...taskWithoutAssignment } = taskWithAssignment;
+          return taskWithoutAssignment;
         })
         .filter((t): t is Task & { assignedUsers?: Profile[] } => t !== null);
     } else if (activeFilter === "pool") {
@@ -1664,28 +2041,30 @@ const Tasks = () => {
     
     // Silinmiş görevleri filtrele: allFirebaseTasks içinde olmayan görevler silinmiş demektir
     // Firebase'de deleteDoc ile silinen görevler Firestore'dan kaldırılıyor, bu yüzden allFirebaseTasks'ta olmayan görevler silinmiş demektir
-    // allFirebaseTasks boş olsa bile (henüz yüklenmemiş), görevleri filtrelemeye çalışalım
-    // Eğer allFirebaseTasks yüklenmişse ve görev içinde yoksa, silinmiş demektir
-    if (Array.isArray(allFirebaseTasks)) {
-      if (allFirebaseTasks.length > 0) {
-        // allFirebaseTasks yüklenmiş, silinmiş görevleri filtrele
-        const firebaseTaskIds = new Set(allFirebaseTasks.map(t => t?.id).filter((id): id is string => !!id));
-        tasks = tasks.filter((task: any) => {
-          if (!task?.id) return false;
-          // Eğer görev allFirebaseTasks içinde yoksa, silinmiş demektir
-          return firebaseTaskIds.has(task.id);
-        });
-      }
-      // allFirebaseTasks boşsa (henüz yüklenmemiş), görevleri olduğu gibi bırak
-      // Çünkü henüz yüklenmediği için silinmiş görevleri filtreleyemeyiz
+    // allFirebaseTasks yüklenmişse, silinmiş görevleri kesinlikle filtrele
+    if (Array.isArray(allFirebaseTasks) && allFirebaseTasks.length > 0) {
+      const firebaseTaskIds = new Set(allFirebaseTasks.map(t => t?.id).filter((id): id is string => !!id));
+      tasks = tasks.filter((task: FirebaseTask) => {
+        if (!task?.id) return false;
+        // Eğer görev allFirebaseTasks içinde yoksa, silinmiş demektir - kesinlikle filtrele
+        return firebaseTaskIds.has(task.id);
+      });
+    }
+    // allFirebaseTasks boşsa (henüz yüklenmemiş), görevleri olduğu gibi bırak
+    // Çünkü henüz yüklenmediği için silinmiş görevleri filtreleyemeyiz
+    // Ama filterTasks içinde de kontrol yapılıyor, bu yüzden çift kontrol var
+    
+    // Arşivlenmiş görevleri filtrele (archive filtresi aktif değilse)
+    if (activeFilter !== "archive") {
+      tasks = tasks.filter((task: FirebaseTask) => task && !task.isArchived && !('is_archived' in task && task.is_archived));
     }
     
     // Proje filtresi uygula (selectedProject state'ine göre)
     if (selectedProject && selectedProject !== "all") {
       if (selectedProject === "general") {
-        tasks = tasks.filter((task: any) => task && (task.projectId === "general" || !task.projectId));
+        tasks = tasks.filter((task: FirebaseTask) => task && (task.projectId === "general" || !task.projectId));
       } else {
-        tasks = tasks.filter((task: any) => task && task.projectId === selectedProject);
+        tasks = tasks.filter((task: FirebaseTask) => task && task.projectId === selectedProject);
       }
     }
     
@@ -1703,7 +2082,7 @@ const Tasks = () => {
     // Hem liste hem pano görünümünde aynı filtreleri ve sıralamayı uygula
     const filtered = filterTasks(tasksForStatsAndDisplay);
     return sortTasks(filtered);
-  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject]);
+  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject, allFirebaseTasks]);
 
   const filteredAndSortedAllTasks = useMemo(() => {
     // İstatistiklerin baz aldığı görev setini kullan (tasksForStatsAndDisplay)
@@ -1715,8 +2094,8 @@ const Tasks = () => {
     // İstatistiklerin kullandığı filtrelemeyi koru, sadece ek filtreleri uygula (arama, durum, odak, proje)
     // Hem liste hem pano görünümünde aynı filtreleri ve sıralamayı uygula
     const filtered = filterTasks(tasksForStatsAndDisplay);
-    return sortTasks(filtered);
-  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject]);
+    return sortTasks(filtered) as (Task | FirebaseTask)[];
+  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject, allFirebaseTasks]);
 
   // Arşivlenmiş görevler için filtrelenmiş ve sıralanmış liste
   const filteredAndSortedArchivedTasks = useMemo(() => {
@@ -1726,20 +2105,135 @@ const Tasks = () => {
     // İstatistiklerin baz aldığı görev setini kullan (tasksForStatsAndDisplay)
     // Hem liste hem pano görünümünde aynı filtreleri ve sıralamayı uygula
     const filtered = filterTasks(tasksForStatsAndDisplay);
-    return sortTasks(filtered);
-  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject]);
+    return sortTasks(filtered) as (Task | FirebaseTask)[];
+  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject, allFirebaseTasks]);
+
+  // Sıralama fonksiyonu
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Aynı kolona tıklandığında yönü değiştir
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // Yeni kolona tıklandığında varsayılan olarak desc
+      setSortColumn(column);
+      setSortDirection("desc");
+    }
+  };
+
+  // Sıralama uygulama fonksiyonu
+  const applySorting = (data: (Task | FirebaseTask)[]): (Task | FirebaseTask)[] => {
+    if (!sortColumn) return data;
+    
+    const sorted = [...data].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+      
+      switch (sortColumn) {
+        case "key":
+          aValue = a.id;
+          bValue = b.id;
+          break;
+        case "title":
+          aValue = (a.title || "").toLowerCase();
+          bValue = (b.title || "").toLowerCase();
+          break;
+        case "status":
+          aValue = normalizeStatus(a.status || "pending");
+          bValue = normalizeStatus(b.status || "pending");
+          break;
+        case "priority":
+          aValue = a.priority || 0;
+          bValue = b.priority || 0;
+          break;
+        case "dueDate":
+          const aDue = (a as any).dueDate || (a as any).due_date;
+          const bDue = (b as any).dueDate || (b as any).due_date;
+          aValue = aDue ? (aDue instanceof Timestamp ? aDue.toDate().getTime() : new Date(aDue).getTime()) : 0;
+          bValue = bDue ? (bDue instanceof Timestamp ? bDue.toDate().getTime() : new Date(bDue).getTime()) : 0;
+          break;
+        case "createdAt":
+          const aCreated = (a as any).createdAt || (a as any).created_at;
+          const bCreated = (b as any).createdAt || (b as any).created_at;
+          aValue = aCreated ? (aCreated instanceof Timestamp ? aCreated.toDate().getTime() : new Date(aCreated).getTime()) : 0;
+          bValue = bCreated ? (bCreated instanceof Timestamp ? bCreated.toDate().getTime() : new Date(bCreated).getTime()) : 0;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+    
+    return sorted;
+  };
 
   // Filtre tipine göre görev listesini belirle
   const listData = useMemo(() => {
+    let data: (Task | FirebaseTask)[] = [];
     if (activeFilter === "my-tasks") {
-      return filteredAndSortedMyTasks;
+      data = filteredAndSortedMyTasks;
     } else if (activeFilter === "archive") {
-      return filteredAndSortedArchivedTasks;
+      data = filteredAndSortedArchivedTasks;
     } else {
       // all, general, pool için filteredAndSortedAllTasks kullan
-      return filteredAndSortedAllTasks;
+      data = filteredAndSortedAllTasks;
     }
-  }, [activeFilter, filteredAndSortedMyTasks, filteredAndSortedAllTasks, filteredAndSortedArchivedTasks]);
+    
+    // Son bir kontrol: Silinmiş görevleri kesinlikle filtrele
+    if (Array.isArray(allFirebaseTasks) && allFirebaseTasks.length > 0) {
+      const firebaseTaskIds = new Set(allFirebaseTasks.map(t => t?.id).filter((id): id is string => !!id));
+      data = data.filter((task: Task | FirebaseTask) => {
+        if (!task || typeof task !== 'object' || !('id' in task)) return false;
+        return firebaseTaskIds.has(task.id as string);
+      });
+    }
+    
+    // Sıralama uygula
+    data = applySorting(data);
+    
+    return data;
+  }, [activeFilter, filteredAndSortedMyTasks, filteredAndSortedAllTasks, filteredAndSortedArchivedTasks, allFirebaseTasks, sortColumn, sortDirection]);
+
+  // Yorum sayılarını lazy load et (görünen görevler için) - listData tanımından sonra
+  useEffect(() => {
+    if (!listData || listData.length === 0) return;
+    
+    const loadCommentCounts = async () => {
+      const visibleTasks = listData.slice(0, visibleItemsCount);
+      const tasksToLoad = visibleTasks.filter((task) => !commentCounts.has(task.id));
+      
+      if (tasksToLoad.length === 0) return;
+      
+      // Batch olarak yükle (10'ar 10'ar)
+      const batchSize = 10;
+      for (let i = 0; i < tasksToLoad.length; i += batchSize) {
+        const batch = tasksToLoad.slice(i, i + batchSize);
+        const counts = await Promise.all(
+          batch.map(async (task) => {
+            try {
+              const comments = await getTaskComments(task.id);
+              return { taskId: task.id, count: Array.isArray(comments) ? comments.length : 0 };
+            } catch {
+              return { taskId: task.id, count: 0 };
+            }
+          })
+        );
+        
+        setCommentCounts(prev => {
+          const newMap = new Map(prev);
+          counts.forEach(({ taskId, count }) => {
+            newMap.set(taskId, count);
+          });
+          return newMap;
+        });
+      }
+    };
+    
+    loadCommentCounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listData, visibleItemsCount]);
 
   // Liste değiştiğinde visible items count'u sıfırla (listData tanımından sonra taşındı)
 
@@ -1758,12 +2252,14 @@ const Tasks = () => {
           try {
             new Notification("Görev Durumu Güncellendi", {
               body: `${task.title} görevi "${statusNames[task.status] || task.status}" durumuna güncellendi`,
-              icon: "/favicon.ico",
+              icon: "/rev-favicon.png",
               tag: `task-${task.id}`,
-              badge: "/favicon.ico",
+              badge: "/rev-favicon.png",
             });
-          } catch (error) {
-            console.error("Browser notification error:", error);
+          } catch (error: unknown) {
+            if (import.meta.env.DEV) {
+              console.error("Browser notification error:", error);
+            }
           }
         }
         previousTaskStatusesRef.current.set(task.id, task.status);
@@ -1773,60 +2269,76 @@ const Tasks = () => {
 
   const boardTasks = useMemo(() => {
     // listData zaten tüm filtreleri (arama, durum, odak, proje) ve sıralamayı uygulamış durumda
-    // Direkt olarak listData'yı kullan, çünkü artık viewMode'dan bağımsız olarak aynı filtreler uygulanıyor
+    // tasksForStatsAndDisplay içinde zaten allFirebaseTasks ile senkronize edilmiş
+    // Direkt olarak listData'yı kullan, ek filtreleme yapma - liste ve pano aynı görevleri göstermeli
     
     if (!Array.isArray(listData) || listData.length === 0) {
       return [];
     }
     
+    // Son bir kontrol: Silinmiş görevleri kesinlikle filtrele
+    let filteredListData = listData;
+    if (Array.isArray(allFirebaseTasks) && allFirebaseTasks.length > 0) {
+      const firebaseTaskIds = new Set(allFirebaseTasks.map(t => t?.id).filter((id): id is string => !!id));
+      filteredListData = listData.filter((task: FirebaseTask) => {
+        if (!task?.id) return false;
+        return firebaseTaskIds.has(task.id);
+      });
+    }
+    
     // listData zaten filtrelenmiş ve sıralanmış, TaskBoard'un beklediği formata çevir
-    const boardTasksResult = listData
-      .filter((task) => {
-        // Null/undefined görevleri filtrele
-        if (!task || !task.id) return false;
-        // Silinmiş görevleri filtrele (allFirebaseTasks içinde olmayan görevler silinmiş demektir)
-        if (Array.isArray(allFirebaseTasks) && allFirebaseTasks.length > 0) {
-          const firebaseTaskIds = new Set(allFirebaseTasks.map(t => t?.id).filter((id): id is string => !!id));
-          if (!firebaseTaskIds.has(task.id)) {
-            return false; // Silinmiş görev
-          }
-        }
-        return true;
-      })
+    // Ek filtreleme yapma - listData zaten doğru şekilde filtrelenmiş
+    const boardTasksResult = filteredListData
       .map((task) => {
         // assignment'ı kaldır ve TaskBoard formatına çevir
-        const { assignment, assignedUsers, ...taskWithoutAssignment } = task;
+        const taskWithExtras = task as unknown as Task & { assignment?: TaskAssignment; assignedUsers?: Profile[] };
+        const { assignment, assignedUsers, ...taskWithoutAssignment } = taskWithExtras;
+        
+        // Firebase task'ı bul (isInPool ve poolRequests için)
+        const firebaseTask = Array.isArray(allFirebaseTasks) ? allFirebaseTasks.find(t => t?.id === task.id) : null;
         
         // TaskBoard'un beklediği formata çevir (assignments array'i oluştur)
-        const boardTask: any = {
+        const boardTask: { id: string; title: string; status: string; priority: number; dueDate?: string; createdAt: string; assignedUsers?: Array<{ id: string; full_name: string }>; labels?: Array<{ name: string; color: string }>; projectId?: string | null; isInPool?: boolean; poolRequests?: string[]; createdBy?: string } = {
           id: task.id,
           title: task.title || "",
-          description: task.description || null,
           status: task.status || "pending",
           priority: task.priority || 0,
-          due_date: task.due_date || null,
-          created_at: task.created_at || new Date().toISOString(),
+          dueDate: (() => {
+            const taskObj = task as { due_date?: string; dueDate?: Timestamp | Date | string };
+            if ('due_date' in taskObj && taskObj.due_date && typeof taskObj.due_date === 'string') return taskObj.due_date;
+            if ('dueDate' in taskObj && taskObj.dueDate) {
+              if (taskObj.dueDate instanceof Timestamp) return taskObj.dueDate.toDate().toISOString();
+              if (taskObj.dueDate instanceof Date) return taskObj.dueDate.toISOString();
+              if (typeof taskObj.dueDate === 'string') return taskObj.dueDate;
+            }
+            return undefined;
+          })(),
+          createdAt: (() => {
+            const taskObj = task as { created_at?: string; createdAt?: Timestamp | Date | string };
+            if ('created_at' in taskObj && taskObj.created_at && typeof taskObj.created_at === 'string') return taskObj.created_at;
+            if ('createdAt' in taskObj && taskObj.createdAt) {
+              if (taskObj.createdAt instanceof Timestamp) return taskObj.createdAt.toDate().toISOString();
+              if (taskObj.createdAt instanceof Date) return taskObj.createdAt.toISOString();
+              if (typeof taskObj.createdAt === 'string') return taskObj.createdAt;
+            }
+            return new Date().toISOString();
+          })(),
           projectId: task.projectId || null,
-          isArchived: task.isArchived || false,
-          is_archived: task.is_archived || false,
-          approvalStatus: task.approvalStatus || undefined,
-          createdBy: task.createdBy || null,
-          created_by: task.createdBy || null,
-          assignments: Array.isArray(assignedUsers) ? assignedUsers
-            .filter((u: any) => u && u.id)
-            .map((u: any) => ({
-              assigned_to: u.id,
-              assigned_to_name: u.full_name || u.email || "Kullanıcı",
-              assigned_to_email: u.email || "",
+          assignedUsers: Array.isArray(assignedUsers) ? assignedUsers
+            .filter((u): u is Profile => {
+              if (!u || typeof u !== 'object') return false;
+              return 'id' in u && 'full_name' in u && typeof (u as { id: unknown; full_name: unknown }).id === 'string' && typeof (u as { id: unknown; full_name: unknown }).full_name === 'string';
+            })
+            .map((u: Profile) => ({
+              id: u.id as string,
+              full_name: u.full_name as string,
             })) : [],
-          attachments: 0,
-          production_order_id: null, // Production order ID burada yok, sadece bilgiler var
-          production_order_number: task.production_order_number || null,
-          production_order_customer: task.production_order_customer || null,
-          production_order_priority: task.production_order_priority || null,
-          production_order_due_date: task.production_order_due_date || null,
-          production_order_status: null,
-          labels: [], // Labels boş array olarak başlat
+          labels: [],
+          // Görev havuzu bilgilerini ekle
+          isInPool: firebaseTask?.isInPool === true,
+          poolRequests: Array.isArray(firebaseTask?.poolRequests) ? firebaseTask.poolRequests : [],
+          // Görevi oluşturan kişi bilgisini ekle
+          createdBy: firebaseTask?.createdBy || task.createdBy || (task as { created_by?: string }).created_by,
         };
         
         return boardTask;
@@ -1839,21 +2351,34 @@ const Tasks = () => {
 
   // Mevcut durumun index'ini bul
   const getCurrentStatusIndex = (status: string, approvalStatus?: "pending" | "approved" | "rejected") => {
+    // Önce status'ü normalize et (column_ prefix'ini kaldır)
+    const normalized = normalizeStatus(status);
     // Eğer görev tamamlandı ve onaylandıysa, "Onaylandı" aşamasını göster
-    if (status === "completed" && approvalStatus === "approved") {
+    if (normalized === "completed" && approvalStatus === "approved") {
       return 3; // "Onaylandı" index'i
     }
     // Eğer görev tamamlandı ama onaylanmadıysa, "Tamamlandı" aşamasını göster
-    if (status === "completed") {
+    if (normalized === "completed") {
       return 2; // "Tamamlandı" index'i
     }
-    const index = taskStatusWorkflow.findIndex((statusItem) => statusItem.value === status);
-    return index === -1 ? 0 : index;
+    const index = taskStatusWorkflow.findIndex((statusItem) => statusItem.value === normalized);
+    // Eğer bulunamazsa, "pending" olarak kabul et (index 0)
+    if (index === -1) {
+      if (import.meta.env.DEV) {
+        console.warn("Tasks: Status workflow'da bulunamadı:", {
+          original: status,
+          normalized,
+          availableStatuses: taskStatusWorkflow.map(s => s.value),
+        });
+      }
+      return 0;
+    }
+    return index;
   };
 
   // Bir sonraki durumu bul
-  const getNextStatus = (currentStatus: string) => {
-    const currentIndex = getCurrentStatusIndex(currentStatus);
+  const getNextStatus = (currentStatus: string, approvalStatus?: "pending" | "approved" | "rejected") => {
+    const currentIndex = getCurrentStatusIndex(currentStatus, approvalStatus);
     if (currentIndex === -1 || currentIndex >= taskStatusWorkflow.length - 1) {
       return null;
     }
@@ -1897,6 +2422,9 @@ const Tasks = () => {
       return;
     }
 
+    // Status'ü normalize et (column_ prefix'ini kaldır)
+    const normalizedStatus = normalizeStatus(status);
+
     // Optimistic update: UI'ı hemen güncelle
     const task = Array.isArray(allTasks) ? allTasks.find(t => t?.id === taskId) : null;
       if (!task) {
@@ -1906,24 +2434,24 @@ const Tasks = () => {
 
     const previousStatus = task.status || "pending";
     
-    // Optimistic update state'ini güncelle
+    // Optimistic update state'ini güncelle (normalize edilmiş status ile)
     setOptimisticUpdates(prev => {
       const newMap = new Map(prev);
-      newMap.set(taskId, { status, timestamp: Date.now() });
+      newMap.set(taskId, { status: normalizedStatus, timestamp: Date.now() });
       return newMap;
     });
 
-    // Optimistic update: Local state'i güncelle
-    const updateTaskInState = (taskList: any[]) => {
+    // Optimistic update: Local state'i güncelle (normalize edilmiş status ile)
+    const updateTaskInState = <T extends { id: string; status: string }>(taskList: T[]): T[] => {
       return taskList.map(t => 
-        t.id === taskId ? { ...t, status } : t
+        t.id === taskId ? { ...t, status: normalizedStatus } as T : t
       );
     };
     
-    setAllTasks(prev => updateTaskInState(prev));
-    setMyTasks(prev => updateTaskInState(prev));
-    setCreatedTasks(prev => updateTaskInState(prev));
-    setArchivedTasks(prev => updateTaskInState(prev));
+    setAllTasks(prev => updateTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
+    setMyTasks(prev => updateTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
+    setCreatedTasks(prev => updateTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
+    setArchivedTasks(prev => updateTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
 
     try {
       // Yetki kontrolü: Sadece atanan kullanıcılar ve adminler durum değiştirebilir
@@ -1944,7 +2472,7 @@ const Tasks = () => {
           updatedAt: Timestamp.now(),
         };
         const hasPermission = await canPerformSubPermission(userProfile, "tasks", "canChangeStatus");
-        if (!hasPermission && !isSuperAdmin && task.createdBy !== user.id) {
+        if (!hasPermission && !isSuperAdmin && !canUpdate && task.createdBy !== user.id) {
           // Görevin atanan kullanıcılarını kontrol et
           const taskAssignments = await getTaskAssignments(taskId);
           const assignedUserIds = Array.isArray(taskAssignments) ? taskAssignments.map(a => a?.assignedTo).filter((id): id is string => !!id) : [];
@@ -1956,12 +2484,14 @@ const Tasks = () => {
           }
         }
       } catch (error) {
-        console.error("Permission check error:", error);
+        if (import.meta.env.DEV) {
+          console.error("Permission check error:", error);
+        }
         // Hata durumunda eski kontrolü yap
       }
 
       // Üst yönetici kontrolü - üst yöneticiler hariç kullanıcılar sadece kendilerine atanan görevlerin durumunu değiştirebilir
-      if (!isSuperAdmin) {
+      if (!isSuperAdmin && !canUpdate) {
         // Görevin atanan kullanıcılarını kontrol et
         const taskAssignments = await getTaskAssignments(taskId);
         const assignedUserIds = Array.isArray(taskAssignments) ? taskAssignments.map(a => a?.assignedTo).filter((id): id is string => !!id) : [];
@@ -1974,10 +2504,10 @@ const Tasks = () => {
         }
       }
 
-      // Durum güncellemesini yap
+      // Durum güncellemesini yap (normalize edilmiş status ile)
       await updateTaskStatus(
         taskId,
-        status as "pending" | "in_progress" | "completed"
+        normalizedStatus as "pending" | "in_progress" | "completed"
       );
       
       // Başarı mesajı göster
@@ -1997,20 +2527,22 @@ const Tasks = () => {
       
       // subscribeToTasks zaten real-time güncellemeleri dinliyor, 
       // bu yüzden fetchTasks() çağrısına gerek yok
-    } catch (error: any) {
-      console.error("Update task status error:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Update task status error:", error);
+      }
       
       // Rollback: Hata durumunda önceki duruma geri dön
-      const rollbackTaskInState = (taskList: any[]) => {
+      const rollbackTaskInState = <T extends { id: string; status: string }>(taskList: T[]): T[] => {
         return taskList.map(t => 
-          t.id === taskId ? { ...t, status: previousStatus } : t
+          t.id === taskId ? { ...t, status: previousStatus } as T : t
         );
       };
       
-      setAllTasks(prev => rollbackTaskInState(prev));
-      setMyTasks(prev => rollbackTaskInState(prev));
-      setCreatedTasks(prev => rollbackTaskInState(prev));
-      setArchivedTasks(prev => rollbackTaskInState(prev));
+      setAllTasks(prev => rollbackTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
+      setMyTasks(prev => rollbackTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
+      setCreatedTasks(prev => rollbackTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
+      setArchivedTasks(prev => rollbackTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
       
       // Optimistic update'i temizle
       setOptimisticUpdates(prev => {
@@ -2019,7 +2551,7 @@ const Tasks = () => {
         return newMap;
       });
       
-      const errorMessage = error.message || "Durum güncellenemedi";
+      const errorMessage = error instanceof Error ? error.message : "Durum güncellenemedi";
       toast.error(errorMessage, {
         action: {
           label: "Tekrar Dene",
@@ -2039,9 +2571,11 @@ const Tasks = () => {
     try {
       await requestTaskApproval(taskId, user.id);
       toast.success("Görev onay için yöneticiye gönderildi.");
-    } catch (error: any) {
-      console.error("Request approval error:", error);
-      toast.error("Onay isteği gönderilemedi: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Request approval error:", error);
+      }
+      toast.error("Onay isteği gönderilemedi: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     }
   };
 
@@ -2073,8 +2607,12 @@ const Tasks = () => {
         return;
       }
 
-      const currentIndex = getCurrentStatusIndex(task.status, task.approvalStatus);
-      const targetIndex = taskStatusWorkflow.findIndex(s => s.value === targetStatus);
+      // Status'ü normalize et
+      const normalizedTaskStatus = normalizeStatus(task.status);
+      const normalizedTargetStatus = normalizeStatus(targetStatus);
+      
+      const currentIndex = getCurrentStatusIndex(normalizedTaskStatus, task.approvalStatus);
+      const targetIndex = taskStatusWorkflow.findIndex(s => s.value === normalizedTargetStatus);
       
       if (targetIndex === -1) {
         toast.error("Geçersiz durum.");
@@ -2088,15 +2626,31 @@ const Tasks = () => {
       }
 
       const targetStatusItem = taskStatusWorkflow[targetIndex];
+      // normalizedTargetStatus zaten yukarıda tanımlanmış, tekrar tanımlamaya gerek yok
+      
       await updateTaskStatus(
         taskId,
-        targetStatusItem.value as "pending" | "in_progress" | "completed"
+        normalizedTargetStatus as "pending" | "in_progress" | "completed"
       );
       
+      // Optimistic update: Local state'i güncelle
+      const updateTaskInState = <T extends { id: string; status: string }>(taskList: T[]): T[] => {
+        return taskList.map(t => 
+          t.id === taskId ? { ...t, status: normalizedTargetStatus } as T : t
+        );
+      };
+      
+      setAllTasks(prev => updateTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
+      setMyTasks(prev => updateTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
+      setCreatedTasks(prev => updateTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
+      setArchivedTasks(prev => updateTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
+      
       toast.success(`Görev durumu ${targetStatusItem.label} olarak geri alındı.`);
-    } catch (error: any) {
-      console.error("Revert status error:", error);
-      toast.error("Durum geri alınamadı: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Revert status error:", error);
+      }
+      toast.error("Durum geri alınamadı: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     }
   };
 
@@ -2168,8 +2722,8 @@ const Tasks = () => {
 
   return (
     <MainLayout disableScroll={false}>
-      <div className={cn(
-        "space-y-2",
+        <div className={cn(
+        "space-y-2 w-[95%] max-w-[95%] min-w-0 mx-auto",
         viewMode === "board" ? "pb-0" : "pb-8"
       )}>
         {/* Hata Durumu */}
@@ -2210,7 +2764,7 @@ const Tasks = () => {
         
         {/* Sayfa Başlığı - Sade */}
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-xl sm:text-2xl font-semibold text-foreground" id="page-title">
+          <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground" id="page-title">
             {getPageTitle()}
           </h1>
           {/* İstatistikler Açılma Butonu */}
@@ -2260,7 +2814,7 @@ const Tasks = () => {
 
         {/* İstatistikler - Sade */}
         {statsExpanded && (
-          <Card className="border shadow-sm">
+          <Card className="border shadow-sm -mt-2">
             <CardContent className="p-2">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                 {/* Tümü */}
@@ -2276,7 +2830,7 @@ const Tasks = () => {
                   <CheckSquare className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-[10px] text-muted-foreground">Tümü</p>
-                    <p className="text-lg font-semibold">{tasksForStatsAndDisplay.length}</p>
+                    <p className="text-lg font-semibold">{listData.length}</p>
                   </div>
                 </div>
 
@@ -2292,11 +2846,12 @@ const Tasks = () => {
                   <div>
                     <p className="text-[10px] text-muted-foreground">Aktif</p>
                     <p className="text-lg font-semibold text-blue-600">
-                      {tasksForStatsAndDisplay.filter((task: Task) => 
-                        task && 
-                        (task.status === "pending" || task.status === "in_progress") &&
-                        !task.isArchived && !task.is_archived
-                      ).length}
+                      {listData.filter((task: Task | FirebaseTask | unknown) => {
+                        if (!task || typeof task !== 'object') return false;
+                        const t = task as { status?: string; isArchived?: boolean; is_archived?: boolean };
+                        return (t.status === "pending" || t.status === "in_progress") &&
+                        !t.isArchived && !t.is_archived;
+                      }).length}
                     </p>
                   </div>
                 </div>
@@ -2312,11 +2867,11 @@ const Tasks = () => {
                   <div>
                     <p className="text-[10px] text-muted-foreground">Onay Bekleyen</p>
                     <p className="text-lg font-semibold text-orange-600">
-                      {tasksForStatsAndDisplay.filter((task: Task) => 
-                        task && 
-                        task.status === "completed" && 
-                        task.approvalStatus === "pending"
-                      ).length}
+                      {listData.filter((task: Task | FirebaseTask | unknown) => {
+                        if (!task || typeof task !== 'object') return false;
+                        const t = task as { status?: string; approvalStatus?: string };
+                        return t.status === "completed" && t.approvalStatus === "pending";
+                      }).length}
                     </p>
                   </div>
                 </div>
@@ -2333,7 +2888,10 @@ const Tasks = () => {
                   <div>
                     <p className="text-[10px] text-muted-foreground">Tamamlanan</p>
                     <p className="text-lg font-semibold text-emerald-600">
-                      {tasksForStatsAndDisplay.filter((task: Task) => task && task.status === "completed").length}
+                      {listData.filter((task: Task | FirebaseTask | unknown) => {
+                        if (!task || typeof task !== 'object') return false;
+                        return (task as { status?: string }).status === "completed";
+                      }).length}
                     </p>
                   </div>
                 </div>
@@ -2350,7 +2908,10 @@ const Tasks = () => {
                   <div>
                     <p className="text-[10px] text-muted-foreground">Geciken</p>
                     <p className="text-lg font-semibold text-red-600">
-                      {tasksForStatsAndDisplay.filter((task: Task) => task && isTaskOverdue(task)).length}
+                      {listData.filter((task: Task | FirebaseTask | unknown) => {
+                        if (!task || typeof task !== 'object') return false;
+                        return isTaskOverdue(task as Task | FirebaseTask);
+                      }).length}
                     </p>
                   </div>
                 </div>
@@ -2367,7 +2928,10 @@ const Tasks = () => {
                   <div>
                     <p className="text-[10px] text-muted-foreground">Yaklaşan</p>
                     <p className="text-lg font-semibold text-amber-600">
-                      {tasksForStatsAndDisplay.filter((task: Task) => task && isTaskDueSoon(task)).length}
+                      {listData.filter((task: Task | FirebaseTask | unknown) => {
+                        if (!task || typeof task !== 'object') return false;
+                        return isTaskDueSoon(task as Task | FirebaseTask);
+                      }).length}
                     </p>
                   </div>
                 </div>
@@ -2384,7 +2948,11 @@ const Tasks = () => {
                   <div>
                     <p className="text-[10px] text-muted-foreground">Öncelikli</p>
                     <p className="text-lg font-semibold text-purple-600">
-                      {tasksForStatsAndDisplay.filter((task: Task) => task && (task.priority || 0) >= 4).length}
+                      {listData.filter((task: Task | FirebaseTask | unknown) => {
+                        if (!task || typeof task !== 'object') return false;
+                        const t = task as { priority?: number };
+                        return (t.priority || 0) >= 4;
+                      }).length}
                     </p>
                   </div>
                 </div>
@@ -2428,8 +2996,10 @@ const Tasks = () => {
                       for (const taskId of tasksToUpdate) {
                         try {
                           await handleStatusChange(taskId, status);
-                        } catch (error) {
-                          console.error(`Failed to update task ${taskId}:`, error);
+                        } catch (error: unknown) {
+                          if (import.meta.env.DEV) {
+                            console.error(`Failed to update task ${taskId}:`, error);
+                          }
                         }
                       }
                       setSelectedTaskIds(new Set());
@@ -2455,8 +3025,10 @@ const Tasks = () => {
                           if (user) {
                             await archiveTask(taskId, user.id);
                           }
-                        } catch (error) {
-                          console.error(`Failed to archive task ${taskId}:`, error);
+                        } catch (error: unknown) {
+                          if (import.meta.env.DEV) {
+                            console.error(`Failed to archive task ${taskId}:`, error);
+                          }
                         }
                       }
                       setSelectedTaskIds(new Set());
@@ -2480,8 +3052,10 @@ const Tasks = () => {
                       for (const taskId of tasksToDelete) {
                         try {
                           await deleteTask(taskId);
-                        } catch (error) {
-                          console.error(`Failed to delete task ${taskId}:`, error);
+                        } catch (error: unknown) {
+                          if (import.meta.env.DEV) {
+                            console.error(`Failed to delete task ${taskId}:`, error);
+                          }
                         }
                       }
                       setSelectedTaskIds(new Set());
@@ -2777,8 +3351,8 @@ const Tasks = () => {
                     </Button>
                   </div>
 
-                  {/* Yeni Görev Butonu */}
-                  {canCreate && (
+                  {/* Yeni Görev Butonu - Personel göremez */}
+                  {canCreate && !(user?.roles?.includes("personnel")) && (
                     <Button 
                       size="sm"
                       className="h-7 text-xs px-2.5 gap-1.5 font-medium shadow-sm hover:shadow transition-all" 
@@ -2804,8 +3378,10 @@ const Tasks = () => {
                             return;
                           }
                           openInlineForm("create");
-                        } catch (error) {
-                          console.error("Permission check error:", error);
+                        } catch (error: unknown) {
+                          if (import.meta.env.DEV) {
+                            console.error("Permission check error:", error);
+                          }
                           toast.error("Yetki kontrolü yapılamadı");
                         }
                       }}
@@ -2823,14 +3399,22 @@ const Tasks = () => {
 
         <Dialog open={inlineFormVisible} onOpenChange={setInlineFormVisible}>
           <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
-            <div className="flex flex-col h-full min-h-0">
-              <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
-                <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground">
+            {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+            <DialogTitle className="sr-only">
                   {inlineFormMode === "edit" ? "Görevi Düzenle" : "Yeni Görev"}
                 </DialogTitle>
                 <DialogDescription className="sr-only">
                   {inlineFormMode === "edit" ? "Görev bilgilerini düzenleyin" : "Yeni görev oluşturun"}
                 </DialogDescription>
+            
+            <div className="flex flex-col h-full min-h-0">
+              <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
+                <h2 className="text-[18px] sm:text-[20px] font-semibold text-foreground">
+                  {inlineFormMode === "edit" ? "Görevi Düzenle" : "Yeni Görev"}
+                </h2>
+                <p className="sr-only">
+                  {inlineFormMode === "edit" ? "Görev bilgilerini düzenleyin" : "Yeni görev oluşturun"}
+                </p>
               </DialogHeader>
               <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
                 <div className="max-w-full mx-auto h-full overflow-y-auto">
@@ -2840,9 +3424,11 @@ const Tasks = () => {
                       const currentTask = allTasks.find(t => t.id === inlineFormTaskId);
                       if (!currentTask) return null;
                       
-                      const currentStatus = currentTask.status || "pending";
+                      // Status'ü normalize et (column_ prefix'ini kaldır)
+                      const rawStatus = currentTask.status || "pending";
+                      const currentStatus = normalizeStatus(rawStatus);
                       const currentIndex = getCurrentStatusIndex(currentStatus, currentTask.approvalStatus);
-                      const nextStatus = getNextStatus(currentStatus);
+                      const nextStatus = getNextStatus(currentStatus, currentTask.approvalStatus);
                       const usersMap = cachedUsers.reduce((acc, u) => {
                         acc[u.id] = u.fullName || u.email || u.id;
                         return acc;
@@ -2853,7 +3439,7 @@ const Tasks = () => {
                           <CardHeader className="space-y-1">
                             <div className="flex items-center justify-between gap-3">
                               <div>
-                                <CardTitle className="text-lg">Görev Durumu</CardTitle>
+                                <CardTitle className="text-[15px] sm:text-[16px]">Görev Durumu</CardTitle>
                                 <p className="text-sm text-muted-foreground">
                                   {(() => {
                                     // Eğer görev onaylandıysa
@@ -2877,9 +3463,12 @@ const Tasks = () => {
                                 </p>
                               </div>
                               <div className="text-xs text-muted-foreground text-right">
-                                Son güncelleyen: {(currentTask as any).statusUpdatedBy 
-                                  ? (usersMap[(currentTask as any).statusUpdatedBy] || (currentTask as any).statusUpdatedBy)
-                                  : (user?.fullName || "-")}
+                                Son güncelleyen: {(() => {
+                                  const taskWithStatus = currentTask as unknown as FirebaseTask & { statusUpdatedBy?: string };
+                                  return taskWithStatus.statusUpdatedBy 
+                                    ? (usersMap[taskWithStatus.statusUpdatedBy || ""] || taskWithStatus.statusUpdatedBy)
+                                    : (user?.fullName || "-");
+                                })()}
                               </div>
                             </div>
                           </CardHeader>
@@ -2926,10 +3515,34 @@ const Tasks = () => {
                               
                               {/* Next Status Button / Onaya Gönder Button */}
                               {(() => {
-                                // Eğer görev onaylandıysa, buton gösterilmez
+                                // Eğer görev onaylandıysa ve tamamlandıysa, buton gösterilmez
                                 if (currentStatus === "completed" && currentTask.approvalStatus === "approved") {
                                   return null;
                                 }
+                                
+                                // Buton SADECE görev üyeleri tarafından görüntülenebilir
+                                // assignedUsers array'i bazen string array, bazen Profile array olabilir
+                                let isAssigned = false;
+                                if (currentTask.assignedUsers && Array.isArray(currentTask.assignedUsers)) {
+                                  isAssigned = currentTask.assignedUsers.some((u) => {
+                                    if (typeof u === 'string') {
+                                      return u === user?.id;
+                                    }
+                                    if (typeof u === 'object' && u !== null && 'id' in u) {
+                                      return (u as { id: string }).id === user?.id;
+                                    }
+                                    return false;
+                                  });
+                                }
+                                
+                                // Eğer assignedUsers array'inde bulunamazsa, assignments'ları kontrol et
+                                if (!isAssigned && inlineFormTaskId && user?.id) {
+                                  // Async kontrol için bir state kullanmak yerine, mevcut task verisinden kontrol ediyoruz
+                                  // assignedUsers zaten assignments'lardan oluşturulduğu için bu kontrol yeterli
+                                }
+                                
+                                // Sadece görev üyeleri butonu görebilir
+                                if (!isAssigned) return null;
                                 
                                 // Tamamlandı durumunda ve onaya gönderilmemişse "Onaya Gönder" butonu göster
                                 if (currentStatus === "completed" && currentTask.approvalStatus !== "pending" && currentTask.approvalStatus !== "approved") {
@@ -2946,25 +3559,26 @@ const Tasks = () => {
                                   );
                                 }
                                 
-                                // Diğer durumlar için normal geçiş butonu (Tamamlandı'ya geçiş)
-                                if (nextStatus && currentTask.approvalStatus !== "pending" && currentTask.approvalStatus !== "approved") {
-                                  // Tamamlandı'ya geçiş yapılırken direkt geçiş yapılır (onaya gönder butonu ayrı gösterilir)
-                                  if (nextStatus.value === "completed") {
+                                // Diğer durumlar için normal geçiş butonu (pending -> in_progress, in_progress -> completed)
+                                // Sadece görev üyeleri butonu görebilir (isAssigned kontrolü yukarıda yapıldı)
+                                // Onay bekliyor durumunda buton gösterilmez, diğer durumlarda gösterilir
+                                if (nextStatus && currentTask.approvalStatus !== "pending") {
                                     return (
                                       <div className="flex justify-center pt-4 border-t">
                                         <Button
                                           onClick={() => handleStatusChange(inlineFormTaskId, nextStatus.value)}
-                                          className="gap-2"
+                                        className="gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all"
+                                        size="lg"
                                         >
                                           {(() => {
                                             const NextIcon = nextStatus.icon;
-                                            return <NextIcon className="h-4 w-4" />;
+                                          return <NextIcon className="h-5 w-5" />;
                                           })()}
-                                          {nextStatus.label} Durumuna Geç
+                                        <ArrowRight className="h-4 w-4" />
+                                        {nextStatus.label} Aşamasına Geç
                                         </Button>
                                       </div>
                                     );
-                                  }
                                 }
                                 
                                 return null;
@@ -2996,9 +3610,105 @@ const Tasks = () => {
 
         {/* Liste veya Pano Görünümü - Aynı İçerik */}
         {viewMode === "list" ? (
+          <div className="w-full max-w-full min-w-0 overflow-x-auto">
+            {/* Tablo Yapısı */}
+            <div className="hidden md:block border border-[#DFE1E6] dark:border-[#38414A] rounded-sm bg-white dark:bg-[#1D2125]" style={{ width: '100%' }}>
+              {/* Tablo - Başlıklar ve İçerik Aynı Tabloda */}
+              <div className="table border-collapse" style={{ tableLayout: 'fixed', width: '100%' }}>
+                {/* Tablo Başlıkları */}
+                <div className="table-header-group bg-[#F4F5F7] dark:bg-[#22272B] border-b-2 border-[#DFE1E6] dark:border-[#38414A] sticky top-0 z-10 shadow-sm">
+                  <div className="table-row">
+                    <div 
+                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.title || 300, minWidth: 100 }}
+                      onClick={() => handleSort("title")}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        Başlık
+                        {sortColumn === "title" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div 
+                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
+                        onMouseDown={(e) => handleResizeStart("title", e)}
+                      />
+                    </div>
+                    <div 
+                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.status || 130, minWidth: 100 }}
+                      onClick={() => handleSort("status")}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        Durum
+                        {sortColumn === "status" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div 
+                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
+                        onMouseDown={(e) => handleResizeStart("status", e)}
+                      />
+                    </div>
+                    <div 
+                      className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.assignee || 150, minWidth: 100 }}
+                    >
+                      Atanan
+                      <div 
+                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
+                        onMouseDown={(e) => handleResizeStart("assignee", e)}
+                      />
+                    </div>
+                    <div 
+                      className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.people || 180, minWidth: 120 }}
+                    >
+                      Görevi Oluşturan
+                      <div 
+                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
+                        onMouseDown={(e) => handleResizeStart("people", e)}
+                      />
+                    </div>
+                    <div 
+                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.priority || 90, minWidth: 70 }}
+                      onClick={() => handleSort("priority")}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        Öncelik
+                        {sortColumn === "priority" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div 
+                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
+                        onMouseDown={(e) => handleResizeStart("priority", e)}
+                      />
+                    </div>
+                    <div 
+                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.dueDate || 110, minWidth: 90 }}
+                      onClick={() => handleSort("dueDate")}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        Bitiş Tarihi
+                        {sortColumn === "dueDate" && (
+                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div 
+                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
+                        onMouseDown={(e) => handleResizeStart("dueDate", e)}
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Tablo İçeriği - Aynı Tablo İçinde */}
           <div 
             ref={listContainerRef}
-            className="space-y-2 overflow-visible"
+                  style={{ maxHeight: 'calc(100vh - 400px)', overflowY: 'auto', display: 'table-row-group' }}
             onScroll={(e) => {
               // Infinite scroll: Kullanıcı listenin sonuna yaklaştığında daha fazla öğe yükle
               const target = e.currentTarget;
@@ -3011,7 +3721,7 @@ const Tasks = () => {
                 {/* "Bana Atanan" sekmesi kaldırıldı - görevler sadece proje altında ve "Tüm Görevler" sekmesinde gözüküyor */}
                 {false && userRequests.length > 0 && (
                   <div className="mb-6">
-                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                    <h3 className="text-[15px] sm:text-[16px] font-semibold mb-3 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                         Taleplerim
                     </h3>
@@ -3036,24 +3746,54 @@ const Tasks = () => {
                         ))}
                     </div>
                     <div className="my-4 border-b" />
-                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                    <h3 className="text-[15px] sm:text-[16px] font-semibold mb-3 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                         Görevlerim
                     </h3>
                   </div>
                 )}
 
-                {(Array.isArray(listData) ? listData.slice(0, visibleItemsCount) : []).map((task: any) => {
+                {(Array.isArray(listData) ? listData.slice(0, visibleItemsCount) : []).map((task: FirebaseTask) => {
                   const overdue = isTaskOverdue(task);
                   const dueSoon = isTaskDueSoon(task);
                   const optimisticUpdate = optimisticUpdates.get(task.id);
-                  const displayStatus = optimisticUpdate ? optimisticUpdate.status : task.status;
+                  // Status'ü normalize et (column_ prefix'ini kaldır)
+                  const rawStatus = optimisticUpdate ? optimisticUpdate.status : task.status;
+                  const displayStatus = normalizeStatus(rawStatus);
                   const isOptimistic = !!optimisticUpdate;
                   const isSelected = selectedTaskIds.has(task.id);
                   // Geciken görevler için daha belirgin görsel işaret
                   const overdueClass = overdue ? "ring-2 ring-destructive/50 bg-destructive/5" : "";
                   // Yaklaşan görevler için subtle uyarı
                   const dueSoonClass = dueSoon && !overdue ? "bg-amber-50/50 dark:bg-amber-950/10" : "";
+
+                  // Atanan kullanıcıları bul
+                  const taskAssignments = assignmentsCacheRef.current.get(task.id) || [];
+                  const assignedUserIds = taskAssignments.map(a => a.assignedTo);
+                  const assignedUsers = cachedUsers.filter(u => assignedUserIds.includes(u.id));
+                  
+                  // Due date'i al
+                  const taskObj = task as { due_date?: string; dueDate?: Timestamp | Date | string };
+                  let dueDate: string | null = null;
+                  if ('due_date' in taskObj && taskObj.due_date && typeof taskObj.due_date === 'string') {
+                    dueDate = taskObj.due_date;
+                  } else if ('dueDate' in taskObj && taskObj.dueDate) {
+                    if (taskObj.dueDate instanceof Timestamp) {
+                      dueDate = taskObj.dueDate.toDate().toISOString();
+                    } else if (taskObj.dueDate instanceof Date) {
+                      dueDate = taskObj.dueDate.toISOString();
+                    } else if (typeof taskObj.dueDate === 'string') {
+                      dueDate = taskObj.dueDate;
+                    }
+                  }
+                  
+                  const priorityDisplay = getPriorityDisplay(task.priority);
+                  
+                  // Görev düzenleme yetkisi kontrolü
+                  // Personel rolündeki kullanıcılar düzenleme yapamaz
+                  // Sadece görevi oluşturan kişi, super admin veya canUpdate yetkisi olanlar düzenleyebilir
+                  const isPersonnel = user?.roles?.includes("personnel") || false;
+                  const canEditThisTask = !isPersonnel && (isSuperAdmin || canUpdate || task.createdBy === user?.id);
 
                   return (
                     <article
@@ -3065,289 +3805,410 @@ const Tasks = () => {
                         }
                       }}
                       className={cn(
-                        "p-2.5 sm:p-3 rounded-lg border",
-                        isSelected ? "border-primary bg-primary/10" : "border-border",
-                        overdueClass,
-                        dueSoonClass,
-                        "hover:border-primary/50 hover:bg-accent/30",
-                        "transition-all duration-300 ease-in-out",
-                        "relative group bg-card shadow-sm hover:shadow-md",
-                        "hover:scale-[1.01] active:scale-[0.99]",
-                        isOptimistic && "opacity-75 animate-pulse",
-                        isMultiSelectMode && "cursor-pointer",
-                        focusedTaskIndex === listData.slice(0, visibleItemsCount).findIndex(t => t.id === task.id) && "ring-2 ring-ring",
-                        // Durum değişikliği animasyonu: fade ve slide
-                        "animate-in fade-in slide-in-from-left-2 duration-300"
+                        "table-row group",
+                        "border-b border-[#DFE1E6] dark:border-[#38414A] hover:bg-[#F4F5F7] dark:hover:bg-[#22272B] transition-all duration-200 cursor-pointer",
+                        "bg-white dark:bg-[#1D2125]",
+                        isSelected && "bg-[#E3FCEF] dark:bg-[#1C3329] border-l-4 border-l-[#006644] dark:border-l-[#4BCE97]",
+                        overdue && "bg-[#FFEBE6] dark:bg-[#3D2115] border-l-4 border-l-[#DE350B] dark:border-l-[#FF5630]",
+                        dueSoon && !overdue && "bg-[#FFF7E6] dark:bg-[#3D2E1A] border-l-4 border-l-[#FF8B00] dark:border-l-[#F5CD47]",
+                        isOptimistic && "opacity-60",
+                        focusedTaskIndex === listData.slice(0, visibleItemsCount).findIndex(t => t.id === task.id) && "ring-2 ring-[#0052CC] dark:ring-[#4C9AFF] ring-offset-2 shadow-md"
                       )}
                       role="article"
                       aria-labelledby={`task-title-${task.id}`}
                       tabIndex={focusedTaskIndex === listData.slice(0, visibleItemsCount).findIndex(t => t.id === task.id) ? 0 : -1}
-                      onClick={isMultiSelectMode ? () => {
-                        setSelectedTaskIds(prev => {
-                          const newSet = new Set(prev);
-                          if (newSet.has(task.id)) {
-                            newSet.delete(task.id);
-                          } else {
-                            newSet.add(task.id);
-                          }
-                          return newSet;
-                        });
-                      } : undefined}
+                      onClick={() => !isMultiSelectMode && openTaskDetail(task.id, task.status)}
                     >
-                      {/* Jira Tarzı Yatay Düzen */}
-                      <div className="flex items-start gap-2.5 sm:gap-3">
-                        {/* Multi-select checkbox veya Status Icon */}
-                        {isMultiSelectMode ? (
-                          <div className="flex-shrink-0">
-                            <div 
-                              className={cn(
-                                "h-5 w-5 rounded border-2 flex items-center justify-center transition-all duration-200 cursor-pointer",
-                                selectedTaskIds.has(task.id)
-                                  ? "bg-primary border-primary text-primary-foreground" 
-                                  : "border-border hover:border-primary/50"
-                              )}
+                      {/* Title */}
+                      <div 
+                        className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A] cursor-pointer"
+                        style={{ width: columnWidths.title || 300, minWidth: 100 }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedTaskIds(prev => {
-                                  const newSet = new Set(prev);
-                                  if (newSet.has(task.id)) {
-                                    newSet.delete(task.id);
-                                  } else {
-                                    newSet.add(task.id);
-                                  }
-                                  return newSet;
-                                });
-                              }}
-                              role="checkbox"
-                              aria-checked={selectedTaskIds.has(task.id)}
-                              tabIndex={0}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  setSelectedTaskIds(prev => {
-                                    const newSet = new Set(prev);
-                                    if (newSet.has(task.id)) {
-                                      newSet.delete(task.id);
-                                    } else {
-                                      newSet.add(task.id);
-                                    }
-                                    return newSet;
-                                  });
-                                }
-                              }}
-                            >
-                              {selectedTaskIds.has(task.id) && <Check className="h-3.5 w-3.5" />}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex-shrink-0" aria-label={`Durum: ${getStatusLabel(displayStatus)}`}>
-                            {getStatusIcon(displayStatus)}
-                          </div>
-                        )}
-                        
-                        {/* İçerik - Orta (Genişleyebilir) */}
-                        <div 
-                          className="flex-1 min-w-0 cursor-pointer"
-                          onClick={() => openTaskDetail(task.id, task.status)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
                               openTaskDetail(task.id, task.status);
-                            }
                           }}
-                          tabIndex={0}
-                          role="button"
-                          aria-label={`${task.title} görevini aç`}
                         >
-                          <div className="flex items-center gap-2">
                             <h3 
                               id={`task-title-${task.id}`}
-                              className="font-semibold text-sm sm:text-base text-foreground line-clamp-1 flex-1"
+                          className="font-semibold text-sm text-[#172B4D] dark:text-[#B6C2CF] line-clamp-1 hover:text-[#0052CC] dark:hover:text-[#4C9AFF] transition-colors leading-snug mb-1"
                             >
                               {task.title}
                             </h3>
                             {task.projectId && projects && projects.has(task.projectId) && (
                               <Badge 
                                 variant="outline" 
-                                className="h-4 px-1.5 text-[10px] font-medium flex-shrink-0"
-                                aria-label={`Proje: ${projects.get(task.projectId)?.name || task.projectId}`}
+                            className="h-5 px-2 text-[10px] font-medium mt-1 border-[#DFE1E6] dark:border-[#38414A] text-[#42526E] dark:text-[#B6C2CF] bg-[#F4F5F7] dark:bg-[#22272B] leading-tight"
                               >
                                 {projects.get(task.projectId)?.name || task.projectId}
                               </Badge>
                             )}
                           </div>
                           
-                          {/* Meta Bilgiler - Sadeleştirilmiş */}
-                          <div className="flex items-center gap-2 flex-wrap mt-1" role="group" aria-label="Görev detayları">
+                      {/* Status - Inline Editable */}
+                      <div onClick={(e) => e.stopPropagation()} className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.status || 130, minWidth: 100 }}>
+                        <Select
+                          value={displayStatus}
+                          onValueChange={(newStatus) => {
+                            handleStatusChange(task.id, newStatus);
+                          }}
+                          disabled={!canEditThisTask}
+                        >
+                          <SelectTrigger 
+                            className={cn(
+                              "h-auto min-h-[32px] px-2 py-1.5 text-xs border-0 bg-transparent rounded-full w-full transition-all duration-200 flex items-center justify-center group",
+                              canEditThisTask 
+                                ? "hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] cursor-pointer hover:shadow-md focus:ring-2 focus:ring-[#0052CC]/50 focus:ring-offset-2 active:scale-[0.97] focus-visible:outline-none" 
+                                : "cursor-not-allowed opacity-60"
+                            )}
+                          >
+                            <SelectValue>
                             <Badge 
                               variant="secondary" 
                               className={cn(
-                                "h-4 px-1.5 text-[10px] font-medium",
-                                isOptimistic && "animate-pulse"
+                                  "h-6 px-3 text-xs font-semibold border-0 leading-tight rounded-full inline-flex items-center justify-center gap-1.5 transition-all duration-200 shadow-sm whitespace-nowrap",
+                                  displayStatus === "completed" && "bg-[#E3FCEF] text-[#006644] dark:bg-[#1C3329] dark:text-[#4BCE97] hover:bg-[#D3FCE3] dark:hover:bg-[#2A4A3A]",
+                                  displayStatus === "in_progress" && "bg-[#DEEBFF] text-[#0052CC] dark:bg-[#1C2B41] dark:text-[#4C9AFF] hover:bg-[#CEDBEF] dark:hover:bg-[#2A3B51]",
+                                  displayStatus === "pending" && "bg-[#DEEBFF] text-[#0052CC] dark:bg-[#1C2B41] dark:text-[#4C9AFF] hover:bg-[#CEDBEF] dark:hover:bg-[#2A3B51]",
+                                  isOptimistic && "opacity-50",
+                                  canEditThisTask && "group-hover:shadow-md"
+                                )}
+                            >
+                              {(() => {
+                                const statusItem = taskStatusWorkflow.find(s => s.value === displayStatus);
+                                if (statusItem) {
+                                  const Icon = statusItem.icon;
+                                  return (
+                                    <>
+                                      <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                                      <span className="whitespace-nowrap">{getStatusLabel(displayStatus)}</span>
+                                    </>
+                                  );
+                                }
+                                return <span className="whitespace-nowrap">{getStatusLabel(displayStatus)}</span>;
+                              })()}
+                            </Badge>
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent className="min-w-[180px] p-1.5 shadow-lg border border-[#DFE1E6] dark:border-[#38414A] rounded-lg">
+                            {taskStatusWorkflow.map((statusItem) => {
+                              const Icon = statusItem.icon;
+                              const isSelected = statusItem.value === displayStatus;
+                              return (
+                                <SelectItem 
+                                  key={statusItem.value} 
+                                  value={statusItem.value}
+                                  className={cn(
+                                    "cursor-pointer rounded-md px-3 py-2.5 transition-all duration-150",
+                                    "hover:bg-[#EBECF0] dark:hover:bg-[#2C333A]",
+                                    "focus:bg-[#EBECF0] dark:focus:bg-[#2C333A]",
+                                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC]/50 focus-visible:ring-offset-1",
+                                    isSelected && "bg-[#EBECF0] dark:bg-[#2C333A] font-semibold"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <Icon className={cn("h-4 w-4 flex-shrink-0", statusItem.color)} />
+                                    <span className="text-xs font-medium">{statusItem.label}</span>
+                                    {isSelected && (
+                                      <Check className="h-3.5 w-3.5 ml-auto text-[#0052CC] dark:text-[#4C9AFF]" />
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      {/* Assignee - Inline Editable - Tüm atanan kişileri göster */}
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.assignee || 150, minWidth: 100 }} onClick={(e) => e.stopPropagation()}>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button className="flex items-center gap-1.5 hover:opacity-80 transition-opacity w-full">
+                              {assignedUsers.length > 0 ? (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {assignedUsers.map((user, index) => {
+                                    const firstName = getFirstName(user.fullName);
+                                    return (
+                                      <span 
+                                        key={user.id} 
+                                        className="text-xs text-[#42526E] dark:text-[#B6C2CF] font-medium" 
+                                        title={user.fullName || user.email}
+                                      >
+                                        {firstName || user.email}
+                                        {index < assignedUsers.length - 1 && <span className="text-[#6B778C] dark:text-[#8C9CB8] ml-1">,</span>}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8] cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] transition-colors">-</span>
                               )}
-                              aria-label={`Durum: ${getStatusLabel(displayStatus)}`}
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-2" align="start">
+                            <div className="space-y-2">
+                              <div className="text-xs font-semibold mb-2">Kullanıcı Ata</div>
+                              <Command>
+                                <CommandInput placeholder="Kullanıcı ara..." />
+                                <CommandList>
+                                  <CommandEmpty>Kullanıcı bulunamadı</CommandEmpty>
+                                  <CommandGroup>
+                                    {cachedUsers.map((user) => {
+                                      const isAssigned = assignedUserIds.includes(user.id);
+                                      return (
+                                        <CommandItem
+                                          key={user.id}
+                                          onSelect={async () => {
+                                            if (!isAssigned && user?.id) {
+                                              try {
+                                                await assignTask(task.id, user.id, user?.id || "");
+                                                const firstName = getFirstName(user.fullName || user.displayName);
+                                                toast.success(`${firstName || user.email} göreve atandı`);
+                                              } catch (error) {
+                                                toast.error("Kullanıcı atanırken hata oluştu");
+                                              }
+                                            }
+                                          }}
+                                          className={cn(isAssigned && "opacity-50")}
+                                        >
+                                          <div className="flex items-center gap-2 w-full">
+                                            <Avatar className="h-6 w-6">
+                                              <AvatarFallback className="text-[10px]">
+                                                {getInitials(user.fullName || user.email)}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                            <span className="flex-1 text-sm" title={user.fullName || user.email}>
+                                              {getFirstName(user.fullName || user.displayName) || user.email}
+                                            </span>
+                                            {isAssigned && <Check className="h-4 w-4 text-primary" />}
+                                          </div>
+                                        </CommandItem>
+                                      );
+                                    })}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      
+                      {/* Görevi Oluşturan */}
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.people || 180, minWidth: 120 }}>
+                        {(() => {
+                          const creatorId = (task as any).createdBy || (task as any).created_by;
+                          const creator = creatorId ? cachedUsers.find(u => u.id === creatorId) : null;
+                          if (creator) {
+                            return (
+                              <span className="text-xs text-[#42526E] dark:text-[#B6C2CF] font-medium whitespace-nowrap" title={creator.fullName || creator.email}>
+                                {creator.fullName || creator.displayName || creator.email}
+                              </span>
+                            );
+                          }
+                          return <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>;
+                        })()}
+                      </div>
+                      
+                      {/* Priority - Inline Editable */}
+                      <div onClick={(e) => e.stopPropagation()} className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.priority || 90, minWidth: 70 }}>
+                        <Select
+                          value={String(task.priority || 1)}
+                          onValueChange={async (newPriority) => {
+                            try {
+                              await updateTask(task.id, { priority: Number(newPriority) as 1 | 2 | 3 | 4 | 5 }, user?.id);
+                              toast.success("Öncelik güncellendi");
+                            } catch (error) {
+                              toast.error("Öncelik güncellenirken hata oluştu");
+                            }
+                          }}
+                          disabled={!canEditThisTask}
+                        >
+                          <SelectTrigger 
+                            className={cn(
+                              "h-auto min-h-[28px] px-2 py-1 text-xs border-0 bg-transparent rounded-md w-full transition-all duration-200 group",
+                              canEditThisTask 
+                                ? "hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] cursor-pointer hover:shadow-sm focus:ring-2 focus:ring-[#0052CC]/50 focus:ring-offset-2 active:scale-[0.97] focus-visible:outline-none" 
+                                : "cursor-not-allowed opacity-60"
+                            )}
+                          >
+                            <SelectValue>
+                              <span className={cn("text-xs font-medium", priorityDisplay.color)}>
+                                {priorityDisplay.label}
+                              </span>
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent className="min-w-[160px] p-1.5 shadow-lg border border-[#DFE1E6] dark:border-[#38414A] rounded-lg">
+                            {[
+                              { value: "1", label: "Çok Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400", bgColor: "bg-blue-50 dark:bg-blue-950/30" },
+                              { value: "2", label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400", bgColor: "bg-blue-50 dark:bg-blue-950/30" },
+                              { value: "3", label: "Orta", icon: Minus, color: "text-gray-600 dark:text-gray-400", bgColor: "bg-gray-50 dark:bg-gray-900/30" },
+                              { value: "4", label: "Yüksek", icon: ChevronUp, color: "text-red-600 dark:text-red-400", bgColor: "bg-red-50 dark:bg-red-950/30" },
+                              { value: "5", label: "Kritik", icon: ChevronUp, color: "text-red-600 dark:text-red-400", bgColor: "bg-red-50 dark:bg-red-950/30" },
+                            ].map((priorityItem) => {
+                              const Icon = priorityItem.icon;
+                              const isSelected = priorityItem.value === String(task.priority || 1);
+                              return (
+                                <SelectItem 
+                                  key={priorityItem.value}
+                                  value={priorityItem.value}
+                                  className={cn(
+                                    "cursor-pointer rounded-md px-3 py-2.5 transition-all duration-150",
+                                    "hover:bg-[#EBECF0] dark:hover:bg-[#2C333A]",
+                                    "focus:bg-[#EBECF0] dark:focus:bg-[#2C333A]",
+                                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC]/50 focus-visible:ring-offset-1",
+                                    isSelected && "bg-[#EBECF0] dark:bg-[#2C333A] font-semibold"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <div className={cn("p-1 rounded-md", priorityItem.bgColor)}>
+                                      <Icon className={cn("h-3.5 w-3.5", priorityItem.color)} />
+                                    </div>
+                                    <span className="text-xs font-medium">{priorityItem.label}</span>
+                                    {isSelected && (
+                                      <Check className="h-3.5 w-3.5 ml-auto text-[#0052CC] dark:text-[#4C9AFF]" />
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      {/* Due Date */}
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.dueDate || 110, minWidth: 90 }}>
+                        {dueDate ? (
+                          <div className={cn(
+                            "inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium",
+                            overdue 
+                              ? "bg-[#FFEBE6] text-[#DE350B] dark:bg-[#3D2115] dark:text-[#FF5630] border border-[#FF5630]/30" 
+                              : dueSoon 
+                                ? "bg-[#FFF7E6] text-[#FF8B00] dark:bg-[#3D2E1A] dark:text-[#F5CD47] border border-[#FF8B00]/30"
+                                : "text-[#42526E] dark:text-[#B6C2CF]"
+                          )}>
+                            {overdue && <AlertCircle className="h-3.5 w-3.5" />}
+                            {!overdue && <CalendarDays className="h-3.5 w-3.5" />}
+                            <span>{formatDueDate(dueDate)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
+                        )}
+                      </div>
+                          
+                        
+                    </article>
+                  );
+                })}
+                </div>
+              </div>
+                        </div>
+                        
+                {/* Mobil Görünüm - Basitleştirilmiş */}
+                {(Array.isArray(listData) ? listData.slice(0, visibleItemsCount) : []).map((task: FirebaseTask) => {
+                  const overdue = isTaskOverdue(task);
+                  const dueSoon = isTaskDueSoon(task);
+                  const optimisticUpdate = optimisticUpdates.get(task.id);
+                  const rawStatus = optimisticUpdate ? optimisticUpdate.status : task.status;
+                  const displayStatus = normalizeStatus(rawStatus);
+                  const isOptimistic = !!optimisticUpdate;
+                  const isSelected = selectedTaskIds.has(task.id);
+                  
+                  const taskAssignments = assignmentsCacheRef.current.get(task.id) || [];
+                  const assignedUserIds = taskAssignments.map(a => a.assignedTo);
+                  const assignedUsers = cachedUsers.filter(u => assignedUserIds.includes(u.id));
+                  
+                  const taskObj = task as { due_date?: string; dueDate?: Timestamp | Date | string };
+                  let dueDate: string | null = null;
+                  if ('due_date' in taskObj && taskObj.due_date && typeof taskObj.due_date === 'string') {
+                    dueDate = taskObj.due_date;
+                  } else if ('dueDate' in taskObj && taskObj.dueDate) {
+                    if (taskObj.dueDate instanceof Timestamp) {
+                      dueDate = taskObj.dueDate.toDate().toISOString();
+                    } else if (taskObj.dueDate instanceof Date) {
+                      dueDate = taskObj.dueDate.toISOString();
+                    } else if (typeof taskObj.dueDate === 'string') {
+                      dueDate = taskObj.dueDate;
+                    }
+                  }
+                  
+                  const priorityDisplay = getPriorityDisplay(task.priority);
+
+                  return (
+                    <article
+                      key={`mobile-${task.id}`}
+                      className={cn(
+                        "md:hidden p-1.5 border-b border-[#DFE1E6] dark:border-[#38414A] w-full",
+                        "bg-white dark:bg-[#1D2125]",
+                        isSelected ? "bg-[#E3FCEF] dark:bg-[#1C3329]" : "",
+                        overdue && "bg-[#FFEBE6] dark:bg-[#3D2115]",
+                        dueSoon && !overdue && "bg-[#FFF7E6] dark:bg-[#3D2E1A]",
+                        "hover:bg-[#F4F5F7] dark:hover:bg-[#22272B] transition-colors",
+                        isOptimistic && "opacity-75 animate-pulse"
+                      )}
+                      onClick={() => openTaskDetail(task.id, task.status)}
+                    >
+                      <div className="flex items-start gap-1.5">
+                        <div className="flex-shrink-0 scale-75">
+                          {getStatusIcon(displayStatus)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <h3 className="font-medium text-[12px] text-[#172B4D] dark:text-[#B6C2CF] line-clamp-1 flex-1 leading-tight">
+                              {task.title}
+                            </h3>
+                            <span className="text-[10px] font-mono text-[#42526E] dark:text-[#B6C2CF]">
+                              {formatTaskKey(task.id)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <Badge 
+                              variant="secondary" 
+                                className={cn(
+                                "h-4 px-1 text-[10px] font-normal border-0 leading-tight",
+                                displayStatus === "completed" && "bg-[#E3FCEF] text-[#006644] dark:bg-[#1C3329] dark:text-[#4BCE97]",
+                                displayStatus === "in_progress" && "bg-[#DEEBFF] text-[#0052CC] dark:bg-[#1C2B41] dark:text-[#4C9AFF]",
+                                displayStatus === "pending" && "bg-[#F4F5F7] text-[#42526E] dark:bg-[#2C333A] dark:text-[#B6C2CF]"
+                              )}
                             >
                               {getStatusLabel(displayStatus)}
                             </Badge>
-                            {task.due_date && (
+                            <Badge 
+                              className={cn(
+                                "h-4 px-1 text-[10px] font-normal border-0 leading-tight",
+                                task.priority === 5 && "bg-[#FFEBE6] text-[#BF2600] dark:bg-[#3D2115] dark:text-[#FF5630]",
+                                task.priority === 4 && "bg-[#FFE6E6] text-[#DE350B] dark:bg-[#3D2115] dark:text-[#FF5630]",
+                                task.priority === 3 && "bg-[#FFF7E6] text-[#FF8B00] dark:bg-[#3D2E1A] dark:text-[#F5CD47]",
+                                task.priority === 2 && "bg-[#E3FCEF] text-[#006644] dark:bg-[#1C3329] dark:text-[#4BCE97]",
+                                (!task.priority || task.priority === 1) && "bg-[#F4F5F7] text-[#42526E] dark:bg-[#2C333A] dark:text-[#B6C2CF]"
+                              )}
+                            >
+                              {priorityDisplay.label}
+                            </Badge>
+                            {dueDate && (
                               <time 
-                                dateTime={task.due_date}
+                                dateTime={dueDate}
                                 className={cn(
-                                  "text-[10px] flex items-center gap-1 font-medium",
-                                  overdue ? "text-destructive" : dueSoon ? "text-amber-600" : "text-muted-foreground"
+                                  "text-[10px] flex items-center gap-0.5 leading-tight",
+                                  overdue ? "text-[#DE350B] dark:text-[#FF5630]" : dueSoon ? "text-[#FF8B00] dark:text-[#F5CD47]" : "text-[#42526E] dark:text-[#B6C2CF]"
                                 )}
-                                aria-label={`Bitiş tarihi: ${formatDueDate(task.due_date)}`}
                               >
-                                <CalendarDays className="h-3 w-3" aria-hidden="true" />
-                                {formatDueDate(task.due_date)}
+                                <CalendarDays className="h-2.5 w-2.5" />
+                                {formatDueDate(dueDate)}
                               </time>
                             )}
-                            {task.assignedUsers && task.assignedUsers.length > 0 && (
-                              <div className="flex items-center -space-x-1.5" aria-label={`Atanan kullanıcılar: ${task.assignedUsers.map(u => u.full_name).join(', ')}`}>
-                                {task.assignedUsers.slice(0, 2).map((user) => (
-                                  <Avatar key={user.id} className="h-5 w-5 border border-background" title={user.full_name}>
-                                    <AvatarFallback className="text-[9px] font-medium">
-                                      {getInitials(user.full_name)}
+                            {assignedUsers.length > 0 && (
+                              <div className="flex items-center -space-x-0.5">
+                                {assignedUsers.slice(0, 2).map((user) => (
+                                  <Avatar key={user.id} className="h-4 w-4 border border-[#DFE1E6] dark:border-[#38414A]" title={user.fullName || user.email}>
+                                    <AvatarFallback className="text-[8px] bg-[#DFE1E6] dark:bg-[#38414A] text-[#42526E] dark:text-[#B6C2CF]">
+                                      {getInitials(user.fullName || user.email)}
                                     </AvatarFallback>
                                   </Avatar>
                                 ))}
-                                {task.assignedUsers.length > 2 && (
-                                  <div className="h-5 w-5 rounded-full bg-muted border border-background flex items-center justify-center text-[9px] font-medium text-muted-foreground">
-                                    +{task.assignedUsers.length - 2}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            {(overdue || dueSoon || task.approvalStatus === "pending") && (
-                              <>
-                                {overdue && (
-                                  <Badge 
-                                    variant="destructive" 
-                                    className="h-4 px-1.5 text-[10px] font-medium"
-                                    aria-label="Gecikmiş görev"
-                                  >
-                                    Gecikti
-                                  </Badge>
-                                )}
-                                {dueSoon && !overdue && (
-                                  <Badge 
-                                    className="bg-amber-100 text-amber-900 border-amber-200 h-4 px-1.5 text-[10px] font-medium"
-                                    aria-label="Yaklaşan görev"
-                                  >
-                                    Yaklaşan
-                                  </Badge>
-                                )}
-                                {task.approvalStatus === "pending" && (
-                                  <Badge 
-                                    className="bg-yellow-100 text-yellow-900 border-yellow-300 h-4 px-1.5 text-[10px] font-medium"
-                                    aria-label="Onay bekleyen görev"
-                                  >
-                                    Onay
-                                  </Badge>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* 3 Nokta Menü - Sağ */}
-                        {(isSuperAdmin || isAdmin || isTeamLeader || task.createdBy === user?.id) && (
-                          <div className="flex-shrink-0 z-[9999]">
-                          <DropdownMenu 
-                            open={openDropdownMenuId === task.id} 
-                            onOpenChange={(open) => {
-                              if (open) {
-                                setOpenDropdownMenuId(task.id);
-                              } else {
-                                setOpenDropdownMenuId(null);
-                              }
-                            }}
-                          >
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                id={`task-menu-trigger-${task.id}`}
-                                data-menu-open={openDropdownMenuId === task.id ? "true" : "false"}
-                                className={cn(
-                                  "task-menu-trigger",
-                                  "inline-flex items-center justify-center",
-                                  "h-7 w-7 rounded-md",
-                                  "transition-colors duration-200",
-                                  "border border-transparent",
-                                  openDropdownMenuId === task.id 
-                                    ? "border-border bg-muted/80" 
-                                    : "hover:bg-muted/50 hover:border-border/50",
-                                  "focus:bg-muted/50 focus:border-border/50 focus:outline-none focus:ring-0",
-                                  "active:bg-muted/50 active:border-border/50"
-                                )}
-                                style={{
-                                  WebkitTapHighlightColor: 'transparent',
-                                  backgroundColor: openDropdownMenuId === task.id ? 'hsl(var(--muted) / 0.8)' : 'transparent',
-                                  borderColor: openDropdownMenuId === task.id ? 'hsl(var(--border))' : 'transparent',
-                                  opacity: 1,
-                                  visibility: 'visible',
-                                  display: 'inline-flex',
-                                  pointerEvents: 'auto',
-                                  position: 'relative',
-                                  zIndex: 9999,
-                                } as React.CSSProperties}
-                              >
-                                <MoreVertical 
-                                  className="h-3.5 w-3.5 stroke-[2.5] text-foreground" 
-                                  style={{
-                                    opacity: 1,
-                                    visibility: 'visible',
-                                    display: 'block',
-                                  }}
-                                />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent 
-                              align="end" 
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-44 rounded-lg shadow-lg border border-border bg-popover p-1.5 z-[10000]"
-                              onCloseAutoFocus={(e) => e.preventDefault()}
-                            >
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenDropdownMenuId(null);
-                                  openInlineForm("edit", task.id, task.status as "pending" | "in_progress" | "completed");
-                                  scrollToInlineForm();
-                                }}
-                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
-                              >
-                                <Edit className="h-4 w-4 mr-2.5 stroke-[2]" />
-                                Düzenle
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenDropdownMenuId(null);
-                                  handleArchiveTask(task.id);
-                                }}
-                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
-                              >
-                                <Archive className="h-4 w-4 mr-2.5 stroke-[2]" />
-                                {task.isArchived || task.is_archived ? "Arşivden Çıkar" : "Arşivle"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenDropdownMenuId(null);
-                                  if (confirm(`"${task.title}" görevini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
-                                    handleDeleteTask(task.id);
-                                  }
-                                }}
-                                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium text-destructive focus:text-destructive hover:bg-destructive/10 focus:bg-destructive/10 transition-colors"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2.5 stroke-[2]" />
-                                Sil
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
                         </div>
                       )}
+                          </div>
+                        </div>
                       </div>
                     </article>
                   );
@@ -3378,7 +4239,7 @@ const Tasks = () => {
                         <CheckSquare className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground/50" aria-hidden="true" />
                               </div>
                       <div className="space-y-2">
-                        <h2 className="text-lg sm:text-xl font-semibold text-foreground">
+                        <h2 className="text-[18px] sm:text-[20px] font-semibold text-foreground">
                           {searchTerm || statusFilter !== "all" || focusFilter !== "all"
                             ? "Filtre kriterlerinize uyan görev bulunamadı"
                             : activeFilter === "my-tasks"
@@ -3463,7 +4324,7 @@ const Tasks = () => {
                                 return;
                               }
                               openInlineForm("create");
-                            } catch (error) {
+                            } catch (error: unknown) {
                               console.error("Permission check error:", error);
                               toast.error("Yetki kontrolü yapılamadı");
                             }
@@ -3480,12 +4341,16 @@ const Tasks = () => {
                 )}
               </div>
         ) : (
-          <TaskBoard
-            tasks={boardTasks}
-            onTaskClick={(taskId, initialStatus) => openTaskDetail(taskId, initialStatus)}
-            onStatusChange={handleStatusChange}
-            showArchived={activeFilter === "archive"}
-          />
+          <div className="w-full max-w-full min-w-0 overflow-x-auto">
+            <div className="min-w-0">
+              <TaskBoard
+                tasks={boardTasks}
+                onTaskClick={(taskId, initialStatus) => openTaskDetail(taskId, initialStatus)}
+                onStatusChange={handleStatusChange}
+                showArchived={activeFilter === "archive"}
+              />
+            </div>
+          </div>
         )}
 
         {/* Advanced Search Dialog */}
@@ -3786,4 +4651,3 @@ const Tasks = () => {
 };
 
 export default Tasks;
-

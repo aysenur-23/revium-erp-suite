@@ -51,7 +51,7 @@ export const DepartmentDetailModal = ({ open, onOpenChange, departmentId }: Depa
 
       // Manager bilgisini al (sadece silinmemiş kullanıcılar)
       if (dept.managerId) {
-        const managerUser = allUsers.find(u => u.id === dept.managerId && !(u as any).deleted);
+        const managerUser = allUsers.find(u => u.id === dept.managerId && !('deleted' in u && u.deleted));
         setManager(managerUser || null);
       } else {
         setManager(null);
@@ -77,7 +77,7 @@ export const DepartmentDetailModal = ({ open, onOpenChange, departmentId }: Depa
         
         // 2. Görev ekip üyelerinden birine atanmışsa
         if (t.assignedUsers && Array.isArray(t.assignedUsers)) {
-          const hasAssignedMember = t.assignedUsers.some((u: any) => {
+          const hasAssignedMember = t.assignedUsers.some((u: string | { id?: string; assignedTo?: string; userId?: string }) => {
             if (typeof u === 'string') return teamMemberIds.has(u);
             if (u && typeof u === 'object') {
               const userId = u.id || u.assignedTo || u.userId;
@@ -95,7 +95,9 @@ export const DepartmentDetailModal = ({ open, onOpenChange, departmentId }: Depa
       });
       setTasks(deptTasks);
     } catch (error) {
-      console.error("Error fetching department details:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching department details:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -144,7 +146,7 @@ export const DepartmentDetailModal = ({ open, onOpenChange, departmentId }: Depa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -152,7 +154,7 @@ export const DepartmentDetailModal = ({ open, onOpenChange, departmentId }: Depa
                 <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                   {loading ? "Yükleniyor..." : department?.name || "Departman Detayları"}
                 </DialogTitle>
                 {department?.description ? (

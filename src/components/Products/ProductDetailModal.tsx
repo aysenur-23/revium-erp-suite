@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Package, Image as ImageIcon, Edit, Save, X, Loader2, Plus, Trash2, List } from "lucide-react";
 import { toast } from "sonner";
-import { updateProduct } from "@/services/firebase/productService";
+import { updateProduct, addProductComment, getProductComments, getProductActivities } from "@/services/firebase/productService";
 import {
   getProductRecipes,
   addRecipeItem,
@@ -25,6 +25,9 @@ import {
   RecipeWithMaterial,
 } from "@/services/firebase/recipeService";
 import { getRawMaterials, RawMaterial } from "@/services/firebase/materialService";
+import { useAuth } from "@/contexts/AuthContext";
+import { canUpdateResource, UserProfile } from "@/utils/permissions";
+import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
 import {
   Table,
   TableBody,
@@ -45,7 +48,7 @@ const PRODUCT_CATEGORIES = [
 interface ProductDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  product: any;
+  product: Product;
   onUpdate?: () => void;
 }
 
@@ -55,6 +58,7 @@ export const ProductDetailModal = ({
   product,
   onUpdate,
 }: ProductDetailModalProps) => {
+  const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
@@ -108,11 +112,12 @@ export const ProductDetailModal = ({
     try {
       const recipesData = await getProductRecipes(product.id);
       setRecipes(recipesData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (import.meta.env.DEV) {
         console.error("Reçete yüklenirken hata:", error);
       }
-      toast.error("Reçeteler yüklenemedi: " + error.message);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Reçeteler yüklenemedi: " + errorMessage);
     }
   };
 
@@ -120,11 +125,12 @@ export const ProductDetailModal = ({
     try {
       const materialsData = await getRawMaterials();
       setMaterials(materialsData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (import.meta.env.DEV) {
         console.error("Hammaddeler yüklenirken hata:", error);
       }
-      toast.error("Hammaddeler yüklenemedi: " + error.message);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Hammaddeler yüklenemedi: " + errorMessage);
     }
   };
 
@@ -154,8 +160,9 @@ export const ProductDetailModal = ({
       fetchRecipes();
       setSelectedMaterial(null);
       setNewQuantity("");
-    } catch (error: any) {
-      toast.error("Hata: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Hata: " + errorMessage);
     } finally {
       setRecipeLoading(false);
     }
@@ -169,8 +176,9 @@ export const ProductDetailModal = ({
       await deleteRecipeItem(recipeId);
       toast.success("Hammadde çıkarıldı");
       fetchRecipes();
-    } catch (error: any) {
-      toast.error("Hata: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Hata: " + errorMessage);
     }
   };
 
@@ -181,8 +189,9 @@ export const ProductDetailModal = ({
       await updateRecipeItem(recipeId, parseFloat(newQty));
       toast.success("Miktar güncellendi");
       fetchRecipes();
-    } catch (error: any) {
-      toast.error("Hata: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Hata: " + errorMessage);
     }
   };
 
@@ -195,7 +204,14 @@ export const ProductDetailModal = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!product?.id) return;
+    if (!product?.id || !user?.id) return;
+
+    // Yetki kontrolü
+    if (!canUpdate && product.createdBy !== user.id) {
+      toast.error("Ürün düzenleme yetkiniz yok.");
+      setIsEditing(false);
+      return;
+    }
     
     setLoading(true);
     try {
@@ -219,9 +235,10 @@ export const ProductDetailModal = ({
       toast.success("Ürün başarıyla güncellendi");
       setIsEditing(false);
       onUpdate?.();
-    } catch (error: any) {
-      console.error("Update product error:", error);
-      toast.error(error.message || "Ürün güncellenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Update product error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(errorMessage || "Ürün güncellenirken hata oluştu");
     } finally {
       setLoading(false);
     }
@@ -243,7 +260,7 @@ export const ProductDetailModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
             <div className="flex items-center justify-between gap-3">
@@ -251,7 +268,7 @@ export const ProductDetailModal = ({
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                   {product.name}
                 </DialogTitle>
                 <DialogDescription className="sr-only">
@@ -332,7 +349,7 @@ export const ProductDetailModal = ({
                 <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg sm:text-xl">Temel Bilgiler</CardTitle>
+                      <CardTitle className="text-lg sm:text-xl font-semibold">Temel Bilgiler</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -519,7 +536,7 @@ export const ProductDetailModal = ({
                   {/* Temel Bilgiler */}
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg sm:text-xl">Temel Bilgiler</CardTitle>
+                      <CardTitle className="text-lg sm:text-xl font-semibold">Temel Bilgiler</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -597,7 +614,7 @@ export const ProductDetailModal = ({
                   {product.description && (
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg sm:text-xl">Açıklama</CardTitle>
+                        <CardTitle className="text-lg sm:text-xl font-semibold">Açıklama</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm sm:text-base whitespace-pre-wrap">{product.description}</p>
@@ -609,7 +626,7 @@ export const ProductDetailModal = ({
                   <TabsContent value="recipe" className="space-y-4 sm:space-y-6 mt-0">
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg sm:text-xl">Reçete Yönetimi</CardTitle>
+                        <CardTitle className="text-lg sm:text-xl font-semibold">Reçete Yönetimi</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-6">
                         {/* Mevcut Reçete */}
@@ -763,6 +780,32 @@ export const ProductDetailModal = ({
             </div>
           </div>
         </div>
+        
+        {/* Activity Comments Panel */}
+        {product?.id && user && (
+          <ActivityCommentsPanel
+            entityId={product.id}
+            entityType="product"
+            onAddComment={async (content: string) => {
+              await addProductComment(
+                product.id,
+                user.id,
+                content,
+                user.fullName || user.displayName,
+                user.email
+              );
+            }}
+            onGetComments={async () => {
+              return await getProductComments(product.id);
+            }}
+            onGetActivities={async () => {
+              return await getProductActivities(product.id);
+            }}
+            currentUserId={user.id}
+            currentUserName={user.fullName || user.displayName}
+            currentUserEmail={user.email}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

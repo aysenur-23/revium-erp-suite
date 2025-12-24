@@ -20,6 +20,7 @@ import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { toast } from "sonner";
 import { getAllUsers } from "@/services/firebase/authService";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,7 +51,7 @@ const Requests = () => {
     try {
       // Filtreleme parametrelerini ayarla
       const filters = {
-        isSuperAdmin: isSuperAdmin,
+        isSuperAdmin: isSuperAdmin || false,
         createdBy: user.id, // Kullanıcı kendi taleplerini görmeli
         assignedTo: user.id, // Yönetici/Lider kendisine atananları görmeli
       };
@@ -66,7 +67,9 @@ const Requests = () => {
       setUsersMap(uMap);
 
     } catch (error) {
-      console.error("Fetch requests error:", error);
+      if (import.meta.env.DEV) {
+        console.error("Fetch requests error:", error);
+      }
       toast.error("Talepler yüklenirken hata oluştu");
     } finally {
       setLoading(false);
@@ -97,7 +100,9 @@ const Requests = () => {
       toast.success(status === "approved" ? "Talep onaylandı" : "Talep reddedildi");
       fetchData();
     } catch (error) {
-      console.error("Update status error:", error);
+      if (import.meta.env.DEV) {
+        console.error("Update status error:", error);
+      }
       toast.error("İşlem başarısız");
     } finally {
       setProcessingId(null);
@@ -166,9 +171,11 @@ const Requests = () => {
               <TableRow key={req.id}>
                 <TableCell className="font-medium">{getTypeLabel(req.type)}</TableCell>
                 <TableCell>
-                    <div className="flex flex-col">
-                        <span>{req.title}</span>
-                        <span className="text-xs text-muted-foreground truncate max-w-[200px]">{req.description}</span>
+                    <div className="flex flex-col gap-1 max-w-[300px]">
+                        <span className="font-medium">{req.title}</span>
+                        {req.description && (
+                            <span className="text-xs text-muted-foreground whitespace-normal break-words">{req.description}</span>
+                        )}
                     </div>
                 </TableCell>
                 <TableCell>{usersMap[req.createdBy] || "Bilinmiyor"}</TableCell>
@@ -194,8 +201,11 @@ const Requests = () => {
                         )}
                         {req.approvedBy && (
                             <div className="flex flex-col gap-0.5 mt-1">
-                                <span className="text-xs font-medium text-emerald-700">
-                                    Onaylayan: {usersMap[req.approvedBy] || "Bilinmiyor"}
+                                <span className={cn(
+                                    "text-xs font-medium",
+                                    req.status === "rejected" ? "text-red-700" : "text-emerald-700"
+                                )}>
+                                    {req.status === "rejected" ? "Cevaplayan" : "Onaylayan"}: {usersMap[req.approvedBy] || "Bilinmiyor"}
                                 </span>
                                 {req.approvedAt && (
                                     <span className="text-[10px] text-muted-foreground">
@@ -262,10 +272,10 @@ const Requests = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Talep Yönetimi</h1>
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Talep Yönetimi</h1>
             <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
               İzin, satın alma ve diğer taleplerinizi yönetin.
             </p>

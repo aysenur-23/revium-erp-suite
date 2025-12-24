@@ -42,8 +42,8 @@ export const CompanySettings = () => {
             auto_backup: settings.autoBackup ?? true,
           });
         }
-      } catch (error: any) {
-        toast.error("Ayarlar yüklenirken hata: " + error.message);
+      } catch (error: unknown) {
+        toast.error("Ayarlar yüklenirken hata: " + (error instanceof Error ? error.message : String(error)));
       } finally {
         setLoading(false);
       }
@@ -72,8 +72,8 @@ export const CompanySettings = () => {
       }, user.id);
 
       toast.success("Şirket bilgileri kaydedildi");
-    } catch (error: any) {
-      toast.error("Ayarlar kaydedilemedi: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Ayarlar kaydedilemedi: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setSaving(false);
     }

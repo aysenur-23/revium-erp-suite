@@ -18,7 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { handleErrorToast } from "@/utils/toastHelpers";
 import { CURRENCY_OPTIONS, CURRENCY_SYMBOLS, DEFAULT_CURRENCY, Currency } from "@/utils/currency";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
-import { Package, Loader2, X, Save } from "lucide-react";
+import { Package, Loader2, X, Save, AlertTriangle, DollarSign, Warehouse, ShoppingCart, MapPin, Link2, Building2, User, FileText } from "lucide-react";
 
 interface CreateRawMaterialDialogProps {
   open: boolean;
@@ -45,7 +45,9 @@ export const CreateRawMaterialDialog = ({
         return JSON.parse(saved);
       }
     } catch (error) {
-      console.error("Error loading draft:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error loading draft:", error);
+      }
     }
     return null;
   };
@@ -55,7 +57,9 @@ export const CreateRawMaterialDialog = ({
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (error) {
-      console.error("Error saving draft:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error saving draft:", error);
+      }
     }
   };
 
@@ -64,7 +68,9 @@ export const CreateRawMaterialDialog = ({
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
-      console.error("Error clearing draft:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error clearing draft:", error);
+      }
     }
   };
 
@@ -74,7 +80,6 @@ export const CreateRawMaterialDialog = ({
     category: "other",
     stock: "0",
     min_stock: "0",
-    max_stock: "",
     unit: "Adet",
     unitPrice: "0",
     vatRate: "0", // KDV yüzdesi
@@ -161,7 +166,9 @@ export const CreateRawMaterialDialog = ({
       const allUsers = await getAllUsers();
       setUsers(allUsers);
     } catch (error) {
-      console.error("Error fetching users:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching users:", error);
+      }
       toast.error("Kullanıcılar yüklenirken hata oluştu");
     } finally {
       setUsersLoading(false);
@@ -187,7 +194,7 @@ export const CreateRawMaterialDialog = ({
         unit: formData.unit,
         currentStock: parseInt(formData.stock) || 0,
         minStock: parseInt(formData.min_stock) || 0,
-        maxStock: formData.max_stock ? parseInt(formData.max_stock) : null,
+        maxStock: null,
         unitPrice: parseFloat(formData.unitPrice) || null,
         totalPrice: parseFloat(formData.totalPrice) || null,
         vatRate: formData.vatRate ? parseFloat(formData.vatRate) : null,
@@ -206,7 +213,7 @@ export const CreateRawMaterialDialog = ({
       onSuccess();
       resetForm(); // State'i sıfırla
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       handleErrorToast(error, "Hammadde eklenirken hata oluştu");
     } finally {
       setLoading(false);
@@ -215,7 +222,7 @@ export const CreateRawMaterialDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           {/* Header */}
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -224,7 +231,7 @@ export const CreateRawMaterialDialog = ({
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                <DialogTitle className="text-[18px] sm:text-[20px] font-semibold text-foreground truncate">
                   Yeni Hammadde Ekle
                 </DialogTitle>
                 <DialogDescription className="sr-only">
@@ -263,47 +270,48 @@ export const CreateRawMaterialDialog = ({
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
             <div className="max-w-full mx-auto h-full overflow-y-auto">
               <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-4 sm:space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg sm:text-xl">Temel Bilgiler</CardTitle>
+                {/* Temel Bilgiler */}
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
+                      <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                      Temel Bilgiler
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="name"  className="text-sm sm:text-base">Hammadde Adı</Label>
+                        <Label htmlFor="name" className="text-sm font-medium flex items-center gap-1.5">
+                          Hammadde Adı
+                          <span className="text-destructive">*</span>
+                        </Label>
                         <Input
                           id="name"
                           value={formData.name}
                           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                           className="min-h-[44px] sm:min-h-0"
+                          placeholder="Örn: Çelik Levha, Plastik Granül"
                           required
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="sku"  className="text-sm sm:text-base">Stok Kodu</Label>
+                        <Label htmlFor="sku" className="text-sm font-medium flex items-center gap-1.5">
+                          Stok Kodu
+                          <span className="text-destructive">*</span>
+                        </Label>
                         <Input
                           id="sku"
                           value={formData.sku}
                           onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                           className="min-h-[44px] sm:min-h-0"
+                          placeholder="Örn: HM-001, SKU-123"
                           required
                         />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="description" className="text-sm sm:text-base">Açıklama</Label>
-                      <Textarea
-                        id="description"
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className="min-h-[80px] sm:min-h-[100px] resize-none"
-                        placeholder="Hammadde hakkında açıklama yazın..."
-                      />
-                    </div>
-
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="category"  className="text-sm sm:text-base">Kategori</Label>
+                        <Label htmlFor="category" className="text-sm font-medium">Kategori</Label>
                         <Select
                           value={formData.category}
                           onValueChange={(value) => setFormData({ ...formData, category: value })}
@@ -322,7 +330,7 @@ export const CreateRawMaterialDialog = ({
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="unit"  className="text-sm sm:text-base">Birim</Label>
+                        <Label htmlFor="unit" className="text-sm font-medium">Birim</Label>
                         <Select
                           value={formData.unit}
                           onValueChange={(value) => setFormData({ ...formData, unit: value })}
@@ -347,20 +355,44 @@ export const CreateRawMaterialDialog = ({
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="brand" className="text-sm sm:text-base">Marka</Label>
+                        <Label htmlFor="brand" className="text-sm font-medium">Marka</Label>
                         <Input
                           id="brand"
                           value={formData.brand}
                           onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                           className="min-h-[44px] sm:min-h-0"
-                          placeholder="Örn: Bosch, Samsung, vb."
+                          placeholder="Örn: Bosch, Samsung"
                         />
                       </div>
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description" className="text-sm font-medium">Açıklama</Label>
+                      <Textarea
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        className="min-h-[80px] sm:min-h-[100px] resize-none"
+                        placeholder="Hammadde hakkında detaylı açıklama yazın..."
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {/* Stok Bilgileri */}
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
+                      <Warehouse className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                      Stok Bilgileri
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="stock"  className="text-sm sm:text-base">Mevcut Stok</Label>
+                        <Label htmlFor="stock" className="text-sm font-medium flex items-center gap-1.5">
+                          Mevcut Stok
+                          <span className="text-destructive">*</span>
+                        </Label>
                         <Input
                           id="stock"
                           type="number"
@@ -373,7 +405,10 @@ export const CreateRawMaterialDialog = ({
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="min_stock"  className="text-sm sm:text-base">Minimum Stok</Label>
+                        <Label htmlFor="min_stock" className="text-sm font-medium flex items-center gap-1.5">
+                          Kritik Stok Adedi
+                          <span className="text-destructive">*</span>
+                        </Label>
                         <Input
                           id="min_stock"
                           type="number"
@@ -384,24 +419,29 @@ export const CreateRawMaterialDialog = ({
                           className="min-h-[44px] sm:min-h-0"
                           required
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="max_stock" className="text-sm sm:text-base">Maksimum Stok</Label>
-                        <Input
-                          id="max_stock"
-                          type="number"
-                          step="1"
-                          min="0"
-                          value={formData.max_stock}
-                          onChange={(e) => setFormData({ ...formData, max_stock: e.target.value })}
-                          className="min-h-[44px] sm:min-h-0"
-                        />
+                        {parseInt(formData.stock) < parseInt(formData.min_stock) && parseInt(formData.stock) >= 0 && parseInt(formData.min_stock) > 0 && (
+                          <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 px-2 py-1.5 rounded-md border border-amber-200 dark:border-amber-800">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <span>Stok kritik seviyenin altında!</span>
+                          </div>
+                        )}
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
 
+                {/* Fiyat Bilgileri */}
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                      Fiyat Bilgileri
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div className="space-y-2">
-                        <Label className="text-sm sm:text-base">Para Birimi</Label>
+                        <Label className="text-sm font-medium">Para Birimi</Label>
                         <Select
                           value={formData.currency}
                           onValueChange={(value) => setFormData({ ...formData, currency: value as Currency })}
@@ -419,7 +459,9 @@ export const CreateRawMaterialDialog = ({
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="unitPrice" className="text-sm sm:text-base">Birim Fiyat ({CURRENCY_SYMBOLS[formData.currency as Currency]})</Label>
+                        <Label htmlFor="unitPrice" className="text-sm font-medium">
+                          Birim Fiyat ({CURRENCY_SYMBOLS[formData.currency as Currency]})
+                        </Label>
                         <Input
                           id="unitPrice"
                           type="number"
@@ -428,10 +470,11 @@ export const CreateRawMaterialDialog = ({
                           value={formData.unitPrice}
                           onChange={(e) => setFormData({ ...formData, unitPrice: e.target.value })}
                           className="min-h-[44px] sm:min-h-0"
+                          placeholder="0.00"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="vatRate" className="text-sm sm:text-base">KDV Yüzdesi (%)</Label>
+                        <Label htmlFor="vatRate" className="text-sm font-medium">KDV Yüzdesi (%)</Label>
                         <Input
                           id="vatRate"
                           type="number"
@@ -445,9 +488,10 @@ export const CreateRawMaterialDialog = ({
                         />
                       </div>
                     </div>
-
                     <div className="space-y-2">
-                      <Label htmlFor="totalPrice" className="text-sm sm:text-base">Nihai Fiyat (KDV Dahil) ({CURRENCY_SYMBOLS[formData.currency as Currency]})</Label>
+                      <Label htmlFor="totalPrice" className="text-sm font-medium">
+                        Nihai Fiyat (KDV Dahil) ({CURRENCY_SYMBOLS[formData.currency as Currency]})
+                      </Label>
                       <Input
                         id="totalPrice"
                         type="number"
@@ -455,39 +499,40 @@ export const CreateRawMaterialDialog = ({
                         min="0"
                         value={formData.totalPrice}
                         readOnly
-                        className="min-h-[44px] sm:min-h-0 bg-muted cursor-not-allowed"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {formData.unitPrice && parseFloat(formData.unitPrice) > 0 && formData.vatRate && parseFloat(formData.vatRate) > 0
-                          ? `Birim Fiyat: ${parseFloat(formData.unitPrice).toFixed(2)} + KDV (%${formData.vatRate}): ${((parseFloat(formData.unitPrice) * parseFloat(formData.vatRate)) / 100).toFixed(2)} = ${parseFloat(formData.totalPrice).toFixed(2)}`
-                          : "Birim fiyat ve KDV yüzdesi girildiğinde otomatik hesaplanır"}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="link" className="text-sm sm:text-base">Link</Label>
-                      <Input
-                        id="link"
-                        type="url"
-                        value={formData.link}
-                        onChange={(e) => setFormData({ ...formData, link: e.target.value })}
-                        className="min-h-[44px] sm:min-h-0"
-                        placeholder="https://..."
+                        className="min-h-[44px] sm:min-h-0 bg-muted/50 cursor-not-allowed font-semibold"
                       />
                     </div>
+                  </CardContent>
+                </Card>
 
+                {/* Tedarik Bilgileri */}
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
+                      <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                      Tedarik Bilgileri
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="supplier" className="text-sm sm:text-base">Tedarikçi</Label>
-                      <Input
-                        id="supplier"
-                        value={formData.supplier}
-                        onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                        className="min-h-[44px] sm:min-h-0"
-                      />
+                        <Label htmlFor="supplier" className="text-sm font-medium flex items-center gap-1.5">
+                          <Building2 className="h-3.5 w-3.5" />
+                          Tedarikçi
+                        </Label>
+                        <Input
+                          id="supplier"
+                          value={formData.supplier}
+                          onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+                          className="min-h-[44px] sm:min-h-0"
+                          placeholder="Tedarikçi firma adı"
+                        />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="purchasedBy" className="text-sm sm:text-base">Satın Alan Kişi</Label>
+                        <Label htmlFor="purchasedBy" className="text-sm font-medium flex items-center gap-1.5">
+                          <User className="h-3.5 w-3.5" />
+                          Satın Alan Kişi
+                        </Label>
                         <Select
                           value={formData.purchasedBy || "none"}
                           onValueChange={(value) => setFormData({ ...formData, purchasedBy: value === "none" ? "" : value })}
@@ -507,29 +552,33 @@ export const CreateRawMaterialDialog = ({
                         </Select>
                       </div>
                     </div>
-
                     <div className="space-y-2">
-                      <Label htmlFor="location" className="text-sm sm:text-base">Hammadde Konumu</Label>
+                      <Label htmlFor="link" className="text-sm font-medium flex items-center gap-1.5">
+                        <Link2 className="h-3.5 w-3.5" />
+                        Ürün Linki
+                      </Label>
+                      <Input
+                        id="link"
+                        type="url"
+                        value={formData.link}
+                        onChange={(e) => setFormData({ ...formData, link: e.target.value })}
+                        className="min-h-[44px] sm:min-h-0"
+                        placeholder="https://..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="location" className="text-sm font-medium flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5" />
+                        Hammadde Konumu
+                      </Label>
                       <Input
                         id="location"
                         value={formData.location}
                         onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                         className="min-h-[44px] sm:min-h-0"
-                        placeholder="Örn: Depo A, Raf 3, vb."
+                        placeholder="Örn: Depo A, Raf 3, Bölüm 2"
                       />
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="description" className="text-sm sm:text-base">Açıklama</Label>
-                      <Textarea
-                        id="description"
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        rows={3}
-                        className="min-h-[44px] sm:min-h-0"
-                      />
-                    </div>
-
                   </CardContent>
                 </Card>
               </form>

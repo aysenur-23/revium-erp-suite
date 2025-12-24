@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useMemo, useRef, ReactNode } from "react";
 import {
   register,
   login,
@@ -11,6 +11,7 @@ import {
 } from "@/services/firebase/authService";
 import { REQUIRE_EMAIL_VERIFICATION } from "@/config/auth";
 import { getPermission, onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
+import { Timestamp } from "firebase/firestore";
 
 interface User {
   id: string;
@@ -20,7 +21,7 @@ interface User {
   phone?: string;
   dateOfBirth?: string;
   roles: string[];
-  lastLoginAt?: any;
+  lastLoginAt?: Timestamp | Date | null;
 }
 
 interface AuthContextType {
@@ -47,67 +48,124 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isTeamLeader, setIsTeamLeader] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // Departments cache - performans için
+  const departmentsCacheRef = useRef<Array<{ id: string; managerId?: string }> | null>(null);
+  const departmentsCacheTimeRef = useRef<number>(0);
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
 
-  // Check roles based on role_permissions system
+  // Departments'ı cache'den al veya yükle
+  const getDepartmentsCached = async (): Promise<Array<{ id: string; managerId?: string }>> => {
+    const now = Date.now();
+    // Cache varsa ve 5 dakikadan eski değilse kullan
+    if (departmentsCacheRef.current && (now - departmentsCacheTimeRef.current) < CACHE_DURATION) {
+      return departmentsCacheRef.current;
+    }
+    
+    // Cache yoksa veya eskiyse yükle
+    try {
+      const { getDepartments } = await import("@/services/firebase/departmentService");
+      const departments = await getDepartments();
+      departmentsCacheRef.current = departments;
+      departmentsCacheTimeRef.current = now;
+      return departments;
+    } catch (error) {
+      // Hata durumunda cache'i kullan veya boş array döndür
+      if (departmentsCacheRef.current) {
+        return departmentsCacheRef.current;
+      }
+      return [];
+    }
+  };
+
+  // Check roles based on role_permissions system - Firestore'dan kontrol et
   const checkRoles = async (userProfile: UserProfile | null) => {
-    if (!userProfile || !userProfile.role || userProfile.role.length === 0) {
+    const normalizedRoles = normalizeRoles(userProfile?.role);
+
+    if (!userProfile || normalizedRoles.length === 0) {
       setIsSuperAdmin(false);
       setIsAdmin(false);
       setIsTeamLeader(false);
       return;
     }
 
-    const userRoles = userProfile.role;
+    const userRoles = normalizedRoles;
     
-    // Super admin: super_admin rolüne sahip mi?
-    const hasSuperAdminRole = userRoles.includes('super_admin');
-    setIsSuperAdmin(hasSuperAdminRole);
-
-    // Admin: admin veya super_admin rolüne sahip mi VE role_permissions sisteminde admin kaynaklarına erişim var mı?
-    const hasAdminRole = userRoles.includes('admin') || hasSuperAdminRole;
-    if (hasAdminRole) {
-      try {
-        // Admin paneli erişimi için audit_logs kaynağına canRead yetkisi kontrolü
-        // Eğer super_admin ise direkt true, değilse role_permissions'tan kontrol et
-        if (hasSuperAdminRole) {
-          setIsAdmin(true);
-        } else {
-          const adminPermission = await getPermission('admin', 'audit_logs');
-          setIsAdmin(adminPermission?.canRead === true);
+    // Super Admin kontrolü - Firestore'dan
+    let hasSuperAdminPermission = false;
+    for (const role of userRoles) {
+      if (role === "super_admin" || role === "main_admin") {
+        try {
+          // Ensure permissions are initialized
+          const { getRolePermissions } = await import("@/services/firebase/rolePermissionsService");
+          await getRolePermissions();
+          
+          const permission = await getPermission(role, "role_permissions", true);
+          hasSuperAdminPermission = permission?.canRead === true;
+          if (hasSuperAdminPermission) break;
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Error checking super admin permission:", error);
+          }
+          // Fallback: rol array'inden kontrol - super_admin rolü varsa true
+          hasSuperAdminPermission = true;
+          break;
         }
-      } catch (error) {
-        // Hata durumunda fallback: rol array'inden kontrol et
-        setIsAdmin(hasAdminRole);
       }
-    } else {
-      setIsAdmin(false);
     }
+    setIsSuperAdmin(hasSuperAdminPermission);
+    setIsAdmin(hasSuperAdminPermission);
 
-    // Team leader: team_leader rolüne sahip mi veya bir departmanın managerId'si mi?
-    const hasTeamLeaderRole = userRoles.includes('team_leader');
-    if (hasTeamLeaderRole || hasAdminRole) {
-      // Ekip lideri kontrolü: departments tablosundaki managerId alanına da bak
-      try {
-        const { getDepartments } = await import("@/services/firebase/departmentService");
-        const departments = await getDepartments();
-        const isManager = departments.some((dept) => dept.managerId === userProfile.id);
-        setIsTeamLeader(hasTeamLeaderRole || isManager || hasAdminRole);
-      } catch (error) {
-        // Hata durumunda fallback: rol array'inden kontrol et
-        setIsTeamLeader(hasTeamLeaderRole || hasAdminRole);
+    // Team Leader kontrolü - Firestore'dan
+    let hasTeamLeaderPermission = false;
+    for (const role of userRoles) {
+      if (role === "team_leader") {
+        try {
+          // Ensure permissions are initialized
+          const { getRolePermissions } = await import("@/services/firebase/rolePermissionsService");
+          await getRolePermissions();
+          
+          // Team leader için departments kaynağında canUpdate yetkisi var mı?
+          const permission = await getPermission(role, "departments", true);
+          hasTeamLeaderPermission = permission?.canUpdate === true;
+          if (hasTeamLeaderPermission) break;
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Error checking team leader permission:", error);
+          }
+          // Fallback: manager kontrolü
+          try {
+            const departments = await getDepartmentsCached();
+            hasTeamLeaderPermission = departments.some((dept) => dept.managerId === userProfile.id);
+            if (hasTeamLeaderPermission) break;
+          } catch (deptError: unknown) {
+            if (import.meta.env.DEV) {
+              console.error("Error checking team leader from departments:", deptError);
+            }
+          }
+        }
       }
-    } else {
-      setIsTeamLeader(false);
     }
+    setIsTeamLeader(hasTeamLeaderPermission);
+  };
+
+  const normalizeRoles = (roles?: string[] | null): string[] => {
+    if (!roles || roles.length === 0) return [];
+    const mapped = roles.map((r) => (r === "admin" ? "super_admin" : r));
+    // Tekrarlananları temizle
+    return Array.from(new Set(mapped));
   };
 
   const convertUserProfileToUser = (profile: UserProfile | null): User | null => {
     if (!profile) return null;
     
+    const normalizedRoles = normalizeRoles(profile.role);
+
     return {
       id: profile.id,
       email: profile.email,
@@ -115,7 +173,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       fullName: profile.fullName || profile.displayName,
       phone: profile.phone,
       dateOfBirth: profile.dateOfBirth,
-      roles: profile.role || [],
+      roles: normalizedRoles,
       lastLoginAt: profile.lastLoginAt,
     };
   };
@@ -131,7 +189,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (isMounted) {
         setLoading(false);
         if (import.meta.env.DEV) {
-          console.warn("Auth state timeout (5 saniye) - loading'i false yapıyoruz");
+          if (import.meta.env.DEV) {
+            console.warn("Auth state timeout (5 saniye) - loading'i false yapıyoruz");
+          }
         }
       }
     }, 5000);
@@ -147,22 +207,55 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (userProfile) {
             const userData = convertUserProfileToUser(userProfile);
             setUser(userData);
+            setCurrentUserProfile(userProfile);
             // Check roles based on role_permissions system
             await checkRoles(userProfile);
             
             // Listen to permission cache changes for real-time updates
             const unsubscribePermissions = onPermissionCacheChange(async () => {
-              if (isMounted && userProfile) {
-                await checkRoles(userProfile);
+              if (isMounted) {
+                // Departments cache'ini invalidate et (rol değişiklikleri departments'ı etkileyebilir)
+                departmentsCacheRef.current = null;
+                departmentsCacheTimeRef.current = 0;
+                
+                // Kullanıcı profilini yeniden yükle (rol değişikliklerini yakalamak için)
+                try {
+                  const { getUserProfile } = await import("@/services/firebase/authService");
+                  const { auth } = await import("@/lib/firebase");
+                  if (auth?.currentUser) {
+                    const updatedProfile = await getUserProfile(auth.currentUser.uid);
+                    if (updatedProfile) {
+                      const updatedUserData = convertUserProfileToUser(updatedProfile);
+                      setUser(updatedUserData);
+                      setCurrentUserProfile(updatedProfile);
+                      await checkRoles(updatedProfile);
+                    } else {
+                      // Profil yüklenemezse mevcut userProfile ile devam et
+                      await checkRoles(userProfile);
+                    }
+                  } else {
+                    // Auth yoksa mevcut userProfile ile devam et
+                    await checkRoles(userProfile);
+                  }
+                } catch (error) {
+                  // Hata durumunda mevcut userProfile ile devam et
+                  if (import.meta.env.DEV) {
+                    if (import.meta.env.DEV) {
+                      console.error("Permission cache değişikliğinde profil yenileme hatası:", error);
+                    }
+                  }
+                  await checkRoles(userProfile);
+                }
               }
             });
             
             // Store unsubscribe function for cleanup
             if (isMounted) {
-              (window as any).__unsubscribePermissions = unsubscribePermissions;
+              (window as Window & { __unsubscribePermissions?: () => void }).__unsubscribePermissions = unsubscribePermissions;
             }
           } else {
             setUser(null);
+            setCurrentUserProfile(null);
             setIsAdmin(false);
             setIsSuperAdmin(false);
             setIsTeamLeader(false);
@@ -170,11 +263,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
           // Callback içinde hata oluşursa
           if (import.meta.env.DEV) {
-            console.error("Auth state callback hatası:", error);
+            if (import.meta.env.DEV) {
+              console.error("Auth state callback hatası:", error);
+            }
           }
           // Hata durumunda user'ı null yap ve loading'i false yap
           if (isMounted) {
             setUser(null);
+            setCurrentUserProfile(null);
             setIsAdmin(false);
             setIsSuperAdmin(false);
             setIsTeamLeader(false);
@@ -188,12 +284,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       // Firebase initialization hatası durumunda
       if (import.meta.env.DEV) {
-        console.error("Auth state listener hatası:", error);
+        if (import.meta.env.DEV) {
+          console.error("Auth state listener hatası:", error);
+        }
       }
       clearTimeout(loadingTimeout);
       if (isMounted) {
         setLoading(false);
         setUser(null);
+        setCurrentUserProfile(null);
         setIsAdmin(false);
         setIsSuperAdmin(false);
         setIsTeamLeader(false);
@@ -207,9 +306,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         unsubscribe();
       }
       // Cleanup permission cache listener
-      if ((window as any).__unsubscribePermissions) {
-        (window as any).__unsubscribePermissions();
-        delete (window as any).__unsubscribePermissions;
+      const windowWithUnsubscribe = window as Window & { __unsubscribePermissions?: () => void };
+      if (windowWithUnsubscribe.__unsubscribePermissions) {
+        windowWithUnsubscribe.__unsubscribePermissions();
+        delete windowWithUnsubscribe.__unsubscribePermissions;
       }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -236,8 +336,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         return { success: false, message: result.message || 'Giriş başarısız' };
       }
-    } catch (error: any) {
-      return { success: false, message: error.message || 'Giriş başarısız' };
+    } catch (error: unknown) {
+      return { success: false, message: error instanceof Error ? error.message : 'Giriş başarısız' };
     }
   };
 
@@ -257,7 +357,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         return { success: false, message: result.message || 'Google ile giriş başarısız' };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { success: false, message: error.message || 'Google ile giriş başarısız' };
     }
   };
@@ -282,10 +382,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           user: null,
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: error.message || 'Kayıt başarısız',
+        message: errorMsg || 'Kayıt başarısız',
         user: null,
       };
     }
@@ -298,6 +399,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Ignore logout errors
     } finally {
       setUser(null);
+      setCurrentUserProfile(null);
       setIsAdmin(false);
       setIsSuperAdmin(false);
       setIsTeamLeader(false);
@@ -308,10 +410,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const handleResetPassword = async (email: string) => {
     try {
       return await resetPassword(email);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: error.message || 'Şifre sıfırlama başarısız',
+        message: errorMsg || 'Şifre sıfırlama başarısız',
       };
     }
   };

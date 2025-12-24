@@ -6,7 +6,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
 import { Plus, Trash2, Download, Edit2, Save, X, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { generateSalesOfferPDF } from "@/services/pdfGenerator";
+// pdfGenerator will be dynamically imported when needed
 import { toast } from "sonner";
 import { CustomerCombobox } from "@/components/Customers/CustomerCombobox";
 import { getOrderById, getOrderItems, OrderItem } from "@/services/firebase/orderService";
@@ -91,7 +90,9 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
       const productsData = await getProducts();
       setProducts(productsData);
     } catch (error) {
-      console.error("Fetch products error:", error);
+      if (import.meta.env.DEV) {
+        console.error("Fetch products error:", error);
+      }
     }
   }, []);
 
@@ -159,7 +160,7 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
   }, [open, orderId]);
 
   // NaN kontrolü için helper
-  const safeNumber = (value: any): number => {
+  const safeNumber = (value: unknown): number => {
     const num = Number(value);
     return (isNaN(num) || !isFinite(num)) ? 0 : num;
   };
@@ -297,7 +298,9 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
     const date = new Date(dateStr);
       // Geçersiz tarih kontrolü
       if (isNaN(date.getTime()) || !isFinite(date.getTime())) {
-        console.warn("Geçersiz tarih:", dateStr);
+        if (import.meta.env.DEV) {
+          console.warn("Geçersiz tarih:", dateStr);
+        }
         return "-";
       }
     const months = [
@@ -314,19 +317,25 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
           monthIndex < 0 || monthIndex > 11 || 
           day < 1 || day > 31 || 
           year < 1900 || year > 2100) {
-        console.warn("Geçersiz tarih bileşenleri:", { day, monthIndex, year });
+        if (import.meta.env.DEV) {
+          console.warn("Geçersiz tarih bileşenleri:", { day, monthIndex, year });
+        }
         return "-";
       }
       
       const month = months[monthIndex];
       if (!month) {
-        console.warn("Geçersiz ay indeksi:", monthIndex);
+        if (import.meta.env.DEV) {
+          console.warn("Geçersiz ay indeksi:", monthIndex);
+        }
         return "-";
       }
       
       return `${day} ${month} ${year}`;
     } catch (error) {
-      console.error("Tarih formatlama hatası:", error, dateStr);
+      if (import.meta.env.DEV) {
+        console.error("Tarih formatlama hatası:", error, dateStr);
+      }
       return "-";
     }
   };
@@ -343,6 +352,8 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
     }
 
     try {
+      // Dynamically import pdfGenerator to avoid loading it on initial page load
+      const { generateSalesOfferPDF } = await import("@/services/pdfGenerator");
       const blob = await generateSalesOfferPDF({
         quoteNumber: quote.quoteNumber,
         quoteDate: formatDate(quote.quoteDate),
@@ -399,7 +410,9 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
       } catch (reportError) {
         // PDF kaydetme başarısız olsa bile PDF indirme başarılı olduğu için sadece log'la
         // Kullanıcıya hata gösterme - PDF zaten indirildi
-        console.warn("Teklif raporu kaydedilemedi (PDF indirme başarılı):", reportError);
+        if (import.meta.env.DEV) {
+          console.warn("Teklif raporu kaydedilemedi (PDF indirme başarılı):", reportError);
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Bilinmeyen hata";
@@ -409,7 +422,11 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-[98vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden bg-gradient-to-br from-background via-background to-muted/20">
+      <DialogContent className="w-full max-w-[98vw] md:max-w-6xl h-[95vh] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-gradient-to-br from-background via-background to-muted/20">
+        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+        <DialogTitle className="sr-only">Satış Teklif Formu</DialogTitle>
+        <DialogDescription className="sr-only">Teklif formunu düzenleyip PDF olarak indirebilirsiniz</DialogDescription>
+        
         <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 backdrop-blur-sm flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -417,12 +434,12 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
                 <Package className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <DialogTitle className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+                <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
                   Satış Teklif Formu
-                </DialogTitle>
-                <DialogDescription className="text-xs sm:text-sm text-muted-foreground mt-1">
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                   Teklif formunu düzenleyip PDF olarak indirebilirsiniz
-                </DialogDescription>
+                </p>
               </div>
             </div>
           {!isEditing && (
@@ -439,7 +456,7 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
             </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch overscroll-behavior-contain">
           <div className="w-full p-4 sm:p-6 flex justify-center bg-gradient-to-br from-muted/20 via-background to-muted/10">
             <div className="w-full max-w-[820px] space-y-4 sm:space-y-6">
           {/* Edit Mode Controls */}
@@ -864,7 +881,7 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
           </div>
             </div>
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -4,13 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Users, FileText, Loader2, Shield, Search, Mail, Phone, CheckCircle2, Clock, XCircle, TrendingUp, Eye, Download, Building2 } from "lucide-react";
+import { Users, FileText, Loader2, Shield, Mail, Phone, CheckCircle2, Clock, XCircle, TrendingUp, Eye, Download, Building2, UserPlus, Check, X, Calendar, Gift } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { getDepartments, Department } from "@/services/firebase/departmentService";
-import { generateUserStatsPDF } from "@/services/pdfGenerator";
+// pdfGenerator will be dynamically imported when needed
 import { getTasks, getTaskAssignments, Task } from "@/services/firebase/taskService";
-import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatPhoneForDisplay } from "@/utils/phoneNormalizer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -18,16 +17,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { getRoles, RoleDefinition } from "@/services/firebase/rolePermissionsService";
+import { approveTeamRequest, rejectTeamRequest, TeamApprovalRequest, subscribeToTeamRequests } from "@/services/firebase/teamApprovalService";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Timestamp } from "firebase/firestore";
 
-export const TeamMembers = () => {
+interface TeamMembersProps {
+  departmentFilter?: string;
+}
+
+export const TeamMembers = ({ departmentFilter: externalDepartmentFilter = "all" }: TeamMembersProps) => {
   const { user, isAdmin, isTeamLeader } = useAuth();
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  // External props varsa onları kullan, yoksa internal state kullan
+  const departmentFilter = externalDepartmentFilter;
   const [memberStats, setMemberStats] = useState<Record<string, {
     total: number;
     completed: number;
@@ -55,10 +62,38 @@ export const TeamMembers = () => {
     };
   } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<TeamApprovalRequest[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<{ userId: string; teamId: string } | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   useEffect(() => {
     fetchTeamData();
-  }, [user, isAdmin]);
+  }, [user, isAdmin, isTeamLeader]);
+
+  // Katılım isteklerini gerçek zamanlı dinle
+  useEffect(() => {
+    if (!user?.id) {
+      setPendingRequests([]);
+      setLoadingRequests(false);
+      return;
+    }
+
+    setLoadingRequests(true);
+    const unsubscribe = subscribeToTeamRequests(
+      isAdmin || false,
+      isTeamLeader ? user.id : null,
+      (requests) => {
+        setPendingRequests(requests);
+        setLoadingRequests(false);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.id, isAdmin, isTeamLeader]);
 
   const fetchTeamData = async () => {
     if (!user?.id) return;
@@ -146,16 +181,20 @@ export const TeamMembers = () => {
               pending,
               inProgress,
             };
-          } catch (error) {
-            console.error(`Error fetching stats for ${member.id}:`, error);
+          } catch (error: unknown) {
+            if (import.meta.env.DEV) {
+              console.error(`Error fetching stats for ${member.id}:`, error);
+            }
             statsMap[member.id] = { total: 0, completed: 0, pending: 0, inProgress: 0 };
           }
         })
       );
 
       setMemberStats(statsMap);
-    } catch (error: any) {
-      console.error("Fetch team members error:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Fetch team members error:", error);
+      }
       toast.error("Ekip üyeleri yüklenemedi");
     } finally {
       setLoading(false);
@@ -164,16 +203,6 @@ export const TeamMembers = () => {
 
   const filteredMembers = useMemo(() => {
     let filtered = members;
-
-    // Arama filtresi
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(member =>
-        member.fullName?.toLowerCase().includes(search) ||
-        member.email?.toLowerCase().includes(search) ||
-        member.phone?.toLowerCase().includes(search)
-      );
-    }
 
     // Departman filtresi
     if (departmentFilter !== "all") {
@@ -189,7 +218,7 @@ export const TeamMembers = () => {
     }
 
     return filtered;
-  }, [members, searchTerm, departmentFilter]);
+  }, [members, departmentFilter]);
 
   // Yönetici için ekiplere göre gruplandırılmış üyeler
   const membersByDepartment = useMemo(() => {
@@ -236,6 +265,18 @@ export const TeamMembers = () => {
     
     return grouped;
   }, [filteredMembers, departments, isAdmin]);
+
+  // Ekiplere göre gruplandırılmış istekler
+  const requestsByTeam = useMemo(() => {
+    const grouped: Record<string, TeamApprovalRequest[]> = {};
+    pendingRequests.forEach(request => {
+      if (!grouped[request.teamId]) {
+        grouped[request.teamId] = [];
+      }
+      grouped[request.teamId].push(request);
+    });
+    return grouped;
+  }, [pendingRequests]);
 
   // Dinamik rol fonksiyonları
   const getUserRole = (member: UserProfile): string => {
@@ -289,8 +330,10 @@ export const TeamMembers = () => {
         active: taskDetails.filter(t => t.status === "accepted").length,
         assignments: taskDetails
       };
-    } catch (error: any) {
-      console.error("Error fetching user stats:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Error fetching user stats:", error);
+      }
       throw error;
     }
   };
@@ -301,8 +344,8 @@ export const TeamMembers = () => {
       const stats = await fetchUserStats(member);
       setPreviewData({ member, stats });
       setPreviewOpen(true);
-    } catch (error: any) {
-      toast.error("Rapor yüklenemedi: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Rapor yüklenemedi: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setLoadingPreview(false);
     }
@@ -312,6 +355,7 @@ export const TeamMembers = () => {
     setGeneratingPdfId(member.id);
     try {
       const stats = await fetchUserStats(member);
+      const { generateUserStatsPDF } = await import("@/services/pdfGenerator");
       const pdfBlob = await generateUserStatsPDF(stats);
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");
@@ -322,9 +366,11 @@ export const TeamMembers = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast.success("Rapor indirildi");
-    } catch (error: any) {
-      console.error("Report generation error:", error);
-      toast.error("Rapor oluşturulamadı: " + error.message);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Report generation error:", error);
+      }
+      toast.error("Rapor oluşturulamadı: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setGeneratingPdfId(null);
     }
@@ -334,6 +380,7 @@ export const TeamMembers = () => {
     if (!previewData) return;
     setGeneratingPdfId(previewData.member.id);
     try {
+      const { generateUserStatsPDF } = await import("@/services/pdfGenerator");
       const pdfBlob = await generateUserStatsPDF(previewData.stats);
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");
@@ -344,9 +391,11 @@ export const TeamMembers = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast.success("Rapor indirildi");
-    } catch (error: any) {
-      console.error("Report generation error:", error);
-      toast.error("Rapor oluşturulamadı: " + error.message);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Report generation error:", error);
+      }
+      toast.error("Rapor oluşturulamadı: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setGeneratingPdfId(null);
     }
@@ -393,37 +442,222 @@ export const TeamMembers = () => {
     );
   }
 
+  const handleApproveRequest = async (userId: string, teamId: string) => {
+    if (!user?.id) return;
+    try {
+      await approveTeamRequest(userId, teamId, user.id);
+      toast.success("Katılım isteği onaylandı");
+      // Gerçek zamanlı dinleme otomatik olarak güncelleyecek
+      await fetchTeamData(); // Üye listesini yenile
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("İstek onaylanamadı: " + errorMessage);
+    }
+  };
+
+  const handleRejectRequest = async () => {
+    if (!user?.id || !selectedRequest) return;
+    try {
+      await rejectTeamRequest(selectedRequest.userId, selectedRequest.teamId, rejectReason || undefined, user.id);
+      toast.success("Katılım isteği reddedildi");
+      setRejectDialogOpen(false);
+      setSelectedRequest(null);
+      setRejectReason("");
+      // Gerçek zamanlı dinleme otomatik olarak güncelleyecek
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("İstek reddedilemedi: " + errorMessage);
+    }
+  };
+
+  // Doğum günü formatla
+  const formatBirthday = (dateOfBirth: Date | Timestamp | string | null | undefined): string | null => {
+    if (!dateOfBirth) return null;
+    try {
+      let date: Date;
+      if (dateOfBirth instanceof Date) {
+        date = dateOfBirth;
+      } else if (dateOfBirth && typeof dateOfBirth === 'object' && 'toDate' in dateOfBirth) {
+        date = (dateOfBirth as Timestamp).toDate();
+      } else if (typeof dateOfBirth === 'string') {
+        date = new Date(dateOfBirth);
+      } else {
+        return null;
+      }
+      return format(date, "dd MMMM yyyy", { locale: tr });
+    } catch {
+      return null;
+    }
+  };
+
+  // Doğum günü yaklaşıyor mu kontrol et (30 gün içinde)
+  const isBirthdaySoon = (dateOfBirth: Date | Timestamp | string | null | undefined): boolean => {
+    if (!dateOfBirth) return false;
+    try {
+      let date: Date;
+      if (dateOfBirth instanceof Date) {
+        date = dateOfBirth;
+      } else if (dateOfBirth && typeof dateOfBirth === 'object' && 'toDate' in dateOfBirth) {
+        date = (dateOfBirth as Timestamp).toDate();
+      } else if (typeof dateOfBirth === 'string') {
+        date = new Date(dateOfBirth);
+      } else {
+        return false;
+      }
+      const today = new Date();
+      const thisYear = today.getFullYear();
+      const birthdayThisYear = new Date(thisYear, date.getMonth(), date.getDate());
+      const daysUntilBirthday = Math.ceil((birthdayThisYear.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      return daysUntilBirthday >= 0 && daysUntilBirthday <= 30;
+    } catch {
+      return false;
+    }
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-1 h-full flex flex-col">
+      {/* Katılım İstekleri Bölümü - Sadece istek geldiğinde görünür */}
+      {pendingRequests.length > 0 && (
+        <Card className="border-blue-200 dark:border-blue-800 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              Katılım İstekleri
+              <Badge variant="secondary" className="ml-auto">{pendingRequests.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {loadingRequests ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : (
+            <>
+              {isAdmin ? (
+                  // Admin için ekiplere göre gruplandırılmış
+                  <div className="space-y-4">
+                    {Object.entries(requestsByTeam).map(([teamId, requests]) => {
+                      const team = departments.find(d => d.id === teamId);
+                      return (
+                        <div key={teamId} className="space-y-2">
+                          <div className="flex items-center gap-2 pb-2 border-b">
+                            <Building2 className="h-4 w-4 text-primary" />
+                            <h4 className="font-semibold">{team?.name || "Bilinmeyen Ekip"}</h4>
+                            <Badge variant="outline">{requests.length} istek</Badge>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {requests.map((request) => (
+                              <Card key={`${request.userId}-${request.teamId}`} className="border-blue-200 dark:border-blue-800">
+                                <CardContent className="p-4 space-y-3">
+                                  <div className="flex items-center gap-3">
+                                    <Avatar className="h-10 w-10">
+                                      <AvatarFallback className="bg-blue-100 text-blue-700">
+                                        {request.userName.substring(0, 2).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-semibold text-sm line-clamp-1">{request.userName}</p>
+                                      <p className="text-xs text-muted-foreground line-clamp-1">{request.userEmail}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      className="flex-1 gap-2"
+                                      onClick={() => handleApproveRequest(request.userId, request.teamId)}
+                                    >
+                                      <Check className="h-4 w-4" />
+                                      Kabul Et
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      className="flex-1 gap-2"
+                                      onClick={() => {
+                                        setSelectedRequest({ userId: request.userId, teamId: request.teamId });
+                                        setRejectDialogOpen(true);
+                                      }}
+                                    >
+                                      <X className="h-4 w-4" />
+                                      Reddet
+                                    </Button>
+                                  </div>
+                                  {request.requestedAt && (
+                                    <p className="text-xs text-muted-foreground text-center">
+                                      {format(request.requestedAt.toDate(), "dd MMMM yyyy, HH:mm", { locale: tr })}
+                                    </p>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  // Ekip lideri için basit liste
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {pendingRequests.map((request) => (
+                      <Card key={`${request.userId}-${request.teamId}`} className="border-blue-200 dark:border-blue-800">
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarFallback className="bg-blue-100 text-blue-700">
+                                {request.userName.substring(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm line-clamp-1">{request.userName}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-1">{request.userEmail}</p>
+                              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{request.teamName}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              className="flex-1 gap-2"
+                              onClick={() => handleApproveRequest(request.userId, request.teamId)}
+                            >
+                              <Check className="h-4 w-4" />
+                              Kabul Et
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="flex-1 gap-2"
+                              onClick={() => {
+                                setSelectedRequest({ userId: request.userId, teamId: request.teamId });
+                                setRejectDialogOpen(true);
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                              Reddet
+                            </Button>
+                          </div>
+                          {request.requestedAt && (
+                            <p className="text-xs text-muted-foreground text-center">
+                              {format(request.requestedAt.toDate(), "dd MMMM yyyy, HH:mm", { locale: tr })}
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
     <Card>
         <CardContent className="pt-6 space-y-4">
-          {/* Filtreler */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <SearchInput
-              placeholder="İsim, e-posta veya telefon ara..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              containerClassName="flex-1"
-            />
-            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Departman Filtrele" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tüm Departmanlar</SelectItem>
-                {departments.map((dept) => (
-                  <SelectItem key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
 
           {filteredMembers.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Users className="h-12 w-12 mx-auto mb-3 opacity-20" />
-              <p>{searchTerm || departmentFilter !== "all" ? "Arama kriterlerinize uygun üye bulunamadı." : "Ekibinizde üye bulunmuyor."}</p>
+              <p>{departmentFilter !== "all" ? "Filtre kriterlerinize uygun üye bulunamadı." : "Ekibinizde üye bulunmuyor."}</p>
           </div>
         ) : isAdmin && membersByDepartment ? (
           // Yönetici için ekiplere göre kategorik gösterim
@@ -441,43 +675,81 @@ export const TeamMembers = () => {
                     <h3 className="text-lg font-semibold">{deptName}</h3>
                     <Badge variant="secondary" className="ml-auto">{deptMembers.length} üye</Badge>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
                     {deptMembers.map((member) => {
                       const stats = memberStats[member.id] || { total: 0, completed: 0, pending: 0, inProgress: 0 };
                       
                       return (
                         <Card
                           key={member.id}
-                          className="hover:shadow-md transition-shadow h-full flex flex-col"
+                          className="hover:shadow-md transition-shadow h-full flex flex-col min-w-0 overflow-hidden"
                         >
-                          <CardContent className="p-4 space-y-4 flex flex-col h-full">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <Avatar className="h-12 w-12 flex-shrink-0">
-                                  <AvatarImage src={undefined} />
-                                  <AvatarFallback className="bg-primary/10 text-primary">
-                                    {member.fullName ? member.fullName.substring(0, 2).toUpperCase() : "U"}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-semibold line-clamp-1">{member.fullName || "İsimsiz"}</p>
-                                    {(member.role?.includes("admin") || member.role?.includes("super_admin") || isUserTeamLeader(member)) && (
-                                      <Shield className="h-4 w-4 text-primary flex-shrink-0" />
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground line-clamp-1">{member.email}</p>
-                                  {member.phone && (
-                                    <p className="text-xs text-muted-foreground line-clamp-1">
-                                      {formatPhoneForDisplay(member.phone)}
-                                    </p>
+                          <CardContent className="p-4 space-y-4 flex flex-col h-full min-w-0">
+                            {/* Kullanıcı Bilgileri */}
+                            <div className="flex items-start gap-3 min-w-0">
+                              <Avatar className="h-14 w-14 flex-shrink-0">
+                                <AvatarImage src={undefined} />
+                                <AvatarFallback className="bg-primary/10 text-primary">
+                                  {member.fullName ? member.fullName.substring(0, 2).toUpperCase() : "U"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0 mb-1">
+                                  <p className="font-semibold text-base truncate">{member.fullName || "İsimsiz"}</p>
+                                  {(member.role?.includes("super_admin") || member.role?.includes("main_admin") || isUserTeamLeader(member)) && (
+                                    <Shield className="h-4 w-4 text-primary flex-shrink-0" />
                                   )}
+                                </div>
+                                <p className="text-sm text-muted-foreground truncate">{member.email}</p>
+                                {member.phone && (
+                                  <p className="text-xs text-muted-foreground truncate mt-1">
+                                    {formatPhoneForDisplay(member.phone)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Görev İstatistikleri */}
+                            <div className="space-y-2 pt-3 border-t">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Toplam Görev</span>
+                                <span className="font-semibold">{stats.total}</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="flex flex-col items-center p-3 bg-green-50 rounded-lg">
+                                  <CheckCircle2 className="h-5 w-5 text-green-600 mb-1.5" />
+                                  <span className="text-base font-bold text-green-700">{stats.completed}</span>
+                                  <span className="text-xs text-green-600 mt-0.5">Tamamlandı</span>
+                                </div>
+                                <div className="flex flex-col items-center p-3 bg-blue-50 rounded-lg">
+                                  <TrendingUp className="h-5 w-5 text-blue-600 mb-1.5" />
+                                  <span className="text-base font-bold text-blue-700">{stats.inProgress}</span>
+                                  <span className="text-xs text-blue-600 mt-0.5">Devam Ediyor</span>
+                                </div>
+                                <div className="flex flex-col items-center p-3 bg-yellow-50 rounded-lg">
+                                  <Clock className="h-5 w-5 text-yellow-600 mb-1.5" />
+                                  <span className="text-base font-bold text-yellow-700">{stats.pending}</span>
+                                  <span className="text-xs text-yellow-600 mt-0.5">Bekliyor</span>
                                 </div>
                               </div>
                             </div>
 
+                            {/* Bilgiler */}
+                            <div className="space-y-2 pt-3 border-t">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Departman</span>
+                                <span className="font-medium text-right truncate flex-1 ml-2">{getDepartmentNames(member)}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Rol</span>
+                                <Badge className={`${getRoleBadgeColor(getUserRole(member))} text-white text-xs px-2 py-0.5`}>
+                                  {getRoleLabel(getUserRole(member))}
+                                </Badge>
+                              </div>
+                            </div>
+
                             {/* İletişim Butonları */}
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 pt-2">
                               {member.email && (
                                 <Button
                                   variant="outline"
@@ -485,7 +757,7 @@ export const TeamMembers = () => {
                                   className="flex-1 gap-2"
                                   onClick={() => window.location.href = `mailto:${member.email}`}
                                 >
-                                  <Mail className="h-3.5 w-3.5" />
+                                  <Mail className="h-4 w-4" />
                                   Mail
                                 </Button>
                               )}
@@ -496,79 +768,10 @@ export const TeamMembers = () => {
                                   className="flex-1 gap-2"
                                   onClick={() => window.location.href = `tel:${member.phone}`}
                                 >
-                                  <Phone className="h-3.5 w-3.5" />
+                                  <Phone className="h-4 w-4" />
                                   Ara
                                 </Button>
                               )}
-                            </div>
-                            
-                            {/* Görev İstatistikleri */}
-                            <div className="space-y-2 pt-2 border-t">
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-muted-foreground">Toplam Görev:</span>
-                                <span className="font-semibold">{stats.total}</span>
-                              </div>
-                              <div className="grid grid-cols-3 gap-2">
-                                <div className="flex flex-col items-center p-2 bg-green-50 rounded min-h-[70px] w-full">
-                                  <CheckCircle2 className="h-4 w-4 text-green-600 mb-1" />
-                                  <span className="text-xs font-semibold text-green-700">{stats.completed}</span>
-                                  <span className="text-[10px] text-green-600">Tamamlandı</span>
-                                </div>
-                                <div className="flex flex-col items-center p-2 bg-blue-50 rounded min-h-[70px] w-full">
-                                  <TrendingUp className="h-4 w-4 text-blue-600 mb-1" />
-                                  <span className="text-xs font-semibold text-blue-700">{stats.inProgress}</span>
-                                  <span className="text-[10px] text-blue-600">Devam Ediyor</span>
-                                </div>
-                                <div className="flex flex-col items-center p-2 bg-yellow-50 rounded min-h-[70px] w-full">
-                                  <Clock className="h-4 w-4 text-yellow-600 mb-1" />
-                                  <span className="text-xs font-semibold text-yellow-700">{stats.pending}</span>
-                                  <span className="text-[10px] text-yellow-600">Bekliyor</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Bilgiler */}
-                            <div className="space-y-2 text-sm pt-2 border-t">
-                              <div className="flex justify-between text-muted-foreground">
-                                <span>Departman:</span>
-                                <span className="text-foreground font-medium text-right">{getDepartmentNames(member)}</span>
-                              </div>
-                              <div className="flex justify-between text-muted-foreground">
-                                <span>Rol:</span>
-                                <Badge className={`${getRoleBadgeColor(getUserRole(member))} text-white hover:opacity-80`}>
-                                  {getRoleLabel(getUserRole(member))}
-                                </Badge>
-                              </div>
-                            </div>
-
-                            {/* Rapor Butonları */}
-                            <div className="flex gap-2 mt-auto">
-                              <Button 
-                                variant="outline" 
-                                className="flex-1 gap-2"
-                                onClick={() => handlePreviewReport(member)}
-                                disabled={loadingPreview}
-                              >
-                                {loadingPreview ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Eye className="h-4 w-4" />
-                                )}
-                                Önizle
-                              </Button>
-                              <Button 
-                                variant="default" 
-                                className="flex-1 gap-2"
-                                onClick={() => handleDownloadReport(member)}
-                                disabled={generatingPdfId === member.id}
-                              >
-                                {generatingPdfId === member.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Download className="h-4 w-4" />
-                                )}
-                                İndir
-                              </Button>
                             </div>
                           </CardContent>
                         </Card>
@@ -581,43 +784,80 @@ export const TeamMembers = () => {
           </div>
         ) : (
           // Ekip lideri için normal liste gösterimi
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredMembers.map((member) => {
                 const stats = memberStats[member.id] || { total: 0, completed: 0, pending: 0, inProgress: 0 };
                 
                 return (
                   <Card
                 key={member.id}
-                    className="hover:shadow-md transition-shadow h-full flex flex-col"
+                    className="hover:shadow-md transition-shadow h-full flex flex-col overflow-hidden"
               >
-                    <CardContent className="p-4 space-y-4 flex flex-col h-full">
-                <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <Avatar className="h-12 w-12 flex-shrink-0">
+                    <CardContent className="p-4 space-y-4 flex flex-col h-full min-w-0">
+                <div className="flex items-start gap-3 min-w-0">
+                        <Avatar className="h-14 w-14 flex-shrink-0">
                       <AvatarImage src={undefined} />
                             <AvatarFallback className="bg-primary/10 text-primary">
                               {member.fullName ? member.fullName.substring(0, 2).toUpperCase() : "U"}
                             </AvatarFallback>
                     </Avatar>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                      <p className="font-semibold line-clamp-1">{member.fullName || "İsimsiz"}</p>
-                              {(member.role?.includes("admin") || member.role?.includes("super_admin") || isUserTeamLeader(member)) && (
+                            <div className="flex items-center gap-2 min-w-0 mb-1">
+                      <p className="font-semibold text-base truncate">{member.fullName || "İsimsiz"}</p>
+                              {(member.role?.includes("super_admin") || member.role?.includes("main_admin") || isUserTeamLeader(member)) && (
                                 <Shield className="h-4 w-4 text-primary flex-shrink-0" />
                               )}
                             </div>
-                      <p className="text-xs text-muted-foreground line-clamp-1">{member.email}</p>
+                      <p className="text-sm text-muted-foreground truncate">{member.email}</p>
                             {member.phone && (
-                              <p className="text-xs text-muted-foreground line-clamp-1">
+                              <p className="text-xs text-muted-foreground truncate mt-1">
                                 {formatPhoneForDisplay(member.phone)}
                               </p>
                             )}
                           </div>
-                    </div>
                   </div>
 
+                      {/* Görev İstatistikleri */}
+                      <div className="space-y-2 pt-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Toplam Görev</span>
+                          <span className="font-semibold">{stats.total}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="flex flex-col items-center p-3 bg-green-50 rounded-lg">
+                            <CheckCircle2 className="h-5 w-5 text-green-600 mb-1.5" />
+                            <span className="text-base font-bold text-green-700">{stats.completed}</span>
+                            <span className="text-xs text-green-600 mt-0.5">Tamamlandı</span>
+                          </div>
+                          <div className="flex flex-col items-center p-3 bg-blue-50 rounded-lg">
+                            <TrendingUp className="h-5 w-5 text-blue-600 mb-1.5" />
+                            <span className="text-base font-bold text-blue-700">{stats.inProgress}</span>
+                            <span className="text-xs text-blue-600 mt-0.5">Devam Ediyor</span>
+                          </div>
+                          <div className="flex flex-col items-center p-3 bg-yellow-50 rounded-lg">
+                            <Clock className="h-5 w-5 text-yellow-600 mb-1.5" />
+                            <span className="text-base font-bold text-yellow-700">{stats.pending}</span>
+                            <span className="text-xs text-yellow-600 mt-0.5">Bekliyor</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bilgiler */}
+                      <div className="space-y-2 pt-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Departman</span>
+                    <span className="font-medium text-right truncate flex-1 ml-2">{getDepartmentNames(member)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Rol</span>
+                    <Badge className={`${getRoleBadgeColor(getUserRole(member))} text-white text-xs px-2 py-0.5`}>
+                      {getRoleLabel(getUserRole(member))}
+                    </Badge>
+                  </div>
+                </div>
+
                       {/* İletişim Butonları */}
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 pt-2">
                         {member.email && (
                           <Button
                             variant="outline"
@@ -625,7 +865,7 @@ export const TeamMembers = () => {
                             className="flex-1 gap-2"
                             onClick={() => window.location.href = `mailto:${member.email}`}
                           >
-                            <Mail className="h-3.5 w-3.5" />
+                            <Mail className="h-4 w-4" />
                             Mail
                           </Button>
                         )}
@@ -636,80 +876,11 @@ export const TeamMembers = () => {
                             className="flex-1 gap-2"
                             onClick={() => window.location.href = `tel:${member.phone}`}
                           >
-                            <Phone className="h-3.5 w-3.5" />
+                            <Phone className="h-4 w-4" />
                             Ara
                           </Button>
-                  )}
-                </div>
-                
-                      {/* Görev İstatistikleri */}
-                      <div className="space-y-2 pt-2 border-t">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Toplam Görev:</span>
-                          <span className="font-semibold">{stats.total}</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="flex flex-col items-center p-2 bg-green-50 rounded min-h-[70px] w-full">
-                            <CheckCircle2 className="h-4 w-4 text-green-600 mb-1" />
-                            <span className="text-xs font-semibold text-green-700">{stats.completed}</span>
-                            <span className="text-[10px] text-green-600">Tamamlandı</span>
-                          </div>
-                          <div className="flex flex-col items-center p-2 bg-blue-50 rounded min-h-[70px] w-full">
-                            <TrendingUp className="h-4 w-4 text-blue-600 mb-1" />
-                            <span className="text-xs font-semibold text-blue-700">{stats.inProgress}</span>
-                            <span className="text-[10px] text-blue-600">Devam Ediyor</span>
-                          </div>
-                          <div className="flex flex-col items-center p-2 bg-yellow-50 rounded min-h-[70px] w-full">
-                            <Clock className="h-4 w-4 text-yellow-600 mb-1" />
-                            <span className="text-xs font-semibold text-yellow-700">{stats.pending}</span>
-                            <span className="text-[10px] text-yellow-600">Bekliyor</span>
-                          </div>
-                        </div>
+                        )}
                       </div>
-
-                      {/* Bilgiler */}
-                      <div className="space-y-2 text-sm pt-2 border-t">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Departman:</span>
-                    <span className="text-foreground font-medium text-right">{getDepartmentNames(member)}</span>
-                  </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Rol:</span>
-                    <Badge className={`${getRoleBadgeColor(getUserRole(member))} text-white hover:opacity-80`}>
-                      {getRoleLabel(getUserRole(member))}
-                    </Badge>
-                  </div>
-                </div>
-
-                      {/* Rapor Butonları */}
-                      <div className="flex gap-2 mt-auto">
-                <Button 
-                  variant="outline" 
-                          className="flex-1 gap-2"
-                          onClick={() => handlePreviewReport(member)}
-                          disabled={loadingPreview}
-                        >
-                          {loadingPreview ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                          Önizle
-                        </Button>
-                        <Button 
-                          variant="default" 
-                          className="flex-1 gap-2"
-                  onClick={() => handleDownloadReport(member)}
-                  disabled={generatingPdfId === member.id}
-                >
-                  {generatingPdfId === member.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                            <Download className="h-4 w-4" />
-                  )}
-                          İndir
-                </Button>
-              </div>
                     </CardContent>
                   </Card>
                 );
@@ -721,19 +892,21 @@ export const TeamMembers = () => {
 
       {/* Rapor Önizleme Modal */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="w-full max-w-[98vw] md:max-w-6xl max-h-[95vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+        <DialogContent className="w-full max-w-[98vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Kullanıcı Raporu Önizleme</DialogTitle>
+          <DialogDescription className="sr-only">Kullanıcı istatistikleri ve görev detayları</DialogDescription>
+          <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b">
+            <h2 className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
               Kullanıcı Performans Raporu - {previewData?.member.fullName || previewData?.member.email}
-            </DialogTitle>
-            <DialogDescription>
+            </h2>
+            <p>
               {previewData?.member.email} - {new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })}
-            </DialogDescription>
+            </p>
           </DialogHeader>
 
           {previewData && (
-            <div className="space-y-6 py-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 min-h-0 overscroll-contain">
               {/* İstatistik Kartları */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200">
@@ -952,6 +1125,42 @@ export const TeamMembers = () => {
                   PDF İndir
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reddetme Dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Katılım İsteğini Reddet</DialogTitle>
+            <DialogDescription>
+              Bu katılım isteğini reddetmek istediğinize emin misiniz? İsteği reddetmek için bir sebep belirtebilirsiniz (isteğe bağlı).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="rejectReason">Red Sebebi (İsteğe Bağlı)</Label>
+              <Textarea
+                id="rejectReason"
+                placeholder="Red sebebini buraya yazabilirsiniz..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setRejectDialogOpen(false);
+              setSelectedRequest(null);
+              setRejectReason("");
+            }}>
+              İptal
+            </Button>
+            <Button variant="destructive" onClick={handleRejectRequest}>
+              Reddet
             </Button>
           </DialogFooter>
         </DialogContent>

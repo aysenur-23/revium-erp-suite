@@ -61,14 +61,18 @@ const getGoogleAccessToken = async (): Promise<string> => {
       saveToken(oauthCredential.accessToken, expiresIn);
       
       return oauthCredential.accessToken;
-    } catch (error: any) {
-      console.error("Google token alma hatası:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.error("Google token alma hatası:", error);
+        }
+      }
       
-      if (error.code === "auth/popup-closed-by-user") {
+      if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === "auth/popup-closed-by-user") {
         throw new Error("Google bağlantısı iptal edildi.");
       }
       
-      throw new Error(error?.message || "Google token alınamadı");
+      throw new Error(error instanceof Error ? error.message : "Google token alınamadı");
     }
   }
 
@@ -98,14 +102,18 @@ const getGoogleAccessToken = async (): Promise<string> => {
       saveToken(oauthCredential.accessToken, expiresIn);
       
       return oauthCredential.accessToken;
-    } catch (error: any) {
-      console.error("Google token alma hatası:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.error("Google token alma hatası:", error);
+        }
+      }
       
-      if (error.code === "auth/popup-closed-by-user") {
+      if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === "auth/popup-closed-by-user") {
         throw new Error("Google bağlantısı iptal edildi.");
       }
       
-      throw new Error(error?.message || "Google token alınamadı");
+      throw new Error(error instanceof Error ? error.message : "Google token alınamadı");
     }
   }
 
@@ -180,10 +188,14 @@ export const authorizeDrive = async (): Promise<boolean> => {
     saveToken(oauthCredential.accessToken, expiresIn);
     
     return true;
-  } catch (error: any) {
-    console.error("Drive authorization error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Drive authorization error:", error);
+      }
+    }
     
-    if (error.code === "auth/popup-closed-by-user") {
+    if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === "auth/popup-closed-by-user") {
       throw new Error("Google bağlantısı iptal edildi.");
     }
     
@@ -224,7 +236,9 @@ export const revokeDriveAccess = async (): Promise<void> => {
     localStorage.removeItem(DRIVE_TOKEN_KEY);
     localStorage.removeItem(DRIVE_TOKEN_EXPIRY_KEY);
   } catch (error) {
-    console.error("Drive revoke error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Drive revoke error:", error);
+    }
   }
 };
 
@@ -243,7 +257,7 @@ export const uploadFileToDrive = async (
     const fileBlob = file instanceof File ? file : new File([file], options.fileName || "file", { type: file.type });
 
     // Metadata oluştur
-    const metadata: any = {
+    const metadata: Record<string, unknown> = {
       name: options.fileName || fileBlob.name,
       mimeType: fileBlob.type || "application/octet-stream",
     };
@@ -355,7 +369,9 @@ export const uploadFileToDrive = async (
           }),
         });
       } catch (permError) {
-        console.warn("Public permission eklenemedi:", permError);
+        if (import.meta.env.DEV) {
+          console.warn("Public permission eklenemedi:", permError);
+        }
         // Public permission hatası dosya yüklemesini engellemez
       }
     }
@@ -369,8 +385,10 @@ export const uploadFileToDrive = async (
       webViewLink: webViewLink,
       webContentLink: result.webContentLink,
     };
-  } catch (error: any) {
-    console.error("Drive upload error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Drive upload error:", error);
+    }
 
     let errorMessage = "Google Drive yüklemesi başarısız oldu";
 
@@ -425,11 +443,15 @@ export const deleteDriveFile = async (fileId: string): Promise<void> => {
 
       throw new Error(errorMessage);
     }
-  } catch (error: any) {
-    console.error("Drive delete error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Drive delete error:", error);
+      }
+    }
 
     let errorMessage = "Drive dosyası silinemedi";
-    if (error?.message) {
+    if (error instanceof Error && error.message) {
       errorMessage = error.message;
     } else if (typeof error === "string") {
       errorMessage = error;

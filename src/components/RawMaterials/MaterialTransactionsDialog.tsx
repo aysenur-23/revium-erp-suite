@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
+import { Timestamp } from "firebase/firestore";
 import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -48,8 +49,16 @@ export const MaterialTransactionsDialog = ({
       const transactionsData = await getMaterialTransactions(materialId);
       // Tarihe göre sırala (en yeni üstte)
       transactionsData.sort((a, b) => {
-        const aTime = a.createdAt?.toMillis?.() || (a.createdAt as any)?.seconds * 1000 || 0;
-        const bTime = b.createdAt?.toMillis?.() || (b.createdAt as any)?.seconds * 1000 || 0;
+        const aTime = a.createdAt && typeof a.createdAt === 'object' && 'toMillis' in a.createdAt && typeof a.createdAt.toMillis === 'function' 
+          ? a.createdAt.toMillis() 
+          : (a.createdAt && typeof a.createdAt === 'object' && 'seconds' in a.createdAt && typeof a.createdAt.seconds === 'number' 
+            ? a.createdAt.seconds * 1000 
+            : 0);
+        const bTime = b.createdAt && typeof b.createdAt === 'object' && 'toMillis' in b.createdAt && typeof b.createdAt.toMillis === 'function' 
+          ? b.createdAt.toMillis() 
+          : (b.createdAt && typeof b.createdAt === 'object' && 'seconds' in b.createdAt && typeof b.createdAt.seconds === 'number' 
+            ? b.createdAt.seconds * 1000 
+            : 0);
         return bTime - aTime;
       });
       setTransactions(transactionsData);
@@ -92,19 +101,32 @@ export const MaterialTransactionsDialog = ({
         usersMapData[user.id] = user.fullName || user.displayName || user.email || "Bilinmeyen";
       });
       setUsersMap(usersMapData);
-    } catch (error: any) {
-      console.error("İşlemler yüklenirken hata:", error);
-      toast.error(error.message || "İşlemler yüklenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("İşlemler yüklenirken hata:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "İşlemler yüklenirken hata oluştu");
       setTransactions([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatDate = (timestamp: any) => {
+  const formatDate = (timestamp: Timestamp | Date | string | null | undefined) => {
     if (!timestamp) return "-";
     try {
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      let date: Date;
+      if (timestamp && typeof timestamp === 'object' && 'toDate' in timestamp && typeof timestamp.toDate === 'function') {
+        date = timestamp.toDate();
+      } else if (timestamp instanceof Date) {
+        date = timestamp;
+      } else if (timestamp instanceof Timestamp) {
+        date = timestamp.toDate();
+      } else if (typeof timestamp === 'string') {
+        date = new Date(timestamp);
+      } else {
+        return "-";
+      }
       return format(date, "dd MMMM yyyy HH:mm", { locale: tr });
     } catch {
       return "-";
@@ -113,7 +135,7 @@ export const MaterialTransactionsDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl w-[80vw] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{materialName} - İşlem Geçmişi</DialogTitle>
           <DialogDescription>

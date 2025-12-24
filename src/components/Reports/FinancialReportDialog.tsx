@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { getOrders, getOrderItems, Order, OrderItem } from "@/services/firebase/orderService";
 import { Download, DollarSign, TrendingUp, ArrowDown, ArrowUp, Percent, Calendar, Clock } from "lucide-react";
-import { generateFinancialReportPDF } from "@/services/pdfGenerator";
+// pdfGenerator will be dynamically imported when needed
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +41,12 @@ type ProductProfitabilityPoint = {
   profit: number;
 };
 
+type CostBreakdownItem = {
+  category: string;
+  amount: number;
+  percentage: number;
+};
+
 interface FinancialReportData {
   totalRevenue: number;
   totalCost: number;
@@ -49,6 +54,7 @@ interface FinancialReportData {
   profitMargin: number;
   monthlyTrend: MonthlyTrendPoint[];
   topProfitableProducts: ProductProfitabilityPoint[];
+  costBreakdown?: CostBreakdownItem[];
 }
 
 interface FinancialReportDialogProps {
@@ -277,13 +283,32 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
         .sort((a, b) => b.profit - a.profit)
         .slice(0, 10);
 
+      // Gider Kalemleri Analizi - Ürün bazında grupla
+      const costBreakdownMap = new Map<string, number>();
+      productResults.forEach(({ productName, cost }) => {
+        if (!costBreakdownMap.has(productName)) {
+          costBreakdownMap.set(productName, 0);
+        }
+        costBreakdownMap.set(productName, costBreakdownMap.get(productName)! + cost);
+      });
+
+      const costBreakdown: CostBreakdownItem[] = Array.from(costBreakdownMap.entries())
+        .map(([category, amount]) => ({
+          category,
+          amount,
+          percentage: totalCost > 0 ? (amount / totalCost) * 100 : 0
+        }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 10); // En yüksek 10 gider kalemi
+
       const data: FinancialReportData = {
         totalRevenue,
         totalCost,
         grossProfit,
         profitMargin,
         monthlyTrend,
-        topProfitableProducts
+        topProfitableProducts,
+        costBreakdown
       };
 
       setReportData(data);
@@ -318,6 +343,8 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
 
     setLoading(true);
     try {
+      // Dynamically import pdfGenerator to avoid loading it on initial page load
+      const { generateFinancialReportPDF } = await import("@/services/pdfGenerator");
       // PDF oluştur - await ile bekle
       const pdfBlob = await generateFinancialReportPDF(reportData, startDate, endDate);
       
@@ -362,22 +389,26 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-[98vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b bg-gradient-to-r from-emerald-500/5 to-transparent flex-shrink-0">
-          <DialogTitle className="text-lg sm:text-xl font-bold flex items-center gap-2">
+      <DialogContent className="w-full max-w-[80vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
+        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+        <DialogTitle className="sr-only">Mali Rapor Oluştur</DialogTitle>
+        <DialogDescription className="sr-only">Tarih aralığı seçerek detaylı mali rapor oluşturun ve PDF olarak indirin</DialogDescription>
+        
+        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b bg-[rgb(255,255,255)] flex-shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
               <DollarSign className="h-4 w-4 text-emerald-600" />
             </div>
             Mali Rapor Oluştur
-          </DialogTitle>
-          <DialogDescription className="text-xs sm:text-sm text-muted-foreground mt-1">
+          </h2>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Tarih aralığı seçerek detaylı mali rapor oluşturun ve PDF olarak indirin
-          </DialogDescription>
+          </p>
         </DialogHeader>
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch overscroll-behavior-contain">
           <div className="w-full p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Tarih Seçimi - Profesyonel Tasarım */}
-          <Card className="bg-gradient-to-br from-gray-50/50 to-white border-2">
+          <Card className="bg-[rgb(249,250,251)] border-2">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-muted-foreground">Tarih Aralığı Seçimi</CardTitle>
             </CardHeader>
@@ -510,7 +541,7 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
                 </Badge>
               </div>
               <div className="grid grid-cols-4 gap-4">
-                <Card className="bg-gradient-to-br from-green-50 via-white to-white border-green-200 hover:shadow-lg transition-all duration-300">
+                <Card className="bg-[rgb(240,253,244)] border-[rgb(187,247,208)] border-2">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 text-green-500" />
@@ -518,11 +549,11 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-green-600">₺{reportData.totalRevenue.toFixed(2)}</p>
+                    <p className="text-3xl font-bold text-green-600">₺{reportData.totalRevenue.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     <p className="text-xs text-muted-foreground mt-1">Toplam ciro</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-red-50 via-white to-white border-red-200 hover:shadow-lg transition-all duration-300">
+                <Card className="bg-[rgb(254,242,242)] border-[rgb(254,202,202)] border-2">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
                       <ArrowDown className="h-4 w-4 text-red-500" />
@@ -530,11 +561,11 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-red-600">₺{reportData.totalCost.toFixed(2)}</p>
+                    <p className="text-3xl font-bold text-red-600">₺{reportData.totalCost.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     <p className="text-xs text-muted-foreground mt-1">Toplam maliyet</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-emerald-50 via-white to-white border-emerald-200 hover:shadow-lg transition-all duration-300">
+                <Card className="bg-[rgb(236,253,245)] border-[rgb(167,243,208)] border-2">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
                       <ArrowUp className="h-4 w-4 text-emerald-500" />
@@ -542,11 +573,11 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-emerald-600">₺{reportData.grossProfit.toFixed(2)}</p>
+                    <p className="text-3xl font-bold text-emerald-600">₺{reportData.grossProfit.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     <p className="text-xs text-muted-foreground mt-1">Net kar</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-primary/10 via-white to-white border-primary/20 hover:shadow-lg transition-all duration-300">
+                <Card className="bg-[rgb(255,255,255)] border-[rgb(221,83,53)] border-2" style={{ backgroundColor: 'rgba(221, 83, 53, 0.05)' }}>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
                       <Percent className="h-4 w-4 text-primary" />
@@ -562,8 +593,8 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
 
               {/* Aylık Trend Tablosu */}
               <Card className="border-2 shadow-sm">
-                <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b">
-                  <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <CardHeader className="bg-[rgb(249,250,251)] border-b">
+                  <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
                     <div className="h-1 w-1 rounded-full bg-primary"></div>
                     Aylık Gelir-Gider-Kar Trendi
                   </CardTitle>
@@ -605,8 +636,8 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
 
               {/* En Karlı Ürünler Tablosu */}
               <Card className="border-2 shadow-sm">
-                <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b">
-                  <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <CardHeader className="bg-[rgb(249,250,251)] border-b">
+                  <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
                     <div className="h-1 w-1 rounded-full bg-primary"></div>
                     En Karlı Ürünler
                   </CardTitle>
@@ -638,11 +669,47 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Gider Kalemleri Analizi Tablosu - En Karlı Ürünler ile aynı yapı */}
+              {reportData.costBreakdown && reportData.costBreakdown.length > 0 && (
+                <Card className="border-2 shadow-sm">
+                  <CardHeader className="bg-[rgb(249,250,251)] border-b">
+                    <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+                      <div className="h-1 w-1 rounded-full bg-primary"></div>
+                      Gider Kalemleri Analizi
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50/50">
+                            <TableHead className="font-semibold">Sıra</TableHead>
+                            <TableHead className="font-semibold">Gider Kalemi</TableHead>
+                            <TableHead className="text-right font-semibold">Tutar</TableHead>
+                            <TableHead className="text-right font-semibold">Oran</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {reportData.costBreakdown.map((item, index) => (
+                            <TableRow key={index} className="hover:bg-gray-50/50 transition-colors">
+                              <TableCell className="font-medium text-muted-foreground">#{index + 1}</TableCell>
+                              <TableCell className="font-medium">{item.category}</TableCell>
+                              <TableCell className="text-right font-semibold text-red-600">₺{item.amount.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                              <TableCell className="text-right font-semibold text-muted-foreground">{item.percentage.toFixed(1)}%</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 
           </div>
-        </ScrollArea>
+        </div>
         <div className="flex-shrink-0 px-4 sm:px-6 pb-4 sm:pb-6 pt-4 border-t">
           <Button 
             onClick={generateReport} 

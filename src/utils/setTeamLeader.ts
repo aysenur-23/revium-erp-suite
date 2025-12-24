@@ -68,11 +68,13 @@ export const setUserAsTeamLeader = async (
       success: true,
       message: `${user.fullName || user.email} kullanıcısı "${targetDepartment.name}" ekibinin lideri olarak atandı ve rolü güncellendi.`,
     };
-  } catch (error: any) {
-    console.error("Set team leader error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Set team leader error:", error);
+    }
     return {
       success: false,
-      message: error.message || "Ekip lideri atanırken hata oluştu",
+      message: error instanceof Error ? error.message : "Ekip lideri atanırken hata oluştu",
     };
   }
 };

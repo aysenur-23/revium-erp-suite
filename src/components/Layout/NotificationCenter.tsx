@@ -52,7 +52,7 @@ const hasActionMetadata = (notification: FirebaseNotification): boolean => {
   const meta = notification.metadata;
   if (meta && typeof meta === "object" && "action" in meta) {
     const value = (meta as Record<string, unknown>).action;
-    return typeof value === "string" && (value === "accepted" || value === "rejected" || value === "rejection_approved" || value === "rejection_rejected");
+    return typeof value === "string" && (value === "accepted" || value === "rejected" || value === "rejection_approved" || value === "rejection_rejected" || value === "pool_request_approved");
   }
   return false;
 };
@@ -204,7 +204,9 @@ export const NotificationCenter = () => {
         });
         setUnreadCount(mappedNotifications.filter((n) => !n.read).length);
       } catch (error: unknown) {
-        console.error("Real-time notifications update error:", error);
+        if (import.meta.env.DEV) {
+          console.error("Real-time notifications update error:", error);
+        }
       }
     });
     
@@ -237,7 +239,9 @@ export const NotificationCenter = () => {
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
-      console.error("Bildirim güncellenirken hata:", error);
+      if (import.meta.env.DEV) {
+        console.error("Bildirim güncellenirken hata:", error);
+      }
     }
   };
 
@@ -607,21 +611,100 @@ export const NotificationCenter = () => {
                     className="p-4 cursor-pointer"
                     onClick={(e) => {
                       e.preventDefault();
+                      e.stopPropagation();
+                      
                       if (isActionableAssignmentNotification(notification)) {
                         return;
                       }
+                      
                       if (!notification.read) {
                         markAsRead(notification.id);
                       }
                       
+                      // Debug
+                      if (import.meta.env.DEV) {
+                        console.log("Notification clicked:", {
+                          type: notification.type,
+                          relatedId: notification.relatedId,
+                          notification
+                        });
+                      }
+                      
+                      // Yönlendirme mantığı
                       if (notification.relatedId) {
+                        // Görev havuzu talebi bildirimleri - Ekip Yönetimi sayfasına yönlendir
+                        if (notification.type === 'task_pool_request') {
+                          setOpen(false);
+                          navigate('/team-management?tab=approvals');
+                          return;
+                        }
                         // Görev ile ilgili bildirimler
-                        if (['task_assigned', 'task_updated', 'task_completed', 'task_created', 'task_approval'].includes(notification.type)) {
-                          navigate(`/tasks?taskId=${notification.relatedId}&view=list`);
-                        } else if (['order_created', 'order_updated'].includes(notification.type)) {
-                          navigate('/orders');
-                        } else if (notification.type === 'role_changed') {
+                        if (['task_assigned', 'task_updated', 'task_completed', 'task_created', 'task_approval', 'task_deleted', 'comment_added'].includes(notification.type)) {
+                          const url = `/tasks?taskId=${notification.relatedId}&view=list`;
+                          if (import.meta.env.DEV) {
+                            console.log("Navigating to:", url);
+                          }
+                          setOpen(false);
+                          navigate(url);
+                          return;
+                        } 
+                        // Sipariş bildirimleri
+                        else if (['order_created', 'order_updated'].includes(notification.type)) {
+                          // Metadata'dan sipariş tipini kontrol et (üretim siparişi mi normal sipariş mi)
+                          const metadata = notification.metadata as { orderType?: string; [key: string]: unknown };
+                          setOpen(false);
+                          if (metadata?.orderType === 'production' || notification.message?.includes('üretim')) {
+                            navigate(`/production?orderId=${notification.relatedId}`);
+                          } else {
+                            navigate(`/orders?orderId=${notification.relatedId}`);
+                          }
+                          return;
+                        } 
+                        // Talep bildirimleri
+                        else if (notification.type === 'system' && notification.metadata) {
+                          const metadata = notification.metadata as { requestType?: string; [key: string]: unknown };
+                          if (metadata.requestType || notification.message?.includes('talep')) {
+                            setOpen(false);
+                            navigate(`/requests?requestId=${notification.relatedId}`);
+                            return;
+                          }
+                        }
+                        // Rol değişikliği
+                        else if (notification.type === 'role_changed') {
+                          setOpen(false);
                           navigate('/admin');
+                          return;
+                        }
+                      } else {
+                        // relatedId yoksa tip bazlı yönlendirme
+                        if (['order_created', 'order_updated'].includes(notification.type)) {
+                          const metadata = notification.metadata as { orderType?: string; [key: string]: unknown };
+                          setOpen(false);
+                          if (metadata?.orderType === 'production' || notification.message?.includes('üretim')) {
+                            navigate('/production');
+                          } else {
+                            navigate('/orders');
+                          }
+                          return;
+                        } else if (notification.type === 'system' && notification.metadata) {
+                          const metadata = notification.metadata as { requestType?: string; [key: string]: unknown };
+                          if (metadata.requestType || notification.message?.includes('talep')) {
+                            setOpen(false);
+                            navigate('/requests');
+                            return;
+                          }
+                        } else if (notification.type === 'role_changed') {
+                          setOpen(false);
+                          navigate('/admin');
+                          return;
+                        } else if (notification.type === 'task_pool_request') {
+                          setOpen(false);
+                          navigate('/team-management?tab=approvals');
+                          return;
+                        } else if (['task_assigned', 'task_updated', 'task_completed', 'task_created', 'task_approval', 'task_deleted', 'comment_added'].includes(notification.type)) {
+                          setOpen(false);
+                          navigate('/tasks');
+                          return;
                         }
                       }
                       
@@ -680,7 +763,7 @@ export const NotificationCenter = () => {
                               message = message.replace(columnIdPattern, (match) => {
                                 // Metadata'dan status bilgisini al
                                 if (notification.metadata) {
-                                  const meta = notification.metadata as any;
+                                  const meta = notification.metadata as { newStatus?: string; status?: string; new_status?: string; [key: string]: unknown };
                                   // newStatus veya status olabilir
                                   const status = meta.newStatus || meta.status || meta.new_status;
                                   if (status && statusNames[status]) {
@@ -689,8 +772,9 @@ export const NotificationCenter = () => {
                                   // Eğer status string olarak direkt metadata'da varsa
                                   if (typeof meta === 'object') {
                                     for (const key in meta) {
-                                      if (statusNames[meta[key]]) {
-                                        return statusNames[meta[key]];
+                                      const value = meta[key];
+                                      if (typeof value === 'string' && statusNames[value]) {
+                                        return statusNames[value];
                                       }
                                     }
                                   }

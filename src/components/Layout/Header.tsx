@@ -33,7 +33,7 @@ export const Header = ({ onMenuClick, sidebarOpen = true }: HeaderProps) => {
         "w-full"
       )}
     >
-      <div className="flex h-full items-center px-2 sm:px-3 md:px-4 lg:px-6 gap-2 sm:gap-3 w-full min-w-0">
+      <div className="flex h-full items-center px-2 sm:px-3 md:px-4 lg:px-6 gap-2 sm:gap-3 w-full min-w-0 max-w-full overflow-hidden">
         {/* Sol taraf - Menu */}
         {onMenuClick && (
           <div className="flex-shrink-0">

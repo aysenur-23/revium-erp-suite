@@ -16,12 +16,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getCustomerById, getCustomers } from "@/services/firebase/customerService";
+import { getCustomerById, getCustomers, Customer } from "@/services/firebase/customerService";
 import { getOrderById } from "@/services/firebase/orderService";
 import { getTaskById } from "@/services/firebase/taskService";
 import { getProjectById } from "@/services/firebase/projectService";
 import { getWarrantyRecordById } from "@/services/firebase/warrantyService";
-import { getProductById, getProducts } from "@/services/firebase/productService";
+import { getProductById, getProducts, Product } from "@/services/firebase/productService";
 import { getAllUsers } from "@/services/firebase/authService";
 
 const ACTION_LABELS: Record<string, string> = {
@@ -141,8 +141,8 @@ export const RecentActivitiesTable = () => {
   const [entityNames, setEntityNames] = useState<Record<string, string>>({});
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -194,7 +194,7 @@ export const RecentActivitiesTable = () => {
                 if (customer?.name) {
                   names[`customers_${id}`] = customer.name;
                 }
-              } catch (error) {
+              } catch (error: unknown) {
                 // Sessizce devam et
               }
             })
@@ -212,7 +212,7 @@ export const RecentActivitiesTable = () => {
                 } else if (order?.customerName) {
                   names[`orders_${id}`] = order.customerName;
                 }
-              } catch (error) {
+              } catch (error: unknown) {
                 // Sessizce devam et
               }
             })
@@ -234,7 +234,7 @@ export const RecentActivitiesTable = () => {
                     names[`task_project_${id}`] = task.projectId; // Mapping için
                   }
                 }
-              } catch (error) {
+              } catch (error: unknown) {
                 // Sessizce devam et
               }
             })
@@ -248,7 +248,7 @@ export const RecentActivitiesTable = () => {
                   if (project?.name) {
                     names[`projects_${projectId}`] = project.name;
                   }
-                } catch (error) {
+                } catch (error: unknown) {
                   // Sessizce devam et
                 }
               })
@@ -265,7 +265,7 @@ export const RecentActivitiesTable = () => {
                 if (project?.name) {
                   names[`projects_${id}`] = project.name;
                 }
-              } catch (error) {
+              } catch (error: unknown) {
                 // Sessizce devam et
               }
             })
@@ -286,7 +286,7 @@ export const RecentActivitiesTable = () => {
                       if (customer?.name) {
                         name = customer.name;
                       }
-                    } catch (error) {
+                    } catch (error: unknown) {
                       // Sessizce devam et
                     }
                   }
@@ -296,7 +296,7 @@ export const RecentActivitiesTable = () => {
                       if (product?.name) {
                         name = product.name;
                       }
-                    } catch (error) {
+                    } catch (error: unknown) {
                       // Sessizce devam et
                     }
                   }
@@ -304,7 +304,7 @@ export const RecentActivitiesTable = () => {
                     names[`warranty_${id}`] = name;
                   }
                 }
-              } catch (error) {
+              } catch (error: unknown) {
                 // Sessizce devam et
               }
             })
@@ -326,8 +326,10 @@ export const RecentActivitiesTable = () => {
         }
         
         setEntityNames(names);
-      } catch (error) {
-        console.error("Error fetching logs:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error fetching logs:", error);
+        }
       } finally {
         setLoading(false);
       }
@@ -516,7 +518,7 @@ export const RecentActivitiesTable = () => {
   };
 
   // Değeri anlaşılır formata çevir
-  const formatValue = (value: any, fieldName?: string, tableName?: string): string => {
+  const formatValue = (value: unknown, fieldName?: string, tableName?: string): string => {
     if (value === null || value === undefined) return "Yok";
     if (typeof value === "boolean") return value ? "Evet" : "Hayır";
     if (value instanceof Date) {
@@ -614,7 +616,7 @@ export const RecentActivitiesTable = () => {
   };
 
   // Kayıt adını al
-  const getRecordDisplayName = (data: any, tableName: string, recordId?: string | null): string | null => {
+  const getRecordDisplayName = (data: unknown, tableName: string, recordId?: string | null): string | null => {
     if (!data && !recordId) return null;
     
     // Önce entityNames'den kontrol et

@@ -59,24 +59,26 @@ export const StatCard = memo(({ title, value, icon: Icon, trend, variant = "defa
         <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       )}
       
-      <CardContent className="p-4 sm:p-6 relative z-10">
-        <div className="flex items-start justify-between">
+      <CardContent className="p-3 sm:p-4 lg:p-3 xl:p-4 relative z-10">
+        <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <p className={cn(
-              "text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1 sm:mb-2",
-              isColored ? "text-white/90" : "text-slate-600 dark:text-slate-400"
+              "text-[9px] sm:text-[10px] lg:text-[9px] xl:text-[10px] font-semibold uppercase tracking-wider mb-1",
+              isColored ? "text-white/90" : "text-slate-600 dark:text-slate-400",
+              "truncate"
             )}>
               {title}
             </p>
             <h3 className={cn(
-              "text-2xl sm:text-3xl font-bold mb-2 sm:mb-3 transition-all duration-300 group-hover:scale-105",
-              isColored ? "text-white" : "text-slate-900 dark:text-slate-100"
+              "text-xl sm:text-2xl lg:text-xl xl:text-2xl font-bold mb-1.5 sm:mb-2 transition-all duration-300 group-hover:scale-105",
+              isColored ? "text-white" : "text-slate-900 dark:text-slate-100",
+              "truncate"
             )}>
               {value}
             </h3>
             {trend && (
               <div className={cn(
-                "flex items-center gap-1.5 text-xs font-medium",
+                "flex items-center gap-1 text-[10px] sm:text-xs lg:text-[10px] xl:text-xs font-medium",
                 isColored 
                   ? "text-white/95" 
                   : trend.positive 
@@ -84,20 +86,20 @@ export const StatCard = memo(({ title, value, icon: Icon, trend, variant = "defa
                     : "text-red-600 dark:text-red-400"
               )}>
                 {trend.positive ? (
-                  <TrendingUp className="h-3.5 w-3.5" />
+                  <TrendingUp className="h-3 w-3 flex-shrink-0" />
                 ) : (
-                  <TrendingDown className="h-3.5 w-3.5" />
+                  <TrendingDown className="h-3 w-3 flex-shrink-0" />
                 )}
-                <span className="font-semibold">{trend.value}</span>
+                <span className="font-semibold truncate">{trend.value}</span>
               </div>
             )}
           </div>
           <div className={cn(
-            "p-2.5 sm:p-3.5 rounded-xl transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 flex-shrink-0",
+            "p-1.5 sm:p-2 lg:p-1.5 xl:p-2 rounded-lg transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 flex-shrink-0",
             iconBgStyles[variant]
           )}>
             <Icon className={cn(
-              "h-5 w-5 sm:h-6 sm:w-6 transition-transform duration-300",
+              "h-4 w-4 sm:h-5 sm:w-5 lg:h-4 lg:w-4 xl:h-5 xl:w-5 transition-transform duration-300",
               iconColorStyles[variant]
             )} />
           </div>

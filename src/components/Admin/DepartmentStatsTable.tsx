@@ -44,7 +44,7 @@ export const DepartmentStatsTable = () => {
 
       // Ekip lideri bilgisini al (sadece silinmemiş kullanıcılar)
       const manager = dept.managerId 
-        ? users.find((u: UserProfile) => u.id === dept.managerId && !(u as any).deleted)
+        ? users.find((u: UserProfile) => u.id === dept.managerId && !('deleted' in u && u.deleted))
         : null;
 
       // Ekip üyelerinin ID'lerini al
@@ -59,7 +59,7 @@ export const DepartmentStatsTable = () => {
 
         // 2. Görev ekip üyelerinden birine atanmışsa (assignedUsers string array veya object array)
         if (task.assignedUsers && Array.isArray(task.assignedUsers)) {
-          const hasAssignedMember = task.assignedUsers.some((u: any) => {
+          const hasAssignedMember = task.assignedUsers.some((u: string | { id?: string; assignedTo?: string; userId?: string }) => {
             // Eğer string ise direkt ID karşılaştırması
             if (typeof u === 'string') {
               return teamMemberIds.has(u);
@@ -134,7 +134,9 @@ export const DepartmentStatsTable = () => {
           setIsLoading(false);
         });
       } catch (error) {
-        console.error("Error loading initial data:", error);
+        if (import.meta.env.DEV) {
+          console.error("Error loading initial data:", error);
+        }
         if (isMounted) {
           setIsLoading(false);
         }
@@ -143,18 +145,34 @@ export const DepartmentStatsTable = () => {
 
     loadInitialData();
 
-    // Departments için real-time listener
+    // Departments için real-time listener - cache kullan
+    let departmentsCache: Department[] | null = null;
+    let departmentsCacheTime = 0;
+    const DEPARTMENTS_CACHE_DURATION = 2 * 60 * 1000; // 2 dakika
+    
     if (db) {
       unsubscribeDepartments = onSnapshot(
         collection(db, "departments"),
         async (snapshot) => {
           if (!isMounted) return;
+          
+          // Cache kontrolü
+          const now = Date.now();
+          if (departmentsCache && (now - departmentsCacheTime) < DEPARTMENTS_CACHE_DURATION) {
+            setDepartments(departmentsCache);
+            return;
+          }
+          
           // getDepartments fonksiyonunu kullanarak manager bilgilerini de al
           try {
             const depts = await getDepartments();
+            departmentsCache = depts;
+            departmentsCacheTime = now;
             setDepartments(depts);
           } catch (error) {
-            console.error("Error fetching departments with manager info:", error);
+            if (import.meta.env.DEV) {
+              console.error("Error fetching departments with manager info:", error);
+            }
             // Fallback: sadece temel bilgileri al
             const depts = snapshot.docs.map((docSnap) => ({
               id: docSnap.id,
@@ -164,17 +182,20 @@ export const DepartmentStatsTable = () => {
           }
         },
         (error) => {
-          console.error("Departments snapshot error:", error);
+          if (import.meta.env.DEV) {
+            console.error("Departments snapshot error:", error);
+          }
         }
       );
     }
 
-    // Users için real-time listener
+    // Users için real-time listener - snapshot'dan direkt al (getAllUsers çağrısı yapmadan)
     if (db) {
       unsubscribeUsers = onSnapshot(
         collection(db, "users"),
         (snapshot) => {
           if (!isMounted) return;
+          // Snapshot'dan direkt al (getAllUsers çağrısı yapmadan - performans için)
           const users = snapshot.docs.map((docSnap) => ({
             id: docSnap.id,
             ...docSnap.data(),
@@ -182,7 +203,9 @@ export const DepartmentStatsTable = () => {
           setAllUsers(users);
         },
         (error) => {
-          console.error("Users snapshot error:", error);
+          if (import.meta.env.DEV) {
+            console.error("Users snapshot error:", error);
+          }
         }
       );
     }

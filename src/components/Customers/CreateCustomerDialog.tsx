@@ -130,7 +130,9 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
           });
         } catch (noteError) {
           // Not oluşturma hatası kritik değil, sadece logla
-          console.warn("Müşteri notu oluşturulamadı:", noteError);
+          if (import.meta.env.DEV) {
+            console.warn("Müşteri notu oluşturulamadı:", noteError);
+          }
         }
       }
       
@@ -138,9 +140,11 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
       onSuccess();
       onOpenChange(false);
       resetForm();
-    } catch (error: any) {
-      console.error("Create customer error:", error);
-      toast.error(error.message || "Müşteri oluşturulurken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Create customer error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Müşteri oluşturulurken hata oluştu");
     } finally {
       setLoading(false);
     }
@@ -148,7 +152,7 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           {/* Header */}
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -157,7 +161,7 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <User className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                <DialogTitle className="text-[18px] sm:text-[20px] font-semibold text-foreground truncate">
                   Yeni Müşteri
                 </DialogTitle>
                 <DialogDescription className="sr-only">
@@ -199,7 +203,7 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
                 <Card>
                   <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                     <div>
-                      <h3 className="text-base sm:text-lg font-semibold text-foreground mb-1">Müşteri Bilgileri</h3>
+                      <h3 className="text-[14px] sm:text-[15px] font-semibold text-foreground mb-1">Müşteri Bilgileri</h3>
                       <p className="text-xs sm:text-sm text-muted-foreground">Temel müşteri bilgilerini girin</p>
                     </div>
                     

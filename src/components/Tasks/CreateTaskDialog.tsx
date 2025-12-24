@@ -4,11 +4,12 @@
  * Bu component geriye dönük uyumluluk için TaskDetailModal'ı açıyor
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { TaskDetailModal } from "./TaskDetailModal";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface CreateTaskDialogProps {
   onTaskCreated?: () => void;
@@ -20,6 +21,21 @@ interface CreateTaskDialogProps {
 export const CreateTaskDialog = ({ onTaskCreated, open, onOpenChange, hideTrigger = false }: CreateTaskDialogProps) => {
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  // Personnel ve İzleyici kontrolü - görev oluşturma yetkisi yok
+  const isPersonnelOrViewer = useMemo(() => {
+    if (!user?.roles) return false;
+    const hasPersonnelRole = user.roles.includes("personnel");
+    const hasViewerRole = user.roles.includes("viewer");
+    const hasAdminRole = user.roles.includes("super_admin") || user.roles.includes("main_admin") || user.roles.includes("team_leader");
+    return (hasPersonnelRole || hasViewerRole) && !hasAdminRole;
+  }, [user?.roles]);
+  
+  // Personnel ve İzleyici için buton gösterilmez
+  if (isPersonnelOrViewer) {
+    return null;
+  }
 
   // Open state'i kontrol et
   useEffect(() => {

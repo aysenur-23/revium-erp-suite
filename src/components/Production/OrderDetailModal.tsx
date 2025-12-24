@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type FormEvent } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -29,19 +29,22 @@ import {
   Save,
   Loader2,
   Truck,
-  type LucideIcon
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { getTasks } from "@/services/firebase/taskService";
-import { updateOrder, getOrderItems, updateOrderItem, getValidStatusTransitions } from "@/services/firebase/orderService";
+import { updateOrder, getOrderItems, updateOrderItem, getValidStatusTransitions, addOrderComment, getOrderComments, getOrderActivities, Order, OrderItem } from "@/services/firebase/orderService";
 import { getCustomerById } from "@/services/firebase/customerService";
 import { formatPhoneForDisplay, formatPhoneForTelLink } from "@/utils/phoneNormalizer";
 import { useAuth } from "@/contexts/AuthContext";
-import { getAllUsers } from "@/services/firebase/authService";
+import { canUpdateResource, canDeleteResource } from "@/utils/permissions";
+import { getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { getProducts, Product } from "@/services/firebase/productService";
 import { Timestamp } from "firebase/firestore";
+import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
 
-const resolveDateValue = (value?: any): Date | null => {
+// Helper functions
+const resolveDateValue = (value?: unknown): Date | null => {
   if (!value) return null;
   if (typeof value === "string") {
     const date = new Date(value);
@@ -56,24 +59,24 @@ const resolveDateValue = (value?: any): Date | null => {
     return value.toDate();
   }
   if (value && typeof value === "object") {
-    if ("seconds" in value && typeof (value as any).seconds === "number") {
-      return new Date((value as any).seconds * 1000);
+    if ("seconds" in value && typeof (value as { seconds: unknown }).seconds === "number") {
+      return new Date((value as { seconds: number }).seconds * 1000);
     }
-    if ("toDate" in value && typeof (value as any).toDate === "function") {
+    if ("toDate" in value && typeof (value as { toDate: unknown }).toDate === "function") {
       try {
-        return (value as any).toDate();
+        return (value as { toDate: () => Date }).toDate();
       } catch {
         return null;
       }
     }
-    if ("_seconds" in value && typeof (value as any)._seconds === "number") {
-      return new Date((value as any)._seconds * 1000);
+    if ("_seconds" in value && typeof (value as { _seconds: unknown })._seconds === "number") {
+      return new Date((value as { _seconds: number })._seconds * 1000);
     }
   }
   return null;
 };
 
-const formatDateSafe = (dateInput?: string | Date | null | Timestamp | any) => {
+const formatDateSafe = (dateInput?: string | Date | null | Timestamp | unknown) => {
   if (!dateInput) return "-";
   let date: Date | null = null;
   
@@ -84,16 +87,16 @@ const formatDateSafe = (dateInput?: string | Date | null | Timestamp | any) => {
   } else if (typeof dateInput === "string") {
     date = new Date(dateInput);
   } else if (dateInput && typeof dateInput === "object") {
-    if ("seconds" in dateInput && typeof (dateInput as any).seconds === "number") {
-      date = new Date((dateInput as any).seconds * 1000);
-    } else if ("toDate" in dateInput && typeof (dateInput as any).toDate === "function") {
+    if ("seconds" in dateInput && typeof (dateInput as { seconds: unknown }).seconds === "number") {
+      date = new Date((dateInput as { seconds: number }).seconds * 1000);
+    } else if ("toDate" in dateInput && typeof (dateInput as { toDate: unknown }).toDate === "function") {
       try {
-        date = (dateInput as any).toDate();
+        date = (dateInput as { toDate: () => Date }).toDate();
       } catch {
         return "-";
       }
-    } else if ("_seconds" in dateInput && typeof (dateInput as any)._seconds === "number") {
-      date = new Date((dateInput as any)._seconds * 1000);
+    } else if ("_seconds" in dateInput && typeof (dateInput as { _seconds: unknown })._seconds === "number") {
+      date = new Date((dateInput as { _seconds: number })._seconds * 1000);
     }
   }
   
@@ -134,7 +137,7 @@ const normalizeStatusValue = (status?: string) => {
 interface OrderDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  order: any;
+  order: Order;
   onEdit?: () => void;
   onDelete?: () => void;
   onUpdate?: () => void;
@@ -143,10 +146,10 @@ interface OrderDetailModalProps {
 export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, onUpdate }: OrderDetailModalProps) => {
   if (!order) return null;
   const { user, isAdmin } = useAuth();
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<Awaited<ReturnType<typeof getTasks>>>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [customer, setCustomer] = useState<any>(null);
+  const [customer, setCustomer] = useState<Awaited<ReturnType<typeof getCustomerById>> | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<string>(normalizeStatusValue(order?.status));
   const [usersMap, setUsersMap] = useState<Record<string, string>>({});
@@ -154,6 +157,9 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
   const [saving, setSaving] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [canUpdate, setCanUpdate] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
   const [formData, setFormData] = useState({
     order_number: "",
     product_name: "",
@@ -179,15 +185,56 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
   
   const isManager = user?.roles?.includes('manager') || isAdmin;
   const isCreator = user?.id === order?.createdBy;
-  const canUpdateStatus = isManager || isAdmin || isCreator;
+  const canUpdateStatus = !isPersonnel && (isManager || isAdmin || isCreator);
+  
+  // Personel kontrolü - Personel üretim siparişi detayını görebilir ama düzenleyemez
+  const isPersonnel = user?.roles?.includes("personnel") || false;
+
+  // Yetki kontrolleri - Firestore'dan kontrol et
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user || !order) {
+        setCanUpdate(false);
+        setCanDelete(false);
+        return;
+      }
+      try {
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: null,
+          dateOfBirth: null,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const [canUpdateOrder, canDeleteOrder] = await Promise.all([
+          canUpdateResource(userProfile, "orders"),
+          canDeleteResource(userProfile, "orders"),
+        ]);
+        setCanUpdate(canUpdateOrder);
+        setCanDelete(canDeleteOrder);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking order permissions:", error);
+        }
+        setCanUpdate(false);
+        setCanDelete(false);
+      }
+    };
+    checkPermissions();
+  }, [user, order]);
 
   const fetchProducts = useCallback(async () => {
     try {
       setProductsLoading(true);
       const productData = await getProducts();
       setProducts(productData);
-    } catch (error) {
-      console.error("Fetch products error:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Fetch products error:", error);
       toast.error("Ürün listesi alınamadı.");
     } finally {
       setProductsLoading(false);
@@ -203,14 +250,13 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
   }, [open, order?.id, order?.status]);
 
   useEffect(() => {
-    if (order && !isEditing) {
-      // Order'dan product_id'yi bul (items array'inden veya direkt order'dan)
-      const productId = order.items?.[0]?.productId || order.items?.[0]?.product_id || order.product_id || "";
-      const productName = order.items?.[0]?.productName || order.items?.[0]?.product_name || order.product_name || "";
+    if (order && !isEditing && orderItems.length > 0) {
+      // Order items'dan product_id'yi bul
+      const firstItem = orderItems[0];
+      const productId = firstItem?.productId || "";
+      const productName = firstItem?.productName || "";
       const dueDate = order.due_date 
-        ? (order.due_date instanceof Date 
-            ? order.due_date.toISOString().split("T")[0]
-            : typeof order.due_date === 'string'
+        ? (typeof order.due_date === 'string'
             ? new Date(order.due_date).toISOString().split("T")[0]
             : order.dueDate
             ? (order.dueDate instanceof Date
@@ -225,8 +271,8 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
         order_number: order.order_number || order.orderNumber || "",
         product_name: productName,
         product_id: productId,
-        quantity: order.quantity?.toString() || order.items?.[0]?.quantity?.toString() || "",
-        unit: order.unit || order.items?.[0]?.unit || "Adet",
+        quantity: firstItem?.quantity?.toString() || "",
+        unit: "Adet",
         customer_id: order.customer_id || order.customerId || "",
         customer_name: order.customer_name || order.customerName || "",
         due_date: dueDate,
@@ -237,7 +283,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
         shipping_notes: order.delivery_notes || order.shippingNotes || order.shipping_notes || "",
       });
     }
-  }, [order, open, isEditing]);
+  }, [order, open, isEditing, orderItems]);
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -248,8 +294,8 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
           userMap[u.id] = u.fullName || u.displayName || u.email || "Bilinmeyen";
         });
         setUsersMap(userMap);
-      } catch (error) {
-        console.error("Error loading users:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) console.error("Error loading users:", error);
       }
     };
     if (open) {
@@ -266,10 +312,18 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
         try {
           const customerData = await getCustomerById(customerId);
           setCustomer(customerData);
-        } catch (error) {
-          console.error("Fetch customer error:", error);
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) console.error("Fetch customer error:", error);
           // Customer fetch hatası kritik değil, devam et
         }
+      }
+      
+      // Fetch order items
+      try {
+        const items = await getOrderItems(order.id);
+        setOrderItems(items);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) console.error("Fetch order items error:", error);
       }
       
       // Fetch tasks
@@ -277,15 +331,17 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
       try {
         const tasks = await getTasks({ productionOrderId: order.id });
         setTasks(tasks);
-      } catch (error: any) {
-        console.error("Fetch order tasks error:", error);
-        toast.error(error.message || "Görevler yüklenirken hata oluştu");
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) console.error("Fetch order tasks error:", error);
+        const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+        toast.error(errorMessage || "Görevler yüklenirken hata oluştu");
       } finally {
         setTasksLoading(false);
       }
-    } catch (error: any) {
-      console.error("Fetch order details error:", error);
-      toast.error("Detaylar yüklenirken hata: " + (error.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Fetch order details error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Detaylar yüklenirken hata: " + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -296,9 +352,10 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
     try {
       const tasks = await getTasks({ productionOrderId: order.id });
       setTasks(tasks);
-    } catch (error: any) {
-      console.error("Fetch order tasks error:", error);
-      toast.error(error.message || "Görevler yüklenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Fetch order tasks error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(errorMessage || "Görevler yüklenirken hata oluştu");
     } finally {
       setTasksLoading(false);
     }
@@ -347,6 +404,10 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
     if (currentStatus === "on_hold") {
       return null;
     }
+    // completed durumundan sonra geçiş yok, sipariş tamamlandı
+    if (currentStatus === "completed") {
+      return null;
+    }
     return productionStatusWorkflow[currentIndex + 1];
   };
 
@@ -360,16 +421,17 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
       await updateOrder(
         order.id,
         {
-          status: nextStatus as any,
+          status: nextStatus as Order["status"],
         },
         user.id,
         isAdmin // Üst yöneticiler için durum geçiş validasyonunu atla
       );
       setCurrentStatus(nextStatus);
       toast.success(`Sipariş durumu ${getStatusLabel(nextStatus)} olarak güncellendi.`);
-    } catch (error: any) {
-      console.error("Order status update error:", error);
-      toast.error("Durum güncellenemedi: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Order status update error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Durum güncellenemedi: " + errorMessage);
     } finally {
       setUpdatingStatus(false);
     }
@@ -385,16 +447,17 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
       await updateOrder(
         order.id,
         {
-          status: targetStatus as any,
+          status: targetStatus as Order["status"],
         },
         user.id,
         isAdmin
       );
       setCurrentStatus(targetStatus);
       toast.success(`Sipariş durumu ${getStatusLabel(targetStatus)} olarak güncellendi.`);
-    } catch (error: any) {
-      console.error("Order status revert error:", error);
-      toast.error("Durum güncellenemedi: " + (error?.message || "Bilinmeyen hata"));
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Order status revert error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Durum güncellenemedi: " + errorMessage);
     } finally {
       setUpdatingStatus(false);
     }
@@ -428,7 +491,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!order?.id) return;
     
@@ -447,7 +510,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
         customer_name: formData.customer_name || null,
         dueDate,
         due_date: formData.due_date || null,
-        status: formData.status as any,
+        status: formData.status as Order["status"],
         notes: formData.notes || null,
         deliveryAddress: formData.shipping_address || null,
         delivery_address: formData.shipping_address || null,
@@ -485,9 +548,10 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
       onUpdate?.();
       // Verileri yeniden yükle
       fetchOrderDetails();
-    } catch (error: any) {
-      console.error("Update production order error:", error);
-      toast.error(error.message || "Sipariş güncellenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Update production order error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(errorMessage || "Sipariş güncellenirken hata oluştu");
     } finally {
       setSaving(false);
     }
@@ -496,29 +560,30 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
   // Quick meta chips için veri
   const quickMetaChips = [
     orderNumber && { label: "Sipariş No", value: orderNumber },
-    createdAtValue && { label: "Oluşturulma", value: formatDateSafe(createdAtValue as any) },
-    dueDateValue && { label: "Termin", value: formatDateSafe(dueDateValue as any) },
+    createdAtValue && { label: "Oluşturulma", value: formatDateSafe(createdAtValue as Date | string | Timestamp | null) },
+    dueDateValue && { label: "Termin", value: formatDateSafe(dueDateValue as Date | string | Timestamp | null) },
     order.priority !== undefined && { label: "Öncelik", value: `${order.priority || 0} / 5` },
   ].filter(Boolean) as { label: string; value: string }[];
 
   // Sipariş özeti satırları
+  const firstItem = orderItems[0];
   const orderSummaryRows = [
     { label: "Sipariş No", value: orderNumber },
-    { label: "Ürün", value: order.product_name || order.productName || "-" },
-    { label: "Miktar", value: `${order.quantity || 0} ${order.unit || "Adet"}` },
-    { label: "Termin Tarihi", value: formatDateSafe(dueDateValue as any) },
+    { label: "Ürün", value: firstItem?.productName || "-" },
+    { label: "Miktar", value: `${firstItem?.quantity || 0} Adet` },
+    { label: "Termin Tarihi", value: formatDateSafe(dueDateValue as Date | string | Timestamp | null) },
     { label: "Öncelik", value: `${order.priority || 0} / 5` },
     { label: "Durum", value: getStatusLabel(order.status) },
     { label: "Oluşturan", value: order?.createdBy 
       ? (usersMap[order.createdBy] || "-")
       : "-" },
-    { label: "Oluşturma Tarihi", value: formatDateSafe(createdAtValue as any) },
-    { label: "Son Güncelleme", value: formatDateSafe(updatedAtValue as any) },
+    { label: "Oluşturma Tarihi", value: formatDateSafe(createdAtValue as Date | string | Timestamp | null) },
+    { label: "Son Güncelleme", value: formatDateSafe(updatedAtValue as Date | string | Timestamp | null) },
   ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
             <div className="flex items-center justify-between gap-3">
@@ -527,12 +592,12 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                   <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                  <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                     Üretim Siparişi - {orderNumber}
                   </DialogTitle>
-                  {order.product_name || order.productName ? (
+                  {firstItem?.productName ? (
                     <DialogDescription className="text-xs text-muted-foreground truncate mt-0.5">
-                      {order.product_name || order.productName}
+                      {firstItem.productName}
                     </DialogDescription>
                   ) : (
                     <DialogDescription className="sr-only">
@@ -547,16 +612,18 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                 </Badge>
                 {!isEditing ? (
                   <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsEditing(true)}
-                      className="min-h-[44px] sm:min-h-0"
-                    >
-                      <Edit className="h-4 w-4 mr-2" />
-                      Düzenle
-                    </Button>
-                    {onDelete && (
+                    {!isPersonnel && (canUpdate || order.createdBy === user?.id) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditing(true)}
+                        className="min-h-[44px] sm:min-h-0"
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Düzenle
+                      </Button>
+                    )}
+                    {!isPersonnel && canDelete && onDelete && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -576,13 +643,12 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                       onClick={() => {
                         setIsEditing(false);
                         // Form verilerini sıfırla
-                        if (order) {
-                          const productId = order.items?.[0]?.productId || order.items?.[0]?.product_id || order.product_id || "";
-                          const productName = order.items?.[0]?.productName || order.items?.[0]?.product_name || order.product_name || "";
+                        if (order && orderItems.length > 0) {
+                          const firstItem = orderItems[0];
+                          const productId = firstItem?.productId || "";
+                          const productName = firstItem?.productName || "";
                           const dueDate = order.due_date 
-                            ? (order.due_date instanceof Date 
-                                ? order.due_date.toISOString().split("T")[0]
-                                : typeof order.due_date === 'string'
+                            ? (typeof order.due_date === 'string'
                                 ? new Date(order.due_date).toISOString().split("T")[0]
                                 : "")
                             : "";
@@ -590,8 +656,8 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             order_number: order.order_number || order.orderNumber || "",
                             product_name: productName,
                             product_id: productId,
-                            quantity: order.quantity?.toString() || order.items?.[0]?.quantity?.toString() || "",
-                            unit: order.unit || order.items?.[0]?.unit || "Adet",
+                            quantity: firstItem?.quantity?.toString() || "",
+                            unit: "Adet",
                             customer_id: order.customer_id || order.customerId || "",
                             customer_name: order.customer_name || order.customerName || "",
                             due_date: dueDate,
@@ -617,7 +683,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                         if (form) {
                           form.requestSubmit();
                         } else {
-                          handleSubmit(e as any);
+                          handleSubmit(e);
                         }
                       }}
                       disabled={saving}
@@ -651,7 +717,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                 <form id="production-order-edit-form" onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg">Sipariş Bilgileri</CardTitle>
+                      <CardTitle className="text-lg sm:text-xl font-semibold">Sipariş Bilgileri</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4 sm:space-y-6">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -860,10 +926,10 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                     </CardHeader>
                     <CardContent>
                       <p className="text-lg sm:text-xl font-semibold text-foreground">
-                        {order.product_name || order.productName || "-"}
+                        {firstItem?.productName || "-"}
                       </p>
                       <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                        {order.quantity || 0} {order.unit || "Adet"}
+                        {firstItem?.quantity || 0} Adet
                       </p>
                     </CardContent>
                   </Card>
@@ -896,7 +962,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                     </CardHeader>
                     <CardContent>
                       <p className="text-lg sm:text-xl font-semibold text-foreground">
-                        {formatDateSafe(dueDateValue as any)}
+                        {formatDateSafe(dueDateValue as Date | string | Timestamp | null)}
                       </p>
                     </CardContent>
                   </Card>
@@ -921,12 +987,14 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                   <CardHeader className="space-y-1">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <CardTitle className="text-lg">Sipariş Durumu</CardTitle>
+                        <CardTitle className="text-lg sm:text-xl font-semibold">Sipariş Durumu</CardTitle>
                         <p className="text-sm text-muted-foreground">
                           {getNextStatus()
                             ? `${getStatusLabel(currentStatus)} aşamasındasınız. Sıradaki adım: ${getNextStatus()!.label}`
                             : currentStatus === "on_hold"
                             ? "Sipariş beklemede."
+                            : currentStatus === "completed"
+                            ? "Sipariş tamamlandı."
                             : "Workflow tamamlandı."}
                         </p>
                       </div>
@@ -936,7 +1004,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                           : (user?.fullName || "-")}
                         <br />
                         <span className="text-[11px]">
-                          {order?.statusUpdatedAt ? formatDateSafe(order.statusUpdatedAt as any) : ""}
+                          {order?.statusUpdatedAt ? formatDateSafe(order.statusUpdatedAt as Timestamp | Date | string | null) : ""}
                         </span>
                       </div>
                     </div>
@@ -1025,7 +1093,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                   {/* Müşteri Bilgileri */}
                   <Card>
                     <CardHeader className="space-y-1">
-                      <CardTitle className="text-lg">Müşteri Bilgileri</CardTitle>
+                      <CardTitle className="text-lg sm:text-xl font-semibold">Müşteri Bilgileri</CardTitle>
                       <p className="text-sm text-muted-foreground">
                         İletişim detayları
                       </p>
@@ -1103,7 +1171,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                   {/* Sipariş Bilgileri */}
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg">Sipariş Bilgileri</CardTitle>
+                      <CardTitle className="text-lg sm:text-xl font-semibold">Sipariş Bilgileri</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3 sm:space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -1131,7 +1199,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
+                      <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
                         <ListChecks className="h-4 w-4 sm:h-5 sm:w-5" />
                         Bağlı Görevler ({tasks.length})
                       </CardTitle>
@@ -1150,7 +1218,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                       )}
                       {!tasksLoading &&
                         tasks.map((task) => {
-                          const taskDueDate = resolveDateValue(task.due_date || task.dueDate);
+                          const taskDueDate = resolveDateValue(task.dueDate);
                           return (
                             <div key={task.id} className="p-3 rounded-md border border-border bg-muted/30">
                               <div className="flex items-center justify-between">
@@ -1158,7 +1226,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                                   <p className="text-sm font-semibold text-foreground">{task.title || "-"}</p>
                                   {taskDueDate && (
                                     <p className="text-xs text-muted-foreground mt-1">
-                                      Termin: {formatDateSafe(taskDueDate as any)}
+                                      Termin: {formatDateSafe(taskDueDate as Date | string | Timestamp | null)}
                                     </p>
                                   )}
                                 </div>
@@ -1177,6 +1245,32 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
             </div>
           </div>
         </div>
+        
+        {/* Activity Comments Panel */}
+        {order?.id && user && (
+          <ActivityCommentsPanel
+            entityId={order.id}
+            entityType="order"
+            onAddComment={async (content: string) => {
+              await addOrderComment(
+                order.id,
+                user.id,
+                content,
+                user.fullName || user.email?.split("@")[0] || "Kullanıcı",
+                user.email || ""
+              );
+            }}
+            onGetComments={async () => {
+              return await getOrderComments(order.id);
+            }}
+            onGetActivities={async () => {
+              return await getOrderActivities(order.id);
+            }}
+            currentUserId={user.id}
+            currentUserName={user.fullName || user.email?.split("@")[0] || "Kullanıcı"}
+            currentUserEmail={user.email || ""}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

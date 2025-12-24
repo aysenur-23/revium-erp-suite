@@ -41,11 +41,15 @@ export const ProfileSettings = () => {
         // Profil ve departmanları paralel çek
         const [profile, depts] = await Promise.all([
           getUserProfile(user.id).catch((err) => {
-            console.error("Profil yüklenirken hata:", err);
+            if (import.meta.env.DEV) {
+              console.error("Profil yüklenirken hata:", err);
+            }
             return null;
           }),
           getDepartments().catch((err) => {
-            console.error("Departmanlar yüklenirken hata:", err);
+            if (import.meta.env.DEV) {
+              console.error("Departmanlar yüklenirken hata:", err);
+            }
             return [];
           })
         ]);
@@ -61,8 +65,10 @@ export const ProfileSettings = () => {
           setPendingTeams(profile.pendingTeams || []);
         }
         setDepartments(depts || []);
-      } catch (error: any) {
-        console.error("Veriler yüklenirken hata:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Veriler yüklenirken hata:", error);
+        }
         // Hata durumunda sessizce devam et, kullanıcıya toast gösterme
       } finally {
         setLoading(false);
@@ -87,8 +93,8 @@ export const ProfileSettings = () => {
       });
 
       toast.success("Profil bilgileri güncellendi");
-    } catch (error: any) {
-      toast.error("Profil güncellenemedi: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Profil güncellenemedi: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setSaving(false);
     }
@@ -119,9 +125,43 @@ export const ProfileSettings = () => {
 
       setPendingTeams(newPendingTeams);
       setSelectedTeamId("");
+      
+      // Ekip liderine bildirim ve mail gönder
+      try {
+        const { getDepartmentById } = await import("@/services/firebase/departmentService");
+        const { createNotification } = await import("@/services/firebase/notificationService");
+        const department = await getDepartmentById(selectedTeamId);
+        
+        if (department && department.managerId) {
+          const requesterName = user.fullName || user.displayName || user.email || "Bir kullanıcı";
+          const teamName = department.name || "ekip";
+          
+          // Bildirim oluştur
+          await createNotification({
+            userId: department.managerId,
+            type: "system",
+            title: "Yeni katılım isteği",
+            message: `${requesterName} "${teamName}" ekibine katılmak için istek gönderdi. İsteği onaylamak veya reddetmek için Ekip Üyeleri sayfasını ziyaret edin.`,
+            read: false,
+            metadata: {
+              teamId: selectedTeamId,
+              teamName: teamName,
+              requesterId: user.id,
+              requesterName: requesterName,
+              requesterEmail: user.email,
+            },
+          });
+        }
+      } catch (notifError) {
+        if (import.meta.env.DEV) {
+          console.error("Error sending notification to team leader:", notifError);
+        }
+        // Bildirim hatası başvuruyu engellemez
+      }
+      
       toast.success("Ekip başvurunuz alındı. Ekip lideri tarafından onaylanması gerekecektir.");
-    } catch (error: any) {
-      toast.error("Başvuru yapılamadı: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Başvuru yapılamadı: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setApplyingTeam(false);
     }

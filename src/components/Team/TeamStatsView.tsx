@@ -3,8 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Users, CheckSquare, Clock, TrendingUp, AlertCircle, CalendarDays, Target, Award, BarChart3 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { addDays, isAfter, isBefore, startOfDay, subDays } from "date-fns";
 import { Timestamp, collection, onSnapshot, Unsubscribe } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,7 +14,11 @@ import { getTasks, Task, subscribeToTasks } from "@/services/firebase/taskServic
 import { DepartmentDetailModal } from "@/components/Admin/DepartmentDetailModal";
 import { firestore } from "@/lib/firebase";
 
-export const TeamStatsView = () => {
+interface TeamStatsViewProps {
+  selectedTeamFilter?: string;
+}
+
+export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps) => {
   const { user, isAdmin, isTeamLeader } = useAuth();
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [managedDepartments, setManagedDepartments] = useState<Department[]>([]);
@@ -22,7 +26,6 @@ export const TeamStatsView = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
-  const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("all");
 
   const fetchTeamStats = useCallback(async () => {
     if (!user?.id) return;
@@ -81,9 +84,10 @@ export const TeamStatsView = () => {
       } else {
         // Ekip lideri sadece yönettiği departmanları görür
         // Kullanıcının yönettiği tüm departmanları bul (managerId kontrolü)
-        const managedDepartments = allDepartments.filter(d => d.managerId === user.id);
+        // allDepts kullan (state henüz güncellenmemiş olabilir)
+        const managedDepts = allDepts.filter(d => d.managerId === user.id);
         
-        if (managedDepartments.length === 0) {
+        if (managedDepts.length === 0) {
           // Kullanıcı hiçbir departmanın yöneticisi değilse boş
           setManagedDepartments([]);
           setTeamMembers([]);
@@ -93,8 +97,8 @@ export const TeamStatsView = () => {
         }
 
         // Kullanıcının yönettiği tüm departmanları göster
-        setManagedDepartments(managedDepartments);
-        const managedDeptIds = managedDepartments.map(d => d.id);
+        setManagedDepartments(managedDepts);
+        const managedDeptIds = managedDepts.map(d => d.id);
 
         // Ekip üyelerini bul - yönettiği tüm departmanlardaki üyeler
         // KRİTİK: approvedTeams, pendingTeams ve departmentId alanlarını kontrol et
@@ -124,7 +128,9 @@ export const TeamStatsView = () => {
         setTasks(teamTasks);
       }
     } catch (error) {
-      console.error("Error fetching team stats:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error fetching team stats:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -142,50 +148,55 @@ export const TeamStatsView = () => {
     
     let unsubscribeTasks: Unsubscribe | null = null;
     let unsubscribeDepartments: Unsubscribe | null = null;
-    let unsubscribeUsers: Unsubscribe | null = null;
     let isMounted = true;
 
-    // Tasks için real-time listener
+    // Tasks için real-time listener (performans için limit: 500)
     unsubscribeTasks = subscribeToTasks({}, (tasks) => {
       if (!isMounted) return;
       setTasks(tasks);
     });
 
-    // Departments için real-time listener
+    // Departments için real-time listener - cache kullan
+    let departmentsCache: Department[] | null = null;
+    let departmentsCacheTime = 0;
+    const DEPARTMENTS_CACHE_DURATION = 2 * 60 * 1000; // 2 dakika
+    
     unsubscribeDepartments = onSnapshot(
       collection(firestore, "departments"),
       async () => {
         if (!isMounted) return;
+        
+        // Cache kontrolü
+        const now = Date.now();
+        if (departmentsCache && (now - departmentsCacheTime) < DEPARTMENTS_CACHE_DURATION) {
+          setAllDepartments(departmentsCache);
+          return;
+        }
+        
         try {
           const depts = await getDepartments();
+          departmentsCache = depts;
+          departmentsCacheTime = now;
           setAllDepartments(depts);
         } catch (error) {
-          console.error("Error fetching departments:", error);
+          if (import.meta.env.DEV) {
+            console.error("Error fetching departments:", error);
+          }
         }
       },
       (error) => {
-        console.error("Departments snapshot error:", error);
+        if (import.meta.env.DEV) {
+          console.error("Departments snapshot error:", error);
+        }
       }
     );
 
-    // Users için real-time listener
-    unsubscribeUsers = onSnapshot(
-      collection(firestore, "users"),
-      () => {
-        if (!isMounted) return;
-        // Users değiştiğinde sadece veriyi yenile, fetchTeamStats çağırma
-        // fetchTeamStats zaten useEffect'te çağrılacak
-      },
-      (error) => {
-        console.error("Users snapshot error:", error);
-      }
-    );
+    // Users subscription'ı kaldırıldı - gereksiz (fetchTeamStats zaten çağrılıyor)
 
     return () => {
       isMounted = false;
       if (unsubscribeTasks) unsubscribeTasks();
       if (unsubscribeDepartments) unsubscribeDepartments();
-      if (unsubscribeUsers) unsubscribeUsers();
     };
   }, [user, selectedTeamFilter, fetchTeamStats]);
 
@@ -193,13 +204,15 @@ export const TeamStatsView = () => {
   const overdueTasks = tasks.filter(t => {
     if (!t.dueDate || t.status === "completed" || t.status === "cancelled") return false;
     let dueDate: Date;
-    const dueDateValue = t.dueDate as any;
-    if (dueDateValue?.toDate && typeof dueDateValue.toDate === 'function') {
-      dueDate = dueDateValue.toDate();
+    const dueDateValue = t.dueDate;
+    if (dueDateValue && typeof dueDateValue === 'object' && 'toDate' in dueDateValue && typeof dueDateValue.toDate === 'function') {
+      dueDate = (dueDateValue as { toDate: () => Date }).toDate();
     } else if (dueDateValue instanceof Date) {
       dueDate = dueDateValue;
+    } else if (dueDateValue instanceof Timestamp) {
+      dueDate = dueDateValue.toDate();
     } else {
-      dueDate = new Date(dueDateValue);
+      return false;
     }
     return isBefore(dueDate, new Date());
   });
@@ -208,13 +221,15 @@ export const TeamStatsView = () => {
   const dueSoonTasks = tasks.filter(t => {
     if (!t.dueDate || t.status === "completed" || t.status === "cancelled") return false;
     let dueDate: Date;
-    const dueDateValue = t.dueDate as any;
-    if (dueDateValue?.toDate && typeof dueDateValue.toDate === 'function') {
-      dueDate = dueDateValue.toDate();
+    const dueDateValue = t.dueDate;
+    if (dueDateValue && typeof dueDateValue === 'object' && 'toDate' in dueDateValue && typeof dueDateValue.toDate === 'function') {
+      dueDate = (dueDateValue as { toDate: () => Date }).toDate();
     } else if (dueDateValue instanceof Date) {
       dueDate = dueDateValue;
+    } else if (dueDateValue instanceof Timestamp) {
+      dueDate = dueDateValue.toDate();
     } else {
-      dueDate = new Date(dueDateValue);
+      return false;
     }
     const today = startOfDay(new Date());
     const threeDaysAfter = addDays(today, 3);
@@ -226,13 +241,15 @@ export const TeamStatsView = () => {
   const recentCompletedTasks = tasks.filter(t => {
     if (t.status !== "completed" || !t.updatedAt) return false;
     let updatedAt: Date;
-    const updatedAtValue = t.updatedAt as any;
-    if (updatedAtValue?.toDate && typeof updatedAtValue.toDate === 'function') {
-      updatedAt = updatedAtValue.toDate();
+    const updatedAtValue = t.updatedAt;
+    if (updatedAtValue && typeof updatedAtValue === 'object' && 'toDate' in updatedAtValue && typeof updatedAtValue.toDate === 'function') {
+      updatedAt = (updatedAtValue as { toDate: () => Date }).toDate();
     } else if (updatedAtValue instanceof Date) {
       updatedAt = updatedAtValue;
+    } else if (updatedAtValue instanceof Timestamp) {
+      updatedAt = updatedAtValue.toDate();
     } else {
-      updatedAt = new Date(updatedAtValue);
+      return false;
     }
     return isAfter(updatedAt, sevenDaysAgo);
   });
@@ -302,8 +319,8 @@ export const TeamStatsView = () => {
   };
 
   if (loading) {
-    return (
-      <div className="space-y-4">
+  return (
+    <div className="space-y-2 h-full flex flex-col">
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -315,160 +332,52 @@ export const TeamStatsView = () => {
   // Bu uyarı anlamsız çünkü zaten bu sayfaya erişebilenler ya yönetici ya da ekip lideridir
 
   return (
-    <div className="space-y-6">
-      {/* Yönetici için Ekip Seçimi */}
-      {isAdmin && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium">Ekip Seç:</label>
-              <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter}>
-                <SelectTrigger className="w-full sm:w-[250px]">
-                  <SelectValue placeholder="Ekip seçiniz" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tüm Ekipler</SelectItem>
-                  {allDepartments.map((dept) => (
-                    <SelectItem key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      
-      {/* Genel İstatistikler */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-green-50 to-green-100/50 border-green-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-green-700">Tamamlanan</p>
-                <p className="text-2xl font-bold text-green-900 mt-1">{overallStats.completedTasks}</p>
+    <div className="space-y-0.5 min-w-0 max-w-full">
+      {/* Aktivite ve Analiz */}
+      <Card className="border-0 shadow-sm overflow-hidden">
+        <CardContent className="pt-1 px-1 pb-1">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between p-1.5 rounded-lg bg-muted/30 border border-border/50">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary/60" />
+                <div>
+                  <div className="text-xs text-muted-foreground">7 Gün</div>
+                  <div className="text-sm font-semibold">{overallStats.recentCompleted} tamamlandı</div>
+                </div>
               </div>
-              <CheckSquare className="h-8 w-8 text-green-600" />
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-purple-700">Tamamlanma Oranı</p>
-                <p className="text-2xl font-bold text-purple-900 mt-1">{overallStats.completionRate.toFixed(0)}%</p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-red-50 to-red-100/50 border-red-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-red-700">Geciken Görevler</p>
-                <p className="text-2xl font-bold text-red-900 mt-1">{overallStats.overdueTasks}</p>
-              </div>
-              <AlertCircle className="h-8 w-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-amber-700">Yaklaşan Terminler</p>
-                <p className="text-2xl font-bold text-amber-900 mt-1">{overallStats.dueSoonTasks}</p>
-                <p className="text-xs text-amber-600 mt-1">3 gün içinde</p>
-              </div>
-              <CalendarDays className="h-8 w-8 text-amber-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Son 7 Gün Aktivite ve Görev Durumu */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
-              Son 7 Gün Aktivite
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Tamamlanan Görevler</span>
-                <span className="text-muted-foreground">{overallStats.recentCompleted}</span>
-              </div>
-              <Progress 
-                value={tasks.length > 0 ? (overallStats.recentCompleted / tasks.length) * 100 : 0} 
-                className="h-3" 
-              />
-            </div>
-            <div className="text-sm text-muted-foreground">
-              Son 7 gün içinde {overallStats.recentCompleted} görev tamamlandı
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Target className="h-5 w-5" />
-              Görev Öncelik Analizi
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Ortalama Öncelik</span>
-                <span className="text-muted-foreground">{overallStats.avgPriority}</span>
-              </div>
-              <Progress 
-                value={tasks.length > 0 ? (parseFloat(overallStats.avgPriority) / 5) * 100 : 0} 
-                className="h-3" 
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Yüksek Öncelik:</span>
-                <span className="ml-2 font-semibold">
-                  {tasks.filter(t => (t.priority || 0) >= 4).length}
-                </span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Kritik:</span>
-                <span className="ml-2 font-semibold text-red-600">
-                  {tasks.filter(t => (t.priority || 0) === 5).length}
-                </span>
+            <div className="flex items-center justify-between p-1.5 rounded-lg bg-muted/30 border border-border/50">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary/60" />
+                <div>
+                  <div className="text-xs text-muted-foreground">Öncelik</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{overallStats.avgPriority}</span>
+                    <span className="text-xs text-muted-foreground">
+                      • {tasks.filter(t => (t.priority || 0) >= 4).length} yüksek
+                    </span>
+                    <span className="text-xs text-red-600 font-medium">
+                      • {tasks.filter(t => (t.priority || 0) === 5).length} kritik
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* En Aktif Üyeler */}
       {memberTaskCounts.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Award className="h-5 w-5" />
-              En Aktif Üyeler
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <CardContent className="pt-1 px-1 pb-1">
+            <CardTitle className="text-xs font-medium mb-1">En Aktif Üyeler</CardTitle>
+            <div className="space-y-1">
               {memberTaskCounts.map(({ member, totalTasks, completedTasks, completionRate }, index) => (
-                <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                <div key={member.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary font-semibold text-sm">
                       {index + 1}
                     </div>
                     <div>
@@ -478,11 +387,9 @@ export const TeamStatsView = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <Badge variant="secondary" className="text-xs">
-                      {completionRate.toFixed(0)}%
-                    </Badge>
-                  </div>
+                  <Badge variant="secondary" className="text-sm px-3 py-1">
+                    {completionRate.toFixed(0)}%
+                  </Badge>
                 </div>
               ))}
             </div>
@@ -491,51 +398,61 @@ export const TeamStatsView = () => {
       )}
 
       {/* Departman İstatistikleri */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Building2 className="h-5 w-5" />
-            {isAdmin ? "Tüm Ekipler" : "Yönettiğim Ekipler"} ({managedDepartments.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {managedDepartments.map((dept) => {
-              const deptStats = getDepartmentStats(dept.id);
-              return (
-                <button
-                  key={dept.id}
-                  onClick={() => {
-                    if (isAdmin) {
-                      // Yönetici için ekip filtresini güncelle
-                      setSelectedTeamFilter(dept.id);
-                    } else {
-                      // Ekip lideri için modal aç (isteğe bağlı, şimdilik modal kapalı)
-                      // setSelectedDepartmentId(dept.id);
-                    }
-                  }}
-                  className="w-full text-left p-4 rounded-lg bg-muted/50 space-y-2 hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <h4 className="font-medium">{dept.name}</h4>
-                    </div>
-                    <span className="text-sm text-muted-foreground">
-                      {deptStats.completionRate.toFixed(0)}%
-                    </span>
-                  </div>
-                  <Progress value={deptStats.completionRate} className="h-2" />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Üye: {deptStats.members}</span>
-                    <span>Aktif: {deptStats.activeTasks}</span>
-                    <span>Tamamlanan: {deptStats.completedTasks}</span>
-                    <span>Toplam: {deptStats.totalTasks}</span>
-                  </div>
-                </button>
-              );
-            })}
+      <Card className="border-0 shadow-sm overflow-hidden">
+        <CardContent className="pt-1 px-1 pb-1">
+          <div className="mb-1">
+            <CardTitle className="text-xs font-medium flex items-center gap-1.5">
+              {isAdmin ? "Tüm Ekipler" : "Yönettiğim Ekipler"}
+              {managedDepartments.length > 0 && (
+                <Badge variant="secondary" className="h-3.5 px-1 text-[9px]">
+                  {managedDepartments.length}
+                </Badge>
+              )}
+            </CardTitle>
           </div>
+          {managedDepartments.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Building2 className="h-12 w-12 mx-auto mb-3 opacity-20" />
+              <p>{isAdmin ? "Henüz ekip bulunmuyor." : "Yönettiğiniz ekip bulunmuyor."}</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {managedDepartments.map((dept) => {
+                const deptStats = getDepartmentStats(dept.id);
+                return (
+                  <div
+                    key={dept.id}
+                    className="w-full text-left p-2 rounded-lg bg-muted/50 space-y-1 border border-transparent"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <Building2 className="h-3.5 w-3.5 text-primary" />
+                        <h4 className="font-medium text-sm">{dept.name}</h4>
+                      </div>
+                      <Badge variant="outline" className="text-xs h-4 px-1">
+                        {deptStats.completionRate.toFixed(0)}%
+                      </Badge>
+                    </div>
+                    <Progress value={deptStats.completionRate} className="h-1.5" />
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 text-xs text-muted-foreground min-w-0">
+                      <div>
+                        <span className="font-medium">Üye:</span> {deptStats.members}
+                      </div>
+                      <div>
+                        <span className="font-medium">Aktif:</span> {deptStats.activeTasks}
+                      </div>
+                      <div>
+                        <span className="font-medium">Tamamlanan:</span> {deptStats.completedTasks}
+                      </div>
+                      <div>
+                        <span className="font-medium">Toplam:</span> {deptStats.totalTasks}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -20,16 +20,34 @@ const ProjectTasksRedirect = () => {
 
 // Lazy load pages for better performance with error handling
 // Optimized for faster initial load
-const lazyWithRetry = (componentImport: () => Promise<any>) => {
+const lazyWithRetry = (componentImport: () => Promise<{ default: React.ComponentType<unknown> }>) => {
   return lazy(async () => {
-    let lastError: any;
-    const maxRetries = 2; // Retry sayısı
+    let lastError: unknown;
+    const maxRetries = 3; // Retry sayısı artırıldı
+    const retryDelays = [100, 500, 1000]; // Artan gecikme süreleri
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         return await componentImport();
       } catch (error) {
         lastError = error;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Network hatalarını kontrol et
+        if (errorMessage.includes('ERR_CONNECTION_REFUSED') || 
+            errorMessage.includes('ERR_NETWORK_CHANGED') ||
+            errorMessage.includes('Failed to fetch')) {
+          // Son deneme değilse bekle ve tekrar dene
+          if (attempt < maxRetries - 1) {
+            const delay = retryDelays[attempt] || 1000;
+            if (import.meta.env.DEV) {
+              console.warn(`Lazy loading network error (attempt ${attempt + 1}/${maxRetries}), retrying in ${delay}ms...`);
+            }
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+        
         // Sadece development'ta log göster
         if (import.meta.env.DEV) {
           console.error(`Lazy loading error (attempt ${attempt + 1}/${maxRetries}):`, error);
@@ -37,7 +55,8 @@ const lazyWithRetry = (componentImport: () => Promise<any>) => {
         
         // Son deneme değilse bekle ve tekrar dene
         if (attempt < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // 1 saniye bekle
+          const delay = retryDelays[attempt] || 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
@@ -92,8 +111,8 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false, // Window focus'ta otomatik refetch'i kapat (performans için)
       retry: 1, // Retry sayısını azalt
-      staleTime: 5 * 60 * 1000, // 5 dakika stale time
-      gcTime: 10 * 60 * 1000, // 10 dakika cache time (eski cacheTime yerine)
+      staleTime: 3 * 60 * 1000, // 3 dakika stale time (daha güncel veri için)
+      gcTime: 5 * 60 * 1000, // 5 dakika cache time (daha az memory kullanımı için)
       // İlk yüklemede daha hızlı render için
       refetchOnMount: false, // Mount'ta refetch yapma (cache'den göster - performans için)
       networkMode: 'online', // Sadece online'dayken fetch yap

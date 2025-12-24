@@ -67,8 +67,10 @@ export const RolePermissions = () => {
       if (rolesData.length > 0 && !activeRole) {
         setActiveRole(rolesData[0].key);
       }
-    } catch (error) {
-      console.error("Fetch role permissions error:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Fetch role permissions error:", error);
+      }
       toast.error("Rol ve yetkiler yüklenirken hata oluştu");
     } finally {
       setLoading(false);
@@ -92,11 +94,7 @@ export const RolePermissions = () => {
       return;
     }
     
-    // Admin rolünün yetkilerini düzenlemek için admin veya super admin olmalı
-    if (permission && permission.role === "admin" && !isAdmin) {
-      toast.error("Yönetici rolünün yetkileri sadece yönetici tarafından düzenlenebilir");
-      return;
-    }
+    // Admin rolü kaldırıldı, sadece super admin kontrolü yapılıyor
 
     // Optimistic update
     const oldPermissions = [...permissions];
@@ -111,11 +109,13 @@ export const RolePermissions = () => {
       } else {
         await updatePermission(permissionId, { [field]: checked as boolean });
       }
-      // Clear cache to force refresh
-      clearPermissionCache();
+      // Cache will be updated by real-time listener automatically
+      // No need to clear cache - listener will update it
       // toast.success("Yetki güncellendi"); // Too spammy for toggles
-    } catch (error) {
-      console.error("Update permission error:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Update permission error:", error);
+      }
       toast.error("Yetki güncellenemedi");
       setPermissions(oldPermissions); // Revert
     } finally {
@@ -139,10 +139,7 @@ export const RolePermissions = () => {
       return;
     }
     
-    if (permission && permission.role === "admin" && !isAdmin) {
-      toast.error("Yönetici rolünün yetkileri sadece yönetici tarafından düzenlenebilir");
-      return;
-    }
+    // Admin rolü kaldırıldı, sadece super admin kontrolü yapılıyor
 
     // Optimistic update
     const oldPermissions = [...permissions];
@@ -156,8 +153,10 @@ export const RolePermissions = () => {
     setSaving(permissionId);
     try {
       await updatePermission(permissionId, { subPermissions: newSubPermissions });
-    } catch (error) {
-      console.error("Update sub-permission error:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Update sub-permission error:", error);
+      }
       toast.error("Alt yetki güncellenemedi");
       setPermissions(oldPermissions); // Revert
     } finally {
@@ -189,9 +188,11 @@ export const RolePermissions = () => {
       setNewRoleKey("");
       setNewRoleColor("bg-gray-500");
       await fetchData();
-    } catch (error: any) {
-      console.error("Add role error:", error);
-      toast.error(error.message || "Rol eklenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Add role error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Rol eklenemedi");
     } finally {
       setAddingRole(false);
     }
@@ -204,7 +205,7 @@ export const RolePermissions = () => {
     }
 
     // Sistem rollerini silmeyi engelle
-    if ((roleKey === "super_admin" || roleKey === "admin") && !isSuperAdmin) {
+    if (roleKey === "super_admin" && !isSuperAdmin) {
       toast.error("Sistem rolleri silinemez");
       return;
     }
@@ -224,9 +225,11 @@ export const RolePermissions = () => {
         setActiveRole(remainingRoles[0]?.key || "");
       }
       await fetchData();
-    } catch (error: any) {
-      console.error("Delete role error:", error);
-      toast.error(error.message || "Rol silinemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete role error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Rol silinemedi");
     } finally {
       setDeletingRole(null);
     }
@@ -243,9 +246,11 @@ export const RolePermissions = () => {
       await updatePermissionsWithSubPermissions();
       toast.success("Alt yetkiler başarıyla güncellendi");
       await fetchData();
-    } catch (error: any) {
-      console.error("Update sub-permissions error:", error);
-      toast.error(error.message || "Alt yetkiler güncellenemedi");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Update sub-permissions error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Alt yetkiler güncellenemedi");
     } finally {
       setUpdatingSubPermissions(false);
     }
@@ -655,7 +660,7 @@ export const RolePermissions = () => {
                                   toast.info("Bu kaynak için yetki henüz oluşturulmamış. Lütfen sayfayı yenileyin.");
                                 }
                               }}
-                              disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || (role.key === "admin" && !isAdmin) || !permission}
+                              disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || !permission}
                             />
                           </div>
                           <div className="flex justify-center min-w-[80px]">
@@ -668,7 +673,7 @@ export const RolePermissions = () => {
                                   toast.info("Bu kaynak için yetki henüz oluşturulmamış. Lütfen sayfayı yenileyin.");
                                 }
                               }}
-                              disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || (role.key === "admin" && !isAdmin) || !permission}
+                              disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || !permission}
                             />
                           </div>
                           <div className="flex justify-center min-w-[80px]">
@@ -681,7 +686,7 @@ export const RolePermissions = () => {
                                   toast.info("Bu kaynak için yetki henüz oluşturulmamış. Lütfen sayfayı yenileyin.");
                                 }
                               }}
-                              disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || (role.key === "admin" && !isAdmin) || !permission}
+                              disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || !permission}
                             />
                           </div>
                           <div className="flex justify-center min-w-[80px]">
@@ -694,7 +699,7 @@ export const RolePermissions = () => {
                                   toast.info("Bu kaynak için yetki henüz oluşturulmamış. Lütfen sayfayı yenileyin.");
                                 }
                               }}
-                              disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || (role.key === "admin" && !isAdmin) || !permission}
+                              disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || !permission}
                             />
                           </div>
                             </div>
@@ -715,7 +720,7 @@ export const RolePermissions = () => {
                                           toast.info("Bu kaynak için yetki henüz oluşturulmamış. Lütfen sayfayı yenileyin.");
                                         }
                                       }}
-                                      disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || (role.key === "admin" && !isAdmin) || !permission}
+                                      disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || !permission}
                                     />
                                     <Label className="text-xs font-normal cursor-pointer">
                                       {subPermissions[subKey]}

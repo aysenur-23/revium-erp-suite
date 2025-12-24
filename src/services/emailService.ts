@@ -87,37 +87,49 @@ export const sendEmail = async (options: EmailOptions): Promise<{ success: boole
           if (result.success) {
             // Başarılı - hem dev hem production'da log göster (kritik işlem)
             if (import.meta.env.DEV) {
-              console.log(`✅ E-posta başarıyla gönderildi (primary): ${options.to}`);
+              if (import.meta.env.DEV) {
+                console.log(`✅ E-posta başarıyla gönderildi (primary): ${options.to}`);
+              }
             }
             return { success: true };
           } else {
             // API başarısız döndü - fallback'e geç
             if (import.meta.env.DEV) {
-              console.warn(`⚠️ Primary email API başarısız: ${result.error || 'Bilinmeyen hata'}, fallback'e geçiliyor`);
+              if (import.meta.env.DEV) {
+                console.warn(`⚠️ Primary email API başarısız: ${result.error || 'Bilinmeyen hata'}, fallback'e geçiliyor`);
+              }
             }
           }
         } else {
           // JSON değilse, endpoint yanlış - fallback'e geç
           if (import.meta.env.DEV) {
-            console.warn("⚠️ Primary email API JSON döndürmüyor, fallback'e geçiliyor");
+            if (import.meta.env.DEV) {
+              console.warn("⚠️ Primary email API JSON döndürmüyor, fallback'e geçiliyor");
+            }
           }
         }
       } else {
         // Response başarısız - fallback'e geç
         if (import.meta.env.DEV) {
           const errorText = await response.text().catch(() => "");
-          console.warn(`⚠️ Primary email API hatası (${response.status}), fallback'e geçiliyor:`, errorText.substring(0, 100));
+          if (import.meta.env.DEV) {
+            console.warn(`⚠️ Primary email API hatası (${response.status}), fallback'e geçiliyor:`, errorText.substring(0, 100));
+          }
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Primary URL bağlantısı başarısız, fallback'e geç
       // Development'ta hata mesajını göster (debug için)
       if (import.meta.env.DEV) {
-        const errorMsg = error?.message || String(error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
         if (errorMsg.includes('ERR_CONNECTION_REFUSED')) {
-          console.warn(`⚠️ Localhost backend çalışmıyor (${primaryUrl}). Fallback URL'e geçiliyor...`);
+          if (import.meta.env.DEV) {
+            console.warn(`⚠️ Localhost backend çalışmıyor (${primaryUrl}). Fallback URL'e geçiliyor...`);
+          }
         } else if (errorMsg.includes('CORS')) {
-          console.warn(`⚠️ CORS hatası (${primaryUrl}). Fallback URL'e geçiliyor...`);
+          if (import.meta.env.DEV) {
+            console.warn(`⚠️ CORS hatası (${primaryUrl}). Fallback URL'e geçiliyor...`);
+          }
         }
       }
     }
@@ -144,7 +156,9 @@ export const sendEmail = async (options: EmailOptions): Promise<{ success: boole
       // HTML veya başka bir format döndüyse, API endpoint'i yanlış
       const errorText = await response.text().catch(() => "");
       if (import.meta.env.DEV) {
-        console.warn(`⚠️ Fallback API JSON döndürmüyor. Response: ${errorText.substring(0, 200)}`);
+        if (import.meta.env.DEV) {
+          console.warn(`⚠️ Fallback API JSON döndürmüyor. Response: ${errorText.substring(0, 200)}`);
+        }
       }
       return { success: false, error: "E-posta servisi şu an meşgul" };
     }
@@ -154,20 +168,24 @@ export const sendEmail = async (options: EmailOptions): Promise<{ success: boole
     if (response.ok && result.success) {
       // Başarılı
       if (import.meta.env.DEV) {
-        console.log(`✅ E-posta gönderildi: ${options.to}`);
+        if (import.meta.env.DEV) {
+          console.log(`✅ E-posta gönderildi: ${options.to}`);
+        }
       }
       return { success: true };
     } else {
       // Response başarısız
       const errorMessage = result.error || `E-posta servisi yanıt vermedi (${response.status})`;
       if (import.meta.env.DEV) {
-        console.debug(`ℹ️ ${errorMessage}`);
+        if (import.meta.env.DEV) {
+          console.debug(`ℹ️ ${errorMessage}`);
+        }
       }
       return { success: false, error: errorMessage };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Hata yakalandı
-    let errorMessage = error?.message || String(error) || "E-posta gönderilemedi";
+    let errorMessage = error instanceof Error ? error.message : (String(error) || "E-posta gönderilemedi");
     
     // CORS ve bağlantı hatalarını tespit et
     const isCorsError = errorMessage.includes('CORS') || 
@@ -181,9 +199,13 @@ export const sendEmail = async (options: EmailOptions): Promise<{ success: boole
     // Development'ta hataları sessizce logla
     if (import.meta.env.DEV) {
       if (isCorsError || isNetworkError || errorMessage.includes('ERR_CONNECTION_REFUSED')) {
-        console.debug(`ℹ️ E-posta sunucusuna erişilemedi (Backend kapalı olabilir). İşlem devam ediyor...`);
+        if (import.meta.env.DEV) {
+          console.debug(`ℹ️ E-posta sunucusuna erişilemedi (Backend kapalı olabilir). İşlem devam ediyor...`);
+        }
       } else {
-        console.debug("ℹ️ E-posta gönderilemedi:", errorMessage);
+        if (import.meta.env.DEV) {
+          console.debug("ℹ️ E-posta gönderilemedi:", errorMessage);
+        }
       }
     }
     
@@ -214,15 +236,23 @@ const sendEmailWithUrl = async (options: EmailOptions, url: string): Promise<{ s
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: "E-posta gönderilemedi" }));
-      console.error("E-posta API hatası:", error);
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.error("E-posta API hatası:", error);
+        }
+      }
       return { success: false, error: error.message || "E-posta gönderilemedi" };
     }
 
     const result = await response.json();
     return { success: true };
-  } catch (error: any) {
-    console.error("E-posta gönderme hatası:", error);
-    return { success: false, error: error.message || "E-posta gönderilemedi" };
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("E-posta gönderme hatası:", error);
+      }
+    }
+    return { success: false, error: error instanceof Error ? error.message : "E-posta gönderilemedi" };
   }
 };
 
@@ -230,7 +260,7 @@ const sendEmailWithUrl = async (options: EmailOptions, url: string): Promise<{ s
  * E-posta servisini test et
  * Bu fonksiyon email servisinin çalışıp çalışmadığını test eder
  */
-export const testEmailService = async (testEmail: string): Promise<{ success: boolean; error?: string; details?: any }> => {
+export const testEmailService = async (testEmail: string): Promise<{ success: boolean; error?: string; details?: Record<string, unknown> }> => {
   if (!testEmail || !testEmail.includes('@')) {
     return {
       success: false,
@@ -256,11 +286,13 @@ export const testEmailService = async (testEmail: string): Promise<{ success: bo
                     "https://revpad.net/api/send-email";
     }
 
-    console.log("📧 E-posta servisi test ediliyor...");
-    console.log("📧 Test e-postası:", testEmail);
-    console.log("📧 Primary URL:", primaryUrl || "Yok");
-    console.log("📧 Fallback URL:", fallbackUrl);
-    console.log("📧 Primary localhost mu?", isPrimaryLocalhost);
+    if (import.meta.env.DEV) {
+      console.log("📧 E-posta servisi test ediliyor...");
+      console.log("📧 Test e-postası:", testEmail);
+      console.log("📧 Primary URL:", primaryUrl || "Yok");
+      console.log("📧 Fallback URL:", fallbackUrl);
+      console.log("📧 Primary localhost mu?", isPrimaryLocalhost);
+    }
 
     const result = await sendEmail({
       to: testEmail,
@@ -287,9 +319,13 @@ export const testEmailService = async (testEmail: string): Promise<{ success: bo
     });
     
     if (result.success) {
-      console.log("✅ E-posta başarıyla gönderildi! Lütfen e-posta kutunuzu kontrol edin.");
+      if (import.meta.env.DEV) {
+        console.log("✅ E-posta başarıyla gönderildi! Lütfen e-posta kutunuzu kontrol edin.");
+      }
     } else {
-      console.error("❌ E-posta gönderilemedi:", result.error || "Bilinmeyen hata");
+      if (import.meta.env.DEV) {
+        console.error("❌ E-posta gönderilemedi:", result.error || "Bilinmeyen hata");
+      }
     }
     
     return {
@@ -303,9 +339,13 @@ export const testEmailService = async (testEmail: string): Promise<{ success: bo
         usedUrl: result.success ? (primaryUrl || fallbackUrl) : "Hiçbiri çalışmadı",
       }
     };
-  } catch (error: any) {
-    const errorMessage = error?.message || String(error) || "E-posta testi başarısız oldu";
-    console.error("❌ E-posta testi hatası:", errorMessage);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : (String(error) || "E-posta testi başarısız oldu");
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("❌ E-posta testi hatası:", errorMessage);
+      }
+    }
     return {
       success: false,
       error: errorMessage,
@@ -326,17 +366,118 @@ export const sendNotificationEmail = async (
   title: string,
   message: string,
   type: string,
-  relatedId?: string | null
+  relatedId?: string | null,
+  metadata?: Record<string, unknown> | null
 ): Promise<{ success: boolean; error?: string }> => {
   const appUrl = import.meta.env.VITE_APP_URL || "https://revpad.net";
   let actionUrl = `${appUrl}/tasks`;
 
-  if (relatedId && ["task_assigned", "task_updated", "task_completed", "task_created", "task_approval"].includes(type)) {
+  // Talep bildirimleri kontrolü (öncelikli - diğer kontrollerden önce)
+  if (type === "system" && metadata && (metadata.requestType || message?.includes('talep'))) {
+    actionUrl = `${appUrl}/requests`;
+  } else if (relatedId && ["task_assigned", "task_updated", "task_completed", "task_created", "task_approval"].includes(type)) {
     actionUrl = `${appUrl}/tasks?taskId=${relatedId}`;
   } else if (relatedId && ["order_created", "order_updated"].includes(type)) {
     actionUrl = `${appUrl}/orders`;
   } else if (type === "role_changed") {
     actionUrl = `${appUrl}/admin`;
+  }
+
+  // Metadata'dan ek bilgileri çıkar
+  const formatDate = (date: unknown): string => {
+    if (!date) return "";
+    try {
+      if (date instanceof Date) {
+        return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+      if (typeof date === 'string') {
+        return new Date(date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+      return String(date);
+    } catch {
+      return String(date);
+    }
+  };
+
+  // Durum etiketleri
+  const getStatusLabel = (status: unknown): string => {
+    if (!status || typeof status !== 'string') return String(status || '');
+    const statusMap: Record<string, string> = {
+      pending: "Beklemede",
+      in_progress: "Devam Ediyor",
+      completed: "Tamamlandı",
+      cancelled: "İptal Edildi",
+      draft: "Taslak",
+      confirmed: "Onaylandı",
+      in_production: "Üretimde",
+      quality_check: "Kalite Kontrol",
+      shipped: "Kargoda",
+      delivered: "Teslim Edildi",
+      on_hold: "Beklemede",
+    };
+    return statusMap[status] || status;
+  };
+
+  // Ek bilgi bölümü oluştur
+  let additionalInfo = "";
+  if (metadata) {
+    const infoItems: string[] = [];
+    
+    // Talep detayları (sistem bildirimi ve requestType varsa)
+    if (type === "system" && metadata.requestType) {
+      const typeLabels: Record<string, string> = {
+        leave: "İzin",
+        purchase: "Satın Alma",
+        advance: "Avans",
+        expense: "Gider",
+        other: "Diğer",
+      };
+      const requestTypeLabel = typeLabels[metadata.requestType as string] || metadata.requestType;
+      
+      infoItems.push(`<div style="background: #fff; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea; margin: 15px 0;">
+        <h3 style="color: #333; margin-top: 0; margin-bottom: 15px; font-size: 18px;">Talep Detayları</h3>
+        <div style="margin-bottom: 12px;"><strong style="color: #333;">Talep Tipi:</strong> <span style="color: #666;">${requestTypeLabel}</span></div>
+        ${metadata.requestTitle ? `<div style="margin-bottom: 12px;"><strong style="color: #333;">Talep Başlığı:</strong> <span style="color: #666;">${metadata.requestTitle}</span></div>` : ''}
+        ${metadata.requestDescription ? `<div style="margin-bottom: 12px;"><strong style="color: #333;">Açıklama:</strong><br><span style="color: #666; line-height: 1.6;">${metadata.requestDescription}</span></div>` : ''}
+        ${metadata.amount ? `<div style="margin-bottom: 12px;"><strong style="color: #333;">Tutar:</strong> <span style="color: #666;">${metadata.amount} ${metadata.currency || 'TL'}</span></div>` : ''}
+        ${metadata.creatorName ? `<div style="margin-bottom: 12px;"><strong style="color: #333;">Talep Eden:</strong> <span style="color: #666;">${metadata.creatorName}</span></div>` : ''}
+        ${metadata.createdAt ? `<div style="margin-bottom: 0;"><strong style="color: #333;">Talep Tarihi:</strong> <span style="color: #666;">${formatDate(metadata.createdAt)}</span></div>` : ''}
+      </div>`);
+    }
+    
+    // Durum değişikliği bilgisi
+    if (metadata.oldStatus && metadata.newStatus) {
+      const oldStatusLabel = getStatusLabel(metadata.oldStatus);
+      const newStatusLabel = getStatusLabel(metadata.newStatus);
+      infoItems.push(`<div style="background: #fff; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea; margin: 15px 0;"><strong style="color: #333;">Durum Değişikliği:</strong><br><span style="color: #666;">${oldStatusLabel} → ${newStatusLabel}</span></div>`);
+    }
+    
+    // Tarih bilgisi
+    if (metadata.updatedAt || metadata.createdAt) {
+      const dateStr = formatDate(metadata.updatedAt || metadata.createdAt);
+      if (dateStr) {
+        infoItems.push(`<div style="background: #fff; padding: 15px; border-radius: 8px; border-left: 4px solid #10b981; margin: 15px 0;"><strong style="color: #333;">İşlem Zamanı:</strong><br><span style="color: #666;">${dateStr}</span></div>`);
+      }
+    }
+    
+    // Öncelik bilgisi
+    if (metadata.priority) {
+      const priorityLabels: Record<number, string> = { 1: "Düşük", 2: "Normal", 3: "Yüksek", 4: "Acil" };
+      const priorityLabel = priorityLabels[metadata.priority as number] || `Öncelik ${metadata.priority}`;
+      infoItems.push(`<div style="background: #fff; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin: 15px 0;"><strong style="color: #333;">Öncelik:</strong><br><span style="color: #666;">${priorityLabel}</span></div>`);
+    }
+    
+    // Bitiş tarihi
+    if (metadata.dueDate) {
+      const dueDateStr = formatDate(metadata.dueDate);
+      if (dueDateStr) {
+        infoItems.push(`<div style="background: #fff; padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444; margin: 15px 0;"><strong style="color: #333;">Bitiş Tarihi:</strong><br><span style="color: #666;">${dueDateStr}</span></div>`);
+      }
+    }
+    
+    if (infoItems.length > 0) {
+      additionalInfo = `<div style="margin: 20px 0;">${infoItems.join('')}</div>`;
+    }
   }
 
   const emailHtml = `
@@ -352,11 +493,14 @@ export const sendNotificationEmail = async (
     <h1 style="color: white; margin: 0; font-size: 24px;">Revium ERP Suite</h1>
   </div>
   <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0; border-top: none;">
-    <h2 style="color: #333; margin-top: 0; font-size: 20px;">${title}</h2>
-    <p style="color: #666; font-size: 16px; margin-bottom: 30px;">${message}</p>
+    <h2 style="color: #333; margin-top: 0; font-size: 20px; margin-bottom: 15px;">${title}</h2>
+    <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e5e7eb;">
+      <p style="color: #374151; font-size: 16px; line-height: 1.8; margin: 0;">${message}</p>
+    </div>
+    ${additionalInfo}
     ${relatedId ? `
     <div style="text-align: center; margin: 30px 0;">
-      <a href="${actionUrl}" style="display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Detayları Görüntüle</a>
+      <a href="${actionUrl}" style="display: inline-block; background: #667eea; color: white; padding: 14px 35px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3); transition: all 0.3s;">Detayları Görüntüle</a>
     </div>
     ` : ""}
     <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
@@ -372,6 +516,142 @@ export const sendNotificationEmail = async (
   const result = await sendEmail({
     to: userEmail,
     subject: `Revium ERP - ${title}`,
+    html: emailHtml,
+  });
+  
+  return result;
+};
+
+/**
+ * Kayıt hoş geldin e-postası gönder
+ */
+export const sendWelcomeEmail = async (
+  userEmail: string,
+  fullName: string
+): Promise<{ success: boolean; error?: string }> => {
+  const appUrl = import.meta.env.VITE_APP_URL || "https://revpad.net";
+  const registrationTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hoş Geldiniz - Revium ERP Suite</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 24px;">Revium ERP Suite</h1>
+  </div>
+  <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0; border-top: none;">
+    <h2 style="color: #333; margin-top: 0; font-size: 20px; margin-bottom: 15px;">Hoş Geldiniz!</h2>
+    <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e5e7eb;">
+      <p style="color: #374151; font-size: 16px; line-height: 1.8; margin: 0 0 15px 0;">
+        Merhaba <strong>${fullName}</strong>,
+      </p>
+      <p style="color: #374151; font-size: 16px; line-height: 1.8; margin: 0 0 15px 0;">
+        Revium ERP Suite'e kaydolduğunuz için teşekkür ederiz! Hesabınız başarıyla oluşturuldu.
+      </p>
+      <p style="color: #374151; font-size: 16px; line-height: 1.8; margin: 0 0 15px 0;">
+        Hesabınızı aktifleştirmek için lütfen e-posta adresinize gönderilen doğrulama bağlantısına tıklayın. E-posta doğrulaması yapılmadan bazı özellikleri kullanamayabilirsiniz.
+      </p>
+      <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea; margin: 20px 0;">
+        <strong style="color: #333;">Kayıt Bilgileri:</strong><br>
+        <span style="color: #666;">E-posta: ${userEmail}</span><br>
+        <span style="color: #666;">Kayıt Zamanı: ${registrationTime}</span>
+      </div>
+      <p style="color: #374151; font-size: 16px; line-height: 1.8; margin: 15px 0 0 0;">
+        E-posta doğrulamasından sonra sisteme giriş yapabilir ve tüm özellikleri kullanmaya başlayabilirsiniz.
+      </p>
+    </div>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${appUrl}/auth" style="display: inline-block; background: #667eea; color: white; padding: 14px 35px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3); transition: all 0.3s;">Giriş Yap</a>
+    </div>
+    <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+    <p style="color: #999; font-size: 12px; text-align: center; margin: 0;">
+      Bu e-posta Revium ERP Suite tarafından otomatik olarak gönderilmiştir.<br>
+      Eğer bu hesabı siz oluşturmadıysanız, lütfen bu e-postayı yok sayın.
+    </p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const result = await sendEmail({
+    to: userEmail,
+    subject: "Hoş Geldiniz - Revium ERP Suite",
+    html: emailHtml,
+  });
+  
+  return result;
+};
+
+/**
+ * Şifre sıfırlama e-postası gönder (özel şablon)
+ */
+export const sendPasswordResetEmailCustom = async (
+  userEmail: string,
+  resetLink: string
+): Promise<{ success: boolean; error?: string }> => {
+  const appUrl = import.meta.env.VITE_APP_URL || "https://revpad.net";
+  const requestTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Şifre Sıfırlama - Revium ERP Suite</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 24px;">Revium ERP Suite</h1>
+  </div>
+  <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0; border-top: none;">
+    <h2 style="color: #333; margin-top: 0; font-size: 20px; margin-bottom: 15px;">Şifre Sıfırlama Talebi</h2>
+    <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e5e7eb;">
+      <p style="color: #374151; font-size: 16px; line-height: 1.8; margin: 0 0 15px 0;">
+        Merhaba,
+      </p>
+      <p style="color: #374151; font-size: 16px; line-height: 1.8; margin: 0 0 15px 0;">
+        <strong>${userEmail}</strong> e-posta adresi için şifre sıfırlama talebi aldık. Eğer bu talebi siz yapmadıysanız, bu e-postayı yok sayabilirsiniz.
+      </p>
+      <div style="background: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin: 20px 0;">
+        <strong style="color: #333;">⚠️ Güvenlik Uyarısı:</strong><br>
+        <span style="color: #666;">Bu bağlantı 1 saat içinde geçerlidir. Bağlantıyı yalnızca siz kullanmalısınız. Başka biriyle paylaşmayın.</span>
+      </div>
+      <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea; margin: 20px 0;">
+        <strong style="color: #333;">İstek Bilgileri:</strong><br>
+        <span style="color: #666;">E-posta: ${userEmail}</span><br>
+        <span style="color: #666;">İstek Zamanı: ${requestTime}</span>
+      </div>
+      <p style="color: #374151; font-size: 16px; line-height: 1.8; margin: 15px 0 0 0;">
+        Şifrenizi sıfırlamak için aşağıdaki butona tıklayın:
+      </p>
+    </div>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${resetLink}" style="display: inline-block; background: #667eea; color: white; padding: 14px 35px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3); transition: all 0.3s;">Şifremi Sıfırla</a>
+    </div>
+    <div style="background: #fee2e2; padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444; margin: 20px 0;">
+      <p style="color: #991b1b; font-size: 14px; line-height: 1.6; margin: 0;">
+        <strong>Önemli:</strong> Eğer bu talebi siz yapmadıysanız, hesabınızın güvenliği için lütfen şifrenizi değiştirin ve bize bildirin.
+      </p>
+    </div>
+    <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+    <p style="color: #999; font-size: 12px; text-align: center; margin: 0;">
+      Bu e-posta Revium ERP Suite tarafından otomatik olarak gönderilmiştir.<br>
+      Bu bağlantı 1 saat içinde geçerliliğini yitirecektir.
+    </p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const result = await sendEmail({
+    to: userEmail,
+    subject: "Şifre Sıfırlama - Revium ERP Suite",
     html: emailHtml,
   });
   

@@ -70,8 +70,8 @@ const ResetPassword = () => {
       await confirmPasswordReset(auth, token, password);
       setSuccess(true);
       toast.success("Şifreniz güncellendi");
-    } catch (error: any) {
-      toast.error("Şifre sıfırlanamadı: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Şifre sıfırlanamadı: " + (error instanceof Error ? error.message : String(error)));
     }
     setResetting(false);
   };

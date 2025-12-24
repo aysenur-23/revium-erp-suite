@@ -27,13 +27,14 @@ import {
 import { toast } from "sonner";
 import { Shield, User as UserIcon, Trash2, AlertTriangle } from "lucide-react";
 import { getAllUsers, updateFirebaseUserProfile, UserProfile, deleteUser } from "@/services/firebase/authService";
-import { getRoles, RoleDefinition } from "@/services/firebase/rolePermissionsService";
+import { getRoles, RoleDefinition, onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 import { getDepartments, updateDepartment } from "@/services/firebase/departmentService";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, collection, onSnapshot, Unsubscribe } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatPhoneForDisplay } from "@/utils/phoneNormalizer";
 import { formatLastLogin, isUserOnline } from "@/utils/formatLastLogin";
 import { Circle } from "lucide-react";
+import { firestore } from "@/lib/firebase";
 
 interface User {
   id: string;
@@ -50,6 +51,7 @@ interface User {
 interface Department {
   id: string;
   name: string;
+  managerId?: string | null;
 }
 
 export const UserManagement = () => {
@@ -69,33 +71,54 @@ export const UserManagement = () => {
   useEffect(() => {
     fetchData();
     
-    // Her 60 saniyede bir sadece lastLoginAt bilgilerini güncelle (performans için)
-    // Tam fetchData yerine sadece kullanıcı listesini hafifçe güncelle
-    const interval = setInterval(async () => {
-      try {
-        // Sadece kullanıcı listesini güncelle (departments ve roles'i tekrar yükleme)
-        const fetchedUsers = await getAllUsers();
-        setUsers(fetchedUsers
-          .filter((u: UserProfile) => !(u as any).deleted)
-          .map((u: UserProfile) => ({
-            id: u.id,
-            full_name: u.fullName || u.displayName || "",
-            email: u.email,
-            phone: u.phone || null,
-            department_id: u.departmentId || null,
-            created_at: u.createdAt || Timestamp.now(),
-            roles: u.role || [],
-            last_login_at: u.lastLoginAt || null,
-          })));
-      } catch (error) {
-        // Sessizce handle et - interval hatası uygulamayı etkilemesin
-        if (import.meta.env.DEV) {
-          console.warn("User list update error:", error);
+    // Kullanıcı koleksiyonu için real-time listener
+    let unsubscribe: Unsubscribe | null = null;
+    if (firestore) {
+      const usersRef = collection(firestore, "users");
+      unsubscribe = onSnapshot(
+        usersRef,
+        (snapshot) => {
+          try {
+            const fetchedUsers = snapshot.docs
+              .map((doc) => ({ id: doc.id, ...doc.data() } as UserProfile))
+              .filter((u: UserProfile) => !("deleted" in u && (u as unknown as { deleted?: boolean }).deleted))
+              .map((u: UserProfile) => ({
+                id: u.id,
+                full_name: u.fullName || u.displayName || "",
+                email: u.email,
+                phone: u.phone || null,
+                department_id: u.departmentId || null,
+                created_at: u.createdAt instanceof Timestamp ? u.createdAt : (u.createdAt instanceof Date ? Timestamp.fromDate(u.createdAt) : Timestamp.now()),
+                roles: u.role || [],
+                last_login_at: u.lastLoginAt instanceof Timestamp ? u.lastLoginAt : (u.lastLoginAt instanceof Date ? Timestamp.fromDate(u.lastLoginAt) : null),
+              }));
+            setUsers(fetchedUsers);
+            setLoading(false);
+          } catch (error) {
+            if (import.meta.env.DEV) {
+              console.error("Real-time kullanıcı güncelleme hatası:", error);
+            }
+          }
+        },
+        (error) => {
+          if (import.meta.env.DEV) {
+            console.error("Users snapshot error:", error);
+          }
         }
-      }
-    }, 60000); // 60 saniye (performans için artırıldı)
+      );
+    }
     
-    return () => clearInterval(interval);
+    // Interval kaldırıldı - performans için gereksiz (kullanıcı manuel yenileme yapabilir)
+    
+    // Yetki cache'i değiştiğinde kullanıcı listesini tazele (rol görünürlükleri için)
+    const unsubscribePermissionCache = onPermissionCacheChange(() => {
+      fetchData();
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+      unsubscribePermissionCache?.();
+    };
   }, []);
 
   const fetchData = async () => {
@@ -109,16 +132,16 @@ export const UserManagement = () => {
 
       // Silinmiş kullanıcıları filtrele (getAllUsers zaten filtreliyor ama yine de kontrol edelim)
       setUsers(fetchedUsers
-        .filter((u: UserProfile) => !(u as any).deleted)
+        .filter((u: UserProfile) => !('deleted' in u && u.deleted))
         .map((u: UserProfile) => ({
           id: u.id,
           full_name: u.fullName || u.displayName || "",
           email: u.email,
           phone: u.phone || null,
           department_id: u.departmentId || null,
-          created_at: u.createdAt || Timestamp.now(),
+          created_at: u.createdAt instanceof Timestamp ? u.createdAt : (u.createdAt instanceof Date ? Timestamp.fromDate(u.createdAt) : Timestamp.now()),
           roles: u.role || [],
-          last_login_at: u.lastLoginAt || null,
+          last_login_at: u.lastLoginAt instanceof Timestamp ? u.lastLoginAt : (u.lastLoginAt instanceof Date ? Timestamp.fromDate(u.lastLoginAt) : null),
         })));
 
       setRoles(fetchedRoles);
@@ -129,9 +152,10 @@ export const UserManagement = () => {
       setDepartments(fetchedDepartments.map((d) => ({
         id: d.id,
         name: d.name,
+        managerId: d.managerId || null,
       })));
-    } catch (error: any) {
-      toast.error("Veriler yüklenirken hata: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Veriler yüklenirken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     } finally {
       setLoading(false);
     }
@@ -148,7 +172,7 @@ export const UserManagement = () => {
         email: user?.email || "",
         emailVerified: user?.emailVerified || false,
         fullName: user?.fullName || "",
-        displayName: (user as any)?.displayName || user?.fullName || "",
+        displayName: ('displayName' in user && typeof user.displayName === 'string' ? user.displayName : null) || user?.fullName || "",
         phone: user?.phone || null,
         dateOfBirth: user?.dateOfBirth || null,
         role: user?.roles || [],
@@ -161,7 +185,9 @@ export const UserManagement = () => {
         return;
       }
     } catch (error) {
-      console.error("Permission check error:", error);
+      if (import.meta.env.DEV) {
+        console.error("Permission check error:", error);
+      }
       toast.error("Yetki kontrolü yapılamadı");
       return;
     }
@@ -185,7 +211,7 @@ export const UserManagement = () => {
         role: updatedRoles,
       });
 
-      // Eğer team_leader rolü atanıyorsa, kullanıcıyı bir departmanın manager'ı olarak ata
+      // Eğer team_leader rolü atanıyorsa, kullanıcıyı bir departmanın manager'ı olarak ata (ZORUNLU)
       if (newRole === "team_leader") {
         try {
           const departments = await getDepartments();
@@ -202,15 +228,41 @@ export const UserManagement = () => {
                 managerId: selectedUser.id,
               }, user?.id || null);
               toast.success(`${selectedUser.full_name || selectedUser.email} kullanıcısı "${departmentWithoutManager.name}" departmanının lideri olarak atandı`);
+              
+              // Ekip kontrolü yap (uyarı ver ama engelleme)
+              const { validateTeamLeaderHasTeam } = await import("@/utils/validateTeamLeader");
+              const teamValidation = await validateTeamLeaderHasTeam(selectedUser.id);
+              if (!teamValidation.isValid) {
+                toast.warning("Uyarı: Ekip lideri henüz ekip üyesine sahip değil. Lütfen ekip yönetiminden ekip üyeleri ekleyin.");
+              }
             } else {
-              // Hiç boş departman yoksa uyarı ver
-              toast.warning("Kullanıcıya team_leader rolü atandı, ancak boş departman bulunamadı. Lütfen departman yönetiminden manuel olarak atayın.");
+              // Hiç boş departman yoksa hata ver ve rol atamasını iptal et
+              toast.error("Ekip lideri rolü atanamadı: Ekip lideri mutlaka bir departmanın yöneticisi olmalıdır. Lütfen önce bir departman oluşturun veya mevcut bir departmanın yöneticisini kaldırın.");
+              // Rol güncellemesini geri al
+              await updateFirebaseUserProfile(selectedUser.id, {
+                role: [oldRole],
+              });
+              return;
+            }
+          } else {
+            // Zaten manager ise, ekip kontrolü yap
+            const { validateTeamLeaderHasTeam } = await import("@/utils/validateTeamLeader");
+            const teamValidation = await validateTeamLeaderHasTeam(selectedUser.id);
+            if (!teamValidation.isValid) {
+              toast.warning("Uyarı: Ekip lideri henüz ekip üyesine sahip değil. Lütfen ekip yönetiminden ekip üyeleri ekleyin.");
             }
           }
-        } catch (deptError: any) {
-          console.error("Departman atama hatası:", deptError);
-          // Departman atama hatası rol güncellemesini engellemez, sadece uyarı ver
-          toast.warning("Rol güncellendi, ancak departman ataması yapılamadı. Lütfen departman yönetiminden manuel olarak atayın.");
+        } catch (deptError: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Departman atama hatası:", deptError);
+          }
+          // Departman atama hatası durumunda rol güncellemesini geri al
+          toast.error("Ekip lideri rolü atanamadı: Departman ataması yapılamadı. Lütfen departman yönetiminden manuel olarak atayın.");
+          // Rol güncellemesini geri al
+          await updateFirebaseUserProfile(selectedUser.id, {
+            role: [oldRole],
+          });
+          return;
         }
       } else if (oldRole === "team_leader" && newRole !== "team_leader") {
         // Eğer team_leader rolü kaldırılıyorsa, kullanıcıyı tüm departmanlardan manager olarak kaldır
@@ -227,8 +279,10 @@ export const UserManagement = () => {
           if (managedDepartments.length > 0) {
             toast.success(`${selectedUser.full_name || selectedUser.email} kullanıcısı ${managedDepartments.length} departmandan manager olarak kaldırıldı`);
           }
-        } catch (deptError: any) {
-          console.error("Departman manager kaldırma hatası:", deptError);
+        } catch (deptError: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Departman manager kaldırma hatası:", deptError);
+          }
           // Hata durumunda sessizce devam et
         }
       }
@@ -251,8 +305,23 @@ export const UserManagement = () => {
           metadata: { oldRole, newRole },
         });
       } catch (notifError) {
-        console.error("Rol değişikliği bildirimi gönderilemedi:", notifError);
+        if (import.meta.env.DEV) {
+          console.error("Rol değişikliği bildirimi gönderilemedi:", notifError);
+        }
         // Bildirim hatası rol güncellemesini engellemez
+      }
+
+      // Permission cache'i temizle - bu tüm dinleyicileri tetikleyecek
+      // AuthContext'teki onPermissionCacheChange callback'i otomatik olarak çağrılacak
+      // ve kullanıcı profilini yeniden yükleyip checkRoles fonksiyonunu çağıracak
+      // Bu sayede yetkiler dinamik olarak güncellenecek
+      try {
+        const { clearPermissionCache } = await import("@/services/firebase/rolePermissionsService");
+        clearPermissionCache();
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Permission cache temizleme hatası:", error);
+        }
       }
 
       toast.success("Kullanıcı rolü başarıyla güncellendi");
@@ -260,8 +329,90 @@ export const UserManagement = () => {
       setSelectedUser(null);
       setNewRole("");
       fetchData();
-    } catch (error: any) {
-      toast.error("Rol güncellenemedi: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Rol güncellenemedi: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
+    }
+  };
+
+  const handleAssignTeamLeader = async (userId: string, departmentId: string) => {
+    if (!isAdmin) {
+      toast.error("Bu işlem için yönetici yetkisi gereklidir");
+      return;
+    }
+
+    if (!departmentId || departmentId === "none") {
+      toast.error("Lütfen bir departman seçin");
+      return;
+    }
+
+    try {
+      const targetUser = users.find(u => u.id === userId);
+      if (!targetUser) {
+        toast.error("Kullanıcı bulunamadı");
+        return;
+      }
+
+      // Kullanıcının mevcut rolleri
+      const currentRoles = targetUser.roles || [];
+      
+      // Eğer kullanıcı team_leader değilse, ekle
+      if (!currentRoles.includes("team_leader")) {
+        await updateFirebaseUserProfile(userId, {
+          role: [...currentRoles, "team_leader"],
+        });
+      }
+
+      // Seçilen departmanın mevcut manager'ını kontrol et
+      const targetDepartment = departments.find(d => d.id === departmentId);
+      if (!targetDepartment) {
+        toast.error("Departman bulunamadı");
+        return;
+      }
+
+      // Eski manager'ın rolünü güncelle (eğer başka departmanda manager değilse)
+      if (targetDepartment.managerId && targetDepartment.managerId !== userId) {
+        const oldManager = users.find(u => u.id === targetDepartment.managerId);
+        if (oldManager) {
+          // Eski manager'ın başka departmanda manager olup olmadığını kontrol et
+          const otherDeptAsManager = departments.find(
+            d => d.id !== departmentId && d.managerId === oldManager.id
+          );
+          
+          // Eğer başka departmanda manager değilse, team_leader rolünü kaldır
+          if (!otherDeptAsManager) {
+            const oldManagerRoles = oldManager.roles || [];
+            const updatedOldManagerRoles = oldManagerRoles.filter((r: string) => r !== "team_leader");
+            if (updatedOldManagerRoles.length === 0) {
+              updatedOldManagerRoles.push("viewer"); // En azından viewer rolü olsun
+            }
+            await updateFirebaseUserProfile(oldManager.id, {
+              role: updatedOldManagerRoles,
+            });
+          }
+        }
+      }
+      
+      // Yeni manager'ı departmana ata
+      await updateDepartment(departmentId, {
+        managerId: userId,
+      }, user?.id || null);
+
+      // Permission cache'i temizle
+      try {
+        const { clearPermissionCache } = await import("@/services/firebase/rolePermissionsService");
+        clearPermissionCache();
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Permission cache temizleme hatası:", error);
+        }
+      }
+
+      toast.success(`${targetUser.full_name || targetUser.email} kullanıcısı "${targetDepartment.name}" departmanının lideri olarak atandı`);
+      
+      // Kullanıcı listesini yenile
+      fetchData();
+    } catch (error: unknown) {
+      toast.error("Ekip lideri atanırken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     }
   };
 
@@ -273,8 +424,8 @@ export const UserManagement = () => {
 
       toast.success("Kullanıcı departmanı başarıyla güncellendi");
       fetchData();
-    } catch (error: any) {
-      toast.error("Departman güncellenemedi: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Departman güncellenemedi: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     }
   };
 
@@ -312,9 +463,11 @@ export const UserManagement = () => {
       setShowDeleteDialog(false);
       setSelectedUser(null);
       fetchData();
-    } catch (error: any) {
-      console.error("Delete user error:", error);
-      toast.error(error.message || "Kullanıcı silinirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete user error:", error);
+      }
+      toast.error(error instanceof Error ? error.message : "Kullanıcı silinirken hata oluştu");
     } finally {
       setDeleting(false);
     }
@@ -357,7 +510,7 @@ export const UserManagement = () => {
                 <TableHead className="min-w-[150px]">Kullanıcı</TableHead>
                 <TableHead className="hidden md:table-cell min-w-[180px]">Email</TableHead>
                 <TableHead className="min-w-[140px]">Departman</TableHead>
-                <TableHead className="min-w-[100px]">Rol</TableHead>
+                <TableHead className="min-w-[100px] max-w-[140px]">Rol</TableHead>
                 <TableHead className="hidden lg:table-cell min-w-[120px]">Son Giriş</TableHead>
                 <TableHead className="text-right min-w-[120px]">İşlemler</TableHead>
               </TableRow>
@@ -382,32 +535,52 @@ export const UserManagement = () => {
                   <TableCell className="hidden md:table-cell">{tableUser.email}</TableCell>
                   <TableCell>
                     {isAdmin ? (
-                    <Select
-                      value={tableUser.department_id || "none"}
-                      onValueChange={(value) => handleDepartmentChange(tableUser.id, value)}
-                    >
-                      <SelectTrigger className="w-full min-w-[120px] sm:min-w-[140px] sm:w-[180px] text-xs sm:text-sm h-8 sm:h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Atanmamış</SelectItem>
-                        {departments.map((dept) => (
-                          <SelectItem key={dept.id} value={dept.id}>
-                            {dept.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <div className="flex flex-col gap-1.5">
+                        <Select
+                          value={tableUser.department_id || "none"}
+                          onValueChange={(value) => handleDepartmentChange(tableUser.id, value)}
+                        >
+                          <SelectTrigger className="w-full min-w-[120px] sm:min-w-[140px] sm:w-[180px] text-xs sm:text-sm h-8 sm:h-10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Atanmamış</SelectItem>
+                            {departments.map((dept) => (
+                              <SelectItem key={dept.id} value={dept.id}>
+                                {dept.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full text-xs h-7 sm:h-8"
+                          onClick={() => {
+                            const deptId = tableUser.department_id || departments[0]?.id;
+                            if (deptId && deptId !== "none") {
+                              handleAssignTeamLeader(tableUser.id, deptId);
+                            } else {
+                              toast.error("Lütfen önce bir departman seçin");
+                            }
+                          }}
+                          disabled={!tableUser.department_id || tableUser.department_id === "none"}
+                        >
+                          Ekip Lideri Ata
+                        </Button>
+                      </div>
                     ) : (
                       <span className="text-xs sm:text-sm text-muted-foreground truncate block">
                         {departments.find(d => d.id === tableUser.department_id)?.name || "Atanmamış"}
                       </span>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <Badge className={`${getRoleBadgeColor(getUserRole(tableUser))} text-white hover:opacity-80 text-xs sm:text-sm px-2 py-0.5 sm:px-2.5 sm:py-1`}>
-                      {getRoleLabel(getUserRole(tableUser))}
-                    </Badge>
+                  <TableCell className="min-w-[100px] max-w-[140px]">
+                    <div className="flex items-center justify-start">
+                      <Badge className={`${getRoleBadgeColor(getUserRole(tableUser))} text-white hover:opacity-80 text-xs px-2 py-0.5 whitespace-nowrap truncate max-w-full`}>
+                        {getRoleLabel(getUserRole(tableUser))}
+                      </Badge>
+                    </div>
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
                     <div className="flex items-center gap-2">
@@ -417,9 +590,9 @@ export const UserManagement = () => {
                         const lastLoginDate = tableUser.last_login_at 
                           ? (tableUser.last_login_at instanceof Timestamp 
                               ? tableUser.last_login_at.toDate() 
-                              : typeof tableUser.last_login_at === 'object' && 'toDate' in tableUser.last_login_at
-                              ? (tableUser.last_login_at as any).toDate()
-                              : new Date(tableUser.last_login_at as any))
+                              : typeof tableUser.last_login_at === 'object' && 'toDate' in tableUser.last_login_at && typeof (tableUser.last_login_at as { toDate: () => Date }).toDate === 'function'
+                              ? (tableUser.last_login_at as { toDate: () => Date }).toDate()
+                              : new Date(tableUser.last_login_at))
                           : null;
                         return (
                           <>

@@ -89,12 +89,12 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
         max_stock: "",
         location: "",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Sadece development'ta log göster
       if (import.meta.env.DEV) {
         console.error("Create product error:", error);
       }
-      toast.error(error.message || "Ürün oluşturulurken hata oluştu");
+      toast.error(error instanceof Error ? error.message : "Ürün oluşturulurken hata oluştu");
     } finally {
       setLoading(false);
     }
@@ -102,7 +102,7 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           {/* Header */}
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -111,7 +111,7 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                   Yeni Ürün
                 </DialogTitle>
                 <DialogDescription className="sr-only">

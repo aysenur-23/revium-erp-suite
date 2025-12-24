@@ -27,8 +27,7 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
     return false;
   });
 
-  // Window resize listener - ekran küçüldüğünde sidebar'ı kapat
-  // Tek bir optimize edilmiş resize listener
+  // Window resize listener - ekran küçüldüğünde sidebar'ı kapat, büyüdüğünde aç
   useEffect(() => {
     let resizeTimeout: NodeJS.Timeout;
     let lastWidth = typeof window !== "undefined" ? window.innerWidth : 0;
@@ -37,33 +36,36 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
       if (typeof window === "undefined") return;
       
       const currentWidth = window.innerWidth;
+      const MOBILE_BREAKPOINT = 768;
       
-      // Debounce: resize event'lerini sınırla ama küçülme durumunda hemen kapat
+      // Debounce: resize event'lerini sınırla
       clearTimeout(resizeTimeout);
       
-      // Eğer ekran küçüldüyse (768px altına düştüyse) hemen kapat
-      if (currentWidth < 768 && lastWidth >= 768) {
-        setSidebarOpen(false);
-        lastWidth = currentWidth;
-        return;
-      }
-      
-      // Diğer durumlarda debounce ile kontrol et
       resizeTimeout = setTimeout(() => {
         if (typeof window !== "undefined") {
-          // md breakpoint (768px) - Tailwind'in md breakpoint'i
-          if (window.innerWidth < 768) {
+          const nowWidth = window.innerWidth;
+          
+          // Ekran küçüldüyse (768px altına düştüyse) sidebar'ı kapat
+          if (nowWidth < MOBILE_BREAKPOINT && lastWidth >= MOBILE_BREAKPOINT) {
             setSidebarOpen(false);
           }
-          lastWidth = window.innerWidth;
+          // Ekran büyüdüyse (768px üstüne çıktıysa) sidebar'ı aç
+          else if (nowWidth >= MOBILE_BREAKPOINT && lastWidth < MOBILE_BREAKPOINT) {
+            setSidebarOpen(true);
+          }
+          
+          lastWidth = nowWidth;
         }
-      }, 150); // 150ms debounce (performans için optimize)
+      }, 150); // 150ms debounce
     };
 
     // İlk yüklemede kontrol et
     if (typeof window !== "undefined") {
-      if (window.innerWidth < 768) {
+      const MOBILE_BREAKPOINT = 768;
+      if (window.innerWidth < MOBILE_BREAKPOINT) {
         setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
       }
       lastWidth = window.innerWidth;
     }
@@ -92,13 +94,15 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
       const timeout = setTimeout(() => {
         const result = testScroll(mainRef.current);
         if (!result.isScrollable && result.hasOverflow) {
-          console.warn("⚠️ Scroll Sorunu Tespit Edildi:", {
-            issues: result.issues,
-            scrollHeight: result.scrollHeight,
-            clientHeight: result.clientHeight,
-            element: mainRef.current,
-          });
-          logScrollTest();
+          if (import.meta.env.DEV) {
+            console.warn("⚠️ Scroll Sorunu Tespit Edildi:", {
+              issues: result.issues,
+              scrollHeight: result.scrollHeight,
+              clientHeight: result.clientHeight,
+              element: mainRef.current,
+            });
+            logScrollTest();
+          }
         }
       }, 100);
       return () => clearTimeout(timeout);
@@ -117,7 +121,7 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
 
   return (
     <SidebarProvider closeSidebar={closeSidebar}>
-      <div className="h-screen bg-background flex overflow-hidden">
+      <div className="h-screen bg-background flex overflow-hidden max-w-full">
         {/* Sidebar - Full Height */}
         <Sidebar 
           isMobile={isMobile} 
@@ -126,7 +130,7 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
           isCollapsed={!isMobile && !sidebarOpen}
         />
         {/* Right Section - Header + Content */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden max-w-full">
           {/* Header Section - Fixed Height */}
           <div className="flex-shrink-0">
             <Header 
@@ -139,7 +143,7 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
             ref={mainRef}
             className={cn(
               "flex-1",
-              disableScroll ? "overflow-hidden" : "overflow-y-auto overflow-x-auto main-scroll-container",
+              disableScroll ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden main-scroll-container",
               "p-2 sm:p-3 md:p-4 lg:p-6 transition-all duration-300",
               "pb-safe",
               // Scroll iyileştirmeleri
@@ -150,13 +154,19 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
               "[&::-webkit-scrollbar-thumb]:hover:bg-muted-foreground/30",
               // Scroll sorunlarını önlemek için
               "overscroll-behavior-contain",
-              "-webkit-overflow-scrolling-touch"
+              "-webkit-overflow-scrolling-touch",
+              // Küçük ekranlarda taşmaları engelle
+              "max-w-full",
+              "min-w-0"
             )}
             onClick={closeSidebar}
           >
             <div className={cn(
               disableScroll ? "h-full" : "w-full",
-              !disableScroll && "min-h-0"
+              !disableScroll && "min-h-0",
+              // Küçük ekranlarda taşmaları engelle
+              "max-w-full",
+              "overflow-x-hidden"
             )}>
               {children}
             </div>

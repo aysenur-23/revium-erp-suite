@@ -7,21 +7,26 @@ import "./lib/firebase";
 
 // Make setTeamLeader function available globally for console usage
 import { setUserAsTeamLeader } from "./utils/setTeamLeader";
-import { setUserAsAdmin } from "./utils/setAdmin";
 import { setSuperAdmin } from "./utils/setSuperAdmin";
 import { testEmailService } from "./services/emailService";
 
 if (typeof window !== "undefined") {
-  (window as any).setTeamLeader = setUserAsTeamLeader;
-  (window as any).setAdmin = setUserAsAdmin;
-  (window as any).setSuperAdmin = setSuperAdmin;
-  (window as any).testEmail = testEmailService;
-  (window as any).testEmailService = testEmailService; // Alias for convenience
+  // Type-safe window extension
+  interface WindowWithUtils extends Window {
+    setTeamLeader?: typeof setUserAsTeamLeader;
+    setSuperAdmin?: typeof setSuperAdmin;
+    testEmail?: typeof testEmailService;
+    testEmailService?: typeof testEmailService;
+  }
+  const win = window as WindowWithUtils;
+  win.setTeamLeader = setUserAsTeamLeader;
+  win.setSuperAdmin = setSuperAdmin;
+  win.testEmail = testEmailService;
+  win.testEmailService = testEmailService; // Alias for convenience
   // Sadece development'ta log göster
   if (import.meta.env.DEV) {
     console.log("💡 Konsol komutları aktif:");
     console.log("- await setTeamLeader('email@example.com')");
-    console.log("- await setAdmin('email@example.com')");
     console.log("- await setSuperAdmin('email@example.com')");
     console.log("- await testEmail('your-email@example.com') // E-posta servisini test et");
     console.log("- await testEmailService('your-email@example.com') // E-posta servisini test et (alias)");
@@ -60,10 +65,12 @@ window.addEventListener('error', (event) => {
     return;
   }
   
-  console.error('Global error:', event.error);
-  if (event.error && event.error.message) {
-    console.error('Error message:', event.error.message);
-    console.error('Error stack:', event.error.stack);
+  if (import.meta.env.DEV) {
+    console.error('Global error:', event.error);
+    if (event.error && event.error instanceof Error) {
+      console.error('Error message:', event.error.message);
+      console.error('Error stack:', event.error.stack);
+    }
   }
 });
 
@@ -96,7 +103,9 @@ window.addEventListener('unhandledrejection', (event) => {
     return;
   }
   
-  console.error('Unhandled promise rejection:', event.reason);
+  if (import.meta.env.DEV) {
+    console.error('Unhandled promise rejection:', event.reason);
+  }
 });
 
 try {
@@ -112,8 +121,10 @@ try {
   
   const root = createRoot(rootElement);
   root.render(<App />);
-} catch (error) {
-  console.error("Uygulama render hatası:", error);
+} catch (error: unknown) {
+  if (import.meta.env.DEV) {
+    console.error("Uygulama render hatası:", error);
+  }
   
   // More detailed error information
   const errorMessage = error instanceof Error ? error.message : String(error);

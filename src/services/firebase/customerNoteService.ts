@@ -16,6 +16,7 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
+  FieldValue,
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase";
 import { logAudit } from "@/utils/auditLogger";
@@ -48,9 +49,10 @@ export const getCustomerNotes = async (customerId: string): Promise<CustomerNote
       id: doc.id,
       ...doc.data(),
     })) as CustomerNote[];
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Index hatası durumunda basit query dene
-    if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
+    const firebaseError = error as { code?: string; message?: string };
+    if (firebaseError?.code === 'failed-precondition' || firebaseError?.message?.includes('index')) {
       console.warn("Customer notes index bulunamadı, basit query kullanılıyor");
       try {
         const simpleQuery = query(collection(firestore, CUSTOMER_NOTES_COLLECTION));
@@ -86,7 +88,7 @@ export const createCustomerNote = async (
   noteData: Omit<CustomerNote, "id" | "createdAt" | "updatedAt">
 ): Promise<CustomerNote> => {
   try {
-    const noteDoc: any = {
+    const noteDoc = {
       ...noteData,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),

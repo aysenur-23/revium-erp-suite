@@ -24,7 +24,7 @@ export interface CompanySettings {
   emailNotifications?: boolean;
   lowStockAlerts?: boolean;
   autoBackup?: boolean;
-  updatedAt: any;
+  updatedAt: Timestamp | Date | null;
   updatedBy: string;
 }
 

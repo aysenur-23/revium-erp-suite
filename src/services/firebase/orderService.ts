@@ -19,6 +19,8 @@ import {
   Timestamp,
   onSnapshot,
   Unsubscribe,
+  QueryConstraint,
+  FieldValue,
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase";
 import { logAudit } from "@/utils/auditLogger";
@@ -126,10 +128,14 @@ export const getOrders = async (filters?: {
       id: doc.id,
       ...doc.data(),
     })) as Order[];
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Index hatası durumunda basit query dene
-    if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
-      console.warn("Orders index bulunamadı, basit query kullanılıyor");
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorCode = (error as { code?: string })?.code;
+    if (errorCode === 'failed-precondition' || errorMessage.includes('index')) {
+      if (import.meta.env.DEV) {
+        console.warn("Orders index bulunamadı, basit query kullanılıyor");
+      }
       try {
         const simpleQuery = query(collection(firestore, "orders"), orderBy("createdAt", "desc"), limit(500));
         const snapshot = await getDocs(simpleQuery);
@@ -148,7 +154,9 @@ export const getOrders = async (filters?: {
         
         return orders;
       } catch (fallbackError) {
-        console.error("Fallback query de başarısız:", fallbackError);
+        if (import.meta.env.DEV) {
+          console.error("Fallback query de başarısız:", fallbackError);
+        }
         // Son çare: filtreleme olmadan (limit ile)
         const snapshot = await getDocs(query(collection(firestore, "orders"), limit(500)));
         let orders = snapshot.docs.map((doc) => ({
@@ -174,7 +182,9 @@ export const getOrders = async (filters?: {
         return orders;
       }
     }
-    console.error("Get orders error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Get orders error:", error);
+    }
     throw error;
   }
 };
@@ -195,7 +205,9 @@ export const getOrderById = async (orderId: string): Promise<Order | null> => {
       ...orderDoc.data(),
     } as Order;
   } catch (error) {
-    console.error("Get order by id error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Get order by id error:", error);
+    }
     throw error;
   }
 };
@@ -211,7 +223,9 @@ export const getOrderItems = async (orderId: string): Promise<OrderItem[]> => {
       ...doc.data(),
     })) as OrderItem[];
   } catch (error) {
-    console.error("Get order items error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Get order items error:", error);
+    }
     throw error;
   }
 };
@@ -227,7 +241,9 @@ export const updateOrderItem = async (
   try {
     await updateDoc(doc(firestore, "orders", orderId, "items", itemId), updates);
   } catch (error) {
-    console.error("Update order item error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Update order item error:", error);
+    }
     throw error;
   }
 };
@@ -286,7 +302,9 @@ export const createOrder = async (
                   
                   // Stok kontrolü
                   if (material.currentStock < totalQuantity) {
-                    console.warn(`Yetersiz stok: ${material.name} için ${totalQuantity} gerekli, ${material.currentStock} mevcut`);
+                    if (import.meta.env.DEV) {
+                      console.warn(`Yetersiz stok: ${material.name} için ${totalQuantity} gerekli, ${material.currentStock} mevcut`);
+                    }
                     // Stok yetersiz olsa bile devam et, sadece uyarı ver
                   }
                   
@@ -311,7 +329,9 @@ export const createOrder = async (
           }
         }
       } catch (error) {
-        console.error("Hammadde stok düşürme hatası:", error);
+        if (import.meta.env.DEV) {
+          console.error("Hammadde stok düşürme hatası:", error);
+        }
         // Hata olsa bile sipariş oluşturulmuş olacak, sadece log
       }
     }
@@ -319,9 +339,35 @@ export const createOrder = async (
     // Audit log
     await logAudit("CREATE", "orders", docRef.id, orderData.createdBy, null, createdOrder);
 
+    // Aktivite log ekle
+    if (orderData.createdBy) {
+      try {
+        const { getUserProfile } = await import("@/services/firebase/authService");
+        const userProfile = await getUserProfile(orderData.createdBy);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addOrderActivity(
+          docRef.id,
+          orderData.createdBy,
+          "created",
+          `bu siparişi oluşturdu`,
+          { orderNumber: orderData.orderNumber || orderData.order_number },
+          userName,
+          userEmail
+        );
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Add order activity error:", error);
+        }
+      }
+    }
+
     return createdOrder;
   } catch (error) {
-    console.error("Create order error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Create order error:", error);
+    }
     throw error;
   }
 };
@@ -337,7 +383,7 @@ const isValidStatusTransition = (currentStatus: string, newStatus: string): bool
     planned: ["in_production", "pending", "on_hold", "cancelled"], // Production order için
     in_production: ["quality_check", "completed", "on_hold", "cancelled"],
     quality_check: ["completed", "in_production", "on_hold", "cancelled"],
-    completed: ["shipped", "in_production", "quality_check"], // Geri dönüşe izin ver
+    completed: [], // Üretim siparişleri için tamamlandı durumundan sonra geçiş yok
     on_hold: ["in_production", "cancelled"],
     shipped: ["delivered"],
     delivered: ["completed", "quality_check", "in_production"],
@@ -377,14 +423,14 @@ export const updateOrder = async (
     }
     
     // Status değişikliği varsa statusUpdatedBy ve statusUpdatedAt ekle
-    const updateData: any = {
+    const updateData: Partial<Order> & { statusUpdatedBy?: string; statusUpdatedAt?: FieldValue | Timestamp } = {
       ...updates,
-      updatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp() as any,
     };
     
     if (updates.status && updates.status !== oldOrder.status && userId) {
       updateData.statusUpdatedBy = userId;
-      updateData.statusUpdatedAt = serverTimestamp();
+      updateData.statusUpdatedAt = serverTimestamp() as any;
     }
     
     await updateDoc(doc(firestore, "orders", orderId), updateData);
@@ -395,6 +441,66 @@ export const updateOrder = async (
     // Audit log
     if (userId) {
       await logAudit("UPDATE", "orders", orderId, userId, oldOrder, newOrder);
+    }
+
+    // Aktivite log ekle
+    if (userId) {
+      try {
+        const { getUserProfile } = await import("@/services/firebase/authService");
+        const userProfile = await getUserProfile(userId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+
+        // Durum değişikliği aktivitesi
+        if (updates.status && updates.status !== oldOrder.status) {
+          const statusLabels: Record<string, string> = {
+            draft: "Taslak",
+            pending: "Beklemede",
+            confirmed: "Onaylandı",
+            planned: "Planlanan",
+            in_production: "Üretimde",
+            quality_check: "Kalite Kontrol",
+            completed: "Tamamlandı",
+            shipped: "Kargoda",
+            delivered: "Teslim Edildi",
+            on_hold: "Beklemede",
+            cancelled: "İptal",
+          };
+          const oldStatusLabel = statusLabels[oldOrder.status] || oldOrder.status;
+          const newStatusLabel = statusLabels[updates.status] || updates.status;
+          await addOrderActivity(
+            orderId,
+            userId,
+            "status_changed",
+            `bu siparişi ${oldStatusLabel} durumundan ${newStatusLabel} durumuna taşıdı`,
+            { oldStatus: oldOrder.status, newStatus: updates.status },
+            userName,
+            userEmail
+          );
+        } else {
+          // Genel güncelleme aktivitesi
+          const changedFields = Object.keys(updates).filter(key => {
+            const oldValue = (oldOrder as unknown as Record<string, unknown>)[key];
+            const newValue = (updates as Record<string, unknown>)[key];
+            return oldValue !== newValue;
+          });
+          
+          if (changedFields.length > 0) {
+            await addOrderActivity(
+              orderId,
+              userId,
+              "updated",
+              `bu siparişi güncelledi`,
+              { changedFields },
+              userName,
+              userEmail
+            );
+          }
+        }
+      } catch (error) {
+        // Aktivite log hatası ana işlemi etkilememeli
+        console.error("Add order activity error:", error);
+      }
     }
 
     // Siparişi tanımlayan kişiye bildirim gönder (güncelleyen kişi hariç)
@@ -424,14 +530,18 @@ export const updateOrder = async (
           };
           const oldStatusLabel = statusLabels[oldOrder.status] || oldOrder.status;
           const newStatusLabel = statusLabels[updates.status] || updates.status;
-          message = `"${oldOrder.orderNumber || oldOrder.order_number || orderId}" siparişinin durumu "${oldStatusLabel}" olarak "${newStatusLabel}" olarak güncellendi.`;
+          const updateTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          message = `"${oldOrder.orderNumber || oldOrder.order_number || orderId}" sipariş numaralı siparişin durumu "${oldStatusLabel}" durumundan "${newStatusLabel}" durumuna güncellendi.\n\nİşlem Zamanı: ${updateTime}`;
+        } else {
+          const updateTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          message = `"${oldOrder.orderNumber || oldOrder.order_number || orderId}" sipariş numaralı sipariş güncellendi.\n\nİşlem Zamanı: ${updateTime}`;
         }
         
         await createNotification({
           userId: oldOrder.createdBy,
           type: "order_updated",
           title: "Siparişiniz güncellendi",
-          message: `${updaterName} tarafından ${message}`,
+          message: `${updaterName} kullanıcısı tarafından ${message}`,
           read: false,
           relatedId: orderId,
           metadata: { 
@@ -439,6 +549,7 @@ export const updateOrder = async (
             statusChanged: updates.status && updates.status !== oldOrder.status,
             oldStatus: oldOrder.status,
             newStatus: updates.status || oldOrder.status,
+            updatedAt: new Date(),
           },
         });
       } catch (notifError) {
@@ -533,7 +644,7 @@ export const getValidStatusTransitions = (currentStatus: string): string[] => {
     planned: ["in_production", "pending", "on_hold", "cancelled"], // Production order için
     in_production: ["quality_check", "completed", "on_hold", "cancelled"],
     quality_check: ["completed", "in_production", "on_hold", "cancelled"],
-    completed: ["shipped", "in_production", "quality_check"],
+    completed: [], // Üretim siparişleri için tamamlandı durumundan sonra geçiş yok
     on_hold: ["in_production", "cancelled"],
     shipped: ["delivered"],
     delivered: ["completed", "quality_check", "in_production"],
@@ -567,6 +678,30 @@ export const deleteOrder = async (orderId: string, userId?: string): Promise<voi
     // Eski veriyi al
     const oldOrder = await getOrderById(orderId);
     
+    // Aktivite log ekle (silmeden önce)
+    if (userId && oldOrder) {
+      try {
+        const { getUserProfile } = await import("@/services/firebase/authService");
+        const userProfile = await getUserProfile(userId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addOrderActivity(
+          orderId,
+          userId,
+          "deleted",
+          `bu siparişi sildi`,
+          { orderNumber: oldOrder.orderNumber || oldOrder.order_number },
+          userName,
+          userEmail
+        );
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Add order activity error:", error);
+        }
+      }
+    }
+    
     await deleteDoc(doc(firestore, "orders", orderId));
     
     // Audit log
@@ -596,7 +731,7 @@ export const subscribeToOrders = (
     const ordersRef = collection(firestore, "orders");
     
     const buildQuery = () => {
-      const constraints: any[] = [orderBy("createdAt", "desc")];
+      const constraints: QueryConstraint[] = [orderBy("createdAt", "desc")];
       
       if (filters?.customerId) {
         constraints.push(where("customerId", "==", filters.customerId));
@@ -697,8 +832,174 @@ export const subscribeToOrders = (
     );
     
     return unsubscribe;
-  } catch (error: any) {
-    console.error("Subscribe to orders setup error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Subscribe to orders setup error:", error);
+    }
     return () => {};
+  }
+};
+
+// Order Comments and Activities
+
+export interface OrderComment {
+  id: string;
+  orderId: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  content: string;
+  createdAt: Timestamp;
+  updatedAt?: Timestamp | null;
+}
+
+export interface OrderActivity {
+  id: string;
+  orderId: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  action: string;
+  description: string;
+  metadata?: Record<string, any>;
+  createdAt: Timestamp;
+}
+
+/**
+ * Sipariş yorumu ekle
+ */
+export const addOrderComment = async (
+  orderId: string,
+  userId: string,
+  content: string,
+  userName?: string,
+  userEmail?: string
+): Promise<OrderComment> => {
+  try {
+    const commentData: Omit<OrderComment, "id"> = {
+      orderId,
+      userId,
+      userName,
+      userEmail,
+      content,
+      createdAt: Timestamp.now(),
+      updatedAt: null,
+    };
+
+    const docRef = await addDoc(
+      collection(firestore, "orders", orderId, "comments"),
+      commentData
+    );
+
+    // Activity log ekle
+    await addOrderActivity(orderId, userId, "commented", `yorum ekledi`, { commentId: docRef.id }, userName, userEmail);
+
+    // Siparişi oluşturan kişiye bildirim gönder (yorum ekleyen kişi hariç)
+    try {
+      const order = await getOrderById(orderId);
+      if (order?.createdBy && order.createdBy !== userId) {
+        const { createNotification } = await import("@/services/firebase/notificationService");
+        await createNotification({
+          userId: order.createdBy,
+          type: "comment_added",
+          title: "Siparişinize Yorum Eklendi",
+          message: `${userName || userEmail || "Bir kullanıcı"} "${order.orderNumber || order.order_number || orderId}" siparişinize yorum ekledi: ${content.substring(0, 100)}${content.length > 100 ? "..." : ""}`,
+          read: false,
+          relatedId: orderId,
+          metadata: { commentId: docRef.id, commenterId: userId, commenterName: userName, commenterEmail: userEmail },
+        });
+      }
+    } catch (error) {
+      // Bildirim hatası ana işlemi etkilememeli
+      console.error("Send comment notification error:", error);
+    }
+
+    return {
+      id: docRef.id,
+      ...commentData,
+    };
+  } catch (error) {
+    console.error("Add order comment error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Sipariş yorumlarını al
+ */
+export const getOrderComments = async (orderId: string): Promise<OrderComment[]> => {
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, "orders", orderId, "comments"),
+        orderBy("createdAt", "desc")
+      )
+    );
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as OrderComment[];
+  } catch (error) {
+    console.error("Get order comments error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Sipariş aktivite log ekle
+ */
+export const addOrderActivity = async (
+  orderId: string,
+  userId: string,
+  action: string,
+  description: string,
+  metadata?: Record<string, any>,
+  userName?: string,
+  userEmail?: string
+): Promise<string> => {
+  try {
+    const activityData: Omit<OrderActivity, "id"> = {
+      orderId,
+      userId,
+      userName,
+      userEmail,
+      action,
+      description,
+      metadata: metadata || {},
+      createdAt: Timestamp.now(),
+    };
+
+    const docRef = await addDoc(
+      collection(firestore, "orders", orderId, "activities"),
+      activityData
+    );
+
+    return docRef.id;
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Add order activity error:", error);
+    }
+    return "";
+  }
+};
+
+/**
+ * Sipariş aktivite loglarını al
+ */
+export const getOrderActivities = async (orderId: string): Promise<OrderActivity[]> => {
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, "orders", orderId, "activities"),
+        orderBy("createdAt", "desc")
+      )
+    );
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as OrderActivity[];
+  } catch (error) {
+    console.error("Get order activities error:", error);
+    throw error;
   }
 };

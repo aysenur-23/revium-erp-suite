@@ -8,7 +8,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Trash2, Package, Loader2, Plus } from "lucide-react";
-import { deleteRawMaterial } from "@/services/firebase/materialService";
+import { deleteRawMaterial, addMaterialComment, getMaterialComments, getMaterialActivities } from "@/services/firebase/materialService";
+import { useAuth } from "@/contexts/AuthContext";
+import { canUpdateResource, canDeleteResource, UserProfile as PermissionUserProfile } from "@/utils/permissions";
+import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -42,7 +45,7 @@ import { ExternalLink } from "lucide-react";
 interface RawMaterialDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  material: any;
+  material: RawMaterial;
   onEdit: () => void;
   onDelete: () => void;
 }
@@ -54,6 +57,9 @@ export const RawMaterialDetailModal = ({
   onEdit,
   onDelete,
 }: RawMaterialDetailModalProps) => {
+  const { user } = useAuth();
+  const [canUpdate, setCanUpdate] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [recipes, setRecipes] = useState<RecipeWithProduct[]>([]);
   const [recipeLoading, setRecipeLoading] = useState(false);
@@ -69,16 +75,52 @@ export const RawMaterialDetailModal = ({
   const [ordersMap, setOrdersMap] = useState<Record<string, { orderNumber: string; productName?: string }>>({});
   const [usersMap, setUsersMap] = useState<Record<string, string>>({});
 
+  // Yetki kontrolü
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user) {
+        setCanUpdate(false);
+        setCanDelete(false);
+        return;
+      }
+
+      try {
+        const [updatePermission, deletePermission] = await Promise.all([
+          canUpdateResource(user as PermissionUserProfile, "raw_materials"),
+          canDeleteResource(user as PermissionUserProfile, "raw_materials"),
+        ]);
+
+        setCanUpdate(updatePermission);
+        setCanDelete(deletePermission);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Permission check error:", error);
+        }
+        setCanUpdate(false);
+        setCanDelete(false);
+      }
+    };
+
+    checkPermissions();
+  }, [user]);
+
   const handleDelete = async () => {
     if (!confirm("Bu hammaddeyi silmek istediğinizden emin misiniz?")) return;
+
+    // Yetki kontrolü
+    if (!canDelete && material.createdBy !== user?.id) {
+      toast.error("Hammadde silme yetkiniz yok.");
+      return;
+    }
 
     setDeleting(true);
     try {
       await deleteRawMaterial(material.id);
       toast.success("Hammadde başarıyla silindi");
       onDelete();
-    } catch (error: any) {
-      toast.error("Hata: " + (error.response?.data?.message || error.message));
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Hata: " + errorMessage);
     } finally {
       setDeleting(false);
     }
@@ -127,8 +169,8 @@ export const RawMaterialDetailModal = ({
         usersMapData[user.id] = user.fullName || user.displayName || user.email || "Bilinmeyen";
       });
       setUsersMap(usersMapData);
-    } catch (error) {
-      console.error("Error fetching users:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Error fetching users:", error);
     } finally {
       setUsersLoading(false);
     }
@@ -141,8 +183,18 @@ export const RawMaterialDetailModal = ({
       const transactionsData = await getMaterialTransactions(material.id);
       // Tarihe göre sırala (en yeni üstte)
       transactionsData.sort((a, b) => {
-        const aTime = a.createdAt?.toMillis?.() || (a.createdAt as any)?.seconds * 1000 || 0;
-        const bTime = b.createdAt?.toMillis?.() || (b.createdAt as any)?.seconds * 1000 || 0;
+        const getTime = (createdAt: unknown): number => {
+          if (!createdAt) return 0;
+          if (createdAt && typeof createdAt === 'object' && 'toMillis' in createdAt && typeof createdAt.toMillis === 'function') {
+            return createdAt.toMillis();
+          }
+          if (createdAt && typeof createdAt === 'object' && 'seconds' in createdAt && typeof (createdAt as { seconds: unknown }).seconds === 'number') {
+            return (createdAt as { seconds: number }).seconds * 1000;
+          }
+          return 0;
+        };
+        const aTime = getTime(a.createdAt);
+        const bTime = getTime(b.createdAt);
         return bTime - aTime;
       });
       setTransactions(transactionsData);
@@ -197,19 +249,27 @@ export const RawMaterialDetailModal = ({
         }
       });
       setOrdersMap(ordersMapData);
-    } catch (error: any) {
-      console.error("İşlemler yüklenirken hata:", error);
-      toast.error(error.message || "İşlemler yüklenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("İşlemler yüklenirken hata:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(errorMessage || "İşlemler yüklenirken hata oluştu");
       setTransactions([]);
     } finally {
       setTransactionsLoading(false);
     }
   };
 
-  const formatTransactionDate = (timestamp: any) => {
+  const formatTransactionDate = (timestamp: unknown) => {
     if (!timestamp) return "-";
     try {
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      let date: Date;
+      if (timestamp && typeof timestamp === 'object' && 'toDate' in timestamp && typeof timestamp.toDate === 'function') {
+        date = timestamp.toDate();
+      } else if (timestamp instanceof Date) {
+        date = timestamp;
+      } else {
+        date = new Date(String(timestamp));
+      }
       return format(date, "dd MMMM yyyy HH:mm", { locale: tr });
     } catch {
       return "-";
@@ -221,8 +281,8 @@ export const RawMaterialDetailModal = ({
     try {
       const productsData = await getProducts();
       setProducts(productsData);
-    } catch (error: any) {
-      console.error("Fetch products error:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Fetch products error:", error);
       toast.error("Ürün listesi alınamadı.");
     } finally {
       setProductsLoading(false);
@@ -235,11 +295,12 @@ export const RawMaterialDetailModal = ({
     try {
       const recipesData = await getRawMaterialRecipes(material.id);
       setRecipes(recipesData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (import.meta.env.DEV) {
         console.error("Reçete yüklenirken hata:", error);
       }
-      toast.error("Reçeteler yüklenemedi: " + error.message);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Reçeteler yüklenemedi: " + errorMessage);
     } finally {
       setRecipeLoading(false);
     }
@@ -253,8 +314,9 @@ export const RawMaterialDetailModal = ({
       await deleteRecipeItem(recipeId);
       toast.success("Reçete silindi");
       fetchRecipes();
-    } catch (error: any) {
-      toast.error("Hata: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Hata: " + errorMessage);
     }
   };
 
@@ -277,8 +339,9 @@ export const RawMaterialDetailModal = ({
       fetchRecipes();
       setSelectedProduct("");
       setNewQuantity("");
-    } catch (error: any) {
-      toast.error("Hata: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Hata: " + errorMessage);
     } finally {
       setRecipeLoading(false);
     }
@@ -291,7 +354,7 @@ export const RawMaterialDetailModal = ({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
           <div className="flex flex-col h-full min-h-0">
             <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
               <div className="flex items-center justify-between gap-3">
@@ -299,7 +362,7 @@ export const RawMaterialDetailModal = ({
                   <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                     <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                  <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                     {material.name}
                   </DialogTitle>
                   <DialogDescription className="sr-only">
@@ -458,19 +521,23 @@ export const RawMaterialDetailModal = ({
                     )}
 
                     <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4 border-t">
-                      <Button variant="outline" onClick={onEdit} className="min-h-[44px] sm:min-h-0">
-                        <Edit className="mr-2 h-4 w-4" />
-                        Düzenle
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={handleDelete}
-                        disabled={deleting}
-                        className="min-h-[44px] sm:min-h-0"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        {deleting ? "Siliniyor..." : "Sil"}
-                      </Button>
+                      {(canUpdate || material.createdBy === user?.id) && (
+                        <Button variant="outline" onClick={onEdit} className="min-h-[44px] sm:min-h-0">
+                          <Edit className="mr-2 h-4 w-4" />
+                          Düzenle
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button
+                          variant="destructive"
+                          onClick={handleDelete}
+                          disabled={deleting}
+                          className="min-h-[44px] sm:min-h-0"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {deleting ? "Siliniyor..." : "Sil"}
+                        </Button>
+                      )}
                     </div>
                   </TabsContent>
 
@@ -691,6 +758,32 @@ export const RawMaterialDetailModal = ({
             </div>
           </div>
         </DialogContent>
+        
+        {/* Activity Comments Panel */}
+        {material?.id && user && (
+          <ActivityCommentsPanel
+            entityId={material.id}
+            entityType="material"
+            onAddComment={async (content: string) => {
+              await addMaterialComment(
+                material.id,
+                user.id,
+                content,
+                user.fullName || user.displayName,
+                user.email
+              );
+            }}
+            onGetComments={async () => {
+              return await getMaterialComments(material.id);
+            }}
+            onGetActivities={async () => {
+              return await getMaterialActivities(material.id);
+            }}
+            currentUserId={user.id}
+            currentUserName={user.fullName || user.displayName}
+            currentUserEmail={user.email}
+          />
+        )}
       </Dialog>
     </>
   );

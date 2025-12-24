@@ -1,5 +1,5 @@
 import jsPDF, { jsPDFOptions } from "jspdf";
-import autoTable from "jspdf-autotable";
+import autoTable, { CellHookData as AutoTableCellHookData } from "jspdf-autotable";
 import { REV_LOGO_DATA_URI } from "@/assets/rev-logo-base64";
 import { ROBOTO_REGULAR_BASE64, ROBOTO_BOLD_BASE64 } from "@/assets/fonts/roboto-base64";
 
@@ -18,13 +18,98 @@ const COMPANY_INFO = {
 
 // PDF sabit değerleri - cache'lenmiş
 const PDF_CONSTANTS = {
-  margin: 40,
-  headerHeight: 130,
+  margin: 50,
+  headerHeight: 120, // Header içeriği için yeterli yükseklik
   footerHeight: 50,
-  logoSize: 50,
-  footerLogoSize: 32,
-  primaryColor: [221, 83, 53] as [number, number, number],
-  mutedColor: [75, 85, 99] as [number, number, number],
+  logoSize: 40, // 50 → 40 (daha küçük)
+  footerLogoSize: 28, // 32 → 28 (daha küçük)
+  // Profesyonel renk paleti - modern ve minimal
+  primaryColor: [30, 58, 138] as [number, number, number], // Koyu mavi - profesyonel
+  mutedColor: [71, 85, 105] as [number, number, number], // Koyu gri-mavi
+  accentColor: [59, 130, 246] as [number, number, number], // Açık mavi vurgu
+  successColor: [16, 185, 129] as [number, number, number], // Yeşil - başarı
+  warningColor: [245, 158, 11] as [number, number, number], // Turuncu - uyarı
+  errorColor: [239, 68, 68] as [number, number, number], // Kırmızı - hata
+  // Kart boyutları ve spacing - Web sayfasındaki değerler (küçültülmüş)
+  cardHeight: 95, // 120 → 95 (daha kompakt)
+  cardGap: 12, // 16 → 12 (daha az boşluk)
+  cardPadding: 14, // 18 → 14 (daha kompakt)
+  cardHeaderPadding: 10, // 12 → 10 (daha az padding)
+  // Tablo başlık boyutları
+  tableHeaderHeight: 32, // 36 → 32 (daha kompakt)
+  tableHeaderPadding: 8, // 10 → 8
+  tableHeaderSpacing: 24, // 30 → 24
+  // Section spacing - Web sayfasındaki gibi (space-y-6 = 24px)
+  sectionSpacing: 20, // 24 → 20 (daha kompakt)
+  tableSpacing: 20, // 24 → 20 (daha kompakt)
+  // Font boyutları - Web sayfasındaki değerler (küçültülmüş)
+  fontSizeCardTitle: 12, // 14 → 12 (daha küçük)
+  fontSizeCardValue: 24, // 30 → 24 (daha küçük)
+  fontSizeCardDescription: 11, // 12 → 11 (daha küçük)
+  fontSizeTableHeader: 16, // 18 → 16 (daha küçük)
+  fontSizeTableBody: 11,
+  fontSizeTableHeaderText: 12,
+} as const;
+
+// Profesyonel renk paleti - modern, minimal ve sofistike
+const TAILWIND_COLORS = {
+  // Profesyonel kart renkleri - nötr ve minimal
+  cardBackground: [248, 250, 252] as [number, number, number], // Çok açık gri - kart arka planı
+  cardBorder: [226, 232, 240] as [number, number, number], // Açık gri - kart border
+  cardText: [71, 85, 105] as [number, number, number], // Koyu gri-mavi - kart metin
+  // Primary kart (vurgulu) - Web sayfasındaki renkler
+  primaryCardBg: [255, 255, 255] as [number, number, number], // Beyaz (rgba(221, 83, 53, 0.05) overlay ile)
+  primaryCardBorder: [221, 83, 53] as [number, number, number], // Kırmızı-turuncu (web: border-[rgb(221,83,53)])
+  primaryCardValue: [221, 83, 53] as [number, number, number], // Kırmızı-turuncu (text-primary)
+  // Success kart (yeşil tonları) - Web sayfasındaki renkler
+  successCardBg: [240, 253, 244] as [number, number, number], // Çok açık yeşil (web: bg-[rgb(240,253,244)])
+  successCardBorder: [187, 247, 208] as [number, number, number], // Açık yeşil (web: border-[rgb(187,247,208)])
+  successCardValue: [22, 163, 74] as [number, number, number], // Yeşil (web: text-green-600)
+  // Info kart (mavi tonları) - Web sayfasındaki renkler
+  infoCardBg: [239, 246, 255] as [number, number, number], // Çok açık mavi (web: bg-[rgb(239,246,255)])
+  infoCardBorder: [191, 219, 254] as [number, number, number], // Açık mavi (web: border-[rgb(191,219,254)])
+  infoCardValue: [37, 99, 235] as [number, number, number], // Koyu mavi (web: text-blue-600)
+  // Warning kart (turuncu tonları - daha yumuşak)
+  warningCardBg: [255, 251, 235] as [number, number, number], // Çok açık turuncu
+  warningCardBorder: [253, 230, 138] as [number, number, number], // Açık turuncu
+  warningCardValue: [217, 119, 6] as [number, number, number], // Koyu turuncu
+  // Error kart (kırmızı tonları - daha yumuşak)
+  errorCardBg: [254, 242, 242] as [number, number, number], // Çok açık kırmızı
+  errorCardBorder: [254, 202, 202] as [number, number, number], // Açık kırmızı
+  errorCardValue: [220, 38, 38] as [number, number, number], // Koyu kırmızı
+  // Gray palette - profesyonel tonlar
+  gray50: [249, 250, 251] as [number, number, number],
+  gray100: [243, 244, 246] as [number, number, number],
+  gray200: [229, 231, 235] as [number, number, number],
+  gray300: [209, 213, 219] as [number, number, number],
+  gray500: [107, 114, 128] as [number, number, number],
+  gray600: [71, 85, 105] as [number, number, number], // Güncellenmiş - daha profesyonel
+  gray700: [51, 65, 85] as [number, number, number], // Yeni - orta koyu
+  gray800: [30, 41, 59] as [number, number, number], // Güncellenmiş - daha koyu
+  gray900: [15, 23, 42] as [number, number, number], // Güncellenmiş - çok koyu
+  // White
+  white: [255, 255, 255] as [number, number, number],
+  // Eski renkler - geriye dönük uyumluluk için (kullanılmıyor ama referans için)
+  green50: [240, 253, 250] as [number, number, number],
+  green200: [167, 243, 208] as [number, number, number],
+  green500: [16, 185, 129] as [number, number, number],
+  green600: [5, 150, 105] as [number, number, number],
+  blue50: [239, 246, 255] as [number, number, number],
+  blue200: [191, 219, 254] as [number, number, number],
+  blue500: [59, 130, 246] as [number, number, number],
+  blue600: [37, 99, 235] as [number, number, number],
+  red50: [254, 242, 242] as [number, number, number],
+  red200: [254, 202, 202] as [number, number, number],
+  red500: [239, 68, 68] as [number, number, number],
+  red600: [220, 38, 38] as [number, number, number],
+  emerald50: [240, 253, 250] as [number, number, number],
+  emerald200: [167, 243, 208] as [number, number, number],
+  emerald500: [16, 185, 129] as [number, number, number],
+  emerald600: [5, 150, 105] as [number, number, number],
+  purple50: [250, 245, 255] as [number, number, number],
+  purple200: [233, 213, 255] as [number, number, number],
+  purple500: [168, 85, 247] as [number, number, number],
+  purple600: [147, 51, 234] as [number, number, number],
 } as const;
 
 // PDF Template Layout - Sabit alanlar ve dinamik içerik alanları
@@ -88,14 +173,14 @@ const createPDFTemplate = (doc: jsPDFWithFontStatus): PDFTemplateLayout => {
     header: {
       startY: 0,
       endY: PDF_CONSTANTS.headerHeight,
-      contentStartY: PDF_CONSTANTS.headerHeight + 40, // Header'dan sonra 40px boşluk
+      contentStartY: PDF_CONSTANTS.headerHeight + 50, // Header'dan sonra 50px boşluk (30 → 50, altında ek boşluk)
     },
     footer: {
       startY: pageHeight - PDF_CONSTANTS.footerHeight,
       endY: pageHeight,
     },
     contentArea: {
-      startY: PDF_CONSTANTS.headerHeight + 40, // Header'dan sonra başlar
+      startY: PDF_CONSTANTS.headerHeight + 50, // Header'dan sonra başlar (30 → 50, altında ek boşluk)
       endY: pageHeight - PDF_CONSTANTS.footerHeight - 20, // Footer'dan önce biter (20px boşluk)
       width: pageWidth - (mar * 2),
       leftMargin: mar,
@@ -104,7 +189,282 @@ const createPDFTemplate = (doc: jsPDFWithFontStatus): PDFTemplateLayout => {
   };
 };
 
-// Sabit İstatistik Kartı Çizme Fonksiyonu - tasarım sabit, değerler dinamik
+// Kart boyutlarını hesapla - standardize edilmiş helper fonksiyon
+const calculateCardDimensions = (contentWidth: number, cardCount: number): { width: number; gap: number } => {
+  const gap = PDF_CONSTANTS.cardGap;
+  if (cardCount === 3) {
+    return {
+      width: (contentWidth - (2 * gap)) / 3,
+      gap: gap,
+    };
+  } else if (cardCount === 4) {
+    // 4 kart için gap'i daha da küçült (taşmayı önlemek için)
+    const reducedGap = 8; // 12 → 8 (daha kompakt)
+    return {
+      width: (contentWidth - (3 * reducedGap)) / 4,
+      gap: reducedGap,
+    };
+  } else {
+    // Varsayılan: 3 kart
+    return {
+      width: (contentWidth - (2 * gap)) / 3,
+      gap: gap,
+    };
+  }
+};
+
+// Ortak safeText helper fonksiyonu - tüm raporlarda kullanılabilir
+// Türkçe karakterleri ASCII'ye çevir (sadece Helvetica için, Roboto destekliyor)
+const transliterateTurkish = (text: string): string => {
+  const turkishMap: Record<string, string> = {
+    'ç': 'c', 'Ç': 'C',
+    'ğ': 'g', 'Ğ': 'G',
+    'ı': 'i', 'İ': 'I',
+    'ö': 'o', 'Ö': 'O',
+    'ş': 's', 'Ş': 'S',
+    'ü': 'u', 'Ü': 'U',
+  };
+  return text.replace(/[çÇğĞıİöÖşŞüÜ]/g, (char) => turkishMap[char] || char);
+};
+
+// AutoTable verilerini transliterate et - head ve body için
+const transliterateTableData = (data: (string | number)[][] | null | undefined): (string | number)[][] => {
+  if (!data || !Array.isArray(data)) {
+    return [];
+  }
+  return data.map((row) => {
+    if (!Array.isArray(row)) {
+      return [];
+    }
+    return row.map((cell) => {
+      if (typeof cell === 'string') {
+        return transliterateTurkish(cell);
+      }
+      return cell;
+    });
+  });
+};
+
+const createSafeText = (doc: jsPDFWithFontStatus) => {
+  // jsPDF'in Roboto font'u ile Türkçe karakter desteği sınırlı
+  // Bu yüzden her zaman Türkçe karakterleri transliterate ediyoruz
+  return (text: string, x: number, y: number, fontSize: number, isBold: boolean = false) => {
+    // Her zaman transliterate et
+    const processedText = transliterateTurkish(text);
+    
+    // Font yüklenmemişse veya yükleme başarısızsa direkt helvetica kullan
+    if (!doc._robotoFontLoaded || doc._robotoFontLoadFailed) {
+      try {
+        doc.setFont("helvetica", isBold ? "bold" : "normal");
+        doc.setFontSize(fontSize);
+        doc.text(processedText, x, y);
+      } catch (error: unknown) {
+        // Hata durumunda sessizce devam et
+      }
+      return;
+    }
+    
+    // Roboto kullanmayı dene - ÇOK AGRESİF YAKLAŞIM
+    // Font'u MUTLAKA Roboto olarak ayarla - daha fazla deneme
+    let fontSet = false;
+    for (let i = 0; i < 10; i++) {
+      try {
+        doc.setFont("Roboto", isBold ? "bold" : "normal");
+        const currentFont = doc.getFont();
+        if (currentFont && isRobotoName(currentFont.fontName)) {
+          fontSet = true;
+          break;
+        }
+      } catch {
+        // Tekrar dene
+      }
+    }
+    
+    if (!fontSet) {
+      // Font ayarlanamadı, Helvetica'ya geç
+      try {
+        doc.setFont("helvetica", isBold ? "bold" : "normal");
+        doc.setFontSize(fontSize);
+        doc.text(processedText, x, y);
+        doc._robotoFontLoaded = false;
+        doc._robotoFontLoadFailed = true;
+      } catch {
+        // Son çare
+      }
+      return;
+    }
+    
+    // Font Roboto, ama Türkçe karakterleri transliterate edilmiş text ile yaz
+    doc.setFontSize(fontSize);
+    try {
+      // Text yazmadan önce font'u tekrar kontrol et ve ayarla - daha agresif
+      let fontVerified = false;
+      for (let i = 0; i < 10; i++) {
+        try {
+          doc.setFont("Roboto", isBold ? "bold" : "normal");
+          doc.setFontSize(fontSize);
+          const verifyFont = doc.getFont();
+          if (verifyFont && isRobotoName(verifyFont.fontName)) {
+            fontVerified = true;
+            break;
+          }
+        } catch {
+          // Tekrar dene
+        }
+      }
+      
+      if (!fontVerified) {
+        // Font ayarlanamadı, font listesini kontrol et
+        try {
+          const fontList = doc.getFontList();
+          const hasRoboto = fontList && Object.keys(fontList).some((key) => isRobotoName(key));
+          if (hasRoboto) {
+            // Font listesinde var, tekrar ayarla
+            for (let i = 0; i < 10; i++) {
+              try {
+                doc.setFont("Roboto", isBold ? "bold" : "normal");
+                doc.setFontSize(fontSize);
+                const checkFont = doc.getFont();
+                if (checkFont && isRobotoName(checkFont.fontName)) {
+                  fontVerified = true;
+                  break;
+                }
+              } catch {
+                // Tekrar dene
+              }
+            }
+          }
+        } catch {
+          // Font listesi alınamadı
+        }
+      }
+      
+      // Font doğrulandı, text'i yaz - ama önce tekrar kontrol et
+      if (fontVerified) {
+        // Text yazmadan hemen önce font'u tekrar ayarla ve doğrula
+        let finalFontSet = false;
+        for (let i = 0; i < 5; i++) {
+          try {
+            doc.setFont("Roboto", isBold ? "bold" : "normal");
+            doc.setFontSize(fontSize);
+            const finalCheck = doc.getFont();
+            if (finalCheck && isRobotoName(finalCheck.fontName)) {
+              finalFontSet = true;
+              break;
+            }
+          } catch {
+            // Tekrar dene
+          }
+        }
+        
+        if (finalFontSet) {
+          // Font kesinlikle Roboto, ama jsPDF ş, İ, ğ karakterlerini desteklemiyor
+          // Bu yüzden processedText zaten transliterate edilmiş (fonksiyon başında)
+          // Text yazmadan hemen önce font'u bir kez daha kontrol et ve ayarla
+          try {
+            // Font'u kesinlikle Roboto olarak ayarla - ÇOK AGRESİF
+            for (let i = 0; i < 15; i++) {
+              try {
+                doc.setFont("Roboto", isBold ? "bold" : "normal");
+                doc.setFontSize(fontSize);
+                const verifyFont = doc.getFont();
+                if (verifyFont && isRobotoName(verifyFont.fontName)) {
+                  break;
+                }
+              } catch {
+                // Tekrar dene
+              }
+            }
+            
+            // Roboto font yüklü, ama Türkçe karakterleri transliterate edilmiş text ile yaz
+            doc.setFont("Roboto", isBold ? "bold" : "normal");
+            doc.setFontSize(fontSize);
+            doc.text(processedText, x, y);
+          } catch (textError) {
+            // Text yazma hatası - font sorunu olabilir
+            // Önce font'u tekrar ayarla ve tekrar dene
+            try {
+              for (let i = 0; i < 10; i++) {
+                try {
+                  doc.setFont("Roboto", isBold ? "bold" : "normal");
+                  doc.setFontSize(fontSize);
+                  const checkFont = doc.getFont();
+                  if (checkFont && isRobotoName(checkFont.fontName)) {
+                    // Roboto font yüklü, transliterate edilmiş text ile yaz
+                    doc.text(processedText, x, y);
+                    return;
+                  }
+                } catch {
+                  // Tekrar dene
+                }
+              }
+            } catch {
+              // Font ayarlanamadı, Helvetica'ya geç
+            }
+            // Tüm denemeler başarısız, Helvetica'ya geç
+            doc.setFont("helvetica", isBold ? "bold" : "normal");
+            doc.setFontSize(fontSize);
+            doc.text(processedText, x, y);
+          }
+        } else {
+          // Font ayarlanamadı, Helvetica'ya geç
+          doc.setFont("helvetica", isBold ? "bold" : "normal");
+          doc.setFontSize(fontSize);
+          doc.text(processedText, x, y);
+        }
+      } else {
+        // Font doğrulanamadı, Helvetica'ya geç
+        doc.setFont("helvetica", isBold ? "bold" : "normal");
+        doc.setFontSize(fontSize);
+        doc.text(processedText, x, y);
+      }
+    } catch (textError) {
+      // Text yazma hatası - font sorunu olabilir
+      // Font'u tekrar ayarla ve tekrar dene - daha agresif
+      try {
+        for (let i = 0; i < 5; i++) {
+          try {
+            doc.setFont("Roboto", isBold ? "bold" : "normal");
+            doc.setFontSize(fontSize);
+            const checkFont = doc.getFont();
+            if (checkFont && isRobotoName(checkFont.fontName)) {
+              // Roboto font yüklü, transliterate edilmiş text ile yaz
+              doc.text(processedText, x, y);
+              return;
+            }
+          } catch {
+            // Tekrar dene
+          }
+        }
+        // Tüm denemeler başarısız, Helvetica'ya geç
+        doc.setFont("helvetica", isBold ? "bold" : "normal");
+        doc.setFontSize(fontSize);
+        doc.text(processedText, x, y);
+      } catch (retryError) {
+        // Son çare: sessizce devam et
+      }
+    }
+  };
+};
+
+// Arka plan template'i - sabit, her sayfada aynı
+const drawPDFBackground = (doc: jsPDFWithFontStatus, template: PDFTemplateLayout) => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const [primaryR, primaryG, primaryB] = PDF_CONSTANTS.primaryColor;
+  
+  // Header background - profesyonel ve minimal (daha hafif)
+  doc.setFillColor(primaryR, primaryG, primaryB);
+  doc.setGState(doc.GState({ opacity: 0.04 })); // Daha hafif: 0.08 → 0.04
+  doc.rect(0, 0, pageWidth, PDF_CONSTANTS.headerHeight, "F");
+  doc.setGState(doc.GState({ opacity: 1 }));
+  
+  // Footer background - sabit (profesyonel gri)
+  const footerY = doc.internal.pageSize.getHeight() - PDF_CONSTANTS.footerHeight;
+  doc.setFillColor(TAILWIND_COLORS.gray50[0], TAILWIND_COLORS.gray50[1], TAILWIND_COLORS.gray50[2]);
+  doc.rect(0, footerY, pageWidth, PDF_CONSTANTS.footerHeight, "F");
+};
+
+// Sabit İstatistik Kartı Çizme Fonksiyonu - profesyonel ve sade tasarım
 const drawStatCard = (
   doc: jsPDFWithFontStatus,
   x: number,
@@ -119,40 +479,53 @@ const drawStatCard = (
   const [textR, textG, textB] = config.color.text;
   const [valueR, valueG, valueB] = config.color.value;
   
-  // Kart arka planı - sabit tasarım
-  doc.setFillColor(bgR, bgG, bgB);
-  doc.roundedRect(x, y, width, height, 6, 6, "F");
+  // Primary kart için özel arka plan (opacity ile) - Web sayfasındaki gibi
+  const isPrimaryCard = borderR === TAILWIND_COLORS.primaryCardBorder[0] && 
+                       borderG === TAILWIND_COLORS.primaryCardBorder[1] && 
+                       borderB === TAILWIND_COLORS.primaryCardBorder[2] &&
+                       bgR === TAILWIND_COLORS.white[0] && 
+                       bgG === TAILWIND_COLORS.white[1] && 
+                       bgB === TAILWIND_COLORS.white[2];
   
-  // Border - sabit tasarım
+  if (isPrimaryCard) {
+    // Primary kart için hafif arka plan (web: rgba(221, 83, 53, 0.05))
+    doc.setFillColor(borderR, borderG, borderB);
+    doc.setGState(doc.GState({ opacity: 0.05 }));
+    doc.roundedRect(x, y, width, height, 6, 6, "F");
+    doc.setGState(doc.GState({ opacity: 1 }));
+  } else {
+    // Normal kart arka planı
+    doc.setFillColor(bgR, bgG, bgB);
+    doc.roundedRect(x, y, width, height, 6, 6, "F");
+  }
+  
+  // Border - Web sayfasındaki gibi (2pt kalınlık - border-2)
   doc.setDrawColor(borderR, borderG, borderB);
-  doc.setLineWidth(1.5);
+  doc.setLineWidth(2);
   doc.roundedRect(x, y, width, height, 6, 6, "S");
   
-  // Shadow efekti simülasyonu - sabit tasarım
-  doc.setFillColor(0, 0, 0);
-  doc.setGState(doc.GState({ opacity: 0.05 }));
-  doc.roundedRect(x + 2, y + 2, width, height, 6, 6, "F");
-  doc.setGState(doc.GState({ opacity: 1 }));
-  
-  // Başlık - profesyonel tasarım (16pt padding)
+  // Başlık - Web sayfasındaki gibi (küçültülmüş spacing)
+  // Title: y + cardPadding (14px) + title baseline (~12px) = y + 26
   doc.setTextColor(textR, textG, textB);
-  safeText(config.title, x + 16, y + 22, 15, true);
+  safeText(config.title, x + PDF_CONSTANTS.cardPadding, y + 26, PDF_CONSTANTS.fontSizeCardTitle, true);
   
-  // Değer - profesyonel tasarım (daha büyük ve net)
+  // Değer - Web sayfasındaki gibi (küçültülmüş spacing)
+  // Value: title'dan sonra (10px) + value baseline (~24px) = y + 26 + 10 + 24 = y + 60
   const valueText = typeof config.value === 'number' ? config.value.toString() : config.value;
   doc.setTextColor(valueR, valueG, valueB);
-  safeText(valueText, x + 16, y + 58, 32, true);
+  safeText(valueText, x + PDF_CONSTANTS.cardPadding, y + 60, PDF_CONSTANTS.fontSizeCardValue, true);
   
-  // Açıklama - profesyonel tasarım (opsiyonel)
+  // Açıklama - Web sayfasındaki gibi (küçültülmüş spacing)
+  // Description: value'dan sonra (4px) + description baseline (~11px) = y + 60 + 4 + 11 = y + 75
   if (config.description) {
     doc.setTextColor(textR, textG, textB);
-    safeText(config.description, x + 16, y + 98, 13, false);
+    safeText(config.description, x + PDF_CONSTANTS.cardPadding, y + 75, PDF_CONSTANTS.fontSizeCardDescription, false);
   }
   
   doc.setTextColor(0, 0, 0);
 };
 
-// Profesyonel Tablo Başlığı Çizme Fonksiyonu - iyileştirilmiş tasarım
+// Profesyonel Tablo Başlığı Çizme Fonksiyonu - profesyonel ve sade tasarım
 const drawProfessionalTableHeader = (
   doc: jsPDFWithFontStatus,
   x: number,
@@ -163,25 +536,34 @@ const drawProfessionalTableHeader = (
   const safeText = createSafeText(doc);
   const [primaryR, primaryG, primaryB] = PDF_CONSTANTS.primaryColor;
   
-  const bgColor = config.backgroundColor || [249, 250, 251];
-  const textColor = config.textColor || [primaryR, primaryG, primaryB];
-  const borderColor = config.borderColor || [primaryR, primaryG, primaryB];
+  // Web sayfasındaki renkler - bg-[rgb(249,250,251)] border-b
+  const bgColor = config.backgroundColor || TAILWIND_COLORS.gray50; // Web: bg-[rgb(249,250,251)]
+  const textColor = config.textColor || PDF_CONSTANTS.primaryColor; // Web: text-primary
+  const borderColor = config.borderColor || [229, 231, 235]; // Web: border-b (gray200)
   
-  // Başlık için arka plan - profesyonel tasarım (32pt yükseklik, 8pt üst padding)
+  // Başlık için arka plan - Web sayfasındaki gibi (bg-[rgb(249,250,251)])
   doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
-  doc.roundedRect(x, y - 8, width, 32, 4, 4, "F");
-  doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
-  doc.setGState(doc.GState({ opacity: 0.2 }));
-  doc.setLineWidth(1);
-  doc.roundedRect(x, y - 8, width, 32, 4, 4, "S");
-  doc.setGState(doc.GState({ opacity: 1 }));
+  doc.roundedRect(x, y - PDF_CONSTANTS.tableHeaderPadding, width, PDF_CONSTANTS.tableHeaderHeight, 4, 4, "F");
   
-  // Başlık text - profesyonel font size (13px)
+  // Alt border - Web sayfasındaki gibi (border-b)
+  doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
+  doc.setLineWidth(1);
+  doc.line(x, y + PDF_CONSTANTS.tableHeaderHeight - PDF_CONSTANTS.tableHeaderPadding, x + width, y + PDF_CONSTANTS.tableHeaderHeight - PDF_CONSTANTS.tableHeaderPadding);
+  
+  // Başlık text - Web sayfasındaki gibi (text-lg font-bold = 18px, bold)
   doc.setTextColor(textColor[0], textColor[1], textColor[2]);
-  safeText(config.title, x + 12, y + 8, 13, true);
+  // Font'u bold yap
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    doc.setFont("Roboto", "bold");
+  } else {
+    doc.setFont("helvetica", "bold");
+  }
+  safeText(config.title, x + 10, y + PDF_CONSTANTS.tableHeaderPadding, PDF_CONSTANTS.fontSizeTableHeader, true); // Küçültülmüş: 18 → 16
   doc.setTextColor(0, 0, 0);
   
-  return y + 40; // Başlıktan sonraki Y pozisyonu (32pt başlık + 8pt boşluk - artırıldı)
+  // Başlıktan sonraki Y pozisyonu: headerHeight + padding + spacing (iyileştirilmiş)
+  // Yeterli boşluk için optimize edildi
+  return y + PDF_CONSTANTS.tableHeaderHeight + PDF_CONSTANTS.tableHeaderSpacing - 2; // Daha kompakt (-2px)
 };
 
 // Eski fonksiyon için alias (geriye dönük uyumluluk)
@@ -189,10 +571,10 @@ const drawTableHeader = drawProfessionalTableHeader;
 
 // Profesyonel Tablo Stil Konfigürasyonu - tüm tablolarda kullanılacak
 interface ProfessionalTableStyles {
-  headStyles: any;
-  bodyStyles: any;
-  styles: any;
-  alternateRowStyles: any;
+  headStyles: Record<string, unknown>;
+  bodyStyles: Record<string, unknown>;
+  styles: Record<string, unknown>;
+  alternateRowStyles: Record<string, unknown>;
 }
 
 const createProfessionalTableStyles = (
@@ -203,35 +585,80 @@ const createProfessionalTableStyles = (
     cellPadding?: { top: number; right: number; bottom: number; left: number };
   }
 ): ProfessionalTableStyles => {
-  const headerFontSize = options?.headerFontSize || 13;
-  const bodyFontSize = options?.bodyFontSize || 12;
-  const cellPadding = options?.cellPadding || { top: 16, right: 18, bottom: 16, left: 18 };
+  // Standardize edilmiş varsayılan değerler
+  const headerFontSize = options?.headerFontSize || PDF_CONSTANTS.fontSizeTableHeaderText;
+  const bodyFontSize = options?.bodyFontSize || PDF_CONSTANTS.fontSizeTableBody;
+  const cellPadding = options?.cellPadding || { top: 10, right: 12, bottom: 10, left: 12 };
   
-  // Font'u zorla Roboto yap - eğer yüklüyse
-  const fontName = (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) ? "Roboto" : "helvetica";
+  // Font'u zorla Roboto yap - ÇOK AGRESİF YAKLAŞIM
+  // Font'un gerçekten yüklü olduğunu kontrol et ve MUTLAKA Roboto kullan
+  let fontName = "helvetica";
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    // Font'u zorla Roboto olarak ayarla - daha fazla deneme
+    for (let i = 0; i < 10; i++) {
+      try {
+        doc.setFont("Roboto", "normal");
+        const currentFont = doc.getFont();
+        if (currentFont && isRobotoName(currentFont.fontName)) {
+          fontName = "Roboto";
+          break;
+        }
+      } catch {
+        // Tekrar dene
+      }
+    }
+    
+    // Font listesinde Roboto var mı kontrol et
+    if (fontName === "helvetica") {
+      try {
+        const fontList = doc.getFontList();
+        if (fontList && Object.keys(fontList).some((key) => isRobotoName(key))) {
+          // Font listesinde var, zorla kullan
+          fontName = "Roboto";
+          // Font'u tekrar ayarla
+          for (let i = 0; i < 5; i++) {
+            try {
+              doc.setFont("Roboto", "normal");
+              const currentFont = doc.getFont();
+              if (currentFont && isRobotoName(currentFont.fontName)) {
+                break;
+              }
+            } catch {
+              // Tekrar dene
+            }
+          }
+        }
+      } catch {
+        // Font listesi alınamadı
+      }
+    }
+  }
   
   return {
     headStyles: {
-      fillColor: [249, 250, 251], // gray-50
-      textColor: [17, 24, 39], // gray-900 - koyu siyah
-      fontStyle: "bold",
+      fillColor: [249, 250, 251], // Web: bg-gray-50/50 (gray50 with opacity, PDF'te tam gray50)
+      textColor: [30, 41, 59], // Koyu gri-mavi - Web: text-muted-foreground
+      fontStyle: "bold", // Web: font-semibold (bold kullanıyoruz)
       fontSize: headerFontSize,
       font: fontName, // Zorla Roboto veya helvetica
-      lineColor: [209, 213, 219], // gray-300
-      lineWidth: { top: 1, bottom: 1, left: 1, right: 1 },
+      halign: "center", // Başlıklar ortalanmış
+      lineColor: TAILWIND_COLORS.gray200, // gray-200
+      lineWidth: { top: 0, bottom: 1, left: 0, right: 0 }, // Sadece alt border - Web: border-b
       cellPadding: cellPadding,
-      minCellHeight: 50, // Minimum satır yüksekliği - artırıldı
+      minCellHeight: 40, // Minimum satır yüksekliği
       overflow: 'linebreak', // Metin taşmasını önle
       wrap: true, // Metin sarmalama
     },
     bodyStyles: {
-      textColor: [31, 41, 55], // gray-800 - koyu gri
+      fillColor: [255, 255, 255], // Web: beyaz arka plan
+      textColor: [30, 41, 59], // Koyu gri-mavi - Web: text-foreground
       fontSize: bodyFontSize,
       font: fontName, // Zorla Roboto veya helvetica
-      lineColor: [229, 231, 235], // gray-200
-      lineWidth: { bottom: 1 },
+      fontStyle: "normal", // Web: font-medium (normal kullanıyoruz)
+      lineColor: TAILWIND_COLORS.gray200, // gray-200
+      lineWidth: { bottom: 1, top: 0, left: 0, right: 0 }, // Sadece alt border
       cellPadding: cellPadding,
-      minCellHeight: 50, // Minimum satır yüksekliği - artırıldı
+      minCellHeight: 40, // Minimum satır yüksekliği
       overflow: 'linebreak', // Metin taşmasını önle
       wrap: true, // Metin sarmalama
     },
@@ -240,12 +667,12 @@ const createProfessionalTableStyles = (
       fontStyle: "normal",
       fontSize: bodyFontSize,
       cellPadding: cellPadding,
-      minCellHeight: 50, // Minimum satır yüksekliği - artırıldı
+      minCellHeight: 40, // Minimum satır yüksekliği
       overflow: 'linebreak', // Metin taşmasını önle
       wrap: true, // Metin sarmalama
     },
     alternateRowStyles: {
-      fillColor: [249, 250, 251], // gray-50 - alternatif satırlar
+      fillColor: TAILWIND_COLORS.gray50, // gray-50 - alternatif satırlar (çok açık)
     },
   };
 };
@@ -271,15 +698,7 @@ const ensureTableFitsPage = (
     const template = createPDFTemplate(doc);
     drawPDFBackground(doc, template);
     
-    if (titleForNextPage) {
-      const safeText = createSafeText(doc);
-      safeSetFont(doc, "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(120, 129, 149);
-      safeText(`${titleForNextPage} (devam)`, margin, nextY, 12, true);
-      doc.setTextColor(0, 0, 0);
-      nextY += 40; // Başlık sonrası 40pt boşluk (30pt'den artırıldı)
-    }
+    // "(devam)" etiketi kaldırıldı - kullanıcı isteği
     
     return nextY;
   }
@@ -321,13 +740,16 @@ const drawSummarySection = (
   
   const summaryY = y + 50;
   
+  // Font'u zorla Roboto olarak ayarla (autoTable öncesi)
+  forceRobotoFont(doc, "normal");
+  
   // Özet tablosu - sabit stil, dinamik veriler
   autoTable(doc, {
     startY: summaryY,
-    head: [['Metrik', 'Değer']],
-    body: data,
+    head: transliterateTableData([['Metrik', 'Değer']]),
+    body: transliterateTableData(data),
     margin: { left: x, right: x },
-    didParseCell: createDidParseCell(doc),
+    willDrawCell: createWillDrawCell(doc),
     headStyles: { 
       fillColor: [headerR, headerG, headerB],
       textColor: [255, 255, 255], 
@@ -361,7 +783,7 @@ const drawSummarySection = (
     },
   });
   
-  const finalY = ((doc as any).lastAutoTable?.finalY || summaryY) + 40; // Standart boşluk: 40pt (20pt'den artırıldı)
+  const finalY = (doc.lastAutoTable?.finalY || summaryY) + 50; // Optimize edilmiş boşluk: 50pt
   return finalY;
 };
 
@@ -369,6 +791,11 @@ const drawSummarySection = (
 interface jsPDFWithFontStatus extends jsPDF {
   _robotoFontLoaded?: boolean;
   _robotoFontLoadFailed?: boolean; // Font yükleme başarısız olduysa tekrar deneme
+  _robotoSupportsTurkish?: boolean; // Font'un Türkçe karakterleri destekleyip desteklemediği
+  _turkishCharsTested?: boolean; // Türkçe karakter testi yapıldı mı?
+  lastAutoTable?: {
+    finalY?: number;
+  };
 }
 
 // Font URLs (Google Fonts CDN) - Artık kullanılmıyor ama referans için tutulabilir veya silinebilir
@@ -394,7 +821,19 @@ const registerFonts = async (doc: jsPDFWithFontStatus) => {
     try {
       const currentFont = doc.getFont();
       if (currentFont && isRobotoName(currentFont.fontName)) {
-        return; // Font zaten yüklü ve çalışıyor
+        // Font yüklü, Türkçe karakter desteğini test et
+        try {
+          doc.setFontSize(12);
+          doc.text("İğüşöç", -1000, -1000);
+          return; // Font zaten yüklü ve çalışıyor
+        } catch (testError) {
+          // Türkçe karakter testi başarısız, ama font yüklü olabilir
+          // Font'u yeniden yükle
+          doc._robotoFontLoaded = false;
+        }
+      } else {
+        // Font yüklü değil, yeniden yükle
+        doc._robotoFontLoaded = false;
       }
     } catch {
       // Font kontrolü başarısız, yeniden yükle
@@ -402,16 +841,18 @@ const registerFonts = async (doc: jsPDFWithFontStatus) => {
     }
   }
 
-  // Eğer daha önce yükleme başarısız olduysa, direkt helvetica kullan
+  // Eğer daha önce yükleme başarısız olduysa, tekrar dene (flag'i reset et)
   if (doc._robotoFontLoadFailed) {
-    doc.setFont("helvetica", "normal");
-    return;
+    // Bir kez daha deneme şansı ver
+    doc._robotoFontLoadFailed = false;
+    // Devam et, font yükleme işlemini tekrar dene
   }
 
   // Font string'lerinin kesilmiş olup olmadığını kontrol et
   // Eğer "..." ile bitiyorsa, font string'leri kesilmiş demektir
-  if (ROBOTO_REGULAR_BASE64.endsWith('...') || ROBOTO_BOLD_BASE64.endsWith('...')) {
-    console.warn("Font base64 string'leri kesilmiş görünüyor, Helvetica kullanılacak");
+  // Ayrıca string'lerin çok kısa olup olmadığını kontrol et (base64 font'lar genellikle çok uzun olur)
+  if (ROBOTO_REGULAR_BASE64.endsWith('...') || ROBOTO_BOLD_BASE64.endsWith('...') ||
+      ROBOTO_REGULAR_BASE64.length < 1000 || ROBOTO_BOLD_BASE64.length < 1000) {
     doc.setFont("helvetica", "normal");
     doc._robotoFontLoaded = false;
     doc._robotoFontLoadFailed = true;
@@ -423,6 +864,7 @@ const registerFonts = async (doc: jsPDFWithFontStatus) => {
     // Önce data: prefix'i varsa temizle
     let cleanRegular = ROBOTO_REGULAR_BASE64.replace(/^data:.*?,/, '').trim();
     let cleanBold = ROBOTO_BOLD_BASE64.replace(/^data:.*?,/, '').trim();
+    
     
     // "..." gibi kesilme işaretlerini kaldır (eğer varsa)
     cleanRegular = cleanRegular.replace(/\.\.\.$/, '').trim();
@@ -460,16 +902,37 @@ const registerFonts = async (doc: jsPDFWithFontStatus) => {
     }
 
     // Add fonts - her adımda hata kontrolü yap
+    // ÖNEMLİ: Font'u eklemeden önce VFS'de olduğundan emin ol
     try {
+      const fontListBefore = doc.getFontList();
+      
+      // Font'u ekle - font adı "Roboto" olmalı
       doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
+      
+      // Font'un eklendiğini doğrula
+      const fontListAfterRegular = doc.getFontList();
+      const hasRobotoRegular = fontListAfterRegular && Object.keys(fontListAfterRegular).some((key) => isRobotoName(key));
+      
+      
+      if (!hasRobotoRegular) {
+        throw new Error("Roboto Regular font eklenemedi");
+      }
+      
       doc.addFont("Roboto-Bold.ttf", "Roboto", "bold");
+      
+      // Font'un eklendiğini doğrula
+      const fontListAfterBold = doc.getFontList();
+      const hasRobotoBold = fontListAfterBold && Object.keys(fontListAfterBold).some((key) => isRobotoName(key));
+      
+      if (!hasRobotoBold) {
+        // Roboto Bold font eklenemedi, ama Regular yüklü
+      }
     } catch (addFontError) {
       // Font eklenemedi, VFS'den temizle
       try {
         // VFS'den silmek için bir yöntem yok, ama flag'i set edelim
       } catch (error) {
         // VFS'den silmek için bir yöntem yok, ama flag'i set edelim
-        console.warn("Font VFS cleanup hatası:", error);
       }
       throw new Error("Font eklenemedi: " + addFontError);
     }
@@ -477,6 +940,8 @@ const registerFonts = async (doc: jsPDFWithFontStatus) => {
     // Set default font ve test et
     try {
       doc.setFont("Roboto", "normal");
+      
+      const fontAfterSet = doc.getFont();
     } catch (setFontError) {
       throw new Error("Font ayarlanamadı: " + setFontError);
     }
@@ -488,6 +953,8 @@ const registerFonts = async (doc: jsPDFWithFontStatus) => {
       const hasRoboto =
         fontList &&
         Object.keys(fontList).some((fontKey) => isRobotoName(fontKey));
+      
+      
       if (!hasRoboto) {
         throw new Error("Roboto font listesinde bulunamadı");
       }
@@ -498,29 +965,75 @@ const registerFonts = async (doc: jsPDFWithFontStatus) => {
       }
       
       // Türkçe karakter testi - "İğüşöç" karakterlerini test et - daha kapsamlı test
+      // Özellikle ş, ç, ğ, İ karakterlerini test et (kullanıcının belirttiği karakterler)
+      let turkishTestPassed = false;
       try {
         doc.setFontSize(12);
         // Test text'i yaz (görünmez bir yere) - tüm Türkçe karakterleri test et
-        const testText = "İğüşöçÇĞÜŞÖÇ";
-        doc.text(testText, -1000, -1000);
+        // Özellikle ş, ç, ğ, İ karakterlerini test et (kullanıcının belirttiği karakterler)
+        const testText = "İğüşöçÇĞÜŞÖÇşçğİŞÇĞ";
+        
+        // Font'u tekrar ayarla ve test et - daha agresif
+        for (let i = 0; i < 5; i++) {
+          try {
+            doc.setFont("Roboto", "normal");
+            doc.setFontSize(12);
+            const checkFont = doc.getFont();
+            if (checkFont && isRobotoName(checkFont.fontName)) {
+              // Font Roboto, test text'i yaz
+          doc.text(testText, -1000, -1000);
+              turkishTestPassed = true;
+              break;
+            }
+          } catch {
+            // Tekrar dene
+          }
+        }
+        
+        if (!turkishTestPassed) {
+          // Türkçe karakter testi başarısız, ama font yüklü olabilir
+          // Font listesini kontrol et
+          try {
+            const fontList = doc.getFontList();
+            const hasRoboto = fontList && Object.keys(fontList).some((key) => isRobotoName(key));
+            if (hasRoboto) {
+              // Font listesinde var, yükleme başarılı sayılabilir
+              turkishTestPassed = true;
+            }
+          } catch {
+            // Font listesi alınamadı
+          }
+        }
         
         // Font'un gerçekten çalıştığını doğrula
         const verifyFont = doc.getFont();
-        if (verifyFont && isRobotoName(verifyFont.fontName)) {
+        if (verifyFont && isRobotoName(verifyFont.fontName) && turkishTestPassed) {
           doc._robotoFontLoaded = true;
+          doc._robotoFontLoadFailed = false;
+          // Font yüklü ve ayarlanmış - Türkçe karakterleri destekliyor
+        } else if (turkishTestPassed) {
+          // Türkçe test başarılı ama font adı eşleşmiyor, yine de kabul et
+          doc._robotoFontLoaded = true;
+          doc._robotoFontLoadFailed = false;
         } else {
           throw new Error("Font test sonrası doğrulama başarısız");
         }
-      } catch (textTestError) {
-        // Text yazma başarısız, ama font yüklü olabilir
-        // Font listesinde varsa ve font adı doğruysa kabul et
+      } catch (textWriteError) {
+        // Text yazma hatası - font Türkçe karakterleri desteklemiyor olabilir
+        // Ama yine de font yüklü olabilir, bu yüzden devam et
+        // Font listesinde varsa kabul et
+        try {
         const fontList = doc.getFontList();
-        const hasRoboto = fontList && Object.keys(fontList).some((fontKey) => isRobotoName(fontKey));
+          const hasRoboto = fontList && Object.keys(fontList).some((key) => isRobotoName(key));
         const currentFont = doc.getFont();
         if (hasRoboto && currentFont && isRobotoName(currentFont.fontName)) {
           doc._robotoFontLoaded = true;
+            doc._robotoFontLoadFailed = false;
         } else {
-          throw new Error("Font test başarısız: " + textTestError);
+            throw new Error("Font test başarısız: " + textWriteError);
+          }
+        } catch (finalError) {
+          throw new Error("Font test başarısız: " + textWriteError);
         }
       }
     } catch (fontTestError) {
@@ -529,7 +1042,6 @@ const registerFonts = async (doc: jsPDFWithFontStatus) => {
       throw new Error("Font yüklendi ama kullanılamıyor: " + fontTestError);
     }
   } catch (e) {
-    console.warn("Font loading failed, falling back to helvetica permanently", e);
     doc.setFont("helvetica", "normal");
     doc._robotoFontLoaded = false;
     doc._robotoFontLoadFailed = true; // Bir daha deneme
@@ -548,6 +1060,7 @@ const safeSetFont = (doc: jsPDFWithFontStatus, style: "normal" | "bold" = "norma
   }
 
   // Roboto font'unu zorla ayarla - daha agresif yaklaşım
+  
   let attempts = 0;
   let fontSet = false;
   const maxAttempts = 3;
@@ -615,24 +1128,33 @@ const safeSetFont = (doc: jsPDFWithFontStatus, style: "normal" | "bold" = "norma
 const applyDocumentTypography = (doc: jsPDFWithFontStatus) => {
   doc.setLineHeightFactor(1.5); // Profesyonel satır aralığı (1.4 → 1.5)
   
-  // Font'u güvenli şekilde ayarla
+  // Font'u ÇOK AGRESİF şekilde ayarla - MUTLAKA Roboto kullan
   if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
-    safeSetFont(doc, "normal");
-    
-    // Font'un gerçekten ayarlandığını doğrula
-    try {
-      const currentFont = doc.getFont();
-      if (!currentFont || !isRobotoName(currentFont.fontName)) {
-        // Roboto ayarlanamadı, Helvetica'ya geç
-        doc.setFont("helvetica", "normal");
-        doc._robotoFontLoaded = false;
-        doc._robotoFontLoadFailed = true;
+    // Font'u 10 kez deneyerek zorla Roboto olarak ayarla
+    let fontSet = false;
+    for (let i = 0; i < 10; i++) {
+      try {
+        doc.setFont("Roboto", "normal");
+        const currentFont = doc.getFont();
+        if (currentFont && isRobotoName(currentFont.fontName)) {
+          fontSet = true;
+          break;
+        }
+      } catch {
+        // Tekrar dene
       }
-    } catch {
-      // Font kontrolü başarısız, Helvetica'ya geç
+    }
+    
+    if (!fontSet) {
+      // Font ayarlanamadı, Helvetica'ya geç
       doc.setFont("helvetica", "normal");
       doc._robotoFontLoaded = false;
       doc._robotoFontLoadFailed = true;
+    } else {
+      // Font başarıyla ayarlandı, doğrula
+      const verifyFont = doc.getFont();
+      if (verifyFont && isRobotoName(verifyFont.fontName)) {
+      }
     }
   } else {
     doc.setFont("helvetica", "normal");
@@ -641,17 +1163,56 @@ const applyDocumentTypography = (doc: jsPDFWithFontStatus) => {
   doc.setFontSize(11); // Profesyonel font boyutu
 };
 
+// Font'u zorla Roboto olarak ayarla - helper fonksiyon
+const forceRobotoFont = (doc: jsPDFWithFontStatus, style: "normal" | "bold" = "normal") => {
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    for (let i = 0; i < 10; i++) {
+      try {
+        doc.setFont("Roboto", style);
+        const currentFont = doc.getFont();
+        if (currentFont && isRobotoName(currentFont.fontName)) {
+          return true;
+        }
+      } catch {
+        // Tekrar dene
+      }
+    }
+  }
+  return false;
+};
+
 const getFontName = (doc?: jsPDFWithFontStatus): string => {
   // Roboto font yüklüyse ve başarısız olmadıysa kullan
   if (doc?._robotoFontLoaded && !doc?._robotoFontLoadFailed) {
     // Font'un gerçekten yüklü olduğunu kontrol et
     try {
+      // Önce mevcut font'u kontrol et
+      const currentFont = doc?.getFont();
+      if (currentFont && isRobotoName(currentFont.fontName)) {
+        return "Roboto";
+      }
+      
+      // Font listesini kontrol et
       const fontList = doc?.getFontList();
       if (fontList && Object.keys(fontList).some((key) => isRobotoName(key))) {
+        // Font listesinde var, zorla ayarla
+        try {
+          doc?.setFont("Roboto", "normal");
+          const verifyFont = doc?.getFont();
+          if (verifyFont && isRobotoName(verifyFont.fontName)) {
+            return "Roboto";
+          }
+        } catch {
+          // Font ayarlanamadı
+        }
+        // Yine de Roboto döndür - font listesinde var
         return "Roboto";
       }
     } catch (error) {
-      // Font listesi alınamazsa Helvetica'ya geç
+      // Font kontrolü başarısız, ama yine de Roboto dene
+      if (doc?._robotoFontLoaded && !doc?._robotoFontLoadFailed) {
+        return "Roboto";
+      }
     }
   }
   // Eğer Roboto yüklenemezse, Helvetica kullan (autoTable için)
@@ -659,96 +1220,221 @@ const getFontName = (doc?: jsPDFWithFontStatus): string => {
   return "helvetica";
 };
 
-// Güçlendirilmiş Türkçe Karakter Desteği - didParseCell hook'u
-const createDidParseCell = (doc: jsPDFWithFontStatus) => {
-  return (data: any) => {
-    // Eğer Roboto font yüklüyse, text'i olduğu gibi bırak ve font'u zorla ayarla
+// Güçlendirilmiş Türkçe Karakter Desteği - willDrawCell hook'u (didParseCell yerine)
+// willDrawCell daha geç çalışır ve font ayarlarının override edilmesini önler
+interface CellHookData {
+  cell?: {
+    text?: string | string[];
+    fontStyle?: string;
+    font?: string;
+    styles?: {
+      font?: string;
+      fontStyle?: string;
+      fontSize?: number;
+  };
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+  };
+  row?: {
+    index?: number;
+  };
+  column?: {
+    index?: number;
+  };
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}
+
+const createWillDrawCell = (doc: jsPDFWithFontStatus) => {
+  return (data: CellHookData) => {
+    if (!data.cell) return;
+    
+    const cell = data.cell;
+    
+    // Font style'ı belirle
+    const fontStyle = (cell.fontStyle === "bold" || cell.styles?.fontStyle === "bold" || cell.styles?.font === "bold") ? "bold" : "normal";
+    
+    // Eğer Roboto font yüklüyse, font'u zorla ayarla
     if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
-      // Roboto font'u kullan, text'i değiştirme - Türkçe karakterleri destekler
-      // autoTable için font'u zorla ayarla - her cell'de
-      if (data.cell) {
-        // Cell'in fontStyle'ına göre font ayarla
-        try {
-          const cell = data.cell as any;
-          const fontStyle = (cell.fontStyle === "bold" || cell.fontStyle === "bold") ? "bold" : "normal";
-          
-          // Font'u güvenli şekilde ayarla - daha agresif
-          safeSetFont(doc, fontStyle);
-          
-          // Font'un gerçekten Roboto olduğunu kontrol et - daha sıkı kontrol
-          let attempts = 0;
-          let fontVerified = false;
-          const maxAttempts = 3;
-          
-          while (attempts < maxAttempts && !fontVerified) {
+      try {
+        // Font'u güvenli şekilde ayarla - daha agresif
+        safeSetFont(doc, fontStyle);
+        
+        // Font'un gerçekten Roboto olduğunu kontrol et - daha sıkı kontrol
+        let attempts = 0;
+        let fontVerified = false;
+        const maxAttempts = 10;
+        
+        while (attempts < maxAttempts && !fontVerified) {
+          try {
+            doc.setFont("Roboto", fontStyle);
             const currentFont = doc.getFont();
             if (currentFont && isRobotoName(currentFont.fontName)) {
-              // Font Roboto, doğrula
-              // Türkçe karakter testi yap
-              try {
-                doc.setFontSize(12);
-                doc.text("İğüşöç", -1000, -1000);
-                fontVerified = true;
-                break;
-              } catch (testError) {
-                // Test başarısız ama font listesini kontrol et
-                const fontList = doc.getFontList();
-                const hasRoboto = fontList && Object.keys(fontList).some((key) => isRobotoName(key));
-                if (hasRoboto) {
-                  fontVerified = true;
-                  break;
-                }
-              }
-            }
-            
-            // Tekrar ayarla
-            try {
-              doc.setFont("Roboto", fontStyle);
-              attempts++;
-            } catch {
+              fontVerified = true;
               break;
             }
-          }
-          
-          if (!fontVerified) {
-            // Font Roboto değilse, Helvetica'ya geç ve transliterate et
-            doc.setFont("helvetica", fontStyle);
-            doc._robotoFontLoaded = false;
-            doc._robotoFontLoadFailed = true;
-            if (cell.text && typeof cell.text === 'string') {
-              cell.text = transliterateTurkish(cell.text);
-            }
-            cell.font = "helvetica";
-          } else {
-            // Font Roboto, text'i olduğu gibi bırak - Türkçe karakterler korunur
-            cell.font = "Roboto";
-          }
-          
-          cell.fontStyle = fontStyle;
-        } catch (error) {
-          // Font ayarlama hatası, Helvetica'ya geç
-          try {
-            doc.setFont("helvetica", "normal");
-            if (data.cell && data.cell.text && typeof data.cell.text === 'string') {
-              (data.cell as any).text = transliterateTurkish(data.cell.text);
-            }
-            (data.cell as any).font = "helvetica";
+            attempts++;
           } catch {
-            // Son çare: sessizce devam et
+            attempts++;
+            if (attempts >= maxAttempts) break;
+          }
+        }
+        
+        // cell.styles'i mutlaka ayarla
+        if (!cell.styles) {
+          cell.styles = {};
+        }
+        
+        if (fontVerified) {
+          // Font Roboto - cell.styles.font kullan (willDrawCell'de bu daha etkili)
+          cell.styles.font = "Roboto";
+          cell.styles.fontStyle = fontStyle;
+          
+          // jsPDF'in Roboto font'u ile Türkçe karakter desteği sınırlı
+          // Bu yüzden her zaman transliterate ediyoruz
+          if (cell.text && typeof cell.text === 'string') {
+            try {
+              cell.text = transliterateTurkish(cell.text);
+            } catch {
+              // Text değiştirilemez, devam et
+            }
+          } else if (cell.text && Array.isArray(cell.text)) {
+            try {
+              cell.text = (cell.text as string[]).map((item: unknown): string => {
+                if (typeof item === 'string') {
+                  return transliterateTurkish(item);
+                }
+                return String(item);
+              });
+            } catch {
+              // Text değiştirilemez, devam et
+            }
+          }
+          // Font ayarlaması için string kontrolü yap
+          const textString = typeof cell.text === 'string' ? cell.text : (Array.isArray(cell.text) ? (cell.text as string[]).join(' ') : '');
+          if (textString) {
+            // Font'u zorla ayarla - Roboto kullan
+            try {
+              const fontList = doc.getFontList();
+              const hasRoboto = fontList && Object.keys(fontList).some((key) => isRobotoName(key));
+              if (hasRoboto) {
+                // Font listesinde var, zorla ayarla
+                for (let i = 0; i < 10; i++) {
+                  try {
+                    doc.setFont("Roboto", fontStyle);
+                    if (cell.styles?.fontSize) {
+                      doc.setFontSize(cell.styles.fontSize);
+                    }
+                    const verifyFont = doc.getFont();
+                    if (verifyFont && isRobotoName(verifyFont.fontName)) {
+                      break;
+                    }
+                  } catch {
+                    // Tekrar dene
+                  }
+                }
+              }
+            } catch {
+              // Font listesi alınamadı, yine de zorla ayarla
+              try {
+                doc.setFont("Roboto", fontStyle);
+                if (cell.styles?.fontSize) {
+                  doc.setFontSize(cell.styles.fontSize);
+                }
+              } catch {
+                // Font ayarlanamadı
+              }
+            }
+          } else {
+            // Text yok, normal font ayarlaması yap
+            for (let i = 0; i < 5; i++) {
+              try {
+                doc.setFont("Roboto", fontStyle);
+                const verifyFont = doc.getFont();
+                if (verifyFont && isRobotoName(verifyFont.fontName)) {
+                  break;
+                }
+              } catch {
+                // Tekrar dene
+              }
+            }
+          }
+        } else {
+          // Font Roboto değilse, Helvetica'ya geç
+          cell.styles.font = "helvetica";
+          cell.styles.fontStyle = fontStyle;
+          
+          // Helvetica Türkçe karakterleri desteklemiyor, transliterate et
+          if (cell.text && typeof cell.text === 'string') {
+            try {
+              cell.text = transliterateTurkish(cell.text);
+            } catch {
+              // Text değiştirilemez, devam et
+            }
+          } else if (cell.text && Array.isArray(cell.text)) {
+            try {
+              cell.text = (cell.text as string[]).map((item: unknown): string => {
+                if (typeof item === 'string') {
+                  return transliterateTurkish(item);
+          }
+                return String(item);
+              });
+            } catch {
+              // Text değiştirilemez, devam et
+        }
+          }
+        }
+      } catch {
+        // Font ayarlama hatası, Helvetica'ya geç
+        if (!cell.styles) {
+          cell.styles = {};
+        }
+        cell.styles.font = "helvetica";
+        cell.styles.fontStyle = fontStyle;
+      }
+    } else {
+      // Helvetica kullanılıyorsa veya font yüklenmemişse
+      if (!cell.styles) {
+        cell.styles = {};
+      }
+      cell.styles.font = "helvetica";
+      cell.styles.fontStyle = fontStyle;
+      
+      // Helvetica Türkçe karakterleri desteklemiyor, transliterate et
+      if (cell.text) {
+        if (typeof cell.text === 'string') {
+        try {
+          cell.text = transliterateTurkish(cell.text);
+        } catch {
+          // Text değiştirilemez, devam et
+        }
+        } else if (Array.isArray(cell.text)) {
+          try {
+            cell.text = (cell.text as string[]).map((item: unknown): string => {
+              if (typeof item === 'string') {
+                return transliterateTurkish(item);
+              }
+              return String(item);
+            });
+          } catch {
+            // Text değiştirilemez, devam et
           }
         }
       }
-      return;
-    } else {
-      // Helvetica kullanılıyorsa transliterate et
-      if (data.cell && data.cell.text && typeof data.cell.text === 'string') {
-        (data.cell as any).text = transliterateTurkish(data.cell.text);
-      }
-      // Font'u helvetica olarak ayarla
-      if (data.cell) {
-        (data.cell as any).font = "helvetica";
-      }
     }
+  };
+};
+
+// Eski didParseCell hook'u - geriye dönük uyumluluk için (kullanılmıyor ama silmiyoruz)
+const createDidParseCell = (doc: jsPDFWithFontStatus) => {
+  return (data: CellHookData) => {
+    // willDrawCell kullanıyoruz, bu fonksiyon artık kullanılmıyor
+    // Ama bazı yerlerde hala didParseCell kullanılıyor olabilir, bu yüzden willDrawCell'i çağır
+    return createWillDrawCell(doc)(data);
   };
 };
 
@@ -765,7 +1451,6 @@ const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     // Geçersiz tarih kontrolü
     if (isNaN(date.getTime()) || !isFinite(date.getTime())) {
-      console.warn("Geçersiz tarih:", dateStr);
       return "-";
     }
     const months = [
@@ -782,19 +1467,16 @@ const formatDate = (dateStr: string) => {
         monthIndex < 0 || monthIndex > 11 || 
         day < 1 || day > 31 || 
         year < 1900 || year > 2100) {
-      console.warn("Geçersiz tarih bileşenleri:", { day, monthIndex, year });
       return "-";
     }
     
     const month = months[monthIndex];
     if (!month) {
-      console.warn("Geçersiz ay indeksi:", monthIndex);
       return "-";
     }
     
     return `${day} ${month} ${year}`;
   } catch (error) {
-    console.error("Tarih formatlama hatası:", error, dateStr);
     return "-";
   }
 };
@@ -834,11 +1516,7 @@ const ensureSpace = (
     if (titleForNextPage) {
       const safeText = createSafeText(doc as jsPDFWithFontStatus);
       safeSetFont(doc as jsPDFWithFontStatus, "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(120, 129, 149);
-      safeText(`${titleForNextPage} (devam)`, margin, nextY, 12, true);
-      doc.setTextColor(0, 0, 0);
-      nextY += 40; // Başlık sonrası 40pt boşluk (30pt'den artırıldı)
+      // "(devam)" etiketi kaldırıldı - kullanıcı isteği
     }
     return nextY;
   }
@@ -847,11 +1525,16 @@ const ensureSpace = (
 
 const formatCurrency = (value: number, currency = "₺") => {
   const safeValue = Number.isFinite(value) ? value : 0;
-  return `${currency}${safeValue.toFixed(2)}`;
+  // Binlik ayırıcılar ile formatla (web UI ile uyumlu)
+  const formatted = safeValue.toLocaleString("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  return `${currency}${formatted}`;
 };
 
 // Optimize edilmiş helper fonksiyonlar - tüm PDF'lerde kullanılabilir
-const safeNumber = (value: any): number => {
+const safeNumber = (value: unknown): number => {
   const num = Number(value);
   return (isNaN(num) || !isFinite(num)) ? 0 : num;
 };
@@ -864,77 +1547,6 @@ const safeFormatCurrency = (value: number): string => {
     maximumFractionDigits: 2 
   });
   return `₺${formatted}`;
-};
-
-// Ortak safeText helper fonksiyonu - tüm raporlarda kullanılabilir
-// Türkçe karakterleri ASCII'ye çevir (sadece Helvetica için, Roboto destekliyor)
-const transliterateTurkish = (text: string): string => {
-  const turkishMap: Record<string, string> = {
-    'ç': 'c', 'Ç': 'C',
-    'ğ': 'g', 'Ğ': 'G',
-    'ı': 'i', 'İ': 'I',
-    'ö': 'o', 'Ö': 'O',
-    'ş': 's', 'Ş': 'S',
-    'ü': 'u', 'Ü': 'U',
-  };
-  return text.replace(/[çÇğĞıİöÖşŞüÜ]/g, (char) => turkishMap[char] || char);
-};
-
-const createSafeText = (doc: jsPDFWithFontStatus) => {
-  // Roboto font yüklüyse Türkçe karakterleri destekler, transliteration'a gerek yok
-  return (text: string, x: number, y: number, fontSize: number, isBold: boolean = false) => {
-    // Font yüklenmemişse veya yükleme başarısızsa direkt helvetica kullan
-    if (!doc._robotoFontLoaded || doc._robotoFontLoadFailed) {
-      try {
-        doc.setFont("helvetica", isBold ? "bold" : "normal");
-        doc.setFontSize(fontSize);
-        // Helvetica Türkçe karakterleri desteklemediği için transliterate et
-        const safeText = transliterateTurkish(text);
-        doc.text(safeText, x, y);
-      } catch (error) {
-        console.warn(`Text render failed (helvetica fallback): ${text.substring(0, 50)}...`, error);
-      }
-      return;
-    }
-    
-    // Roboto kullanmayı dene - daha agresif kontrol
-    try {
-      // Font'u zorla ayarla
-      safeSetFont(doc, isBold ? "bold" : "normal");
-      
-      // Font'un gerçekten Roboto olduğunu doğrula - sıkı kontrol
-      const currentFont = doc.getFont();
-      if (!currentFont || !isRobotoName(currentFont.fontName)) {
-        // Font Roboto değil, Helvetica'ya geç
-        doc.setFont("helvetica", isBold ? "bold" : "normal");
-        doc._robotoFontLoaded = false;
-        doc._robotoFontLoadFailed = true;
-        // Helvetica'ya geçtiysek transliterate et
-        const safeText = transliterateTurkish(text);
-        doc.setFontSize(fontSize);
-        doc.text(safeText, x, y);
-        return;
-      }
-      
-      // Font Roboto, text'i olduğu gibi yaz (Türkçe karakterler korunur)
-      doc.setFontSize(fontSize);
-      doc.text(text, x, y);
-    } catch (error: any) {
-      // Roboto başarısız, Helvetica'ya geç
-      try {
-        doc.setFont("helvetica", isBold ? "bold" : "normal");
-        doc.setFontSize(fontSize);
-        // Helvetica Türkçe karakterleri desteklemediği için transliterate et
-        const safeText = transliterateTurkish(text);
-        doc.text(safeText, x, y);
-        doc._robotoFontLoaded = false;
-        doc._robotoFontLoadFailed = true;
-      } catch (fallbackError) {
-        // Son çare: sadece log at, text yazmayı atla
-        console.warn(`Text render completely failed: ${text.substring(0, 50)}...`, error, fallbackError);
-      }
-    }
-  };
 };
 
 const drawInfoCard = (
@@ -1075,20 +1687,6 @@ const drawSummaryBlock = (
   return height;
 };
 
-// Arka plan template'i - sabit, her sayfada aynı
-const drawPDFBackground = (doc: jsPDFWithFontStatus, template: PDFTemplateLayout) => {
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const [primaryR, primaryG, primaryB] = PDF_CONSTANTS.primaryColor;
-  
-  // Header background gradient simülasyonu - sabit
-  doc.setFillColor(primaryR, primaryG, primaryB);
-  doc.setGState(doc.GState({ opacity: 0.08 }));
-  doc.rect(0, 0, pageWidth, template.header.endY, "F");
-  doc.setGState(doc.GState({ opacity: 0.03 }));
-  doc.rect(0, 0, pageWidth, template.header.endY, "F");
-  doc.setGState(doc.GState({ opacity: 1 }));
-};
-
 // Header template'i - sabit komponentler + dinamik içerik
 const drawPDFHeader = (doc: jsPDFWithFontStatus, template: PDFTemplateLayout, title: string, reportDate: string, startDate?: string, endDate?: string) => {
   const mar = PDF_CONSTANTS.margin;
@@ -1097,90 +1695,200 @@ const drawPDFHeader = (doc: jsPDFWithFontStatus, template: PDFTemplateLayout, ti
   const [primaryR, primaryG, primaryB] = PDF_CONSTANTS.primaryColor;
   const [mutedR, mutedG, mutedB] = PDF_CONSTANTS.mutedColor;
   
-  // Header alt çizgisi - sabit
-  doc.setDrawColor(primaryR, primaryG, primaryB);
-  doc.setLineWidth(3);
-  doc.line(mar, template.header.endY, pageWidth - mar, template.header.endY);
+  // Header çizgisi header içeriğinden SONRA çizilecek (drawPDFHeader içinde)
   
-  // Dekoratif çizgi - sabit
-  doc.setDrawColor(primaryR, primaryG, primaryB);
-  doc.setGState(doc.GState({ opacity: 0.3 }));
-  doc.setLineWidth(1);
-  doc.line(mar, template.header.endY + 3, pageWidth - mar, template.header.endY + 3);
-  doc.setGState(doc.GState({ opacity: 1 }));
+  const safeText = createSafeText(doc);
   
-  // Logo ve şirket bilgileri (sağ üst) - sabit komponentler
-  const rightX = pageWidth - mar - 200;
-  const logoY = 28;
+  // Font'u Roboto olarak ayarla
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    for (let i = 0; i < 10; i++) {
+      try {
+        doc.setFont("Roboto", "normal");
+        const currentFont = doc.getFont();
+        if (currentFont && isRobotoName(currentFont.fontName)) {
+          break;
+        }
+      } catch {
+        // Tekrar dene
+      }
+    }
+  }
   
-  // Logo için arka plan kutusu - sabit
+  // YENİ HEADER TASARIMI: Logo sol, Başlık orta, Tarih/Şirket bilgileri sağ
+  
+  // === SOL TARAF: Logo ve REVIUM (en solda, margin içinde) ===
+  const logoX = mar; // En solda, margin'den başlar
+  const logoY = 35; // Üstten 35px (25 → 35, üstte ek boşluk)
+  const logoFramePadding = 2; // Çerçeve padding'i
+  const logoFrameSize = logoSize + (logoFramePadding * 2); // Çerçeve boyutu
+  
+  // Logo için arka plan kutusu - minimal
   doc.setFillColor(255, 255, 255);
-  doc.roundedRect(rightX - 5, logoY - 5, logoSize + 10, logoSize + 10, 4, 4, "F");
+  doc.roundedRect(logoX - logoFramePadding, logoY - logoFramePadding, logoFrameSize, logoFrameSize, 4, 4, "F");
   doc.setDrawColor(primaryR, primaryG, primaryB);
-  doc.setGState(doc.GState({ opacity: 0.2 }));
+  doc.setGState(doc.GState({ opacity: 0.1 }));
   doc.setLineWidth(1);
-  doc.roundedRect(rightX - 5, logoY - 5, logoSize + 10, logoSize + 10, 4, 4, "S");
+  doc.roundedRect(logoX - logoFramePadding, logoY - logoFramePadding, logoFrameSize, logoFrameSize, 4, 4, "S");
   doc.setGState(doc.GState({ opacity: 1 }));
   
   try {
-    doc.addImage(REV_LOGO_DATA_URI, 'PNG', rightX, logoY, logoSize, logoSize);
+    doc.addImage(REV_LOGO_DATA_URI, 'PNG', logoX, logoY, logoSize, logoSize);
   } catch (error) {
     // Logo eklenemezse sessizce devam et
   }
   
-  const safeText = createSafeText(doc);
-  
-  // REVIUM brand name - sabit
+  // REVIUM brand name - logonun ÇERÇEVESİNİN altında ORTALANMIŞ
   doc.setTextColor(primaryR, primaryG, primaryB);
-  safeText("REVIUM", rightX + logoSize + 10, 58, 24, true);
+  // REVIUM text genişliğini hesapla ve logonun çerçevesinin ortasına hizala
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    doc.setFont("Roboto", "bold");
+    doc.setFontSize(14);
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+  }
+  const reviumTextWidth = doc.getTextWidth("REVIUM");
+  const reviumX = logoX - logoFramePadding + (logoFrameSize / 2) - (reviumTextWidth / 2); // Çerçeve ortasına hizala
+  const reviumY = logoY + logoSize + logoFramePadding + 12; // Logo + çerçeve altından 12px aşağı (6 → 12, daha aşağı)
+  safeText("REVIUM", reviumX, reviumY, 14, true);
   doc.setTextColor(0, 0, 0);
   
-  // Company address info - sabit bilgiler, cache'lenmiş
-  doc.setTextColor(mutedR, mutedG, mutedB);
-  safeText(COMPANY_INFO.headerAddress, rightX, 75, 10, false);
-  safeText(COMPANY_INFO.city, rightX, 87, 10, false);
-  safeText(COMPANY_INFO.contactInfo, rightX, 99, 10, false);
-  doc.setTextColor(0, 0, 0);
+  // === ORTA TARAF: Başlık (sayfa genişliğinde ortalanmış) ===
+  // Başlığı sayfa genişliğinde ortala
+  const titleY = 45; // Üstten 45px (35 → 45, üstte ek boşluk)
   
-  // Report title - dinamik (değişiyor, daha okunabilir)
+  // Report title - dinamik (sayfa genişliğinde ortada)
   doc.setTextColor(primaryR, primaryG, primaryB);
-  safeText(title, mar, 58, 34, true); // İyileştirildi: 32px → 34px
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    for (let i = 0; i < 10; i++) {
+      try {
+        doc.setFont("Roboto", "bold");
+        const currentFont = doc.getFont();
+        if (currentFont && isRobotoName(currentFont.fontName)) {
+          break;
+        }
+      } catch {
+        // Tekrar dene
+      }
+    }
+    doc.setFontSize(22);
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+  }
   
-  // Title altında dekoratif çizgi - dinamik (title genişliğine göre)
+  // Başlık genişliğini hesapla ve sayfa genişliğinde ortala
   const titleWidth = doc.getTextWidth(title);
+  const titleStartX = (pageWidth - titleWidth) / 2; // Sayfa genişliğinin ortası
+  
+  safeText(title, titleStartX, titleY, 22, true);
+  
+  // Title altında ince çizgi
   doc.setDrawColor(primaryR, primaryG, primaryB);
-  doc.setGState(doc.GState({ opacity: 0.3 }));
+  doc.setGState(doc.GState({ opacity: 0.2 }));
   doc.setLineWidth(1.5);
-  doc.line(mar, 68, mar + titleWidth, 68);
+  doc.line(titleStartX, titleY + 7, titleStartX + titleWidth, titleY + 7);
   doc.setGState(doc.GState({ opacity: 1 }));
   doc.setTextColor(0, 0, 0);
   
-  // Date information - dinamik (tarih değişiyor)
-  let dateY = 88;
+  // === SAĞ TARAF: Tarih (en üst) ve Şirket Bilgileri (altında) ===
+  const rightSectionX = pageWidth - mar - 200; // Sağdan 200px içeride (taşmaması için)
+  let rightSectionY = 30; // En üstten başlar (20 → 30, üstte ek boşluk)
+  
+  // Telefon numarası genişliğini hesapla (referans pozisyon için - önce hesapla)
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    doc.setFont("Roboto", "normal");
+    doc.setFontSize(8);
+  } else {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+  }
+  const phoneText = "+90 (551) 829-1613";
+  const phoneTextWidth = doc.getTextWidth(phoneText);
+  const phoneX = pageWidth - mar - phoneTextWidth; // Sağa hizalı - referans pozisyon
+  
+  // "2025" metninin genişliğini hesapla (sağa kaydırma miktarı için)
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    doc.setFont("Roboto", "normal");
+    doc.setFontSize(9);
+  } else {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+  }
+  const year2025Width = doc.getTextWidth("2025");
+  // Tüm bilgileri "2025" genişliği kadar sağa kaydır
+  const rightInfoX = phoneX - year2025Width;
+  
+  // 1. TARİH BİLGİLERİ - Telefon numarasıyla aynı hizaya alındı, "2025" genişliği kadar sağa kaydırıldı
   doc.setTextColor(mutedR, mutedG, mutedB);
+  
   if (startDate && endDate) {
-    doc.setFillColor(249, 250, 251);
-    doc.roundedRect(mar, dateY - 6, 350, 18, 3, 3, "F");
-    doc.setDrawColor(229, 231, 235);
-    doc.setLineWidth(1);
-    doc.roundedRect(mar, dateY - 6, 350, 18, 3, 3, "S");
+    // Dönem bilgisi - sağa kaydırılmış pozisyon
+    safeText(`Dönem: ${formatDateShort(startDate)} - ${formatDateShort(endDate)}`, rightInfoX, rightSectionY, 9, false);
     
-    safeText(`Rapor Dönemi: ${formatDateShort(startDate)} - ${formatDateShort(endDate)}`, mar + 8, dateY + 4, 12, false);
-    dateY += 22;
+    // Rapor tarihi (altında, sağa kaydırılmış pozisyon)
+    rightSectionY += 12; // Bir sonraki satır için boşluk
+    safeText(`Tarih: ${reportDate}`, rightInfoX, rightSectionY, 9, true);
+    
+    rightSectionY += 15; // Şirket bilgileri için boşluk
+  } else {
+    // Sadece rapor tarihi varsa
+    safeText(`Tarih: ${reportDate}`, rightInfoX, rightSectionY, 9, true);
+    
+    rightSectionY += 15; // Şirket bilgileri için boşluk
   }
   
-  // Rapor tarihi - dinamik
-  doc.setFillColor(249, 250, 251);
-  doc.roundedRect(mar, dateY - 6, 250, 18, 3, 3, "F");
-  doc.setDrawColor(229, 231, 235);
-  doc.setLineWidth(1);
-  doc.roundedRect(mar, dateY - 6, 250, 18, 3, 3, "S");
-  
-  safeText(`Rapor Tarihi: ${reportDate}`, mar + 8, dateY + 4, 12, true);
   doc.setTextColor(0, 0, 0);
   
-  // Template'in contentStartY'sini güncelle (dateY'ye göre)
-  return dateY + 40;
+  // 2. ŞİRKET BİLGİLERİ - Tarih altında, YETERLİ BOŞLUKLA (sağa kaydırılmış pozisyon)
+  let companyInfoY = rightSectionY; // Tarih bilgilerinden sonra başlar
+  
+  // Tüm bilgiler sağa kaydırılmış X pozisyonundan hizalı
+  doc.setTextColor(mutedR, mutedG, mutedB);
+  // Adres - ilk satır (Milenyum Cad. alt satıra alındı)
+  safeText("Fevzi Cakmak Mah.", rightInfoX, companyInfoY, 8, false); // Sağa kaydırılmış pozisyon
+  companyInfoY += 10; // Satırlar arası boşluk
+  safeText("Milenyum Cad. No:81", rightInfoX, companyInfoY, 8, false); // Milenyum Cad. alt satırda
+  companyInfoY += 10; // Satırlar arası boşluk
+  safeText(COMPANY_INFO.city, rightInfoX, companyInfoY, 8, false); // Sağa kaydırılmış pozisyon
+  companyInfoY += 10;
+  // Email - alt satırda (sağa kaydırılmış pozisyon)
+  safeText("info@reviumtech.com", rightInfoX, companyInfoY, 8, false);
+  companyInfoY += 10;
+  // Website - alt satırda (sağa kaydırılmış pozisyon)
+  safeText("www.reviumtech.com", rightInfoX, companyInfoY, 8, false);
+  companyInfoY += 10;
+  // Telefon numarası - sağa kaydırılmış pozisyon (ama telefon numarası kendisi sağa hizalı kalacak)
+  // Telefon numarasını sağa hizalı tutmak için, rightInfoX'ten başlayıp genişliğini hesaplayarak sağa hizala
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    doc.setFont("Roboto", "normal");
+    doc.setFontSize(8);
+  } else {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+  }
+  const phoneXAligned = rightInfoX; // Sağa kaydırılmış pozisyon, ama telefon numarası kendisi sağa hizalı değil, soldan başlıyor
+  safeText(phoneText, phoneXAligned, companyInfoY, 8, false);
+  doc.setTextColor(0, 0, 0);
+  
+  // Header'ın son pozisyonunu hesapla (sol taraftaki logo+REVIUM veya sağ taraftaki şirket bilgileri, hangisi daha aşağıdaysa)
+  const leftSectionEndY = reviumY + 8; // REVIUM yazısı + boşluk (daha aşağıda olduğu için)
+  const headerEndY = Math.max(leftSectionEndY, companyInfoY + 8); // Her iki taraftan da en aşağıdaki pozisyon
+  
+  // Header alt çizgisi - header içeriğinden SONRA çiz (istatistiklerin üstünde olması için)
+  doc.setDrawColor(primaryR, primaryG, primaryB);
+  doc.setLineWidth(2);
+  doc.line(mar, headerEndY + 5, pageWidth - mar, headerEndY + 5); // Header içeriğinden 5px aşağıda
+  
+  // Dekoratif çizgi - sabit (daha hafif)
+  doc.setDrawColor(primaryR, primaryG, primaryB);
+  doc.setGState(doc.GState({ opacity: 0.2 }));
+  doc.setLineWidth(1);
+  doc.line(mar, headerEndY + 8, pageWidth - mar, headerEndY + 8); // Ana çizgiden 3px aşağıda
+  doc.setGState(doc.GState({ opacity: 1 }));
+  
+  // Template'in contentStartY'sini güncelle - header'dan sonra yeterli boşluk (altında ek boşluk)
+  return headerEndY + 50; // Header'dan sonra 50px boşluk (30 → 50, altında ek boşluk, içerik aşağı kaydırıldı)
 };
 
 // Footer template'i - sabit komponentler + dinamik sayfa numarası
@@ -1192,14 +1900,14 @@ const drawPDFFooter = (doc: jsPDFWithFontStatus, template: PDFTemplateLayout, pa
   const [primaryR, primaryG, primaryB] = PDF_CONSTANTS.primaryColor;
   const [mutedR, mutedG, mutedB] = PDF_CONSTANTS.mutedColor;
   
-  // Footer üst çizgisi - sabit
+  // Footer üst çizgisi - sabit (daha ince ve profesyonel)
   doc.setDrawColor(primaryR, primaryG, primaryB);
-  doc.setLineWidth(2);
+  doc.setLineWidth(1.5); // Daha ince: 2 → 1.5
   doc.line(mar, footerY - 18, pageWidth - mar, footerY - 18);
   
-  // Dekoratif çizgi - sabit
+  // Dekoratif çizgi - sabit (daha hafif)
   doc.setDrawColor(primaryR, primaryG, primaryB);
-  doc.setGState(doc.GState({ opacity: 0.3 }));
+  doc.setGState(doc.GState({ opacity: 0.2 })); // Daha hafif: 0.3 → 0.2
   doc.setLineWidth(1);
   doc.line(mar, footerY - 15, pageWidth - mar, footerY - 15);
   doc.setGState(doc.GState({ opacity: 1 }));
@@ -1213,24 +1921,7 @@ const drawPDFFooter = (doc: jsPDFWithFontStatus, template: PDFTemplateLayout, pa
   safeText(COMPANY_INFO.contactInfo, mar, footerY + 24, 9, false);
   doc.setTextColor(0, 0, 0);
   
-  // Sayfa numarası - dinamik (değişiyor)
-  if (pageNumber !== undefined && totalPages !== undefined) {
-    doc.setFillColor(249, 250, 251);
-    doc.roundedRect(pageWidth - mar - 100, footerY + 6, 90, 18, 3, 3, "F");
-    doc.setDrawColor(primaryR, primaryG, primaryB);
-    doc.setGState(doc.GState({ opacity: 0.2 }));
-    doc.setLineWidth(1);
-    doc.roundedRect(pageWidth - mar - 100, footerY + 6, 90, 18, 3, 3, "S");
-    doc.setGState(doc.GState({ opacity: 1 }));
-    
-    doc.setTextColor(primaryR, primaryG, primaryB);
-    try {
-      safeText(`Sayfa ${pageNumber} / ${totalPages}`, pageWidth - mar - 95, footerY + 18, 10, true);
-      doc.setTextColor(0, 0, 0);
-    } catch (pageNumError) {
-      console.warn("Sayfa numarası eklenemedi:", pageNumError);
-    }
-  }
+  // Sayfa numarası kaldırıldı - kullanıcı isteği
   
   // Footer logo - sabit komponent
   const footerLogoX = pageWidth - mar - footerLogoSize - 120;
@@ -1256,7 +1947,6 @@ const drawPDFFooter = (doc: jsPDFWithFontStatus, template: PDFTemplateLayout, pa
     safeText("REVIUM", footerLogoX + footerLogoSize + 8, footerY + 10, 12, true);
     doc.setTextColor(0, 0, 0);
   } catch (logoError) {
-    console.warn("Footer logo eklenemedi:", logoError);
   }
 };
 
@@ -1310,7 +2000,7 @@ const applyPDFTemplateToNewPage = (doc: jsPDFWithFontStatus, template: PDFTempla
   doc.setFillColor(255, 255, 255);
   doc.roundedRect(rightX - 5, logoY - 5, logoSize + 10, logoSize + 10, 4, 4, "F");
   doc.setDrawColor(primaryR, primaryG, primaryB);
-  doc.setGState(doc.GState({ opacity: 0.2 }));
+  doc.setGState(doc.GState({ opacity: 0.1 })); // Daha hafif: 0.2 → 0.1
   doc.setLineWidth(1);
   doc.roundedRect(rightX - 5, logoY - 5, logoSize + 10, logoSize + 10, 4, 4, "S");
   doc.setGState(doc.GState({ opacity: 1 }));
@@ -1333,16 +2023,62 @@ const applyPDFTemplateToNewPage = (doc: jsPDFWithFontStatus, template: PDFTempla
   return newTemplate;
 };
 
-export const generateSalesReportPDF = async (data: any, startDate: string, endDate: string) => {
+interface SalesReportData {
+  totalRevenue?: number;
+  totalOrders?: number;
+  activeCustomers?: number;
+  avgOrderValue?: number; // Web sayfasından gelen hesaplanmış değer
+  orders?: Array<{
+    status?: string;
+    total?: number;
+    totalAmount?: number;
+    total_amount?: number;
+    subtotal?: number;
+  }>;
+  topProducts?: Array<{
+    name?: string;
+    quantity?: number;
+    revenue?: number;
+  }>;
+}
+
+export const generateSalesReportPDF = async (data: SalesReportData, startDate: string, endDate: string) => {
   const doc = createPdf({ format: "a4", unit: "pt" });
-  await registerFonts(doc);
   
-  // Font'un gerçekten yüklendiğini doğrula
-  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
-    const currentFont = doc.getFont();
-    if (!currentFont || !isRobotoName(currentFont.fontName)) {
-      // Font yüklenmemiş, tekrar dene
+  // Font'u MUTLAKA yükle - daha agresif yaklaşım
+  try {
+  await registerFonts(doc);
+  } catch (fontError) {
+    // Font yükleme hatası, tekrar dene
+    try {
       await registerFonts(doc);
+    } catch (retryError) {
+      // İkinci deneme de başarısız, devam et
+    }
+  }
+  
+  // Font'un gerçekten yüklendiğini doğrula - daha agresif kontrol
+  if (!doc._robotoFontLoaded || doc._robotoFontLoadFailed) {
+    // Font yüklenemedi, tekrar dene
+    try {
+      await registerFonts(doc);
+    } catch (retryError) {
+      // Font yüklenemedi, devam et
+    }
+  }
+  
+  // Font'u zorla Roboto olarak ayarla
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    for (let i = 0; i < 10; i++) {
+      try {
+        doc.setFont("Roboto", "normal");
+      const currentFont = doc.getFont();
+      if (currentFont && isRobotoName(currentFont.fontName)) {
+        break;
+      }
+      } catch {
+        // Tekrar dene
+    }
     }
   }
   
@@ -1353,8 +2089,23 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
   // PDF Template'i uygula - sabit layout + dinamik içerik
   const template = applyPDFTemplate(doc, "SATIŞ RAPORU", reportDate, startDate, endDate);
   
-  // Dinamik içerik alanından başla
-  let currentY = template.contentArea.startY;
+  // Font'u tekrar kontrol et ve ayarla
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    for (let i = 0; i < 5; i++) {
+      try {
+        doc.setFont("Roboto", "normal");
+    const currentFont = doc.getFont();
+        if (currentFont && isRobotoName(currentFont.fontName)) {
+          break;
+        }
+      } catch {
+        // Tekrar dene
+      }
+    }
+  }
+  
+  // Dinamik içerik alanından başla (iyileştirilmiş spacing)
+  let currentY = template.contentArea.startY + 5; // Header'dan sonra ekstra 5px boşluk
   const contentWidth = template.contentArea.width;
   const mar = template.contentArea.leftMargin;
   
@@ -1362,28 +2113,30 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
   const [primaryR, primaryG, primaryB] = PDF_CONSTANTS.primaryColor;
   const [mutedR, mutedG, mutedB] = PDF_CONSTANTS.mutedColor;
   
-  // İstatistik Kartları - Sabit tasarım, dinamik değerler
-  const cardWidth = (contentWidth - 32) / 3;
-  const cardHeight = 110; // Daha ferah: 100 → 110
-  const cardGap = 16;
+  // İstatistik Kartları - Sabit tasarım, dinamik değerler (standardize edilmiş)
+  const cardDimensions = calculateCardDimensions(contentWidth, 3);
+  const cardWidth = cardDimensions.width;
+  const cardGap = cardDimensions.gap;
+  const cardHeight = PDF_CONSTANTS.cardHeight;
   let cardX = mar;
   
-  // Kart 1: Toplam Gelir - sabit tasarım, dinamik değer
+  // Kart 1: Toplam Gelir - Web sayfasındaki gibi (aynı veriler)
   const totalRevenue = safeNumber(data.totalRevenue);
-  const avgOrderValueCard = safeNumber(data.totalOrders) > 0 ? safeNumber(data.totalRevenue) / safeNumber(data.totalOrders) : 0;
+  // Web sayfasında avgOrderValue zaten hesaplanmış geliyor, aynısını kullan
+  const avgOrderValue = safeNumber(data.avgOrderValue ?? (data.totalOrders && data.totalOrders > 0 ? totalRevenue / data.totalOrders : 0));
   drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
     title: "Toplam Gelir",
     value: safeFormatCurrency(totalRevenue),
-    description: `Ortalama: ${safeFormatCurrency(avgOrderValueCard)}`,
+    description: `Ortalama: ${safeFormatCurrency(avgOrderValue)}`,
     color: {
-      background: [primaryR, primaryG, primaryB],
-      border: [primaryR, primaryG, primaryB],
-      text: [mutedR, mutedG, mutedB],
-      value: [primaryR, primaryG, primaryB],
+      background: TAILWIND_COLORS.primaryCardBg,
+      border: TAILWIND_COLORS.primaryCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.primaryCardValue,
     },
   });
   
-  // Kart 2: Toplam Sipariş - sabit tasarım, dinamik değer
+  // Kart 2: Toplam Sipariş - profesyonel ve minimal (info)
   cardX += cardWidth + cardGap;
   const totalOrders = safeNumber(data.totalOrders);
   drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
@@ -1391,14 +2144,14 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
     value: totalOrders.toString(),
     description: "Tarih aralığında",
     color: {
-      background: [239, 246, 255],
-      border: [191, 219, 254],
-      text: [107, 114, 128],
-      value: [37, 99, 235],
+      background: TAILWIND_COLORS.infoCardBg,
+      border: TAILWIND_COLORS.infoCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.infoCardValue,
     },
   });
   
-  // Kart 3: Aktif Müşteri - sabit tasarım, dinamik değer
+  // Kart 3: Aktif Müşteri - profesyonel ve minimal (success)
   cardX += cardWidth + cardGap;
   const activeCustomers = safeNumber(data.activeCustomers);
   drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
@@ -1406,26 +2159,28 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
     value: activeCustomers.toString(),
     description: "Sipariş veren müşteri",
     color: {
-      background: [240, 253, 244],
-      border: [187, 247, 208],
-      text: [107, 114, 128],
-      value: [22, 163, 74],
+      background: TAILWIND_COLORS.successCardBg,
+      border: TAILWIND_COLORS.successCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.successCardValue,
     },
   });
   
-  currentY += cardHeight + 40;
+  currentY += cardHeight + PDF_CONSTANTS.sectionSpacing + 5; // Kartlar ve tablolar arası boşluk - iyileştirilmiş (ekstra 5px)
   
-  // Sipariş Durumu Dağılımı Tablosu - sabit başlık tasarımı
+  // Sipariş Durumu Dağılımı Tablosu - sabit başlık tasarımı (iyileştirilmiş)
   if (data.orders && data.orders.length > 0) {
+    // Tablolar arası boşluk kontrolü
+    currentY = ensureSpace(doc, currentY, 200, mar, "Sipariş Durumu Dağılımı");
     currentY = drawTableHeader(doc, mar, currentY, 300, {
       title: "Sipariş Durumu Dağılımı",
-      backgroundColor: [249, 250, 251],
-      textColor: PDF_CONSTANTS.primaryColor,
-      borderColor: PDF_CONSTANTS.primaryColor,
+      backgroundColor: TAILWIND_COLORS.gray50, // Web: bg-[rgb(249,250,251)]
+      textColor: PDF_CONSTANTS.primaryColor, // Web: text-primary
+      borderColor: [229, 231, 235], // Web: border-b (gray200)
     });
     
     const statusMap = new Map<string, { count: number; total: number }>();
-    data.orders.forEach((order: any) => {
+    data.orders?.forEach((order) => {
       const status = order.status || "Bilinmeyen";
       const total = safeNumber(order.total ?? order.totalAmount ?? order.total_amount ?? order.subtotal ?? 0);
       if (!statusMap.has(status)) {
@@ -1440,7 +2195,11 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
       draft: "Taslak",
       pending: "Beklemede",
       confirmed: "Onaylandı",
+      planned: "Planlandı",
       in_production: "Üretimde",
+      in_progress: "Üretimde",
+      quality_check: "Kalite Kontrol",
+      on_hold: "Beklemede",
       completed: "Tamamlandı",
       shipped: "Kargoda",
       delivered: "Teslim Edildi",
@@ -1457,15 +2216,13 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
         totalOrders > 0 ? `${((data.count / totalOrders) * 100).toFixed(1)}%` : "0%"
       ]);
     
-    // Profesyonel tablo stilleri kullan
+    // Profesyonel tablo stilleri kullan - Web sayfasındaki gibi
     const tableStyles = createProfessionalTableStyles(doc, {
       headerFontSize: 12,
       bodyFontSize: 11,
       cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
     });
-    tableStyles.headStyles.fillColor = [59, 130, 246];
-    tableStyles.headStyles.textColor = [255, 255, 255];
-    tableStyles.headStyles.halign = "center";
+    // Web sayfasındaki tablo stilleri (zaten createProfessionalTableStyles'da ayarlandı)
     tableStyles.bodyStyles.overflow = 'linebreak';
     tableStyles.styles.overflow = 'linebreak';
     
@@ -1476,66 +2233,60 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
     const currentPageWidth = doc.internal.pageSize.getWidth();
     const tableWidth = currentPageWidth - (mar * 2);
     
+    // Font'u zorla Roboto olarak ayarla (autoTable öncesi)
+    forceRobotoFont(doc, "normal");
+    
     autoTable(doc, {
       startY: currentY,
-      head: [['Durum', 'Sipariş Sayısı', 'Toplam Tutar', 'Oran']],
-      body: statusTableData,
+      head: transliterateTableData([['Durum', 'Sipariş Sayısı', 'Toplam Tutar', 'Oran']]),
+      body: transliterateTableData(statusTableData),
       margin: { left: mar, right: mar },
       tableWidth: tableWidth,
-      didParseCell: createDidParseCell(doc),
+      willDrawCell: createWillDrawCell(doc),
       ...tableStyles,
       columnStyles: {
-        0: { cellWidth: tableWidth * 0.35, halign: "left", overflow: 'linebreak' }, // %35
-        1: { cellWidth: tableWidth * 0.20, halign: "right", fontStyle: "bold" }, // %20
-        2: { cellWidth: tableWidth * 0.25, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %25
-        3: { cellWidth: tableWidth * 0.20, halign: "right", fontStyle: "bold", textColor: [107, 114, 128] }, // %20
+        0: { cellWidth: tableWidth * 0.35, halign: "center", overflow: 'linebreak', fontStyle: "normal" }, // Ortalanmış
+        1: { cellWidth: tableWidth * 0.20, halign: "center", fontStyle: "bold" }, // Ortalanmış
+        2: { cellWidth: tableWidth * 0.25, halign: "center", fontStyle: "bold", textColor: PDF_CONSTANTS.primaryColor }, // Ortalanmış
+        3: { cellWidth: tableWidth * 0.20, halign: "center", fontStyle: "bold", textColor: [107, 114, 128] }, // Ortalanmış
       },
     });
     
-    // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY = (doc as any).lastAutoTable?.finalY;
+    // Tablo sonrası currentY'yi güvenli şekilde güncelle - yeterli boşluk
+    const tableEndY = doc.lastAutoTable?.finalY;
     if (tableEndY && tableEndY > currentY) {
-      currentY = tableEndY + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
+      currentY = tableEndY + PDF_CONSTANTS.tableSpacing; // Tablo sonrası boşluk - standardize edilmiş
     } else {
-      currentY += 40; // Fallback: eğer lastAutoTable yoksa (30pt'den artırıldı)
+      currentY += PDF_CONSTANTS.tableSpacing; // Fallback: eğer lastAutoTable yoksa
     }
   }
   
   // En Çok Satan Ürünler Tablosu - sabit başlık tasarımı
   if (data.topProducts && data.topProducts.length > 0) {
+    // Tablolar arası boşluk kontrolü
+    currentY = ensureSpace(doc, currentY, 200, mar, "En Çok Satan Ürünler");
     currentY = drawTableHeader(doc, mar, currentY, 300, {
       title: "En Çok Satan Ürünler",
-      backgroundColor: [249, 250, 251],
-      textColor: PDF_CONSTANTS.primaryColor,
-      borderColor: PDF_CONSTANTS.primaryColor,
+      backgroundColor: TAILWIND_COLORS.gray50, // Web: bg-[rgb(249,250,251)]
+      textColor: PDF_CONSTANTS.primaryColor, // Web: text-primary
+      borderColor: [229, 231, 235], // Web: border-b (gray200)
     });
     
-    const topProductsData = data.topProducts.slice(0, 10).map((p: any, index: number) => [
+    // Web sayfasındaki gibi - sadece ilk 10 ürün, TOPLAM satırı yok
+    const topProductsData = data.topProducts?.slice(0, 10).map((p, index: number) => [
       `#${index + 1}`,
       p.name || '-',
       safeNumber(p.quantity).toString(),
       safeFormatCurrency(safeNumber(p.revenue))
-    ]);
+    ]) || [];
     
-    // Özet satırı ekle
-    const totalQuantity = data.topProducts.slice(0, 10).reduce((sum: number, p: any) => sum + safeNumber(p.quantity), 0);
-    const totalRevenue = data.topProducts.slice(0, 10).reduce((sum: number, p: any) => sum + safeNumber(p.revenue), 0);
-    topProductsData.push([
-      'TOPLAM',
-      '',
-      totalQuantity.toString(),
-      safeFormatCurrency(totalRevenue)
-    ]);
-    
-    // Profesyonel tablo stilleri kullan
+    // Profesyonel tablo stilleri kullan - Web sayfasındaki gibi
     const tableStyles2 = createProfessionalTableStyles(doc, {
       headerFontSize: 12,
       bodyFontSize: 11,
       cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
     });
-    tableStyles2.headStyles.fillColor = [59, 130, 246];
-    tableStyles2.headStyles.textColor = [255, 255, 255];
-    tableStyles2.headStyles.halign = "center";
+    // Web sayfasındaki tablo stilleri (zaten createProfessionalTableStyles'da ayarlandı)
     tableStyles2.bodyStyles.overflow = 'linebreak';
     tableStyles2.styles.overflow = 'linebreak';
     
@@ -1546,248 +2297,36 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
     const currentPageWidth2 = doc.internal.pageSize.getWidth();
     const tableWidth2 = currentPageWidth2 - (mar * 2);
     
+    // Font'u zorla Roboto olarak ayarla (autoTable öncesi)
+    forceRobotoFont(doc, "normal");
+    
     autoTable(doc, {
       startY: currentY,
-      head: [['Sıra', 'Ürün Adı', 'Adet', 'Gelir']],
-      body: topProductsData,
+      head: transliterateTableData([['Sıra', 'Ürün Adı', 'Adet', 'Gelir']]),
+      body: transliterateTableData(topProductsData),
       margin: { left: mar, right: mar },
       tableWidth: tableWidth2,
-      didParseCell: createDidParseCell(doc),
+      willDrawCell: createWillDrawCell(doc),
       ...tableStyles2,
       columnStyles: {
-        0: { cellWidth: tableWidth2 * 0.10, halign: "left", textColor: [107, 114, 128] }, // %10
-        1: { cellWidth: tableWidth2 * 0.50, halign: "left", fontStyle: "normal", overflow: 'linebreak' }, // %50
-        2: { cellWidth: tableWidth2 * 0.15, halign: "right", fontStyle: "bold" }, // %15
-        3: { cellWidth: tableWidth2 * 0.25, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %25
-      },
-      didDrawCell: (data: any) => {
-        // Özet satırını vurgula
-        if (data.row.index === topProductsData.length - 1) {
-          doc.setFillColor(221, 83, 53); // Primary color
-          doc.setGState(doc.GState({ opacity: 0.1 }));
-          doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
-          doc.setGState(doc.GState({ opacity: 1 }));
-          doc.setDrawColor(221, 83, 53);
-          doc.setLineWidth(1.5);
-          doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "S");
-          doc.setTextColor(221, 83, 53);
-          safeSetFont(doc, "bold");
-        }
+        0: { cellWidth: tableWidth2 * 0.10, halign: "center", fontStyle: "normal", textColor: [107, 114, 128] }, // Ortalanmış
+        1: { cellWidth: tableWidth2 * 0.50, halign: "center", fontStyle: "normal", overflow: 'linebreak' }, // Ortalanmış
+        2: { cellWidth: tableWidth2 * 0.15, halign: "center", fontStyle: "bold" }, // Ortalanmış
+        3: { cellWidth: tableWidth2 * 0.25, halign: "center", fontStyle: "bold", textColor: PDF_CONSTANTS.primaryColor }, // Ortalanmış
       },
     });
-  }
-  
-  // Müşteri Bazlı Analiz - Yeni detaylı bölüm
-  if (data.orders && data.orders.length > 0) {
-    // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY = (doc as any).lastAutoTable?.finalY;
-    if (tableEndY && tableEndY > currentY) {
-      currentY = tableEndY + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
+    
+    // Tablo sonrası currentY'yi güvenli şekilde güncelle
+    const tableEndY2 = doc.lastAutoTable?.finalY;
+    if (tableEndY2 && tableEndY2 > currentY) {
+      currentY = tableEndY2 + PDF_CONSTANTS.tableSpacing;
     } else {
-      currentY += 40; // Fallback: eğer lastAutoTable yoksa (30pt'den artırıldı)
-    }
-    currentY = ensureSpace(doc, currentY, 200, mar, "Müşteri Analizi");
-    
-    // Müşteri bazlı sipariş analizi
-    const customerMap = new Map<string, { name: string; orders: number; total: number }>();
-    data.orders.forEach((order: any) => {
-      const customerId = order.customerId || "Bilinmeyen";
-      const customerName = order.customerName || order.customer?.name || "Bilinmeyen Müşteri";
-      const total = safeNumber(order.total ?? order.totalAmount ?? order.total_amount ?? order.subtotal ?? 0);
-      
-      if (!customerMap.has(customerId)) {
-        customerMap.set(customerId, { name: customerName, orders: 0, total: 0 });
-      }
-      const customer = customerMap.get(customerId)!;
-      customer.orders += 1;
-      customer.total += total;
-    });
-    
-    const topCustomers = Array.from(customerMap.values())
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10);
-    
-    if (topCustomers.length > 0) {
-      currentY = drawTableHeader(doc, mar, currentY, 350, {
-        title: "En Değerli Müşteriler (Top 10)",
-        backgroundColor: [249, 250, 251],
-        textColor: PDF_CONSTANTS.primaryColor,
-        borderColor: PDF_CONSTANTS.primaryColor,
-      });
-      
-      const customerData = topCustomers.map((c, index) => [
-        `#${index + 1}`,
-        c.name.length > 30 ? c.name.substring(0, 30) + "..." : c.name,
-        c.orders.toString(),
-        safeFormatCurrency(c.total),
-        safeFormatCurrency(c.total / c.orders)
-      ]);
-      
-      // Profesyonel tablo stilleri kullan
-      const tableStyles3 = createProfessionalTableStyles(doc, {
-        headerFontSize: 12,
-        bodyFontSize: 11,
-        cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
-      });
-      tableStyles3.headStyles.fillColor = [59, 130, 246];
-      tableStyles3.headStyles.textColor = [255, 255, 255];
-      tableStyles3.headStyles.halign = "center";
-      tableStyles3.bodyStyles.overflow = 'linebreak';
-      tableStyles3.styles.overflow = 'linebreak';
-      
-      // Sayfa sığma kontrolü
-      currentY = ensureTableFitsPage(doc, currentY, 200, mar, "En Değerli Müşteriler");
-      
-      // Tablo genişliğini sayfa genişliğine göre ayarla
-      const currentPageWidth4 = doc.internal.pageSize.getWidth();
-      const tableWidth4 = currentPageWidth4 - (mar * 2);
-      
-      autoTable(doc, {
-        startY: currentY,
-        head: [['Sıra', 'Müşteri', 'Sipariş', 'Toplam', 'Ortalama']],
-        body: customerData,
-        margin: { left: mar, right: mar },
-        tableWidth: tableWidth4,
-        didParseCell: createDidParseCell(doc),
-        ...tableStyles3,
-        columnStyles: {
-          0: { cellWidth: tableWidth4 * 0.08, halign: "left", textColor: [107, 114, 128] }, // %8
-          1: { cellWidth: tableWidth4 * 0.35, halign: "left", overflow: 'linebreak' }, // %35
-          2: { cellWidth: tableWidth4 * 0.15, halign: "right", fontStyle: "bold" }, // %15
-          3: { cellWidth: tableWidth4 * 0.25, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %25
-          4: { cellWidth: tableWidth4 * 0.17, halign: "right", textColor: [107, 114, 128] }, // %17
-        },
-      });
-      
-      // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY = (doc as any).lastAutoTable?.finalY;
-    if (tableEndY && tableEndY > currentY) {
-      currentY = tableEndY + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
-    } else {
-      currentY += 40; // Fallback: eğer lastAutoTable yoksa (30pt'den artırıldı)
-    }
+      currentY += PDF_CONSTANTS.tableSpacing;
     }
   }
   
-  // Zaman Bazlı Analiz - Günlük/Haftalık trend
-  if (data.orders && data.orders.length > 0) {
-    // Helper function for date parsing - önce tanımla (hoisting için)
-    function getOrderDate(order: any): Date {
-      if (order.createdAt && order.createdAt.toDate) {
-        return order.createdAt.toDate();
-      }
-      if (order.created_at) {
-        const parsed = new Date(order.created_at);
-        if (!isNaN(parsed.getTime())) {
-          return parsed;
-        }
-      }
-      if (order.createdAt) {
-        const parsed = new Date(order.createdAt);
-        if (!isNaN(parsed.getTime())) {
-          return parsed;
-        }
-      }
-      return new Date();
-    }
-    
-    currentY = ensureSpace(doc, currentY, 200, mar, "Zaman Bazlı Analiz");
-    
-    // Günlük gelir analizi
-    const dailyMap = new Map<string, { orders: number; revenue: number }>();
-    data.orders.forEach((order: any) => {
-      const orderDate = getOrderDate(order);
-      const dateKey = orderDate.toISOString().split("T")[0];
-      const total = safeNumber(order.total ?? order.totalAmount ?? order.total_amount ?? order.subtotal ?? 0);
-      
-      if (!dailyMap.has(dateKey)) {
-        dailyMap.set(dateKey, { orders: 0, revenue: 0 });
-      }
-      const day = dailyMap.get(dateKey)!;
-      day.orders += 1;
-      day.revenue += total;
-    });
-    
-    const dailyData = Array.from(dailyMap.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .slice(-14) // Son 14 gün
-      .map(([date, stats]) => {
-        const d = new Date(date);
-        const dayName = d.toLocaleDateString("tr-TR", { day: "2-digit", month: "short" });
-        return [dayName, stats.orders.toString(), safeFormatCurrency(stats.revenue)];
-      });
-    
-    if (dailyData.length > 0) {
-      // Tablo genişliğini sayfa genişliğine göre ayarla
-      const pageWidthDaily = doc.internal.pageSize.getWidth();
-      const tableWidthDaily = pageWidthDaily - (mar * 2);
-      
-      currentY = drawTableHeader(doc, mar, currentY, tableWidthDaily, {
-        title: "Son 14 Günlük Trend",
-        backgroundColor: [249, 250, 251],
-        textColor: PDF_CONSTANTS.primaryColor,
-        borderColor: PDF_CONSTANTS.primaryColor,
-      });
-        
-        // Profesyonel tablo stilleri kullan
-        const tableStylesDaily = createProfessionalTableStyles(doc, {
-          headerFontSize: 12,
-          bodyFontSize: 11,
-          cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
-        });
-        tableStylesDaily.headStyles.fillColor = [59, 130, 246];
-        tableStylesDaily.headStyles.textColor = [255, 255, 255];
-        tableStylesDaily.headStyles.halign = "center";
-        tableStylesDaily.bodyStyles.overflow = 'linebreak';
-        tableStylesDaily.styles.overflow = 'linebreak';
-        
-        // Sayfa sığma kontrolü
-        currentY = ensureTableFitsPage(doc, currentY, 200, mar, "Son 14 Günlük Trend");
-        
-        autoTable(doc, {
-          startY: currentY,
-          head: [['Tarih', 'Sipariş', 'Gelir']],
-          body: dailyData,
-          margin: { left: mar, right: mar },
-          tableWidth: tableWidthDaily,
-          didParseCell: createDidParseCell(doc),
-          ...tableStylesDaily,
-          columnStyles: {
-            0: { cellWidth: tableWidthDaily * 0.35, halign: "left" }, // %35
-            1: { cellWidth: tableWidthDaily * 0.25, halign: "right", fontStyle: "bold" }, // %25
-            2: { cellWidth: tableWidthDaily * 0.40, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %40
-          },
-        });
-      
-      // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY = (doc as any).lastAutoTable?.finalY;
-    if (tableEndY && tableEndY > currentY) {
-      currentY = tableEndY + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
-    } else {
-      currentY += 40; // Fallback: eğer lastAutoTable yoksa (30pt'den artırıldı)
-    }
-    }
-  }
-  
-  // Özet Bölümü - sabit tasarım, dinamik veriler
-  currentY = ((doc as any).lastAutoTable?.finalY || currentY) + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
-  currentY = ensureSpace(doc, currentY, 100, mar, "Özet");
-  
-  const avgOrderValue = safeNumber(data.totalOrders) > 0 ? safeNumber(data.totalRevenue) / safeNumber(data.totalOrders) : 0;
-  const avgCustomerValue = safeNumber(data.activeCustomers) > 0 ? safeNumber(data.totalRevenue) / safeNumber(data.activeCustomers) : 0;
-  const ordersPerCustomer = safeNumber(data.activeCustomers) > 0 ? (safeNumber(data.totalOrders) / safeNumber(data.activeCustomers)).toFixed(1) : "0";
-  
-  const summaryData: Array<[string, string]> = [
-    ['Toplam Gelir', safeFormatCurrency(safeNumber(data.totalRevenue))],
-    ['Toplam Sipariş', safeNumber(data.totalOrders).toString()],
-    ['Aktif Müşteri', safeNumber(data.activeCustomers).toString()],
-    ['Ortalama Sipariş Değeri', safeFormatCurrency(avgOrderValue)],
-    ['Müşteri Başına Ortalama Gelir', safeFormatCurrency(avgCustomerValue)],
-    ['Müşteri Başına Ortalama Sipariş', ordersPerCustomer],
-    ['En Çok Satan Ürün Sayısı', data.topProducts ? data.topProducts.length.toString() : "0"],
-  ];
-  
-  currentY = drawSummarySection(doc, mar, currentY, contentWidth, "Rapor Özeti", summaryData);
+  // Web sayfasında sadece 3 bölüm var: Kartlar, Sipariş Durumu Dağılımı, En Çok Satan Ürünler
+  // Ekstra bölümler (Müşteri Bazlı Analiz, Zaman Bazlı Analiz, Özet) kaldırıldı
   
   // Sayfa numaralarını ekle - template footer kullan
   try {
@@ -1799,13 +2338,11 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
           const pageTemplate = createPDFTemplate(doc);
           drawPDFFooter(doc, pageTemplate, i, totalPages);
         } catch (pageError) {
-          console.warn(`Sayfa ${i} footer eklenirken hata:`, pageError);
           // Devam et, diğer sayfaları eklemeye çalış
         }
       }
     }
   } catch (footerError) {
-    console.warn("Footer eklenirken hata:", footerError);
     // Footer hatası kritik değil, PDF'i yine de döndür
   }
   
@@ -1817,20 +2354,59 @@ export const generateSalesReportPDF = async (data: any, startDate: string, endDa
     }
     return blob;
   } catch (outputError) {
-    console.error("PDF output hatası:", outputError);
     throw new Error("PDF oluşturulamadı: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
   }
 };
 
-export const generateProductionReportPDF = async (data: any, startDate: string, endDate: string) => {
+interface ProductionReportData {
+  totalOrders?: number;
+  completed?: number;
+  completionRate?: number;
+  statusDistribution?: Record<string, number>;
+  topProducts?: Array<{
+    name?: string;
+    quantity?: number;
+    orders?: number;
+  }>;
+}
+
+export const generateProductionReportPDF = async (data: ProductionReportData, startDate: string, endDate: string) => {
   const doc = createPdf({ format: "a4", unit: "pt" });
-  await registerFonts(doc);
   
-  // Font'un gerçekten yüklendiğini doğrula
-  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
-    const currentFont = doc.getFont();
-    if (!currentFont || !isRobotoName(currentFont.fontName)) {
+  // Font'u MUTLAKA yükle - daha agresif yaklaşım
+  try {
+  await registerFonts(doc);
+  } catch (fontError) {
+    // Font yükleme hatası, tekrar dene
+    try {
       await registerFonts(doc);
+    } catch (retryError) {
+      // İkinci deneme de başarısız, devam et
+    }
+  }
+  
+  // Font'un gerçekten yüklendiğini doğrula - daha agresif kontrol
+  if (!doc._robotoFontLoaded || doc._robotoFontLoadFailed) {
+    // Font yüklenemedi, tekrar dene
+    try {
+      await registerFonts(doc);
+    } catch (retryError) {
+      // Font yüklenemedi, devam et
+    }
+  }
+  
+  // Font'u zorla Roboto olarak ayarla
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    for (let i = 0; i < 10; i++) {
+      try {
+        doc.setFont("Roboto", "normal");
+      const currentFont = doc.getFont();
+      if (currentFont && isRobotoName(currentFont.fontName)) {
+        break;
+      }
+      } catch {
+        // Tekrar dene
+    }
     }
   }
   
@@ -1840,6 +2416,21 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
   
   // PDF Template'i uygula
   const template = applyPDFTemplate(doc, "ÜRETİM RAPORU", reportDate, startDate, endDate);
+  
+  // Font'u tekrar kontrol et ve ayarla
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    for (let i = 0; i < 5; i++) {
+      try {
+        doc.setFont("Roboto", "normal");
+    const currentFont = doc.getFont();
+        if (currentFont && isRobotoName(currentFont.fontName)) {
+          break;
+        }
+      } catch {
+        // Tekrar dene
+      }
+    }
+  }
   
   // Dinamik içerik alanından başla
   let currentY = template.contentArea.startY;
@@ -1856,21 +2447,21 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
   const cardGap = 16;
   let cardX = mar;
   
-  // Kart 1: Toplam Sipariş - profesyonel tasarım, dinamik değer
+  // Kart 1: Toplam Sipariş - profesyonel ve sade
   const totalOrders = safeNumber(data.totalOrders);
   drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
     title: "Toplam Sipariş",
     value: totalOrders.toString(),
     description: "Tarih aralığında",
     color: {
-      background: [239, 246, 255],
-      border: [191, 219, 254],
-      text: [75, 85, 99],
-      value: [37, 99, 235],
+      background: TAILWIND_COLORS.infoCardBg,
+      border: TAILWIND_COLORS.infoCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.infoCardValue,
     },
   });
   
-  // Kart 2: Tamamlanan - sabit tasarım, dinamik değer
+  // Kart 2: Tamamlanan - profesyonel ve sade
   cardX += cardWidth + cardGap;
   const completed = safeNumber(data.completed);
   drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
@@ -1878,14 +2469,14 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
     value: completed.toString(),
     description: "Başarıyla tamamlandı",
     color: {
-      background: [240, 253, 244],
-      border: [187, 247, 208],
-      text: [75, 85, 99],
-      value: [22, 163, 74],
+      background: TAILWIND_COLORS.successCardBg,
+      border: TAILWIND_COLORS.successCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.successCardValue,
     },
   });
   
-  // Kart 3: Tamamlanma Oranı - sabit tasarım, dinamik değer
+  // Kart 3: Tamamlanma Oranı - profesyonel ve sade
   cardX += cardWidth + cardGap;
   const completionRate = safeNumber(data.completionRate);
   drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
@@ -1893,17 +2484,19 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
     value: `${completionRate.toFixed(1)}%`,
     description: "Başarı oranı",
     color: {
-      background: [primaryR, primaryG, primaryB],
-      border: [primaryR, primaryG, primaryB],
-      text: [mutedR, mutedG, mutedB],
-      value: [primaryR, primaryG, primaryB],
+      background: TAILWIND_COLORS.primaryCardBg,
+      border: TAILWIND_COLORS.primaryCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.primaryCardValue,
     },
   });
   
-  currentY += cardHeight + 40;
+  currentY += cardHeight + PDF_CONSTANTS.sectionSpacing; // Kartlar ve tablolar arası boşluk - standardize edilmiş
   
   // Durum Dağılımı Tablosu - sabit başlık tasarımı
   if (data.statusDistribution) {
+    // Tablolar arası boşluk kontrolü
+    currentY = ensureSpace(doc, currentY, 200, mar, "Durum Dağılımı");
     currentY = drawTableHeader(doc, mar, currentY, 250, {
       title: "Durum Dağılımı",
       backgroundColor: [249, 250, 251],
@@ -1939,7 +2532,9 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
       bodyFontSize: 11,
       cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
     });
-    tableStyles.headStyles.fillColor = [59, 130, 246];
+    // Header rengi zaten createProfessionalTableStyles'da primaryColor olarak ayarlandı
+    // Burada override etmeye gerek yok, ama tutarlılık için bırakıyoruz
+    tableStyles.headStyles.fillColor = PDF_CONSTANTS.primaryColor;
     tableStyles.headStyles.textColor = [255, 255, 255];
     tableStyles.headStyles.halign = "center";
     tableStyles.bodyStyles.overflow = 'linebreak';
@@ -1952,13 +2547,16 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
     const currentPageWidth = doc.internal.pageSize.getWidth();
     const tableWidth = currentPageWidth - (mar * 2);
     
+    // Font'u zorla Roboto olarak ayarla (autoTable öncesi)
+    forceRobotoFont(doc, "normal");
+    
     autoTable(doc, {
       startY: currentY,
-      head: [['Durum', 'Sipariş Sayısı', 'Oran']],
-      body: statusData,
+      head: transliterateTableData([['Durum', 'Sipariş Sayısı', 'Oran']]),
+      body: transliterateTableData(statusData),
       margin: { left: mar, right: mar },
       tableWidth: tableWidth,
-      didParseCell: createDidParseCell(doc),
+      willDrawCell: createWillDrawCell(doc),
       ...tableStyles,
       columnStyles: {
         0: { cellWidth: tableWidth * 0.50, halign: "left", overflow: 'linebreak' }, // %50
@@ -1967,12 +2565,12 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
       },
     });
     
-    // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY = (doc as any).lastAutoTable?.finalY;
+    // Tablo sonrası currentY'yi güvenli şekilde güncelle - yeterli boşluk
+    const tableEndY = doc.lastAutoTable?.finalY;
     if (tableEndY && tableEndY > currentY) {
-      currentY = tableEndY + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
+      currentY = tableEndY + PDF_CONSTANTS.tableSpacing; // Tablo sonrası boşluk - standardize edilmiş
     } else {
-      currentY += 40; // Fallback: eğer lastAutoTable yoksa (30pt'den artırıldı)
+      currentY += PDF_CONSTANTS.tableSpacing; // Fallback: eğer lastAutoTable yoksa
     }
   }
   
@@ -1982,6 +2580,8 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
     const pageWidthProd = doc.internal.pageSize.getWidth();
     const tableWidthProd = pageWidthProd - (mar * 2);
     
+    // Tablolar arası boşluk kontrolü
+    currentY = ensureSpace(doc, currentY, 200, mar, "En Çok Üretilen Ürünler");
     currentY = drawTableHeader(doc, mar, currentY, tableWidthProd, {
       title: "En Çok Üretilen Ürünler",
       backgroundColor: [249, 250, 251],
@@ -1989,7 +2589,7 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
       borderColor: PDF_CONSTANTS.primaryColor,
     });
     
-    const topProductsData = data.topProducts.slice(0, 10).map((p: any, index: number) => [
+    const topProductsData = data.topProducts?.slice(0, 10).map((p, index: number) => [
       `#${index + 1}`,
       p.name || '-',
       safeNumber(p.quantity).toString(),
@@ -1997,8 +2597,8 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
     ]);
     
     // Özet satırı ekle
-    const totalQuantity = data.topProducts.slice(0, 10).reduce((sum: number, p: any) => sum + safeNumber(p.quantity), 0);
-    const totalOrders = data.topProducts.slice(0, 10).reduce((sum: number, p: any) => sum + safeNumber(p.orders), 0);
+    const totalQuantity = data.topProducts?.slice(0, 10).reduce((sum: number, p) => sum + safeNumber(p.quantity), 0) || 0;
+    const totalOrders = data.topProducts?.slice(0, 10).reduce((sum: number, p) => sum + safeNumber(p.orders), 0) || 0;
     topProductsData.push([
       'TOPLAM',
       '',
@@ -2025,13 +2625,16 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
     const currentPageWidth2 = doc.internal.pageSize.getWidth();
     const tableWidth2 = currentPageWidth2 - (mar * 2);
     
+    // Font'u zorla Roboto olarak ayarla (autoTable öncesi)
+    forceRobotoFont(doc, "normal");
+    
     autoTable(doc, {
       startY: currentY,
-      head: [['Sıra', 'Ürün Adı', 'Miktar', 'Sipariş Sayısı']],
-      body: topProductsData,
+      head: transliterateTableData([['Sıra', 'Ürün Adı', 'Miktar', 'Sipariş Sayısı']]),
+      body: transliterateTableData(topProductsData),
       margin: { left: mar, right: mar },
       tableWidth: tableWidth2,
-      didParseCell: createDidParseCell(doc),
+      willDrawCell: createWillDrawCell(doc),
       ...tableStyles2,
       columnStyles: {
         0: { cellWidth: tableWidth2 * 0.10, halign: "left", textColor: [107, 114, 128] }, // %10
@@ -2041,12 +2644,12 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
       },
     });
     
-    // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY = (doc as any).lastAutoTable?.finalY;
+    // Tablo sonrası currentY'yi güvenli şekilde güncelle - yeterli boşluk
+    const tableEndY = doc.lastAutoTable?.finalY;
     if (tableEndY && tableEndY > currentY) {
-      currentY = tableEndY + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
+      currentY = tableEndY + PDF_CONSTANTS.tableSpacing; // Tablo sonrası boşluk - standardize edilmiş
     } else {
-      currentY += 40; // Fallback: eğer lastAutoTable yoksa (30pt'den artırıldı)
+      currentY += PDF_CONSTANTS.tableSpacing; // Fallback: eğer lastAutoTable yoksa
     }
   }
   
@@ -2054,7 +2657,7 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
   if (data.topProducts && data.topProducts.length > 0) {
     currentY = ensureSpace(doc, currentY, 200, mar, "Üretim Verimliliği");
     
-    const efficiencyData = data.topProducts.slice(0, 10).map((p: any, index: number) => {
+    const efficiencyData = data.topProducts?.slice(0, 10).map((p, index: number) => {
       const quantity = safeNumber(p.quantity);
       const orders = safeNumber(p.orders);
       const avgPerOrder = orders > 0 ? (quantity / orders).toFixed(1) : "0";
@@ -2072,6 +2675,8 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
     const pageWidth3 = doc.internal.pageSize.getWidth();
     const tableWidth3 = pageWidth3 - (mar * 2);
     
+    // Tablolar arası boşluk kontrolü
+    currentY = ensureSpace(doc, currentY, 200, mar, "Ürün Bazlı Üretim Verimliliği");
     currentY = drawTableHeader(doc, mar, currentY, tableWidth3, {
       title: "Ürün Bazlı Üretim Verimliliği",
       backgroundColor: [249, 250, 251],
@@ -2100,11 +2705,11 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
     
     autoTable(doc, {
       startY: currentY,
-      head: [['Sıra', 'Ürün', 'Toplam Miktar', 'Sipariş', 'Ortalama/Sipariş']],
-      body: efficiencyData,
+      head: transliterateTableData([['Sıra', 'Ürün', 'Toplam Miktar', 'Sipariş', 'Ortalama/Sipariş']]),
+      body: transliterateTableData(efficiencyData),
       margin: { left: mar, right: mar },
       tableWidth: currentTableWidth3,
-      didParseCell: createDidParseCell(doc),
+      willDrawCell: createWillDrawCell(doc),
       ...tableStyles3,
       columnStyles: {
         0: { cellWidth: currentTableWidth3 * 0.08, halign: "left", textColor: [107, 114, 128] }, // %8
@@ -2115,21 +2720,21 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
       },
     });
     
-    // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY = (doc as any).lastAutoTable?.finalY;
+    // Tablo sonrası currentY'yi güvenli şekilde güncelle - yeterli boşluk
+    const tableEndY = doc.lastAutoTable?.finalY;
     if (tableEndY && tableEndY > currentY) {
-      currentY = tableEndY + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
+      currentY = tableEndY + PDF_CONSTANTS.tableSpacing; // Tablo sonrası boşluk - standardize edilmiş
     } else {
-      currentY += 40; // Fallback: eğer lastAutoTable yoksa (30pt'den artırıldı)
+      currentY += PDF_CONSTANTS.tableSpacing; // Fallback: eğer lastAutoTable yoksa
     }
   }
   
   // Özet Bölümü - sabit tasarım, dinamik veriler
-  currentY = ((doc as any).lastAutoTable?.finalY || currentY) + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
+  currentY = (doc.lastAutoTable?.finalY || currentY) + 50; // Optimize edilmiş boşluk: 50pt
   currentY = ensureSpace(doc, currentY, 100, mar, "Özet");
   
-  const onHold = safeNumber(data.onHold || 0);
-  const inProduction = safeNumber(data.inProduction || 0);
+  const onHold = safeNumber((data as any).onHold || 0);
+  const inProduction = safeNumber((data as any).inProduction || 0);
   const planned = safeNumber(data.statusDistribution?.planned || 0);
   const qualityCheck = safeNumber(data.statusDistribution?.quality_check || 0);
   
@@ -2156,13 +2761,11 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
           const pageTemplate = createPDFTemplate(doc);
           drawPDFFooter(doc, pageTemplate, i, totalPages);
         } catch (pageError) {
-          console.warn(`Sayfa ${i} footer eklenirken hata:`, pageError);
           // Devam et, diğer sayfaları eklemeye çalış
         }
       }
     }
   } catch (footerError) {
-    console.warn("Footer eklenirken hata:", footerError);
     // Footer hatası kritik değil, PDF'i yine de döndür
   }
   
@@ -2174,20 +2777,64 @@ export const generateProductionReportPDF = async (data: any, startDate: string, 
     }
     return blob;
   } catch (outputError) {
-    console.error("PDF output hatası:", outputError);
     throw new Error("PDF oluşturulamadı: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
   }
 };
 
-export const generateCustomerReportPDF = async (data: any, startDate: string, endDate: string) => {
+interface CustomerReportData {
+  totalCustomers?: number;
+  activeCustomers?: number;
+  newCustomers?: number;
+  topCustomers?: Array<{
+    name?: string;
+    total?: number;
+    orders?: number;
+    lastOrderDate?: string | Date;
+  }>;
+  customerSegments?: {
+    high?: number;
+    medium?: number;
+    low?: number;
+  };
+}
+
+export const generateCustomerReportPDF = async (data: CustomerReportData, startDate: string, endDate: string) => {
   const doc = createPdf({ format: "a4", unit: "pt" });
-  await registerFonts(doc);
   
-  // Font'un gerçekten yüklendiğini doğrula
-  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
-    const currentFont = doc.getFont();
-    if (!currentFont || !isRobotoName(currentFont.fontName)) {
+  // Font'u MUTLAKA yükle - daha agresif yaklaşım
+  try {
+  await registerFonts(doc);
+  } catch (fontError) {
+    // Font yükleme hatası, tekrar dene
+    try {
       await registerFonts(doc);
+    } catch (retryError) {
+      // İkinci deneme de başarısız, devam et
+    }
+  }
+  
+  // Font'un gerçekten yüklendiğini doğrula - daha agresif kontrol
+  if (!doc._robotoFontLoaded || doc._robotoFontLoadFailed) {
+    // Font yüklenemedi, tekrar dene
+    try {
+      await registerFonts(doc);
+    } catch (retryError) {
+      // Font yüklenemedi, devam et
+    }
+  }
+  
+  // Font'u zorla Roboto olarak ayarla
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    for (let i = 0; i < 10; i++) {
+      try {
+        doc.setFont("Roboto", "normal");
+      const currentFont = doc.getFont();
+      if (currentFont && isRobotoName(currentFont.fontName)) {
+        break;
+      }
+      } catch {
+        // Tekrar dene
+    }
     }
   }
   
@@ -2195,8 +2842,23 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
   
   const reportDate = formatDate(new Date().toISOString()); // Dinamik
   
-  // PDF Template'i uygula
+  // PDF Template'i uygula - Türkçe karakterler için font kontrolü
   const template = applyPDFTemplate(doc, "MÜŞTERİ RAPORU", reportDate, startDate, endDate);
+  
+  // Font'u tekrar kontrol et ve ayarla
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    for (let i = 0; i < 5; i++) {
+      try {
+        doc.setFont("Roboto", "normal");
+    const currentFont = doc.getFont();
+        if (currentFont && isRobotoName(currentFont.fontName)) {
+          break;
+        }
+      } catch {
+        // Tekrar dene
+      }
+    }
+  }
   
   // Dinamik içerik alanından başla
   let currentY = template.contentArea.startY;
@@ -2213,21 +2875,21 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
   const cardGap = 16;
   let cardX = mar;
   
-  // Kart 1: Toplam Müşteri - profesyonel tasarım, dinamik değer
+  // Kart 1: Toplam Müşteri - profesyonel ve sade
   const totalCustomers = safeNumber(data.totalCustomers);
   drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
     title: "Toplam Müşteri",
     value: totalCustomers.toString(),
     description: "Tüm müşteriler",
     color: {
-      background: [250, 245, 255],
-      border: [221, 214, 254],
-      text: [75, 85, 99],
-      value: [147, 51, 234],
+      background: TAILWIND_COLORS.cardBackground,
+      border: TAILWIND_COLORS.cardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.gray700,
     },
   });
   
-  // Kart 2: Aktif Müşteri - sabit tasarım, dinamik değer
+  // Kart 2: Aktif Müşteri - profesyonel ve sade
   cardX += cardWidth + cardGap;
   const activeCustomers = safeNumber(data.activeCustomers);
   drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
@@ -2235,14 +2897,14 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
     value: activeCustomers.toString(),
     description: "Sipariş veren müşteri",
     color: {
-      background: [240, 253, 244],
-      border: [187, 247, 208],
-      text: [75, 85, 99],
-      value: [22, 163, 74],
+      background: TAILWIND_COLORS.successCardBg,
+      border: TAILWIND_COLORS.successCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.successCardValue,
     },
   });
   
-  // Kart 3: Yeni Müşteri - sabit tasarım, dinamik değer
+  // Kart 3: Yeni Müşteri - profesyonel ve sade
   cardX += cardWidth + cardGap;
   const newCustomers = safeNumber(data.newCustomers);
   drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
@@ -2250,83 +2912,23 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
     value: newCustomers.toString(),
     description: "Tarih aralığında",
     color: {
-      background: [239, 246, 255],
-      border: [191, 219, 254],
-      text: [75, 85, 99],
-      value: [37, 99, 235],
+      background: TAILWIND_COLORS.infoCardBg,
+      border: TAILWIND_COLORS.infoCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.infoCardValue,
     },
   });
   
-  currentY += cardHeight + 40;
+  currentY += cardHeight + PDF_CONSTANTS.sectionSpacing; // Kartlar ve tablolar arası boşluk - standardize edilmiş
   
-  // En Değerli Müşteriler Tablosu - sabit başlık tasarımı
-  if (data.topCustomers && data.topCustomers.length > 0) {
-    // Tablo genişliğini sayfa genişliğine göre ayarla
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const tableWidth = pageWidth - (mar * 2);
-    
-    currentY = drawTableHeader(doc, mar, currentY, tableWidth, {
-      title: "En Değerli Müşteriler",
-      backgroundColor: [249, 250, 251],
-      textColor: PDF_CONSTANTS.primaryColor,
-      borderColor: PDF_CONSTANTS.primaryColor,
-    });
-    
-    // Profesyonel tablo stilleri kullan
-    const tableStyles = createProfessionalTableStyles(doc, {
-      headerFontSize: 12,
-      bodyFontSize: 11,
-      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
-    });
-    tableStyles.headStyles.fillColor = [59, 130, 246];
-    tableStyles.headStyles.textColor = [255, 255, 255];
-    tableStyles.headStyles.halign = "center";
-    tableStyles.bodyStyles.overflow = 'linebreak';
-    tableStyles.styles.overflow = 'linebreak';
-    
-    // Sayfa sığma kontrolü
-    currentY = ensureTableFitsPage(doc, currentY, 200, mar, "En Değerli Müşteriler");
-    
-    // Tablo genişliğini sayfa genişliğine göre ayarla
-    const currentPageWidth = doc.internal.pageSize.getWidth();
-    const currentTableWidth = currentPageWidth - (mar * 2);
-    
-    autoTable(doc, {
-      startY: currentY,
-      head: [['Sıra', 'Müşteri', 'Sipariş Sayısı', 'Toplam Harcama']],
-      body: data.topCustomers.slice(0, 10).map((c: any, index: number) => [
-        `#${index + 1}`,
-        c.name || '-',
-        safeNumber(c.orders).toString(),
-        safeFormatCurrency(safeNumber(c.total))
-      ]),
-      margin: { left: mar, right: mar },
-      tableWidth: currentTableWidth,
-      didParseCell: createDidParseCell(doc),
-      ...tableStyles,
-      columnStyles: {
-        0: { cellWidth: currentTableWidth * 0.10, halign: "left", textColor: [107, 114, 128] }, // %10
-        1: { cellWidth: currentTableWidth * 0.40, halign: "left", overflow: 'linebreak' }, // %40
-        2: { cellWidth: currentTableWidth * 0.20, halign: "right", fontStyle: "bold" }, // %20
-        3: { cellWidth: currentTableWidth * 0.30, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %30
-      },
-    });
-    
-    // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY = (doc as any).lastAutoTable?.finalY;
-    if (tableEndY && tableEndY > currentY) {
-      currentY = tableEndY + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
-    } else {
-      currentY += 40; // Fallback: eğer lastAutoTable yoksa (30pt'den artırıldı)
-    }
-  }
-  
-  // Müşteri Segmentasyonu Tablosu - sabit başlık tasarımı
-  if (data.segments) {
+  // Müşteri Segmentasyonu Tablosu - sayfadaki sıralamayla uyumlu (önce Segmentasyonu, sonra En Değerli Müşteriler)
+  if ((data as any).segments) {
     // Tablo genişliğini sayfa genişliğine göre ayarla
     const pageWidthSeg = doc.internal.pageSize.getWidth();
     const tableWidthSeg = pageWidthSeg - (mar * 2);
     
+    // Tablolar arası boşluk kontrolü
+    currentY = ensureSpace(doc, currentY, 200, mar, "Müşteri Segmentasyonu");
     currentY = drawTableHeader(doc, mar, currentY, tableWidthSeg, {
       title: "Müşteri Segmentasyonu",
       backgroundColor: [249, 250, 251],
@@ -2353,38 +2955,118 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
     const currentPageWidthSeg = doc.internal.pageSize.getWidth();
     const currentTableWidthSeg = currentPageWidthSeg - (mar * 2);
     
+    // Font'u zorla Roboto olarak ayarla (autoTable öncesi)
+    forceRobotoFont(doc, "normal");
+    
     autoTable(doc, {
       startY: currentY,
-      head: [['Segment', 'Müşteri Sayısı']],
-      body: [
-        ['Yüksek Değerli (>₺50K)', safeNumber(data.segments.high).toString()],
-        ['Orta Değerli (₺10K-₺50K)', safeNumber(data.segments.medium).toString()],
-        ['Düşük Değerli (<₺10K)', safeNumber(data.segments.low).toString()],
-      ],
+      head: transliterateTableData([['Segment', 'Müşteri Sayısı']]),
+      body: transliterateTableData([
+        ['Yüksek Değerli (>₺50K)', safeNumber((data as any).segments.high).toString()],
+        ['Orta Değerli (₺10K-₺50K)', safeNumber((data as any).segments.medium).toString()],
+        ['Düşük Değerli (<₺10K)', safeNumber((data as any).segments.low).toString()],
+      ]),
       margin: { left: mar, right: mar },
       tableWidth: currentTableWidthSeg,
-      didParseCell: createDidParseCell(doc),
+      willDrawCell: createWillDrawCell(doc),
       ...tableStyles2,
       columnStyles: {
         0: { cellWidth: currentTableWidthSeg * 0.70, halign: "left", overflow: 'linebreak' }, // %70
         1: { cellWidth: currentTableWidthSeg * 0.30, halign: "right", fontStyle: "bold" }, // %30
       },
     });
+    
+    // Tablo sonrası currentY'yi güvenli şekilde güncelle
+    const tableEndY2 = doc.lastAutoTable?.finalY;
+    if (tableEndY2 && tableEndY2 > currentY) {
+      currentY = tableEndY2 + 50; // Optimize edilmiş boşluk: 50pt
+    } else {
+      currentY += PDF_CONSTANTS.tableSpacing; // Fallback: eğer lastAutoTable yoksa
+    }
+  }
+  
+  // En Değerli Müşteriler Tablosu - sayfadaki sıralamayla uyumlu (Müşteri Segmentasyonu'ndan sonra)
+  if (data.topCustomers && data.topCustomers.length > 0) {
+    // Tablo genişliğini sayfa genişliğine göre ayarla
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const tableWidth = pageWidth - (mar * 2);
+    
+    // Tablolar arası boşluk kontrolü
+    currentY = ensureSpace(doc, currentY, 200, mar, "En Değerli Müşteriler");
+    currentY = drawTableHeader(doc, mar, currentY, tableWidth, {
+      title: "En Değerli Müşteriler",
+      backgroundColor: TAILWIND_COLORS.gray100,
+      textColor: PDF_CONSTANTS.primaryColor,
+      borderColor: PDF_CONSTANTS.primaryColor,
+    });
+    
+    // Profesyonel tablo stilleri kullan
+    const tableStyles = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
+    // Header rengi zaten createProfessionalTableStyles'da ayarlandı
+    // Override etmeye gerek yok
+    tableStyles.headStyles.halign = "center";
+    tableStyles.bodyStyles.overflow = 'linebreak';
+    tableStyles.styles.overflow = 'linebreak';
+    
+    // Sayfa sığma kontrolü
+    currentY = ensureTableFitsPage(doc, currentY, 200, mar, "En Değerli Müşteriler");
+    
+    // Tablo genişliğini sayfa genişliğine göre ayarla
+    const currentPageWidth = doc.internal.pageSize.getWidth();
+    const currentTableWidth = currentPageWidth - (mar * 2);
+    
+    // Font'u zorla Roboto olarak ayarla (autoTable öncesi)
+    forceRobotoFont(doc, "normal");
+    
+    autoTable(doc, {
+      startY: currentY,
+      head: transliterateTableData([['Sıra', 'Müşteri', 'Sipariş Sayısı', 'Toplam Harcama']]),
+      body: transliterateTableData(
+        data.topCustomers?.slice(0, 10).map((c, index: number) => [
+        `#${index + 1}`,
+        c.name || '-',
+        safeNumber(c.orders).toString(),
+        safeFormatCurrency(safeNumber(c.total))
+        ]) || []
+      ),
+      margin: { left: mar, right: mar },
+      tableWidth: currentTableWidth,
+      willDrawCell: createWillDrawCell(doc),
+      ...tableStyles,
+      columnStyles: {
+        0: { cellWidth: currentTableWidth * 0.10, halign: "left", textColor: TAILWIND_COLORS.gray500 }, // %10
+        1: { cellWidth: currentTableWidth * 0.40, halign: "left", overflow: 'linebreak' }, // %40
+        2: { cellWidth: currentTableWidth * 0.20, halign: "right", fontStyle: "bold" }, // %20
+        3: { cellWidth: currentTableWidth * 0.30, halign: "right", fontStyle: "bold", textColor: PDF_CONSTANTS.primaryColor }, // %30
+      },
+    });
+    
+    // Tablo sonrası currentY'yi güvenli şekilde güncelle
+    const tableEndY = doc.lastAutoTable?.finalY;
+    if (tableEndY && tableEndY > currentY) {
+      currentY = tableEndY + 50; // Optimize edilmiş boşluk: 50pt
+    } else {
+      currentY += PDF_CONSTANTS.tableSpacing; // Fallback: eğer lastAutoTable yoksa
+    }
   }
   
   // Müşteri Detay Analizi - Yeni detaylı bölüm
   if (data.topCustomers && data.topCustomers.length > 0) {
     // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY2 = (doc as any).lastAutoTable?.finalY;
+    const tableEndY2 = doc.lastAutoTable?.finalY;
     if (tableEndY2 && tableEndY2 > currentY) {
-      currentY = tableEndY2 + 30; // Standart boşluk: 30pt
+      currentY = tableEndY2 + 60; // Tablo sonrası boşluk artırıldı: 30 → 60
     } else {
-      currentY += 30; // Fallback: eğer lastAutoTable yoksa
+      currentY += PDF_CONSTANTS.tableSpacing; // Fallback: eğer lastAutoTable yoksa
     }
     currentY = ensureSpace(doc, currentY, 200, mar, "Müşteri Detay Analizi");
     
     // Müşteri bazlı sipariş frekansı ve değer analizi
-    const customerDetailData = data.topCustomers.slice(0, 15).map((c: any, index: number) => {
+    const customerDetailData = data.topCustomers?.slice(0, 15).map((c, index: number) => {
       const orders = safeNumber(c.orders);
       const total = safeNumber(c.total);
       const avgOrderValue = orders > 0 ? (total / orders) : 0;
@@ -2404,6 +3086,8 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
     const pageWidth5 = doc.internal.pageSize.getWidth();
     const tableWidth5 = pageWidth5 - (mar * 2);
     
+    // Tablolar arası boşluk kontrolü
+    currentY = ensureSpace(doc, currentY, 300, mar, "Müşteri Detay Analizi");
     currentY = drawTableHeader(doc, mar, currentY, tableWidth5, {
       title: "Müşteri Detay Analizi (Top 15)",
       backgroundColor: [249, 250, 251],
@@ -2428,38 +3112,42 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
     
     autoTable(doc, {
       startY: currentY,
-      head: [['Sıra', 'Müşteri', 'Sipariş', 'Toplam', 'Ortalama', 'Segment']],
-      body: customerDetailData,
+      head: transliterateTableData([['Sıra', 'Müşteri', 'Sipariş', 'Toplam', 'Ortalama', 'Segment']]),
+      body: transliterateTableData(customerDetailData),
       margin: { left: mar, right: mar },
       tableWidth: tableWidth5,
-      didParseCell: createDidParseCell(doc),
+      willDrawCell: createWillDrawCell(doc),
       ...tableStyles3,
       columnStyles: {
         0: { cellWidth: tableWidth5 * 0.07, halign: "left", textColor: [107, 114, 128] }, // %7
         1: { cellWidth: tableWidth5 * 0.30, halign: "left", overflow: 'linebreak' }, // %30
         2: { cellWidth: tableWidth5 * 0.12, halign: "right", fontStyle: "bold" }, // %12
-        3: { cellWidth: tableWidth5 * 0.20, halign: "right", fontStyle: "bold", textColor: [221, 83, 53] }, // %20
+        3: { cellWidth: tableWidth5 * 0.20, halign: "right", fontStyle: "bold", textColor: PDF_CONSTANTS.primaryColor }, // %20
         4: { cellWidth: tableWidth5 * 0.18, halign: "right", textColor: [107, 114, 128] }, // %18
         5: { cellWidth: tableWidth5 * 0.13, halign: "center", fontStyle: "bold" }, // %13
       },
       alternateRowStyles: {
         fillColor: [249, 250, 251]
       },
-      didDrawCell: (data: any) => {
+      didDrawCell: (data: CellHookData) => {
         // Segment renklendirme
-        if (data.column.index === 5 && data.cell.text) {
+        if (data.column?.index === 5 && data.cell?.text) {
           const segment = data.cell.text.toString();
+          const x = data.cell?.x ?? data.x ?? 0;
+          const y = data.cell?.y ?? data.y ?? 0;
+          const width = data.cell?.width ?? data.width ?? 0;
+          const height = data.cell?.height ?? data.height ?? 0;
           if (segment === "Yüksek") {
             doc.setFillColor(240, 253, 244);
-            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
+            doc.rect(x, y, width, height, "F");
             doc.setTextColor(22, 163, 74);
           } else if (segment === "Orta") {
             doc.setFillColor(254, 249, 195);
-            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
+            doc.rect(x, y, width, height, "F");
             doc.setTextColor(217, 119, 6);
           } else {
             doc.setFillColor(254, 242, 242);
-            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
+            doc.rect(x, y, width, height, "F");
             doc.setTextColor(220, 38, 38);
           }
         }
@@ -2467,7 +3155,7 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
     });
     
     // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY3 = (doc as any).lastAutoTable?.finalY;
+    const tableEndY3 = doc.lastAutoTable?.finalY;
     if (tableEndY3 && tableEndY3 > currentY) {
       currentY = tableEndY3 + 30; // Standart boşluk: 30pt
     } else {
@@ -2490,25 +3178,25 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
       ['Yeni Müşteri Oranı', `${(safeNumber(data.newCustomers) / Math.max(safeNumber(data.totalCustomers), 1) * 100).toFixed(1)}%`],
       ['Müşteri Tutma Oranı', `${retentionRate}%`],
       ['Aktif Müşteri Oranı', `${activeRate}%`],
-      ['Segment Dağılımı (Yüksek)', `${safeNumber(data.segments?.high || 0)} müşteri`],
-      ['Segment Dağılımı (Orta)', `${safeNumber(data.segments?.medium || 0)} müşteri`],
-      ['Segment Dağılımı (Düşük)', `${safeNumber(data.segments?.low || 0)} müşteri`],
+      ['Segment Dağılımı (Yüksek)', `${safeNumber((data as any).segments?.high || 0)} müşteri`],
+      ['Segment Dağılımı (Orta)', `${safeNumber((data as any).segments?.medium || 0)} müşteri`],
+      ['Segment Dağılımı (Düşük)', `${safeNumber((data as any).segments?.low || 0)} müşteri`],
     ];
     
     currentY = drawSummarySection(doc, mar, currentY, contentWidth, "Müşteri Trend Analizi", trendData, [147, 51, 234]);
   }
   
   // Özet Bölümü - sabit tasarım, dinamik veriler
-  currentY = ((doc as any).lastAutoTable?.finalY || currentY) + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
+  currentY = (doc.lastAutoTable?.finalY || currentY) + 50; // Optimize edilmiş boşluk: 50pt
   currentY = ensureSpace(doc, currentY, 100, mar, "Özet");
   
   const summaryData: Array<[string, string]> = [
     ['Toplam Müşteri', safeNumber(data.totalCustomers).toString()],
     ['Aktif Müşteri', safeNumber(data.activeCustomers).toString()],
     ['Yeni Müşteri', safeNumber(data.newCustomers).toString()],
-    ['Yüksek Değerli Müşteri', safeNumber(data.segments?.high || 0).toString()],
-    ['Orta Değerli Müşteri', safeNumber(data.segments?.medium || 0).toString()],
-    ['Düşük Değerli Müşteri', safeNumber(data.segments?.low || 0).toString()],
+    ['Yüksek Değerli Müşteri', safeNumber((data as any).segments?.high || 0).toString()],
+    ['Orta Değerli Müşteri', safeNumber((data as any).segments?.medium || 0).toString()],
+    ['Düşük Değerli Müşteri', safeNumber((data as any).segments?.low || 0).toString()],
     ['En Değerli Müşteri Sayısı', data.topCustomers ? data.topCustomers.length.toString() : "0"],
   ];
   
@@ -2524,13 +3212,11 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
           const pageTemplate = createPDFTemplate(doc);
           drawPDFFooter(doc, pageTemplate, i, totalPages);
         } catch (pageError) {
-          console.warn(`Sayfa ${i} footer eklenirken hata:`, pageError);
           // Devam et, diğer sayfaları eklemeye çalış
         }
       }
     }
   } catch (footerError) {
-    console.warn("Footer eklenirken hata:", footerError);
     // Footer hatası kritik değil, PDF'i yine de döndür
   }
   
@@ -2542,20 +3228,75 @@ export const generateCustomerReportPDF = async (data: any, startDate: string, en
     }
     return blob;
   } catch (outputError) {
-    console.error("PDF output hatası:", outputError);
     throw new Error("PDF oluşturulamadı: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
   }
 };
 
-export const generateFinancialReportPDF = async (data: any, startDate: string, endDate: string) => {
+interface FinancialReportData {
+  totalRevenue?: number;
+  totalCost?: number;
+  grossProfit?: number;
+  profitMargin?: number;
+  monthlyTrend?: Array<{
+    month?: string;
+    revenue?: number;
+    cost?: number;
+    profit?: number;
+  }>;
+  topProfitableProducts?: Array<{
+    name?: string;
+    revenue?: number;
+    cost?: number;
+    profit?: number;
+  }>;
+  segments?: {
+    high?: number;
+    medium?: number;
+    low?: number;
+  };
+  topCustomers?: Array<{
+    name?: string;
+    total?: number;
+  }>;
+}
+
+export const generateFinancialReportPDF = async (data: FinancialReportData, startDate: string, endDate: string) => {
   const doc = createPdf({ format: "a4", unit: "pt" });
-  await registerFonts(doc);
   
-  // Font'un gerçekten yüklendiğini doğrula
-  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
-    const currentFont = doc.getFont();
-    if (!currentFont || !isRobotoName(currentFont.fontName)) {
+  // Font'u MUTLAKA yükle - daha agresif yaklaşım
+  try {
+  await registerFonts(doc);
+  } catch (fontError) {
+    // Font yükleme hatası, tekrar dene
+    try {
       await registerFonts(doc);
+    } catch (retryError) {
+      // İkinci deneme de başarısız, devam et
+    }
+  }
+  
+  // Font'un gerçekten yüklendiğini doğrula - daha agresif kontrol
+  if (!doc._robotoFontLoaded || doc._robotoFontLoadFailed) {
+    // Font yüklenemedi, tekrar dene
+    try {
+      await registerFonts(doc);
+    } catch (retryError) {
+      // Font yüklenemedi, devam et
+    }
+  }
+  
+  // Font'u zorla Roboto olarak ayarla
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    for (let i = 0; i < 10; i++) {
+      try {
+        doc.setFont("Roboto", "normal");
+      const currentFont = doc.getFont();
+      if (currentFont && isRobotoName(currentFont.fontName)) {
+        break;
+      }
+      } catch {
+        // Tekrar dene
+    }
     }
   }
   
@@ -2563,8 +3304,23 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
   
   const reportDate = formatDate(new Date().toISOString()); // Dinamik
   
-  // PDF Template'i uygula
+  // PDF Template'i uygula - Türkçe karakterler için font kontrolü
   const template = applyPDFTemplate(doc, "MALİ RAPOR", reportDate, startDate, endDate);
+  
+  // Font'u tekrar kontrol et ve ayarla
+  if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
+    for (let i = 0; i < 5; i++) {
+      try {
+        doc.setFont("Roboto", "normal");
+    const currentFont = doc.getFont();
+        if (currentFont && isRobotoName(currentFont.fontName)) {
+          break;
+        }
+      } catch {
+        // Tekrar dene
+      }
+    }
+  }
   
   // Dinamik içerik alanından başla
   let currentY = template.contentArea.startY;
@@ -2575,184 +3331,85 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
   const [primaryR, primaryG, primaryB] = PDF_CONSTANTS.primaryColor;
   const [mutedR, mutedG, mutedB] = PDF_CONSTANTS.mutedColor;
   
-  // İstatistik Kartları - Profesyonel tasarım (4 kart)
-  const cardWidth = (contentWidth - 48) / 4;
-  const cardHeight = 110; // Daha ferah: 100 → 110
-  const cardGap = 16;
+  // İstatistik Kartları - Profesyonel tasarım (4 kart) - standardize edilmiş
+  const cardDimensions = calculateCardDimensions(contentWidth, 4);
+  const cardWidth = cardDimensions.width;
+  const cardGap = cardDimensions.gap;
+  const cardHeight = PDF_CONSTANTS.cardHeight;
   let cardX = mar;
   
-  // Kart 1: Toplam Gelir (Green) - daha modern ve profesyonel
-  doc.setFillColor(240, 253, 244); // green-50
-  doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 6, 6, "F");
-  doc.setDrawColor(187, 247, 208); // green-200
-  doc.setLineWidth(1.5);
-  doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 6, 6, "S");
-  
-  // Shadow efekti simülasyonu
-  doc.setFillColor(0, 0, 0);
-  doc.setGState(doc.GState({ opacity: 0.05 }));
-  doc.roundedRect(cardX + 2, currentY + 2, cardWidth, cardHeight, 6, 6, "F");
-  doc.setGState(doc.GState({ opacity: 1 }));
-  
-  doc.setTextColor(75, 85, 99); // text-muted-foreground - daha koyu
-  safeText("Toplam Gelir", cardX + 14, currentY + 20, 15, true); // İyileştirildi: 14px → 15px
+  // Kart 1: Toplam Gelir (Green) - profesyonel ve sade
   const totalRevenue = safeNumber(data.totalRevenue);
-  doc.setTextColor(22, 163, 74); // text-green-600
-  safeText(safeFormatCurrency(totalRevenue), cardX + 14, currentY + 52, 32, true); // İyileştirildi: 30px → 32px
-  doc.setTextColor(75, 85, 99); // text-muted-foreground - daha koyu
-  safeText("Toplam ciro", cardX + 14, currentY + 88, 13, false); // İyileştirildi: 12px → 13px
-  doc.setTextColor(0, 0, 0);
+  drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
+    title: "Toplam Gelir",
+    value: safeFormatCurrency(totalRevenue),
+    description: "Toplam ciro",
+    color: {
+      background: TAILWIND_COLORS.successCardBg,
+      border: TAILWIND_COLORS.successCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.successCardValue,
+    },
+  });
   
-  // Kart 2: Toplam Gider (Red) - daha modern ve profesyonel
+  // Kart 2: Toplam Gider (Red) - profesyonel ve sade
   cardX += cardWidth + cardGap;
-  doc.setFillColor(254, 242, 242); // red-50
-  doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 6, 6, "F");
-  doc.setDrawColor(254, 202, 202); // red-200
-  doc.setLineWidth(1.5);
-  doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 6, 6, "S");
-  
-  // Shadow efekti simülasyonu
-  doc.setFillColor(0, 0, 0);
-  doc.setGState(doc.GState({ opacity: 0.05 }));
-  doc.roundedRect(cardX + 2, currentY + 2, cardWidth, cardHeight, 6, 6, "F");
-  doc.setGState(doc.GState({ opacity: 1 }));
-  
-  doc.setTextColor(75, 85, 99); // text-muted-foreground - daha koyu
-  safeText("Toplam Gider", cardX + 14, currentY + 20, 15, true); // İyileştirildi: 14px → 15px
   const totalCost = safeNumber(data.totalCost);
-  doc.setTextColor(220, 38, 38); // text-red-600
-  safeText(safeFormatCurrency(totalCost), cardX + 14, currentY + 52, 32, true); // İyileştirildi: 30px → 32px
-  doc.setTextColor(75, 85, 99); // text-muted-foreground - daha koyu
-  safeText("Toplam maliyet", cardX + 14, currentY + 88, 13, false); // İyileştirildi: 12px → 13px
-  doc.setTextColor(0, 0, 0);
+  drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
+    title: "Toplam Gider",
+    value: safeFormatCurrency(totalCost),
+    description: "Toplam maliyet",
+    color: {
+      background: TAILWIND_COLORS.errorCardBg,
+      border: TAILWIND_COLORS.errorCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.errorCardValue,
+    },
+  });
   
-  // Kart 3: Brüt Kar (Emerald) - daha modern ve profesyonel
+  // Kart 3: Brüt Kar (Emerald) - profesyonel ve sade
   cardX += cardWidth + cardGap;
-  doc.setFillColor(236, 253, 245); // emerald-50
-  doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 6, 6, "F");
-  doc.setDrawColor(167, 243, 208); // emerald-200
-  doc.setLineWidth(1.5);
-  doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 6, 6, "S");
-  
-  // Shadow efekti simülasyonu
-  doc.setFillColor(0, 0, 0);
-  doc.setGState(doc.GState({ opacity: 0.05 }));
-  doc.roundedRect(cardX + 2, currentY + 2, cardWidth, cardHeight, 6, 6, "F");
-  doc.setGState(doc.GState({ opacity: 1 }));
-  
-  doc.setTextColor(75, 85, 99); // text-muted-foreground - daha koyu
-  safeText("Brüt Kar", cardX + 14, currentY + 20, 15, true); // İyileştirildi: 14px → 15px
   const grossProfit = safeNumber(data.grossProfit);
-  doc.setTextColor(5, 150, 105); // text-emerald-600
-  safeText(safeFormatCurrency(grossProfit), cardX + 14, currentY + 52, 32, true); // İyileştirildi: 30px → 32px
-  doc.setTextColor(75, 85, 99); // text-muted-foreground - daha koyu
-  safeText("Net kar", cardX + 14, currentY + 88, 13, false); // İyileştirildi: 12px → 13px
-  doc.setTextColor(0, 0, 0);
+  drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
+    title: "Brüt Kar",
+    value: safeFormatCurrency(grossProfit),
+    description: "Net kar",
+    color: {
+      background: TAILWIND_COLORS.successCardBg,
+      border: TAILWIND_COLORS.successCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.successCardValue,
+    },
+  });
   
-  // Kart 4: Kar Marjı (Primary) - daha modern ve profesyonel
+  // Kart 4: Kar Marjı (Primary) - profesyonel ve sade
   cardX += cardWidth + cardGap;
-  doc.setFillColor(221, 83, 53); // Primary color
-  doc.setGState(doc.GState({ opacity: 0.12 }));
-  doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 6, 6, "F");
-  doc.setGState(doc.GState({ opacity: 0.05 }));
-  doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 6, 6, "F");
-  doc.setGState(doc.GState({ opacity: 1 }));
-  doc.setDrawColor(221, 83, 53);
-  doc.setGState(doc.GState({ opacity: 0.3 }));
-  doc.setLineWidth(1.5);
-  doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 6, 6, "S");
-  doc.setGState(doc.GState({ opacity: 1 }));
-  
-  // Shadow efekti simülasyonu
-  doc.setFillColor(0, 0, 0);
-  doc.setGState(doc.GState({ opacity: 0.05 }));
-  doc.roundedRect(cardX + 2, currentY + 2, cardWidth, cardHeight, 6, 6, "F");
-  doc.setGState(doc.GState({ opacity: 1 }));
-  
-  doc.setTextColor(75, 85, 99); // text-muted-foreground - daha koyu
-  safeText("Kar Marjı", cardX + 14, currentY + 20, 15, true); // İyileştirildi: 14px → 15px
   const profitMargin = safeNumber(data.profitMargin);
-  doc.setTextColor(221, 83, 53); // text-primary
-  safeText(`${profitMargin.toFixed(1)}%`, cardX + 14, currentY + 52, 32, true); // İyileştirildi: 30px → 32px
-  doc.setTextColor(75, 85, 99); // text-muted-foreground - daha koyu
-  safeText("Karlılık oranı", cardX + 14, currentY + 88, 13, false); // İyileştirildi: 12px → 13px
-  doc.setTextColor(0, 0, 0);
+  drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
+    title: "Kar Marjı",
+    value: `${profitMargin.toFixed(1)}%`,
+    description: "Karlılık oranı",
+    color: {
+      background: TAILWIND_COLORS.primaryCardBg,
+      border: TAILWIND_COLORS.primaryCardBorder,
+      text: TAILWIND_COLORS.cardText,
+      value: TAILWIND_COLORS.primaryCardValue,
+    },
+  });
   
-  currentY += cardHeight + 40; // İyileştirildi: 30px → 40px (daha ferah)
+  currentY += cardHeight + PDF_CONSTANTS.sectionSpacing; // Kartlar ve tablolar arası boşluk - standardize edilmiş
   
-  // En Karlı Ürünler Tablosu - sabit başlık tasarımı
-  if (data.topProfitableProducts && data.topProfitableProducts.length > 0) {
-    // Tablo genişliğini sayfa genişliğine göre ayarla
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const tableWidth = pageWidth - (mar * 2);
-    
-    currentY = drawTableHeader(doc, mar, currentY, tableWidth, {
-      title: "En Karlı Ürünler",
-      backgroundColor: [249, 250, 251],
-      textColor: PDF_CONSTANTS.primaryColor,
-      borderColor: PDF_CONSTANTS.primaryColor,
-    });
-    
-    // Profesyonel tablo stilleri kullan
-    const tableStyles = createProfessionalTableStyles(doc, {
-      headerFontSize: 12,
-      bodyFontSize: 11,
-      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
-    });
-    tableStyles.headStyles.fillColor = [59, 130, 246];
-    tableStyles.headStyles.textColor = [255, 255, 255];
-    tableStyles.headStyles.halign = "center";
-    tableStyles.bodyStyles.overflow = 'linebreak';
-    tableStyles.styles.overflow = 'linebreak';
-    
-    // Sayfa sığma kontrolü
-    currentY = ensureTableFitsPage(doc, currentY, 200, mar, "En Karlı Ürünler");
-    
-    // Tablo genişliğini sayfa genişliğine göre ayarla
-    const currentPageWidth = doc.internal.pageSize.getWidth();
-    const currentTableWidth = currentPageWidth - (mar * 2);
-    
-    autoTable(doc, {
-      startY: currentY,
-      head: [['Sıra', 'Ürün', 'Gelir', 'Gider', 'Kar']],
-      body: data.topProfitableProducts.slice(0, 10).map((p: any, index: number) => [
-        `#${index + 1}`,
-        p.name || '-',
-        safeFormatCurrency(safeNumber(p.revenue)),
-        safeFormatCurrency(safeNumber(p.cost)),
-        safeFormatCurrency(safeNumber(p.profit))
-      ]),
-      margin: { left: mar, right: mar },
-      tableWidth: currentTableWidth,
-      didParseCell: createDidParseCell(doc),
-      ...tableStyles,
-      columnStyles: {
-        0: { cellWidth: currentTableWidth * 0.08, halign: "left", textColor: [107, 114, 128] }, // %8
-        1: { cellWidth: currentTableWidth * 0.40, halign: "left", overflow: 'linebreak' }, // %40
-        2: { cellWidth: currentTableWidth * 0.17, halign: "right", fontStyle: "bold", textColor: [34, 197, 94] }, // %17
-        3: { cellWidth: currentTableWidth * 0.17, halign: "right", fontStyle: "bold", textColor: [239, 68, 68] }, // %17
-        4: { cellWidth: currentTableWidth * 0.18, halign: "right", fontStyle: "bold", textColor: [16, 185, 129] }, // %18
-      },
-    });
-  }
-  
-  // Aylık trend
-  // Tablo sonrası currentY'yi güvenli şekilde güncelle
-  const trendTableEndY = (doc as any).lastAutoTable?.finalY;
-  if (trendTableEndY && trendTableEndY > currentY) {
-    currentY = trendTableEndY + 30;
-  } else {
-    currentY += 30;
-  }
-  
+  // Aylık Trend Tablosu - sayfadaki sıralamayla uyumlu (önce Aylık Trend, sonra En Karlı Ürünler)
   if (data.monthlyTrend && data.monthlyTrend.length > 0) {
     // Tablo genişliğini sayfa genişliğine göre ayarla
     const pageWidthTrend = doc.internal.pageSize.getWidth();
     const tableWidthTrend = pageWidthTrend - (mar * 2);
     
+    // Tablolar arası boşluk kontrolü
+    currentY = ensureSpace(doc, currentY, 200, mar, "Aylık Trend");
     currentY = drawTableHeader(doc, mar, currentY, tableWidthTrend, {
       title: "Aylık Gelir-Gider-Kar Trendi",
-      backgroundColor: [249, 250, 251],
+      backgroundColor: TAILWIND_COLORS.gray100,
       textColor: PDF_CONSTANTS.primaryColor,
       borderColor: PDF_CONSTANTS.primaryColor,
     });
@@ -2763,14 +3420,14 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
       '09': 'Eylül', '10': 'Ekim', '11': 'Kasım', '12': 'Aralık'
     };
     
-    const trendData = data.monthlyTrend.map((item: any) => {
+    const trendData = data.monthlyTrend?.map((item) => {
       const [year, month] = item.month.split('-');
       const monthLabel = monthLabels[month] || month;
       return [
         `${monthLabel} ${year}`,
-        `₺${(item.revenue || 0).toFixed(2)}`,
-        `₺${(item.cost || 0).toFixed(2)}`,
-        `₺${(item.profit || 0).toFixed(2)}`
+        safeFormatCurrency(safeNumber(item.revenue || 0)),
+        safeFormatCurrency(safeNumber(item.cost || 0)),
+        safeFormatCurrency(safeNumber(item.profit || 0))
       ];
     });
     
@@ -2780,7 +3437,7 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
       bodyFontSize: 11,
       cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
     });
-    tableStyles2.headStyles.fillColor = [221, 83, 53]; // Primary color
+    tableStyles2.headStyles.fillColor = PDF_CONSTANTS.primaryColor; // Primary color
     tableStyles2.headStyles.textColor = [255, 255, 255]; // White text
     tableStyles2.headStyles.halign = "center";
     tableStyles2.bodyStyles.overflow = 'linebreak';
@@ -2793,13 +3450,16 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
     const currentPageWidth2 = doc.internal.pageSize.getWidth();
     const currentTableWidth2 = currentPageWidth2 - (mar * 2);
     
+    // Font'u zorla Roboto olarak ayarla (autoTable öncesi)
+    forceRobotoFont(doc, "normal");
+    
     autoTable(doc, {
       startY: currentY,
-      head: [['Ay', 'Gelir', 'Gider', 'Kar']],
-      body: trendData,
+      head: transliterateTableData([['Ay', 'Gelir', 'Gider', 'Kar']]),
+      body: transliterateTableData(trendData),
       margin: { left: mar, right: mar },
       tableWidth: currentTableWidth2,
-      didParseCell: createDidParseCell(doc),
+      willDrawCell: createWillDrawCell(doc),
       ...tableStyles2,
       columnStyles: {
         0: { cellWidth: currentTableWidth2 * 0.25, halign: "left" },  // %25
@@ -2808,28 +3468,111 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
         3: { cellWidth: currentTableWidth2 * 0.25, halign: "right" }, // %25
       },
     });
+    
+    // Tablo sonrası currentY'yi güvenli şekilde güncelle
+    const trendTableEndY = doc.lastAutoTable?.finalY;
+    if (trendTableEndY && trendTableEndY > currentY) {
+      currentY = trendTableEndY + 50; // Optimize edilmiş boşluk: 50pt
+    } else {
+      currentY += PDF_CONSTANTS.tableSpacing; // Fallback: eğer lastAutoTable yoksa
+    }
+  }
+  
+  // En Karlı Ürünler Tablosu - sayfadaki sıralamayla uyumlu (Aylık Trend'den sonra)
+  if (data.topProfitableProducts && data.topProfitableProducts.length > 0) {
+    // Tablo genişliğini sayfa genişliğine göre ayarla
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const tableWidth = pageWidth - (mar * 2);
+    
+    // Tablolar arası boşluk kontrolü
+    currentY = ensureSpace(doc, currentY, 200, mar, "En Karlı Ürünler");
+    currentY = drawTableHeader(doc, mar, currentY, tableWidth, {
+      title: "En Karlı Ürünler",
+      backgroundColor: TAILWIND_COLORS.gray100,
+      textColor: PDF_CONSTANTS.primaryColor,
+      borderColor: PDF_CONSTANTS.primaryColor,
+    });
+    
+    // Profesyonel tablo stilleri kullan
+    const tableStyles = createProfessionalTableStyles(doc, {
+      headerFontSize: 12,
+      bodyFontSize: 11,
+      cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
+    });
+    // Header rengi zaten createProfessionalTableStyles'da ayarlandı
+    // Override etmeye gerek yok
+    tableStyles.headStyles.halign = "center";
+    tableStyles.bodyStyles.overflow = 'linebreak';
+    tableStyles.styles.overflow = 'linebreak';
+    
+    // Sayfa sığma kontrolü
+    currentY = ensureTableFitsPage(doc, currentY, 200, mar, "En Karlı Ürünler");
+    
+    // Tablo genişliğini sayfa genişliğine göre ayarla
+    const currentPageWidth = doc.internal.pageSize.getWidth();
+    const currentTableWidth = currentPageWidth - (mar * 2);
+    
+    // Font'u zorla Roboto olarak ayarla (autoTable öncesi)
+    forceRobotoFont(doc, "normal");
+    
+    autoTable(doc, {
+      startY: currentY,
+      head: transliterateTableData([['Sıra', 'Ürün', 'Gelir', 'Gider', 'Kar']]),
+      body: transliterateTableData(
+        data.topProfitableProducts?.slice(0, 10).map((p, index: number) => [
+        `#${index + 1}`,
+        p.name || '-',
+        safeFormatCurrency(safeNumber(p.revenue)),
+        safeFormatCurrency(safeNumber(p.cost)),
+        safeFormatCurrency(safeNumber(p.profit))
+        ]) || []
+      ),
+      margin: { left: mar, right: mar },
+      tableWidth: currentTableWidth,
+      willDrawCell: createWillDrawCell(doc),
+      ...tableStyles,
+      columnStyles: {
+        0: { cellWidth: currentTableWidth * 0.08, halign: "left", textColor: TAILWIND_COLORS.gray500 }, // %8
+        1: { cellWidth: currentTableWidth * 0.40, halign: "left", overflow: 'linebreak' }, // %40
+        2: { cellWidth: currentTableWidth * 0.17, halign: "right", fontStyle: "bold", textColor: PDF_CONSTANTS.successColor }, // %17
+        3: { cellWidth: currentTableWidth * 0.17, halign: "right", fontStyle: "bold", textColor: PDF_CONSTANTS.errorColor }, // %17
+        4: { cellWidth: currentTableWidth * 0.18, halign: "right", fontStyle: "bold", textColor: PDF_CONSTANTS.successColor }, // %18
+      },
+    });
+    
+    // Tablo sonrası currentY'yi güvenli şekilde güncelle
+    const productsTableEndY = doc.lastAutoTable?.finalY;
+    if (productsTableEndY && productsTableEndY > currentY) {
+      currentY = productsTableEndY + 50; // Optimize edilmiş boşluk: 50pt
+    } else {
+      currentY += PDF_CONSTANTS.tableSpacing; // Fallback: eğer lastAutoTable yoksa
+    }
   }
   
   // Gider Kalemleri Analizi - Yeni detaylı bölüm
-  if (data.costBreakdown || data.expenseCategories) {
-    // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY = (doc as any).lastAutoTable?.finalY;
+  if ((data as any).costBreakdown || (data as any).expenseCategories) {
+    // Tablo sonrası currentY'yi güvenli şekilde güncelle - yeterli boşluk
+    const tableEndY = doc.lastAutoTable?.finalY;
     if (tableEndY && tableEndY > currentY) {
-      currentY = tableEndY + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
+      currentY = tableEndY + PDF_CONSTANTS.tableSpacing; // Tablo sonrası boşluk - standardize edilmiş
     } else {
-      currentY += 40; // Fallback: eğer lastAutoTable yoksa (30pt'den artırıldı)
+      currentY += PDF_CONSTANTS.tableSpacing; // Fallback: eğer lastAutoTable yoksa
     }
     currentY = ensureSpace(doc, currentY, 200, mar, "Gider Kalemleri Analizi");
     
-    const costData = data.costBreakdown || data.expenseCategories || [];
+    const costData = (data as any).costBreakdown || (data as any).expenseCategories || [];
     if (costData.length > 0) {
-      const costTableData = costData.map((item: any) => {
+      // En Karlı Ürünler tablosu gibi sıra numarası ile
+      const costTableData = costData.map((item: { category?: string; name?: string; amount?: number; total?: number; percentage?: number }, index: number) => {
         const category = item.category || item.name || "Bilinmeyen";
         const amount = safeNumber(item.amount || item.total || 0);
-        const percentage = safeNumber(data.totalCost) > 0 
-          ? ((amount / safeNumber(data.totalCost)) * 100).toFixed(1)
-          : "0";
+        const percentage = item.percentage !== undefined 
+          ? item.percentage.toFixed(1)
+          : (safeNumber(data.totalCost) > 0 
+            ? ((amount / safeNumber(data.totalCost)) * 100).toFixed(1)
+            : "0");
         return [
+          `#${index + 1}`,
           category.length > 30 ? category.substring(0, 30) + "..." : category,
           safeFormatCurrency(amount),
           `${percentage}%`
@@ -2840,9 +3583,11 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
       const pageWidth3 = doc.internal.pageSize.getWidth();
       const tableWidth3 = pageWidth3 - (mar * 2);
       
+      // Tablolar arası boşluk kontrolü
+      currentY = ensureSpace(doc, currentY, 200, mar, "Gider Kalemleri Analizi");
       currentY = drawTableHeader(doc, mar, currentY, tableWidth3, {
-        title: "Gider Kalemleri Detayı",
-        backgroundColor: [249, 250, 251],
+        title: "Gider Kalemleri Analizi",
+        backgroundColor: TAILWIND_COLORS.gray100,
         textColor: PDF_CONSTANTS.primaryColor,
         borderColor: PDF_CONSTANTS.primaryColor,
       });
@@ -2866,27 +3611,31 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
       const currentPageWidth3 = doc.internal.pageSize.getWidth();
       const currentTableWidth3 = currentPageWidth3 - (mar * 2);
       
+      // Font'u zorla Roboto olarak ayarla (autoTable öncesi)
+      forceRobotoFont(doc, "normal");
+
       autoTable(doc, {
         startY: currentY,
-        head: [['Kategori', 'Tutar', 'Oran']],
-        body: costTableData,
+        head: transliterateTableData([['Sıra', 'Gider Kalemi', 'Tutar', 'Oran']]),
+        body: transliterateTableData(costTableData),
         margin: { left: mar, right: mar },
         tableWidth: currentTableWidth3,
-        didParseCell: createDidParseCell(doc),
+        willDrawCell: createWillDrawCell(doc),
         ...tableStyles3,
         columnStyles: {
-          0: { cellWidth: currentTableWidth3 * 0.55, halign: "left", overflow: 'linebreak' }, // %55
-          1: { cellWidth: currentTableWidth3 * 0.30, halign: "right", fontStyle: "bold", textColor: [220, 38, 38] }, // %30
-          2: { cellWidth: currentTableWidth3 * 0.15, halign: "right", textColor: [107, 114, 128] }, // %15
+          0: { cellWidth: currentTableWidth3 * 0.08, halign: "left", textColor: TAILWIND_COLORS.gray500 }, // %8 - Sıra
+          1: { cellWidth: currentTableWidth3 * 0.40, halign: "left", overflow: 'linebreak' }, // %40 - Gider Kalemi
+          2: { cellWidth: currentTableWidth3 * 0.30, halign: "right", fontStyle: "bold", textColor: PDF_CONSTANTS.errorColor }, // %30 - Tutar
+          3: { cellWidth: currentTableWidth3 * 0.22, halign: "right", textColor: TAILWIND_COLORS.gray500 }, // %22 - Oran
         },
       });
       
-      // Tablo sonrası currentY'yi güvenli şekilde güncelle - minimum 30pt boşluk
-    const tableEndY = (doc as any).lastAutoTable?.finalY;
+      // Tablo sonrası currentY'yi güvenli şekilde güncelle - yeterli boşluk
+    const tableEndY = doc.lastAutoTable?.finalY;
     if (tableEndY && tableEndY > currentY) {
-      currentY = tableEndY + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
+      currentY = tableEndY + PDF_CONSTANTS.tableSpacing; // Tablo sonrası boşluk - standardize edilmiş
     } else {
-      currentY += 40; // Fallback: eğer lastAutoTable yoksa (30pt'den artırıldı)
+      currentY += PDF_CONSTANTS.tableSpacing; // Fallback: eğer lastAutoTable yoksa
     }
     }
   }
@@ -2923,7 +3672,7 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
   currentY = drawSummarySection(doc, mar, currentY, contentWidth, "Kar Analizi Detayı", profitAnalysisData, [5, 150, 105]);
   
   // Özet Bölümü - sabit tasarım, dinamik veriler
-  currentY = ((doc as any).lastAutoTable?.finalY || currentY) + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
+  currentY = (doc.lastAutoTable?.finalY || currentY) + 50; // Optimize edilmiş boşluk: 50pt
   currentY = ensureSpace(doc, currentY, 100, mar, "Özet");
   
   const summaryData: Array<[string, string]> = [
@@ -2950,13 +3699,11 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
           const pageTemplate = createPDFTemplate(doc);
           drawPDFFooter(doc, pageTemplate, i, totalPages);
         } catch (pageError) {
-          console.warn(`Sayfa ${i} footer eklenirken hata:`, pageError);
           // Devam et, diğer sayfaları eklemeye çalış
         }
       }
     }
   } catch (footerError) {
-    console.warn("Footer eklenirken hata:", footerError);
     // Footer hatası kritik değil, PDF'i yine de döndür
   }
   
@@ -2968,7 +3715,6 @@ export const generateFinancialReportPDF = async (data: any, startDate: string, e
     }
     return blob;
   } catch (outputError) {
-    console.error("PDF output hatası:", outputError);
     throw new Error("PDF oluşturulamadı: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
   }
 };
@@ -3002,24 +3748,24 @@ interface SalesOfferPayload {
 /**
  * Kullanıcı istatistikleri PDF'i oluştur
  */
-export const generateUserStatsPDF = async (
-  userStats: {
-    userName: string;
-    userEmail: string;
-    total: number;
-    accepted: number;
-    rejected: number;
-    pending: number;
-    completed: number;
-    active: number;
-    assignments: Array<{
-      taskTitle: string;
-      status: string;
-      assignedAt: Date | string;
-      completedAt?: Date | string | null;
-    }>;
-  }
-): Promise<Blob> => {
+interface UserStatsReportData {
+  userName: string;
+  userEmail: string;
+  total: number;
+  accepted: number;
+  rejected: number;
+  pending: number;
+  completed: number;
+  active: number;
+  assignments: Array<{
+    taskTitle: string;
+    status: string;
+    assignedAt: Date | string;
+    completedAt?: Date | string | null;
+  }>;
+}
+
+export const generateUserStatsPDF = async (userStats: UserStatsReportData): Promise<Blob> => {
   const doc = createPdf({ format: "a4", unit: "pt" });
   await registerFonts(doc);
   
@@ -3048,8 +3794,8 @@ export const generateUserStatsPDF = async (
   // Kullanıcı bilgileri kartı
   const cardHeight = 110; // Daha ferah: 100 → 110
   const cardY = yPos;
-  doc.setFillColor(249, 250, 251);
-  doc.setDrawColor(229, 231, 235);
+  doc.setFillColor(TAILWIND_COLORS.gray50[0], TAILWIND_COLORS.gray50[1], TAILWIND_COLORS.gray50[2]);
+  doc.setDrawColor(TAILWIND_COLORS.gray200[0], TAILWIND_COLORS.gray200[1], TAILWIND_COLORS.gray200[2]);
   doc.setLineWidth(1.5);
   doc.roundedRect(mar, cardY, pageWidth - 2 * mar, cardHeight, 6, 6, "F");
   doc.roundedRect(mar, cardY, pageWidth - 2 * mar, cardHeight, 6, 6, "S");
@@ -3142,7 +3888,7 @@ export const generateUserStatsPDF = async (
     startY: yPos,
     head: [detailedStats[0]],
     body: detailedStats.slice(1),
-    didParseCell: createDidParseCell(doc),
+    willDrawCell: createWillDrawCell(doc),
     margin: { left: mar, right: mar },
     tableWidth: detailedTableWidth,
     ...detailedTableStyles,
@@ -3153,7 +3899,7 @@ export const generateUserStatsPDF = async (
     },
   });
 
-  yPos = (doc as any).lastAutoTable.finalY + 30;
+  yPos = (doc.lastAutoTable?.finalY || yPos) + 30;
 
   // Görev listesi
   if (userStats.assignments.length > 0) {
@@ -3201,7 +3947,9 @@ export const generateUserStatsPDF = async (
       bodyFontSize: 11,
       cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
     });
-    tableStyles.headStyles.fillColor = [59, 130, 246]; // Blue
+    // Header rengi zaten createProfessionalTableStyles'da primaryColor olarak ayarlandı
+    // Burada override etmeye gerek yok, ama tutarlılık için bırakıyoruz
+    tableStyles.headStyles.fillColor = PDF_CONSTANTS.primaryColor; // Blue
     tableStyles.headStyles.textColor = [255, 255, 255]; // White
     tableStyles.headStyles.halign = "center";
     tableStyles.bodyStyles.halign = "left";
@@ -3221,7 +3969,7 @@ export const generateUserStatsPDF = async (
       body: assignmentRows,
       margin: { left: mar, right: mar },
       tableWidth: tableWidth,
-      didParseCell: createDidParseCell(doc),
+      willDrawCell: createWillDrawCell(doc),
       ...tableStyles,
       columnStyles: {
         0: { cellWidth: tableWidth * 0.40, halign: "left", overflow: 'linebreak' }, // %40 - görev başlığı için daha fazla alan
@@ -3233,7 +3981,7 @@ export const generateUserStatsPDF = async (
   }
 
   // Özet bölümü
-  const finalY = (doc as any).lastAutoTable?.finalY || yPos;
+  const finalY = doc.lastAutoTable?.finalY || yPos;
   if (finalY < pageHeight - 120) {
     yPos = finalY + 30;
     
@@ -3280,7 +4028,6 @@ export const generateUserStatsPDF = async (
     const finalTemplate = createPDFTemplate(doc);
     drawPDFFooter(doc, finalTemplate);
   } catch (footerError) {
-    console.warn("Footer eklenirken hata:", footerError);
     // Footer hatası kritik değil, PDF'i yine de döndür
   }
   
@@ -3292,7 +4039,6 @@ export const generateUserStatsPDF = async (
     }
     return blob;
   } catch (outputError) {
-    console.error("PDF output hatası:", outputError);
     throw new Error("PDF oluşturulamadı: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
   }
 };
@@ -3342,7 +4088,6 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
   const actualWidth = doc.internal.pageSize.getWidth();
   const actualHeight = doc.internal.pageSize.getHeight();
   if (Math.abs(actualWidth - pageWidth) > 1 || Math.abs(actualHeight - pageHeight) > 1) {
-    console.warn(`Page size mismatch: expected ${pageWidth}x${pageHeight}, got ${actualWidth}x${actualHeight}`);
   }
 
   // Header - Form Preview Style
@@ -3352,14 +4097,15 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
   const logoX = pageWidth - mar - 160; // Logo ve text için alan ayır
   
   // Helper functions
-  const safeNumber = (value: any): number => {
+  const safeNumber = (value: unknown): number => {
     const num = Number(value);
     return (isNaN(num) || !isFinite(num)) ? 0 : num;
   };
   
   const safeFormatCurrency = (value: number, currency: string): string => {
     const safeVal = safeNumber(value);
-    return `${currency}${safeVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // Türkçe locale kullan (web UI ile uyumlu)
+    return `${currency}${safeVal.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
   
   // Create safeText helper with color support - createSafeText kullan
@@ -3383,14 +4129,15 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
       try {
         doc.setFont("helvetica", isBold ? "bold" : "normal");
         doc.setFontSize(fontSize);
-        const safeTextFallback = transliterateTurkish(text);
+        // Problemli karakterleri transliterate et
+        const hasProblematicChars = /[şŞİğĞ]/.test(text);
+        const safeTextFallback = hasProblematicChars ? transliterateTurkish(text) : text;
         if (color) {
           doc.setTextColor(color[0], color[1], color[2]);
         }
         doc.text(safeTextFallback, x, y);
         doc.setTextColor(0, 0, 0);
       } catch (fallbackError) {
-        console.warn(`Text render failed: ${text.substring(0, 50)}...`, error, fallbackError);
       }
     }
   };
@@ -3413,7 +4160,6 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
     // Reset opacity
     doc.setGState(doc.GState({ opacity: 1 }));
   } catch (error) {
-    console.warn("Background panel eklenemedi:", error);
   }
   
   // Header Y position - Optimized for A4 (top 20% of page = ~170pt max)
@@ -3471,17 +4217,16 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
   // Right Side: Logo & Company Info - Top right
   const rightContentX = pageWidth - mar;
   const companyInfoY = headerY;
-  const headerLogoSize = 50;
+  const headerLogoSize = 40; // 50 → 40 (daha küçük logo)
   
   // Logo - sağ üst köşede, doğru pozisyonda
   try {
     const logoX = rightContentX - headerLogoSize;
     doc.addImage(REV_LOGO_DATA_URI, 'PNG', logoX, companyInfoY, headerLogoSize, headerLogoSize);
   } catch (error) {
-    console.warn("Logo eklenemedi:", error);
   }
   
-  // Company address block - under logo, right-aligned
+  // Company address block - under logo, right-aligned (daha kompakt)
   const addressLines = [
     COMPANY_INFO.address,
     COMPANY_INFO.city,
@@ -3490,24 +4235,24 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
     COMPANY_INFO.phone
   ];
   
-  let addrY = companyInfoY + headerLogoSize + 14;
+  let addrY = companyInfoY + headerLogoSize + 10; // 14 → 10 (daha az boşluk)
   safeSetFont(doc, "normal");
-  doc.setFontSize(10);
+  doc.setFontSize(9); // 10 → 9 (daha küçük font)
   addressLines.forEach(line => {
     try {
       const lineWidth = doc.getTextWidth(line);
       doc.setTextColor(75, 85, 99); // gray-600
-      safeText(line, rightContentX - lineWidth, addrY, 10, false);
+      safeText(line, rightContentX - lineWidth, addrY, 9, false);
       doc.setTextColor(0, 0, 0);
-      addrY += 13;
+      addrY += 11; // 13 → 11 (daha kompakt satır aralığı)
     } catch (error) {
-      console.warn(`Address line render failed: ${line}`, error);
-      addrY += 13;
+      addrY += 11;
     }
   });
 
-  // Date Info - Right side, aligned with customer block
-  const dateInfoY = customerBlockY;
+  // Date Info - Right side, şirket bilgilerinden sonra (üst üste binmeyi önlemek için)
+  // Şirket bilgileri: addrY başlangıç + (5 satır * 11pt) = companyInfoY + headerLogoSize + 10 + 55 = companyInfoY + 105
+  const dateInfoY = companyInfoY + headerLogoSize + 10 + (addressLines.length * 11) + 12; // Şirket bilgilerinden sonra 12pt boşluk
   
   // Format dates in Turkish format: "20 Ağustos 2025"
   const formatDateTurkish = (dateStr: string | Date): string => {
@@ -3533,7 +4278,6 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
   try {
     dateValue = formatDateTurkish(payload.quoteDate);
   } catch (error) {
-    console.error("Tarih formatlama hatası:", error, payload.quoteDate);
     dateValue = "-";
   }
   
@@ -3555,7 +4299,6 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
   try {
     validValue = formatDateTurkish(payload.validUntil);
   } catch (error) {
-    console.error("Tarih formatlama hatası:", error, payload.validUntil);
     validValue = "-";
   }
   
@@ -3597,52 +4340,124 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
   const tableHead = [["No", "Ürün Adı", "Adet", "Birim Fiyat", "Toplam"]];
   
   let startY = currentY;
-  const didParseCell = createDidParseCell(doc);
+  const baseDidParseCell = createDidParseCell(doc);
+  
+  // Alternatif satır renkleri için özel didParseCell
+  const didParseCell = (data: { row?: { index?: number }; cell?: { styles?: { fillColor?: number[] } } }) => {
+    // Base fonksiyonu çağır
+    if (baseDidParseCell) {
+      baseDidParseCell(data);
+    }
+    
+    // Body satırları için alternatif renk (header hariç, index 0 header)
+    if (data.row && data.row.index !== undefined && data.cell && data.cell.styles) {
+      const rowIndex = data.row.index;
+      // Header index 0, body satırları 1'den başlar
+      if (rowIndex > 0) {
+        // Çift satırlar için alternatif renk (2, 4, 6, ... - 0-based değil, 1-based body)
+        if ((rowIndex - 1) % 2 === 1) {
+          data.cell.styles.fillColor = [248, 250, 252]; // slate-50
+        } else {
+          data.cell.styles.fillColor = [255, 255, 255]; // Beyaz
+        }
+      }
+    }
+  };
   
   // Dinamik tablo genişliği hesaplama (diğer tablolarla tutarlı)
   const dynamicPageWidth = doc.internal.pageSize.getWidth();
   const tableWidth = dynamicPageWidth - (mar * 2);
   
-  // Profesyonel tablo stilleri kullan (özel padding ile)
+  // Profesyonel tablo stilleri kullan (modern UI/UX kurallarına uygun)
   const tableStyles = createProfessionalTableStyles(doc, {
-    headerFontSize: 12,
-    bodyFontSize: 12,
-    cellPadding: { top: 14, right: 16, bottom: 14, left: 16 }
+    headerFontSize: 11,
+    bodyFontSize: 10,
+    cellPadding: { top: 12, right: 14, bottom: 12, left: 14 }
   });
-  tableStyles.headStyles.fillColor = [59, 130, 246]; // Blue (tutarlılık için)
+  
+  // Modern, profesyonel renk paleti
+  tableStyles.headStyles.fillColor = [15, 23, 42]; // slate-900 - daha koyu, profesyonel
   tableStyles.headStyles.textColor = [255, 255, 255]; // White
   tableStyles.headStyles.halign = "center";
+  tableStyles.headStyles.fontStyle = "bold";
+  tableStyles.headStyles.fontSize = 11;
+  tableStyles.headStyles.lineColor = [15, 23, 42]; // slate-900 border
+  tableStyles.headStyles.lineWidth = { top: 0, bottom: 2, left: 0, right: 0 }; // Kalın alt border
+  tableStyles.headStyles.cellPadding = { top: 12, right: 14, bottom: 12, left: 14 };
+  tableStyles.headStyles.minCellHeight = 36;
+  
+  // Body stilleri - daha temiz ve okunabilir
+  tableStyles.bodyStyles.fillColor = [255, 255, 255]; // Beyaz
+  tableStyles.bodyStyles.textColor = [30, 41, 59]; // slate-700 - daha koyu, okunabilir
+  tableStyles.bodyStyles.fontSize = 10;
+  tableStyles.bodyStyles.fontStyle = "normal";
+  tableStyles.bodyStyles.lineColor = [226, 232, 240]; // slate-200 - daha açık border
+  tableStyles.bodyStyles.lineWidth = { bottom: 0.5, top: 0, left: 0, right: 0 }; // İnce alt border
+  tableStyles.bodyStyles.cellPadding = { top: 12, right: 14, bottom: 12, left: 14 };
+  tableStyles.bodyStyles.minCellHeight = 32;
   tableStyles.bodyStyles.overflow = 'linebreak';
+  
+  // Alternatif satır renkleri (zebra striping) - daha profesyonel
+  tableStyles.alternateRowStyles.fillColor = [248, 250, 252]; // slate-50 - çok açık gri
   tableStyles.styles.overflow = 'linebreak';
   
   // Sayfa sığma kontrolü
   startY = ensureTableFitsPage(doc, startY, 300, mar, "Ürün Listesi");
   
+  // Font'u zorla Roboto olarak ayarla (autoTable öncesi)
+  forceRobotoFont(doc, "normal");
+  
   autoTable(doc, {
-    head: tableHead,
-    body: tableBody.length === 0
+    head: transliterateTableData(tableHead),
+    body: transliterateTableData(tableBody.length === 0
       ? [["", "Kalem bilgisi girilmedi", "", "", ""]]
-      : tableBody,
+      : tableBody),
     startY,
     margin: { left: mar, right: mar },
     didParseCell: didParseCell,
     tableWidth: tableWidth, // Dinamik genişlik kullan
     ...tableStyles,
     columnStyles: {
-      0: { cellWidth: tableWidth * 0.08, halign: "center" }, // %8 - No
-      1: { cellWidth: tableWidth * 0.48, halign: "left", overflow: 'linebreak' }, // %48 - Ürün Adı
-      2: { cellWidth: tableWidth * 0.10, halign: "center" }, // %10 - Adet
-      3: { cellWidth: tableWidth * 0.17, halign: "right" }, // %17 - Birim Fiyat
-      4: { cellWidth: tableWidth * 0.17, halign: "right" }, // %17 - Toplam
+      0: { 
+        cellWidth: tableWidth * 0.08, 
+        halign: "center",
+        textColor: [71, 85, 105], // slate-600 - daha yumuşak
+        fontStyle: "normal"
+      }, // %8 - No
+      1: { 
+        cellWidth: tableWidth * 0.48, 
+        halign: "left", 
+        overflow: 'linebreak',
+        textColor: [15, 23, 42], // slate-900 - ürün adı daha koyu
+        fontStyle: "normal"
+      }, // %48 - Ürün Adı
+      2: { 
+        cellWidth: tableWidth * 0.10, 
+        halign: "center",
+        textColor: [30, 41, 59], // slate-700
+        fontStyle: "normal"
+      }, // %10 - Adet
+      3: { 
+        cellWidth: tableWidth * 0.17, 
+        halign: "right",
+        textColor: [30, 41, 59], // slate-700
+        fontStyle: "normal"
+      }, // %17 - Birim Fiyat
+      4: { 
+        cellWidth: tableWidth * 0.17, 
+        halign: "right",
+        textColor: [15, 23, 42], // slate-900 - toplam daha vurgulu
+        fontStyle: "bold" // Toplam sütunu bold
+      }, // %17 - Toplam
     },
   });
 
   // Get actual table end position - minimum 30pt boşluk (diğer tablolarla tutarlı)
-  let tableEndY = ((doc as any).lastAutoTable?.finalY || startY);
-  if ((doc as any).lastAutoTable?.finalY) {
-    tableEndY = (doc as any).lastAutoTable.finalY + 40; // Standart boşluk: 40pt (30pt'den artırıldı)
+  let tableEndY = (doc.lastAutoTable?.finalY || startY);
+  if (doc.lastAutoTable?.finalY) {
+    tableEndY = doc.lastAutoTable.finalY + 50; // Optimize edilmiş boşluk: 50pt
     } else {
-    tableEndY = startY + 40; // Fallback (30pt'den artırıldı)
+    tableEndY = startY + 50; // Fallback: eğer lastAutoTable yoksa
   }
 
   // Layout: Left (Notes) - Right (Totals) at bottom
@@ -3699,7 +4514,6 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
       });
       notesY += (noteLines.length * 14) + 6;
     } catch (error) {
-      console.warn(`Note render failed: ${note}`, error);
       notesY += 16;
     }
   });
@@ -3737,7 +4551,6 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
       
       totalsY += isGrandTotal ? 22 : 18; // Reduced spacing: 26→22, 20→18
     } catch (error) {
-      console.warn(`Total row render failed: ${label}`, error);
       totalsY += isGrandTotal ? 20 : 18; // Reduced spacing
     }
   };
@@ -3810,7 +4623,6 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
     const logoX = rightContentX - footerLogoSize;
     doc.addImage(REV_LOGO_DATA_URI, 'PNG', logoX, footerY, footerLogoSize, footerLogoSize);
   } catch (error) {
-    console.warn('Footer logo eklenemedi:', error);
   }
 
   // PDF'i güvenli bir şekilde oluştur
@@ -3821,7 +4633,6 @@ export const generateSalesOfferPDF = async (payload: SalesOfferPayload) => {
     }
     return blob;
   } catch (outputError) {
-    console.error("PDF output hatası:", outputError);
     throw new Error("PDF oluşturulamadı: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
   }
 };

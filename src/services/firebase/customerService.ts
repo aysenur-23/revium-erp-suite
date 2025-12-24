@@ -53,9 +53,13 @@ export const getCustomers = async (): Promise<Customer[]> => {
         id: doc.id,
         ...doc.data(),
       })) as Customer[];
-    } catch (orderByError: any) {
+    } catch (orderByError: unknown) {
       // Index hatası varsa orderBy olmadan al
-      console.warn("OrderBy failed, fetching customers without order:", orderByError);
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.warn("OrderBy failed, fetching customers without order:", orderByError);
+        }
+      }
       const q = query(collection(firestore, "customers"), limit(500));
       const snapshot = await getDocs(q);
       const customers = snapshot.docs.map((doc) => ({
@@ -70,7 +74,11 @@ export const getCustomers = async (): Promise<Customer[]> => {
       });
     }
   } catch (error) {
-    console.error("Get customers error:", error);
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Get customers error:", error);
+      }
+    }
     throw error;
   }
 };
@@ -91,7 +99,11 @@ export const getCustomerById = async (customerId: string): Promise<Customer | nu
       ...customerDoc.data(),
     } as Customer;
   } catch (error) {
-    console.error("Get customer by id error:", error);
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Get customer by id error:", error);
+      }
+    }
     throw error;
   }
 };
@@ -117,9 +129,37 @@ export const createCustomer = async (
     // Audit log
     await logAudit("CREATE", "customers", docRef.id, customerData.createdBy, null, createdCustomer);
 
+    // Aktivite log ekle
+    if (customerData.createdBy) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(customerData.createdBy);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addCustomerActivity(
+          docRef.id,
+          customerData.createdBy,
+          "created",
+          `bu müşteriyi oluşturdu`,
+          { customerName: customerData.name },
+          userName,
+          userEmail
+        );
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Add customer activity error:", error);
+        }
+      }
+    }
+
     return createdCustomer;
   } catch (error) {
-    console.error("Create customer error:", error);
+    if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.error("Create customer error:", error);
+      }
+    }
     throw error;
   }
 };
@@ -148,6 +188,38 @@ export const updateCustomer = async (
     if (userId) {
       await logAudit("UPDATE", "customers", customerId, userId, oldCustomer, newCustomer);
     }
+
+    // Aktivite log ekle
+    if (userId && oldCustomer) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(userId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+
+        const changedFields = Object.keys(updates).filter(key => {
+          const oldValue = (oldCustomer as Record<string, unknown>)[key];
+          const newValue = (updates as Record<string, unknown>)[key];
+          return oldValue !== newValue;
+        });
+        
+        if (changedFields.length > 0) {
+          await addCustomerActivity(
+            customerId,
+            userId,
+            "updated",
+            `bu müşteriyi güncelledi`,
+            { changedFields },
+            userName,
+            userEmail
+          );
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Add customer activity error:", error);
+        }
+      }
+    }
   } catch (error) {
     console.error("Update customer error:", error);
     throw error;
@@ -162,6 +234,30 @@ export const deleteCustomer = async (customerId: string, userId?: string): Promi
     // Eski veriyi al
     const oldCustomer = await getCustomerById(customerId);
     
+    // Aktivite log ekle (silmeden önce)
+    if (userId && oldCustomer) {
+      try {
+        const { getUserProfile } = await import("./authService");
+        const userProfile = await getUserProfile(userId);
+        const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
+        const userEmail = userProfile?.email;
+        
+        await addCustomerActivity(
+          customerId,
+          userId,
+          "deleted",
+          `bu müşteriyi sildi`,
+          { customerName: oldCustomer.name },
+          userName,
+          userEmail
+        );
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Add customer activity error:", error);
+        }
+      }
+    }
+    
     await deleteDoc(doc(firestore, "customers", customerId));
     
     // Audit log
@@ -169,7 +265,180 @@ export const deleteCustomer = async (customerId: string, userId?: string): Promi
       await logAudit("DELETE", "customers", customerId, userId, oldCustomer, null);
     }
   } catch (error) {
-    console.error("Delete customer error:", error);
+    if (import.meta.env.DEV) {
+      console.error("Delete customer error:", error);
+    }
+    throw error;
+  }
+};
+
+// Customer Comments and Activities
+
+export interface CustomerComment {
+  id: string;
+  customerId: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  content: string;
+  createdAt: Timestamp;
+  updatedAt?: Timestamp | null;
+}
+
+export interface CustomerActivity {
+  id: string;
+  customerId: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  action: string;
+  description: string;
+  metadata?: Record<string, any>;
+  createdAt: Timestamp;
+}
+
+/**
+ * Müşteri yorumu ekle
+ */
+export const addCustomerComment = async (
+  customerId: string,
+  userId: string,
+  content: string,
+  userName?: string,
+  userEmail?: string
+): Promise<CustomerComment> => {
+  try {
+    const commentData: Omit<CustomerComment, "id"> = {
+      customerId,
+      userId,
+      userName,
+      userEmail,
+      content,
+      createdAt: Timestamp.now(),
+      updatedAt: null,
+    };
+
+    const docRef = await addDoc(
+      collection(firestore, "customers", customerId, "comments"),
+      commentData
+    );
+
+    // Activity log ekle
+    await addCustomerActivity(customerId, userId, "commented", `yorum ekledi`, { commentId: docRef.id }, userName, userEmail);
+
+    // Müşteriyi oluşturan kişiye bildirim gönder (yorum ekleyen kişi hariç)
+    try {
+      const customer = await getCustomerById(customerId);
+      if (customer?.createdBy && customer.createdBy !== userId) {
+        const { createNotification } = await import("@/services/firebase/notificationService");
+        await createNotification({
+          userId: customer.createdBy,
+          type: "comment_added",
+          title: "Müşterinize Yorum Eklendi",
+          message: `${userName || userEmail || "Bir kullanıcı"} "${customer.name}" müşterinize yorum ekledi: ${content.substring(0, 100)}${content.length > 100 ? "..." : ""}`,
+          read: false,
+          relatedId: customerId,
+          metadata: { commentId: docRef.id, commenterId: userId, commenterName: userName, commenterEmail: userEmail },
+        });
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("Send comment notification error:", error);
+      }
+    }
+
+    return {
+      id: docRef.id,
+      ...commentData,
+    };
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Add customer comment error:", error);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Müşteri yorumlarını al
+ */
+export const getCustomerComments = async (customerId: string): Promise<CustomerComment[]> => {
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, "customers", customerId, "comments"),
+        orderBy("createdAt", "desc")
+      )
+    );
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as CustomerComment[];
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Get customer comments error:", error);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Müşteri aktivite log ekle
+ */
+export const addCustomerActivity = async (
+  customerId: string,
+  userId: string,
+  action: string,
+  description: string,
+  metadata?: Record<string, any>,
+  userName?: string,
+  userEmail?: string
+): Promise<string> => {
+  try {
+    const activityData: Omit<CustomerActivity, "id"> = {
+      customerId,
+      userId,
+      userName,
+      userEmail,
+      action,
+      description,
+      metadata: metadata || {},
+      createdAt: Timestamp.now(),
+    };
+
+    const docRef = await addDoc(
+      collection(firestore, "customers", customerId, "activities"),
+      activityData
+    );
+
+    return docRef.id;
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Add customer activity error:", error);
+    }
+    return "";
+  }
+};
+
+/**
+ * Müşteri aktivite loglarını al
+ */
+export const getCustomerActivities = async (customerId: string): Promise<CustomerActivity[]> => {
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(firestore, "customers", customerId, "activities"),
+        orderBy("createdAt", "desc")
+      )
+    );
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as CustomerActivity[];
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("Get customer activities error:", error);
+    }
     throw error;
   }
 };

@@ -48,9 +48,9 @@ export interface UserProfile {
   approvedTeams?: string[]; // Onaylanmış ekipler (department IDs)
   teamLeaderIds?: string[]; // Ekip lideri olduğu ekipler (opsiyonel)
   emailVerified: boolean;
-  createdAt: any;
-  updatedAt: any;
-  lastLoginAt?: any; // Son giriş zamanı
+  createdAt: Timestamp | Date | null;
+  updatedAt: Timestamp | Date | null;
+  lastLoginAt?: Timestamp | Date | null; // Son giriş zamanı
 }
 
 /**
@@ -86,14 +86,18 @@ export const register = async (
             try {
               await firebaseDeleteUser(firebaseUser);
             } catch (deleteError) {
-              console.error("Kullanıcı silinirken hata:", deleteError);
+              if (import.meta.env.DEV) {
+                console.error("Kullanıcı silinirken hata:", deleteError);
+              }
             }
             throw new Error("Bu e-posta adresi ile kayıtlı bir hesap silinmiş. Yeni bir hesap oluşturamazsınız.");
           }
         }
-      } catch (checkError: any) {
+      } catch (checkError: unknown) {
         // İzin hatası olsa bile devam et (kullanıcı zaten oluşturuldu)
-        console.warn("Silinmiş kullanıcı kontrolü yapılamadı:", checkError?.message || checkError);
+        if (import.meta.env.DEV) {
+          console.warn("Silinmiş kullanıcı kontrolü yapılamadı:", checkError instanceof Error ? checkError.message : String(checkError));
+        }
       }
     }
     
@@ -101,7 +105,7 @@ export const register = async (
     
     // Firestore'da kullanıcı profili oluştur
     // Firestore undefined değerleri kabul etmez, bu yüzden sadece tanımlı alanları ekle
-    const userProfileData: any = {
+    const userProfileData: Omit<UserProfile, "id"> = {
       email: email,
       displayName: fullName,
       fullName: fullName,
@@ -203,7 +207,7 @@ export const register = async (
       await updateProfile(firebaseUser, { displayName: fullName });
     }
 
-    // Email doğrulama gönder
+    // Email doğrulama gönder (Firebase Console'daki şablon kullanılır)
     await sendEmailVerification(firebaseUser);
 
     return {
@@ -224,9 +228,11 @@ export const register = async (
         updatedAt: new Date(),
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Firebase hata kodlarını Türkçe'ye çevir
     let errorMessage = "Kayıt başarısız";
+    const errorCode = (error as { code?: string })?.code;
+    const errorMsg = error instanceof Error ? error.message : String(error);
     
     // Beklenen hatalar için sessizce devam et, sadece beklenmeyen hatalar için log göster
     const isExpectedError = [
@@ -234,28 +240,28 @@ export const register = async (
       'auth/invalid-email',
       'auth/weak-password',
       'auth/operation-not-allowed'
-    ].includes(error.code);
+    ].includes(errorCode || '');
     
-    if (error.code === 'auth/email-already-in-use') {
+    if (errorCode === 'auth/email-already-in-use') {
       errorMessage = "Bu e-posta adresi zaten kayıtlı. Lütfen giriş yapmayı deneyin. Eğer şifrenizi unuttuysanız, şifre sıfırlama özelliğini kullanabilirsiniz.";
-    } else if (error.code === 'auth/invalid-email') {
+    } else if (errorCode === 'auth/invalid-email') {
       errorMessage = "Geçersiz e-posta adresi. Lütfen geçerli bir e-posta adresi girin.";
-    } else if (error.code === 'auth/weak-password') {
+    } else if (errorCode === 'auth/weak-password') {
       errorMessage = "Şifre çok zayıf. Şifre en az 6 karakter olmalıdır.";
-    } else if (error.code === 'auth/operation-not-allowed') {
+    } else if (errorCode === 'auth/operation-not-allowed') {
       errorMessage = "E-posta/şifre ile kayıt şu anda devre dışı. Lütfen yöneticiye başvurun.";
-    } else if (error.code === 'permission-denied' || error.message?.includes('permissions')) {
-      errorMessage = "Firestore izin hatası. Lütfen Firebase Console'da Security Rules'u kontrol edin. Detaylar: " + (error.message || "İzin reddedildi");
-    } else if (error.message?.includes('Unsupported field value: undefined')) {
+    } else if (errorCode === 'permission-denied' || errorMsg.includes('permissions')) {
+      errorMessage = "Firestore izin hatası. Lütfen Firebase Console'da Security Rules'u kontrol edin. Detaylar: " + (errorMsg || "İzin reddedildi");
+    } else if (errorMsg.includes('Unsupported field value: undefined')) {
       errorMessage = "Form verilerinde eksik veya geçersiz alanlar var. Lütfen tüm zorunlu alanları doldurun ve tekrar deneyin.";
-    } else if (error.message?.includes('invalid data')) {
+    } else if (errorMsg.includes('invalid data')) {
       errorMessage = "Gönderilen veriler geçersiz. Lütfen tüm alanları kontrol edip tekrar deneyin.";
-    } else if (error.message) {
-      errorMessage = error.message;
+    } else if (errorMsg) {
+      errorMessage = errorMsg;
     }
     
     // Sadece beklenmeyen hatalar için console.error göster
-    if (!isExpectedError) {
+    if (!isExpectedError && import.meta.env.DEV) {
       console.error("Register error:", error);
     }
     
@@ -292,7 +298,11 @@ export const login = async (
           try {
             await firebaseSignOut(auth);
           } catch (signOutError) {
+            if (import.meta.env.DEV) {
+              if (import.meta.env.DEV) {
             console.error("Çıkış yapılırken hata:", signOutError);
+          }
+            }
           }
           return {
             success: false,
@@ -314,7 +324,9 @@ export const login = async (
         try {
           await firebaseSignOut(auth);
         } catch (signOutError) {
-          console.error("Çıkış yapılırken hata:", signOutError);
+          if (import.meta.env.DEV) {
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
         }
         return {
           success: false,
@@ -349,11 +361,15 @@ export const login = async (
             { lastLoginAt: loginTime, action: "LOGIN", method: "EMAIL", email: email, userId: firebaseUser.uid, timestamp: loginTime }
           );
         } catch (logError) {
-          console.error("Giriş logu kaydedilirken hata:", logError);
+          if (import.meta.env.DEV) {
+            console.error("Giriş logu kaydedilirken hata:", logError);
+          }
           // Log hatası girişi engellememeli
         }
       } catch (updateError) {
-        console.error("Son giriş zamanı güncellenirken hata:", updateError);
+        if (import.meta.env.DEV) {
+          console.error("Son giriş zamanı güncellenirken hata:", updateError);
+        }
         // Hata olsa bile giriş devam etsin
       }
 
@@ -361,13 +377,15 @@ export const login = async (
         success: true,
         user: userProfile,
       };
-    } catch (profileError: any) {
+    } catch (profileError: unknown) {
       // Silinmiş kullanıcı hatası
-      if (profileError.message?.includes("silinmiş")) {
+      if (profileError instanceof Error && profileError.message?.includes("silinmiş")) {
         try {
           await firebaseSignOut(auth);
         } catch (signOutError) {
-          console.error("Çıkış yapılırken hata:", signOutError);
+          if (import.meta.env.DEV) {
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
         }
         return {
           success: false,
@@ -378,11 +396,14 @@ export const login = async (
       // Diğer hatalar için tekrar fırlat
       throw profileError;
     }
-  } catch (error: any) {
-    console.error("Login error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Login error:", error);
+    }
     
+    const errorMsg = error instanceof Error ? error.message : String(error);
     // Eğer zaten çıkış yapıldıysa (silinmiş kullanıcı), hata mesajını döndür
-    if (error.message?.includes("silinmiş")) {
+    if (errorMsg.includes("silinmiş")) {
       return {
         success: false,
         message: "Bu hesap silinmiş. Giriş yapamazsınız.",
@@ -446,7 +467,7 @@ export const logout = async (): Promise<{ success: boolean; message?: string }> 
     
     await firebaseSignOut(auth);
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Logout error:", error);
     return {
       success: false,
@@ -463,15 +484,19 @@ export const resetPassword = async (email: string): Promise<{ success: boolean; 
     if (!auth) {
       throw new Error('Firebase Auth is not initialized');
     }
+    // Firebase'in şifre sıfırlama e-postasını gönder
     await sendPasswordResetEmail(auth, email);
     return { success: true, message: "Şifre sıfırlama e-postası gönderildi" };
-  } catch (error: any) {
-    console.error("Reset password error:", error);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Reset password error:", error);
+    }
     // Firebase hata kodlarını Türkçe'ye çevir
     let errorMessage = "Şifre sıfırlama başarısız";
-    if (error.code === 'auth/user-not-found') {
+    const errorObj = error && typeof error === 'object' && 'code' in error ? error as { code?: string; message?: string } : null;
+    if (errorObj?.code === 'auth/user-not-found') {
       errorMessage = "Bu e-posta adresi kayıtlı değil";
-    } else if (error.code === 'auth/invalid-email') {
+    } else if (errorObj?.code === 'auth/invalid-email') {
       errorMessage = "Geçersiz e-posta adresi";
     } else if (error.message) {
       errorMessage = error.message;
@@ -525,7 +550,9 @@ export const getUserProfile = async (userId: string, allowDeleted: boolean = fal
         try {
           await firebaseSignOut(auth);
         } catch (signOutError) {
-          console.error("Çıkış yapılırken hata:", signOutError);
+          if (import.meta.env.DEV) {
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
           // Çıkış hatası olsa bile devam et
         }
       }
@@ -559,7 +586,7 @@ export const getUserProfile = async (userId: string, allowDeleted: boolean = fal
       updatedAt: data.updatedAt,
       lastLoginAt: data.lastLoginAt,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Get user profile error:", error);
     
     // Permissions hatası için özel mesaj
@@ -587,12 +614,12 @@ export const updateUserProfile = async (
     }
     
     // Firestore undefined değerleri kabul etmez, bu yüzden undefined alanları temizle
-    const cleanUpdates: any = {
+    const cleanUpdates: Record<string, unknown> = {
       updatedAt: serverTimestamp(),
     };
     
     Object.keys(updates).forEach((key) => {
-      const value = (updates as any)[key];
+      const value = (updates as Record<string, unknown>)[key];
       if (value !== undefined) {
         cleanUpdates[key] = value;
       }
@@ -608,7 +635,7 @@ export const updateUserProfile = async (
     }
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Update user profile error:", error);
     return {
       success: false,
@@ -681,7 +708,9 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
                     await firebaseSignOut(auth);
                   } catch (signOutError) {
                     if (import.meta.env.DEV) {
-                      console.error("Çıkış yapılırken hata:", signOutError);
+                      if (import.meta.env.DEV) {
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
                     }
                   }
                   callback(null);
@@ -704,7 +733,9 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
                 await firebaseSignOut(auth);
               } catch (signOutError) {
                 if (import.meta.env.DEV) {
-                  console.error("Çıkış yapılırken hata:", signOutError);
+                  if (import.meta.env.DEV) {
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
                 }
               }
               callback(null);
@@ -735,11 +766,11 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
                     let loginDate: Date;
                     if (currentLastLogin instanceof Timestamp) {
                       loginDate = currentLastLogin.toDate();
-                    } else if (currentLastLogin && typeof currentLastLogin === 'object' && 'toDate' in currentLastLogin) {
-                      loginDate = (currentLastLogin as any).toDate();
+                    } else if (currentLastLogin && typeof currentLastLogin === 'object' && 'toDate' in currentLastLogin && typeof (currentLastLogin as { toDate: () => Date }).toDate === 'function') {
+                      loginDate = (currentLastLogin as { toDate: () => Date }).toDate();
                     } else if (currentLastLogin && typeof currentLastLogin === 'object' && '_seconds' in currentLastLogin) {
-                      const seconds = Number((currentLastLogin as any)._seconds);
-                      const nanoseconds = Number((currentLastLogin as any)._nanoseconds) || 0;
+                      const seconds = Number((currentLastLogin as { _seconds?: number })._seconds || 0);
+                      const nanoseconds = Number((currentLastLogin as { _nanoseconds?: number })._nanoseconds || 0);
                       loginDate = new Timestamp(seconds, nanoseconds).toDate();
                     } else {
                       shouldUpdate = true; // Geçersiz format, güncelle
@@ -781,14 +812,16 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
             }
             
             callback(userProfile);
-          } catch (error: any) {
+          } catch (error: unknown) {
             // Silinmiş kullanıcı ise çıkış yap
             if (error.message?.includes("silinmiş")) {
               try {
                 await firebaseSignOut(auth);
               } catch (signOutError) {
                 if (import.meta.env.DEV) {
-                  console.error("Çıkış yapılırken hata:", signOutError);
+                  if (import.meta.env.DEV) {
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
                 }
               }
               callback(null);
@@ -803,7 +836,7 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
         } else {
           callback(null);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // En dış seviye hata yakalama - unhandled promise rejection'ları önle
         if (import.meta.env.DEV) {
           console.error("onAuthChange async callback hatası:", error);
@@ -909,7 +942,7 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
         .filter((user): user is UserProfile => user !== null && !!user.id && !!(user.displayName || user.fullName || user.email)); // Geçerli kullanıcıları filtrele (email varsa da kabul et)
       
       return users;
-    } catch (orderByError: any) {
+    } catch (orderByError: unknown) {
       // Index hatası varsa orderBy olmadan al
       console.warn("OrderBy failed, fetching without order:", orderByError?.message || orderByError);
       // Önce roles collection'ından tanımlı rolleri al
@@ -968,7 +1001,7 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
         return nameA.localeCompare(nameB, "tr");
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Get all users error:", error);
     
     // Permissions hatası için özel mesaj
@@ -1011,7 +1044,11 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
           try {
             await firebaseSignOut(auth);
           } catch (signOutError) {
+            if (import.meta.env.DEV) {
+              if (import.meta.env.DEV) {
             console.error("Çıkış yapılırken hata:", signOutError);
+          }
+            }
           }
           return {
             success: false,
@@ -1034,7 +1071,9 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
         try {
           await firebaseSignOut(auth);
         } catch (signOutError) {
-          console.error("Çıkış yapılırken hata:", signOutError);
+          if (import.meta.env.DEV) {
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
         }
         return {
           success: false,
@@ -1080,13 +1119,15 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
         success: true,
         user: userProfile,
       };
-    } catch (profileError: any) {
+    } catch (profileError: unknown) {
       // Silinmiş kullanıcı hatası
-      if (profileError.message?.includes("silinmiş")) {
+      if (profileError instanceof Error && profileError.message?.includes("silinmiş")) {
         try {
           await firebaseSignOut(auth);
         } catch (signOutError) {
-          console.error("Çıkış yapılırken hata:", signOutError);
+          if (import.meta.env.DEV) {
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
         }
         return {
           success: false,
@@ -1114,7 +1155,7 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
         user: newUserProfile as UserProfile,
       };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Google Sign-In error:", error);
     let errorMessage = "Google ile giriş başarısız";
     if (error.code === 'auth/popup-closed-by-user') {
@@ -1144,7 +1185,7 @@ export const sendVerificationEmail = async (): Promise<{ success: boolean; messa
     }
     await sendEmailVerification(user);
     return { success: true, message: "Doğrulama e-postası gönderildi" };
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (import.meta.env.DEV) {
       console.error("Send verification email error:", error);
     }
@@ -1227,7 +1268,7 @@ export const deleteUser = async (userId: string, deletedBy: string): Promise<voi
       deletedBy
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Delete user error:", error);
     throw error;
   }

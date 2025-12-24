@@ -7,8 +7,8 @@ import { toast } from "sonner";
 import { Check, X, ListTodo, Loader2, Clock, CheckCircle2, XCircle, Eye, AlertCircle, Users, CalendarDays, Folder, ChevronDown, ChevronUp, FileText, CircleDot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { getTasks, approveTask, rejectTaskApproval, Task, getTaskAssignments, getTaskById, subscribeToTasks } from "@/services/firebase/taskService";
-import { getUserProfile, getAllUsers } from "@/services/firebase/authService";
+import { getTasks, approveTask, rejectTaskApproval, Task, getTaskAssignments, getTaskById, subscribeToTasks, approvePoolRequest, rejectPoolRequest } from "@/services/firebase/taskService";
+import { getUserProfile, getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { getDepartments } from "@/services/firebase/departmentService";
 import { getProjects, Project, getProjectById } from "@/services/firebase/projectService";
 import { getAuditLogs, AuditLog } from "@/services/firebase/auditLogsService";
@@ -37,14 +37,36 @@ const taskStatusWorkflow: StatusItem[] = [
   { value: "completed", label: "Tamamlandı", icon: CheckCircle2, color: "text-emerald-600" },
 ];
 
+// Normalize status - remove "column_" prefix if present
+const normalizeStatusHelper = (status: string | undefined | null): string => {
+  if (!status) return "pending";
+  // Eğer "column_" ile başlıyorsa, bu bir column ID'sidir (sayısal olabilir)
+  if (status.startsWith("column_")) {
+    const statusFromColumn = status.replace("column_", "");
+    // Geçerli status değerlerini kontrol et (pending, in_progress, completed, approved, cancelled)
+    if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(statusFromColumn)) {
+      return statusFromColumn === "cancelled" ? "pending" : statusFromColumn;
+    }
+    // Sayısal ID veya geçersiz değer ise "pending" olarak kabul et
+    return "pending";
+  }
+  // Geçerli status değerlerini kontrol et
+  if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(status)) {
+    return status === "cancelled" ? "pending" : status;
+  }
+  return "pending"; // Fallback
+};
+
 // Status helper fonksiyonları
 const getStatusLabelHelper = (status: string) => {
+  // Önce status'ü normalize et (column_ prefix'ini kaldır)
+  const normalized = normalizeStatusHelper(status);
   const labels: Record<string, string> = {
     pending: "Yapılacak",
     in_progress: "Devam Ediyor",
     completed: "Tamamlandı",
   };
-  return labels[status] || status;
+  return labels[normalized] || normalized;
 };
 
 const getCurrentStatusIndex = (status: string) => {
@@ -61,17 +83,19 @@ const getNextStatus = (currentStatus: string) => {
 };
 
 // Tarih formatlama fonksiyonu
-const formatDateSafe = (dateInput?: any) => {
+const formatDateSafe = (dateInput?: Timestamp | Date | string | null) => {
   if (!dateInput) return "Tarih yok";
   try {
     let date: Date;
-    if (dateInput?.toDate) {
+    if (dateInput instanceof Timestamp) {
       // Firebase Timestamp
       date = dateInput.toDate();
     } else if (dateInput instanceof Date) {
       date = dateInput;
     } else if (typeof dateInput === "string") {
       date = new Date(dateInput);
+    } else if (typeof dateInput === 'object' && 'toDate' in dateInput && typeof (dateInput as { toDate: () => Date }).toDate === 'function') {
+      date = (dateInput as { toDate: () => Date }).toDate();
     } else {
       return "Geçersiz tarih";
     }
@@ -98,6 +122,7 @@ export const PendingTaskApprovals = () => {
   const [pendingTasks, setPendingTasks] = useState<Task[]>([]);
   const [approvedTasks, setApprovedTasks] = useState<Task[]>([]);
   const [rejectedTasks, setRejectedTasks] = useState<Task[]>([]);
+  const [poolRequestTasks, setPoolRequestTasks] = useState<Task[]>([]);
   const [requesterNames, setRequesterNames] = useState<Record<string, string>>({});
   const [approverNames, setApproverNames] = useState<Record<string, string>>({});
   const [rejecterNames, setRejecterNames] = useState<Record<string, string>>({});
@@ -110,7 +135,7 @@ export const PendingTaskApprovals = () => {
   const [selectedTaskStatus, setSelectedTaskStatus] = useState<"pending" | "in_progress" | "completed">("pending");
   const [inlineFormMode, setInlineFormMode] = useState<"create" | "edit">("edit");
   const [projects, setProjects] = useState<Map<string, Project>>(new Map());
-  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [userLogs, setUserLogs] = useState<Record<string, AuditLog[]>>({});
   const [expandedTaskLogs, setExpandedTaskLogs] = useState<Set<string>>(new Set());
   const [entityNames, setEntityNames] = useState<Record<string, string>>({});
@@ -129,22 +154,8 @@ export const PendingTaskApprovals = () => {
     // Tasks için real-time listener - tüm görevleri dinle
     unsubscribeTasks = subscribeToTasks({}, (tasks) => {
       if (!isMounted) return;
-      // Sadece onay durumlarındaki görevleri filtrele ve güncelle
-      const pending = tasks.filter(t => t.approvalStatus === "pending");
-      const approved = tasks.filter(t => t.approvalStatus === "approved");
-      const rejected = tasks.filter(t => t.approvalStatus === "rejected");
-      
-      // Ekip lideri için filtreleme yap
-      if (!isAdmin) {
-        // fetchPendingTasks içindeki filtreleme mantığını burada da uygula
-        // Şimdilik basit bir yaklaşım: fetchPendingTasks'ı çağır
-        fetchPendingTasks();
-      } else {
-        // Admin için direkt güncelle
-        setPendingTasks(pending);
-        setApprovedTasks(approved);
-        setRejectedTasks(rejected);
-      }
+      // Real-time güncellemeler için fetchPendingTasks'ı çağır (görev havuzu talepleri de dahil)
+      fetchPendingTasks();
     });
 
     return () => {
@@ -157,15 +168,25 @@ export const PendingTaskApprovals = () => {
     if (!user?.id) return;
     setLoading(true);
     try {
-      // Tüm onay durumlarındaki görevleri getir
-      const [pending, approved, rejected, usersData, allDepts, projectsData] = await Promise.all([
+      // Tüm onay durumlarındaki görevleri ve görev havuzu taleplerini getir
+      const [pending, approved, rejected, allTasksForPool, usersData, allDepts, projectsData] = await Promise.all([
         getTasks({ approvalStatus: "pending" }),
         getTasks({ approvalStatus: "approved" }),
         getTasks({ approvalStatus: "rejected" }),
+        getTasks(), // Görev havuzu talepleri için tüm görevleri al
         getAllUsers(),
         getDepartments(),
         getProjects(),
       ]);
+      
+      // Görev havuzu taleplerini filtrele - sadece görevi oluşturan kişi için
+      const poolTasks = allTasksForPool.filter(t => 
+        t.isInPool === true && 
+        t.poolRequests && 
+        Array.isArray(t.poolRequests) && 
+        t.poolRequests.length > 0 &&
+        t.createdBy === user.id // Sadece görevi oluşturan kişi görebilir
+      );
       
       // Projeleri Map'e çevir
       const projectsMap = new Map<string, Project>();
@@ -236,8 +257,12 @@ export const PendingTaskApprovals = () => {
               .filter((u): u is { id: string; full_name: string; email: string } => u !== null);
             
             return { ...task, assignedUsers };
-          } catch (error) {
-            console.error(`Error fetching assignments for task ${task.id}:`, error);
+          } catch (error: unknown) {
+            if (import.meta.env.DEV) {
+              if (import.meta.env.DEV) {
+                console.error(`Error fetching assignments for task ${task.id}:`, error);
+              }
+            }
             return { ...task, assignedUsers: [] };
           }
         })
@@ -257,6 +282,35 @@ export const PendingTaskApprovals = () => {
       setPendingTasks(pendingWithAssignments as unknown as Task[]);
       setApprovedTasks(approvedWithAssignments as unknown as Task[]);
       setRejectedTasks(rejectedWithAssignments as unknown as Task[]);
+      
+      // Görev havuzu taleplerini de assignments ile birlikte al
+      const poolTasksWithAssignments = await Promise.all(
+        poolTasks.map(async (task) => {
+          try {
+            const assignments = await getTaskAssignments(task.id);
+            const assignedUsers = assignments
+              .map((a) => {
+                const user = usersData.find((u) => u.id === a.assignedTo);
+                return user
+                  ? {
+                      id: user.id,
+                      full_name: user.fullName || user.displayName || user.email || "Bilinmeyen",
+                      email: user.email,
+                    }
+                  : null;
+              })
+              .filter((u): u is { id: string; full_name: string; email: string } => u !== null);
+            
+            return { ...task, assignedUsers };
+          } catch (error: unknown) {
+            if (import.meta.env.DEV) {
+              console.error(`Error fetching assignments for pool task ${task.id}:`, error);
+            }
+            return { ...task, assignedUsers: [] };
+          }
+        })
+      );
+      setPoolRequestTasks(poolTasksWithAssignments as unknown as Task[]);
 
       // Tüm kullanıcı isimlerini al
       const requesterNamesMap: Record<string, string> = {};
@@ -269,7 +323,7 @@ export const PendingTaskApprovals = () => {
             try {
               const profile = await getUserProfile(task.approvalRequestedBy, true);
               requesterNamesMap[task.approvalRequestedBy] = profile?.fullName || profile?.email || "Silinmiş Kullanıcı";
-            } catch (error: any) {
+            } catch (error: unknown) {
               requesterNamesMap[task.approvalRequestedBy] = "Silinmiş Kullanıcı";
             }
           }
@@ -277,7 +331,7 @@ export const PendingTaskApprovals = () => {
             try {
               const profile = await getUserProfile(task.approvedBy, true);
               approverNamesMap[task.approvedBy] = profile?.fullName || profile?.email || "Silinmiş Kullanıcı";
-            } catch (error: any) {
+            } catch (error: unknown) {
               approverNamesMap[task.approvedBy] = "Silinmiş Kullanıcı";
             }
           }
@@ -285,7 +339,7 @@ export const PendingTaskApprovals = () => {
             try {
               const profile = await getUserProfile(task.rejectedBy, true);
               rejecterNamesMap[task.rejectedBy] = profile?.fullName || profile?.email || "Silinmiş Kullanıcı";
-            } catch (error: any) {
+            } catch (error: unknown) {
               rejecterNamesMap[task.rejectedBy] = "Silinmiş Kullanıcı";
             }
           }
@@ -302,11 +356,16 @@ export const PendingTaskApprovals = () => {
       
       // Tüm görevlerdeki atanan kullanıcı ID'lerini topla
       for (const task of tasksWithAssignments) {
-        const assignedUsers = (task as any).assignedUsers || [];
+        const taskWithAssignments = task as Task & { assignedUsers?: Array<{ id: string; full_name: string; email: string }> };
+        const assignedUsers = taskWithAssignments.assignedUsers || [];
         for (const user of assignedUsers) {
-          const userId = typeof user === 'string' ? user : user.id;
-          if (userId) {
-            uniqueUserIds.add(userId);
+          if (typeof user === 'string') {
+            uniqueUserIds.add(user);
+          } else if (user && typeof user === 'object' && 'id' in user) {
+            const userId = (user as { id: string }).id;
+            if (userId) {
+              uniqueUserIds.add(userId);
+            }
           }
         }
       }
@@ -317,8 +376,12 @@ export const PendingTaskApprovals = () => {
           try {
             const logs = await getAuditLogs({ userId, limit: 10 });
             logsMap[userId] = logs;
-          } catch (error) {
-            console.error(`Error fetching logs for user ${userId}:`, error);
+          } catch (error: unknown) {
+            if (import.meta.env.DEV) {
+              if (import.meta.env.DEV) {
+                console.error(`Error fetching logs for user ${userId}:`, error);
+              }
+            }
             logsMap[userId] = [];
           }
         })
@@ -342,12 +405,13 @@ export const PendingTaskApprovals = () => {
           entityMap[log.tableName].add(log.recordId);
         }
         // task_assignments için taskId ve assignedTo'yu al
-        if (log.tableName === "task_assignments") {
-          if (log.newData?.taskId) {
-            entityMap.tasks.add(log.newData.taskId);
+        if (log.tableName === "task_assignments" && log.newData) {
+          const newData = log.newData as Record<string, unknown>;
+          if (typeof newData.taskId === 'string') {
+            entityMap.tasks.add(newData.taskId);
           }
-          if (log.newData?.assignedTo) {
-            userIds.add(log.newData.assignedTo);
+          if (typeof newData.assignedTo === 'string') {
+            userIds.add(newData.assignedTo);
           }
         }
       });
@@ -474,8 +538,12 @@ export const PendingTaskApprovals = () => {
       
       setEntityNames(names);
 
-    } catch (error: any) {
-      console.error("Fetch tasks error:", error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        if (import.meta.env.DEV) {
+          console.error("Fetch tasks error:", error);
+        }
+      }
       toast.error("Görevler yüklenemedi");
     } finally {
       setLoading(false);
@@ -488,8 +556,9 @@ export const PendingTaskApprovals = () => {
       await approveTask(task.id, user.id);
       toast.success("Görev onaylandı");
       fetchPendingTasks();
-    } catch (error: any) {
-      toast.error("Onaylama hatası: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Onaylama hatası oluştu";
+      toast.error(errorMessage);
     }
   };
 
@@ -502,8 +571,33 @@ export const PendingTaskApprovals = () => {
       setSelectedTask(null);
       setRejectReason("");
       fetchPendingTasks();
-    } catch (error: any) {
-      toast.error("Reddetme hatası: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Reddetme hatası oluştu";
+      toast.error(errorMessage);
+    }
+  };
+
+  const handleApprovePoolRequest = async (task: Task, requestingUserId: string) => {
+    if (!user?.id || !task?.id) return;
+    try {
+      await approvePoolRequest(task.id, requestingUserId, user.id, true);
+      toast.success("Görev havuzu talebi onaylandı");
+      fetchPendingTasks();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Onaylama hatası oluştu";
+      toast.error(errorMessage);
+    }
+  };
+
+  const handleRejectPoolRequest = async (task: Task, requestingUserId: string) => {
+    if (!user?.id || !task?.id) return;
+    try {
+      await rejectPoolRequest(task.id, requestingUserId);
+      toast.success("Görev havuzu talebi reddedildi");
+      fetchPendingTasks();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Reddetme hatası oluştu";
+      toast.error(errorMessage);
     }
   };
 
@@ -531,14 +625,36 @@ export const PendingTaskApprovals = () => {
     }
   };
 
+  // Normalize status - remove "column_" prefix if present
+  const normalizeStatus = (status: string | undefined | null): string => {
+    if (!status) return "pending";
+    // Eğer "column_" ile başlıyorsa, bu bir column ID'sidir (sayısal olabilir)
+    if (status.startsWith("column_")) {
+      const statusFromColumn = status.replace("column_", "");
+      // Geçerli status değerlerini kontrol et (pending, in_progress, completed, approved, cancelled)
+      if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(statusFromColumn)) {
+        return statusFromColumn === "cancelled" ? "pending" : statusFromColumn;
+      }
+      // Sayısal ID veya geçersiz değer ise "pending" olarak kabul et
+      return "pending";
+    }
+    // Geçerli status değerlerini kontrol et
+    if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(status)) {
+      return status === "cancelled" ? "pending" : status;
+    }
+    return "pending"; // Fallback
+  };
+
   const getStatusLabel = (status: string) => {
+    // Önce status'ü normalize et (column_ prefix'ini kaldır)
+    const normalized = normalizeStatus(status);
     const labels: Record<string, string> = {
       pending: "Beklemede",
       in_progress: "Devam Ediyor",
       completed: "Tamamlandı",
       cancelled: "İptal",
     };
-    return labels[status] || status;
+    return labels[normalized] || normalized;
   };
 
   const isTaskOverdue = (task: Task) => {
@@ -547,9 +663,11 @@ export const PendingTaskApprovals = () => {
     if (task.dueDate instanceof Timestamp) {
       dueDate = task.dueDate.toDate();
     } else if (task.dueDate && typeof task.dueDate === 'object' && 'toDate' in task.dueDate) {
-      dueDate = (task.dueDate as any).toDate();
+      dueDate = (task.dueDate as { toDate: () => Date }).toDate();
+    } else if (typeof task.dueDate === 'string' || typeof task.dueDate === 'number') {
+      dueDate = new Date(task.dueDate);
     } else {
-      dueDate = new Date(task.dueDate as any);
+      return false;
     }
     return isBefore(dueDate, new Date()) && task.status !== "completed";
   };
@@ -560,9 +678,11 @@ export const PendingTaskApprovals = () => {
     if (task.dueDate instanceof Timestamp) {
       dueDate = task.dueDate.toDate();
     } else if (task.dueDate && typeof task.dueDate === 'object' && 'toDate' in task.dueDate) {
-      dueDate = (task.dueDate as any).toDate();
+      dueDate = (task.dueDate as { toDate: () => Date }).toDate();
+    } else if (typeof task.dueDate === 'string' || typeof task.dueDate === 'number') {
+      dueDate = new Date(task.dueDate);
     } else {
-      dueDate = new Date(task.dueDate as any);
+      return false;
     }
     const today = startOfDay(new Date());
     const threeDaysAfter = addDays(today, 3);
@@ -615,388 +735,192 @@ export const PendingTaskApprovals = () => {
     const dueSoon = isTaskDueSoon(task);
     
     // Assigned users bilgisini al
-    const assignedUsers = (task as any).assignedUsers || [];
+    const taskWithAssignments = task as Task & { assignedUsers?: Array<{ id: string; full_name: string; email?: string }> };
+    const assignedUsers = taskWithAssignments.assignedUsers || [];
     const assignedUsersWithDetails = assignedUsers
-      .map((user: any) => {
+      .map((user: { id: string; full_name: string; email?: string } | string) => {
         if (typeof user === 'string') {
           const userData = allUsers.find(u => u.id === user);
           return userData ? { id: userData.id, full_name: userData.fullName || userData.email || "Bilinmeyen" } : null;
         }
         return user;
       })
-      .filter(Boolean);
+      .filter((u): u is { id: string; full_name: string; email?: string } => u !== null);
 
     return (
-      <div
+      <Card
         key={task.id}
-        className="p-6 rounded-xl border-2 border-border hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 shadow-sm hover:shadow-md"
+        className="group border-0 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
       >
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-          <div
-            className="flex-1 cursor-pointer"
-            onClick={() => handleTaskClick(task)}
-          >
-            <div className="flex items-start gap-3 mb-3">
-              {getStatusIcon(task.status)}
-              <div className="flex-1">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <h3 className="font-semibold text-lg">{task.title}</h3>
-                  {task.projectId && projects.has(task.projectId) && (
-                    <Badge 
-                      variant="outline" 
-                      className="bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-blue-300 hover:from-blue-100 hover:to-indigo-100 transition-all shadow-sm"
-                    >
-                      <Folder className="h-3 w-3 mr-1.5" />
-                      <span className="font-semibold text-xs">
-                        {projects.get(task.projectId)?.name}
-                      </span>
-                    </Badge>
+        <CardContent className="p-2">
+          <div className="flex flex-col gap-2">
+            {/* Header */}
+            <div
+              className="flex-1 cursor-pointer"
+              onClick={() => handleTaskClick(task)}
+            >
+              <div className="flex items-start gap-2 mb-1.5">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  {getStatusIcon(task.status)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2 mb-2 min-w-0">
+                    <h3 className="font-semibold text-[14px] sm:text-[15px] leading-tight line-clamp-2 flex-1 min-w-0">{task.title}</h3>
+                    {task.projectId && projects.has(task.projectId) && (
+                      <Badge 
+                        variant="outline" 
+                        className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex-shrink-0 ml-2"
+                      >
+                        <Folder className="h-3 w-3 mr-1 flex-shrink-0" />
+                        <span className="truncate max-w-[100px] inline-block">
+                          {projects.get(task.projectId)?.name}
+                        </span>
+                      </Badge>
+                    )}
+                  </div>
+                  {task.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed mb-1.5">
+                      {task.description}
+                    </p>
                   )}
                 </div>
               </div>
-            </div>
-            {task.description && (
-              <p className="text-sm text-muted-foreground mt-2 mb-4 line-clamp-2 leading-relaxed">
-                {task.description}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2 mb-4">
-              <Badge variant="secondary">{getStatusLabel(task.status)}</Badge>
-              <Badge variant="outline" className="text-xs">
-                Öncelik {task.priority}
-              </Badge>
-              {dueSoon && <Badge className="bg-amber-100 text-amber-900 border-amber-200">Yaklaşan Termin</Badge>}
-              {overdue && <Badge variant="destructive">Termin Geçti</Badge>}
-              {task.approvalStatus === "pending" && (
-                <Badge className="bg-yellow-100 text-yellow-900 border-yellow-300">Görev Onayı Bekleniyor</Badge>
-              )}
-              {task.approvalStatus === "approved" && (
-                <Badge className="bg-green-100 text-green-900 border-green-300">Görev Onaylandı</Badge>
-              )}
-              {task.approvalStatus === "rejected" && (
-                <Badge className="bg-red-100 text-red-900 border-red-300">Görev Onayı Reddedildi</Badge>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-4 mt-4 text-sm text-muted-foreground">
-              {task.dueDate && (
-                <span className="flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4" />
-                  Termin: {formatDueDate(task.dueDate)}
-                </span>
-              )}
-              {assignedUsersWithDetails.length > 0 && (
-                <span className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  {assignedUsersWithDetails.length} kişi
-                </span>
-              )}
-            </div>
-            {assignedUsersWithDetails.length > 0 && (
-              <div className="flex items-center gap-2 mt-4">
-                <div className="flex -space-x-2">
-                  {assignedUsersWithDetails.slice(0, 4).map((user: any) => (
-                    <Avatar key={user.id} className="h-7 w-7 border-2 border-background">
-                      <AvatarFallback className="text-[11px]">
-                        {getInitials(user.full_name)}
-                      </AvatarFallback>
-                    </Avatar>
-                  ))}
-                </div>
-                {assignedUsersWithDetails.length > 4 && (
-                  <span className="text-xs text-muted-foreground">
-                    +{assignedUsersWithDetails.length - 4} daha
+              
+              {/* Badges */}
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                <Badge variant="secondary" className="text-xs">{getStatusLabel(task.status)}</Badge>
+                <Badge variant="outline" className="text-xs">Öncelik {task.priority}</Badge>
+                {dueSoon && <Badge className="bg-amber-100 text-amber-900 border-amber-200 text-xs">Yaklaşan</Badge>}
+                {overdue && <Badge variant="destructive" className="text-xs">Gecikti</Badge>}
+                {task.approvalStatus === "pending" && (
+                  <Badge className="bg-yellow-100 text-yellow-900 border-yellow-300 text-xs">Onay Bekliyor</Badge>
+                )}
+                {task.approvalStatus === "approved" && (
+                  <Badge className="bg-green-100 text-green-900 border-green-300 text-xs">Onaylandı</Badge>
+                )}
+                {task.approvalStatus === "rejected" && (
+                  <Badge className="bg-red-100 text-red-900 border-red-300 text-xs">Reddedildi</Badge>
+                )}
+              </div>
+              
+              {/* Meta Info */}
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mb-1.5">
+                {task.dueDate && (
+                  <span className="flex items-center gap-1.5">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {formatDueDate(task.dueDate)}
+                  </span>
+                )}
+                {assignedUsersWithDetails.length > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5" />
+                    {assignedUsersWithDetails.length} kişi
                   </span>
                 )}
               </div>
-            )}
-            {(approverName || rejecterName || task.rejectionReason) && (
-              <div className="flex flex-col gap-2 mt-4 p-3 bg-muted/30 rounded-lg border border-border">
-                {approverName && approvalDate && (
-                  <div className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <span className="text-sm font-semibold text-emerald-700">Onaylayan Kişi:</span>
-                      <div className="flex flex-col gap-0.5 mt-0.5">
-                        <span className="text-sm font-medium text-foreground">{approverName}</span>
-                        <span className="text-xs text-muted-foreground">{approvalDate}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {rejecterName && rejectionDate && (
-                  <div className="flex items-start gap-2">
-                    <XCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <span className="text-sm font-semibold text-red-700">Reddeden Kişi:</span>
-                      <div className="flex flex-col gap-0.5 mt-0.5">
-                        <span className="text-sm font-medium text-foreground">{rejecterName}</span>
-                        <span className="text-xs text-muted-foreground">{rejectionDate}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {task.rejectionReason && (
-                  <div className="text-sm text-red-700 font-medium mt-1 pt-2 border-t border-border">
-                    <span className="font-semibold">Red Nedeni:</span> {task.rejectionReason}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Ekip Üyelerinin Logları */}
-          {assignedUsersWithDetails.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-border">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setExpandedTaskLogs(prev => {
-                    const newSet = new Set(prev);
-                    if (newSet.has(task.id)) {
-                      newSet.delete(task.id);
-                    } else {
-                      newSet.add(task.id);
-                    }
-                    return newSet;
-                  });
-                }}
-                className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full"
-              >
-                <FileText className="h-4 w-4" />
-                <span>Ekip Üyelerinin Logları</span>
-                {expandedTaskLogs.has(task.id) ? (
-                  <ChevronUp className="h-4 w-4 ml-auto" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 ml-auto" />
-                )}
-              </button>
               
-              {expandedTaskLogs.has(task.id) && (
-                <div className="mt-3 space-y-3">
-                  {assignedUsersWithDetails.map((user: any) => {
-                    const logs = userLogs[user.id] || [];
-                    if (logs.length === 0) {
+              {/* Assigned Users */}
+              {assignedUsersWithDetails.length > 0 && (
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex -space-x-2">
+                    {assignedUsersWithDetails.slice(0, 4).map((user) => {
+                      if (typeof user === 'string') return null;
                       return (
-                        <div key={user.id} className="p-3 rounded-lg bg-muted/30 border border-border">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Avatar className="h-6 w-6">
-                              <AvatarFallback className="text-[10px]">
-                                {getInitials(user.full_name)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="font-medium text-sm">{user.full_name}</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">Henüz log bulunmuyor</p>
-                        </div>
+                        <Avatar key={user.id} className="h-6 w-6 border-2 border-background">
+                          <AvatarFallback className="text-[10px]">
+                            {getInitials(user.full_name)}
+                          </AvatarFallback>
+                        </Avatar>
                       );
-                    }
-                    
-                    return (
-                      <div key={user.id} className="p-3 rounded-lg bg-muted/30 border border-border">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-[10px]">
-                              {getInitials(user.full_name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium text-sm">{user.full_name}</span>
-                          <Badge variant="secondary" className="text-xs ml-auto">
-                            {logs.length} log
-                          </Badge>
-                        </div>
-                        <div className="space-y-2">
-                          {logs.slice(0, 5).map((log) => {
-                            const actionMeta = {
-                              CREATE: { color: "bg-green-500", label: "Oluşturma" },
-                              UPDATE: { color: "bg-blue-500", label: "Güncelleme" },
-                              DELETE: { color: "bg-red-500", label: "Silme" },
-                            }[log.action] || { color: "bg-gray-500", label: log.action };
-                            
-                            let logDate: Date;
-                            if (log.createdAt instanceof Timestamp) {
-                              logDate = log.createdAt.toDate();
-                            } else if (log.createdAt && typeof log.createdAt === 'object' && 'toDate' in log.createdAt) {
-                              logDate = (log.createdAt as any).toDate();
-                            } else if (log.createdAt && typeof log.createdAt === 'object' && (log.createdAt as any).constructor === Date) {
-                              logDate = log.createdAt as Date;
-                            } else if (typeof log.createdAt === 'string' || typeof log.createdAt === 'number') {
-                              logDate = new Date(log.createdAt);
-                            } else {
-                              logDate = new Date();
-                            }
-                            
-                            return (
-                              <div key={log.id} className="flex items-start gap-2 text-xs">
-                                <div className={`w-2 h-2 rounded-full ${actionMeta.color} mt-1.5 flex-shrink-0`} />
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium">
-                                    {(() => {
-                                      const userName = log.userName || log.userEmail || "Sistem";
-                                      const actionVerb = log.action === "CREATE" ? "oluşturdu" : 
-                                                        log.action === "UPDATE" ? "güncelledi" : 
-                                                        log.action === "DELETE" ? "sildi" : "yaptı";
-                                      
-                                      // Giriş logları
-                                      if (log.tableName === "user_logins") {
-                                        return `${userName} Giriş yaptı`;
-                                      }
-                                      
-                                      // Görev atama logları - özel format
-                                      if (log.tableName === "task_assignments" && log.action === "CREATE") {
-                                        const taskId = log.newData?.taskId;
-                                        const assignedToId = log.newData?.assignedTo;
-                                        const taskName = taskId && entityNames[`tasks_${taskId}`] 
-                                          ? entityNames[`tasks_${taskId}`] 
-                                          : (log.newData?.taskTitle || "görev");
-                                        const assignedUserName = assignedToId && entityNames[`users_${assignedToId}`]
-                                          ? entityNames[`users_${assignedToId}`]
-                                          : "bir kişiyi";
-                                        
-                                        // Proje bilgisini kontrol et - taskId'den projectId'yi bul
-                                        if (taskId && entityNames[`task_project_${taskId}`]) {
-                                          const projectId = entityNames[`task_project_${taskId}`];
-                                          if (entityNames[`projects_${projectId}`]) {
-                                            const projectName = entityNames[`projects_${projectId}`];
-                                            return `${userName} "${projectName}" projesindeki "${taskName}" görevini oluşturdu ve ${assignedUserName} kişisini göreve atadı`;
-                                          }
-                                        }
-                                        
-                                        return `${userName} "${taskName}" görevini oluşturdu ve ${assignedUserName} kişisini göreve atadı`;
-                                      }
-                                      
-                                      // Görev logları - proje bilgisi ile
-                                      if (log.tableName === "tasks" && log.recordId) {
-                                        const taskName = entityNames[`tasks_${log.recordId}`] || 
-                                                        log.newData?.title || 
-                                                        log.oldData?.title || 
-                                                        "görev";
-                                        
-                                        // Proje bilgisini kontrol et
-                                        const projectId = log.newData?.projectId || log.oldData?.projectId;
-                                        if (projectId && entityNames[`projects_${projectId}`]) {
-                                          const projectName = entityNames[`projects_${projectId}`];
-                                          return `${userName} "${projectName}" projesindeki "${taskName}" görevini ${actionVerb}`;
-                                        }
-                                        return `${userName} "${taskName}" görevini ${actionVerb}`;
-                                      }
-                                      
-                                      // Müşteri logları
-                                      if (log.tableName === "customers" && log.recordId) {
-                                        const customerName = entityNames[`customers_${log.recordId}`] || 
-                                                           log.newData?.name || 
-                                                           log.oldData?.name || 
-                                                           "müşteri";
-                                        return `${userName} "${customerName}" müşterisini ${actionVerb}`;
-                                      }
-                                      
-                                      // Sipariş logları
-                                      if (log.tableName === "orders" && log.recordId) {
-                                        const orderName = entityNames[`orders_${log.recordId}`] || 
-                                                         (log.newData?.orderNumber ? `Sipariş #${log.newData.orderNumber}` : null) ||
-                                                         (log.oldData?.orderNumber ? `Sipariş #${log.oldData.orderNumber}` : null) ||
-                                                         "sipariş";
-                                        return `${userName} "${orderName}" siparişini ${actionVerb}`;
-                                      }
-                                      
-                                      // Ürün logları
-                                      if (log.tableName === "products" && log.recordId) {
-                                        const productName = entityNames[`products_${log.recordId}`] || 
-                                                          log.newData?.name || 
-                                                          log.oldData?.name || 
-                                                          "ürün";
-                                        return `${userName} "${productName}" ürününü ${actionVerb}`;
-                                      }
-                                      
-                                      // Proje logları
-                                      if (log.tableName === "projects" && log.recordId) {
-                                        const projectName = entityNames[`projects_${log.recordId}`] || 
-                                                          log.newData?.name || 
-                                                          log.oldData?.name || 
-                                                          "proje";
-                                        return `${userName} "${projectName}" projesini ${actionVerb}`;
-                                      }
-                                      
-                                      // Diğer loglar - entity adı ile
-                                      if (log.recordId && entityNames[`${log.tableName}_${log.recordId}`]) {
-                                        const entityName = entityNames[`${log.tableName}_${log.recordId}`];
-                                        return `${userName} "${entityName}" kaydını ${actionVerb}`;
-                                      }
-                                      
-                                      // Fallback
-                                      return `${userName} ${actionMeta.label} yaptı`;
-                                    })()}
-                                  </p>
-                                  <p className="text-muted-foreground mt-0.5">
-                                    {logDate.toLocaleDateString("tr-TR", {
-                                      day: "2-digit",
-                                      month: "short",
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {logs.length > 5 && (
-                            <p className="text-xs text-muted-foreground mt-2">
-                              +{logs.length - 5} log daha
-                            </p>
-                          )}
-                        </div>
+                    }).filter(Boolean)}
+                  </div>
+                  {assignedUsersWithDetails.length > 4 && (
+                    <span className="text-xs text-muted-foreground">
+                      +{assignedUsersWithDetails.length - 4}
+                    </span>
+                  )}
+                </div>
+              )}
+              
+              {/* Approval/Rejection Info */}
+              {(approverName || rejecterName || task.rejectionReason) && (
+                <div className="flex flex-col gap-1.5 p-2 bg-muted/30 rounded-lg border border-border text-xs">
+                  {approverName && approvalDate && (
+                    <div className="flex items-start gap-2 min-w-0">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold text-emerald-700">Onaylayan:</span>
+                        <span className="ml-1.5 text-foreground break-words">{approverName}</span>
+                        <span className="ml-1.5 text-muted-foreground whitespace-nowrap">({approvalDate})</span>
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
+                  {rejecterName && rejectionDate && (
+                    <div className="flex items-start gap-2 min-w-0">
+                      <XCircle className="h-3.5 w-3.5 text-red-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold text-red-700">Reddeden:</span>
+                        <span className="ml-1.5 text-foreground break-words">{rejecterName}</span>
+                        <span className="ml-1.5 text-muted-foreground whitespace-nowrap">({rejectionDate})</span>
+                      </div>
+                    </div>
+                  )}
+                  {task.rejectionReason && (
+                    <div className="text-red-700 font-medium pt-2 border-t border-border break-words">
+                      <span className="font-semibold">Neden:</span> <span className="break-words">{task.rejectionReason}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
 
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            {showActions && task.approvalStatus === "pending" && (
-              <>
-                <Button
-                  size="sm"
-                  variant="default"
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleApprove(task);
-                  }}
-                >
-                  <Check className="h-4 w-4 mr-2" />
-                  Onayla
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedTask(task);
-                    setRejectDialogOpen(true);
-                  }}
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Reddet
-                </Button>
-              </>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTaskClick(task);
-              }}
-            >
-              <Eye className="h-4 w-4 mr-2" />
-              Detay
-            </Button>
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-3 border-t" onClick={(e) => e.stopPropagation()}>
+              {showActions && task.approvalStatus === "pending" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleApprove(task);
+                    }}
+                  >
+                    <Check className="h-4 w-4 mr-1.5" />
+                    Onayla
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedTask(task);
+                      setRejectDialogOpen(true);
+                    }}
+                  >
+                    <X className="h-4 w-4 mr-1.5" />
+                    Reddet
+                  </Button>
+                </>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleTaskClick(task);
+                }}
+              >
+                <Eye className="h-4 w-4 mr-1.5" />
+                Detay
+              </Button>
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     );
   };
 
@@ -1011,80 +935,208 @@ export const PendingTaskApprovals = () => {
   }
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="pt-6">
+    <div className="w-full space-y-1 min-w-0">
+      <div>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="pending" className="gap-2">
+            <TabsList className="grid w-full grid-cols-3 bg-muted/50">
+              <TabsTrigger value="pending" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Clock className="h-4 w-4" />
-                Bekleyen ({pendingTasks.length})
+                Bekleyen
+                {(pendingTasks.length + poolRequestTasks.length) > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 h-5 min-w-5 px-1.5 text-xs">
+                    {pendingTasks.length + poolRequestTasks.length}
+                  </Badge>
+                )}
               </TabsTrigger>
-              <TabsTrigger value="approved" className="gap-2">
+              <TabsTrigger value="approved" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <CheckCircle2 className="h-4 w-4" />
-                Onaylandı ({approvedTasks.length})
+                Onaylandı
+                {approvedTasks.length > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 h-5 min-w-5 px-1.5 text-xs">
+                    {approvedTasks.length}
+                  </Badge>
+                )}
               </TabsTrigger>
-              <TabsTrigger value="rejected" className="gap-2">
+              <TabsTrigger value="rejected" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <XCircle className="h-4 w-4" />
-                Reddedildi ({rejectedTasks.length})
+                Reddedildi
+                {rejectedTasks.length > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 h-5 min-w-5 px-1.5 text-xs">
+                    {rejectedTasks.length}
+                  </Badge>
+                )}
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="pending" className="space-y-4 mt-4">
-              {pendingTasks.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <div className="flex justify-center mb-3">
-                    <Check className="h-10 w-10 text-muted-foreground/20" />
+            <TabsContent value="pending" className="space-y-1 mt-1 max-h-[60vh] overflow-y-auto">
+              {pendingTasks.length === 0 && poolRequestTasks.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground">
+                  <div className="flex justify-center mb-2">
+                    <Check className="h-8 w-8 text-muted-foreground/20" />
                   </div>
-                  <p>Onayınızı bekleyen görev bulunmuyor.</p>
+                  <p className="text-sm">Onayınızı bekleyen görev bulunmuyor.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-1.5">
+                  {/* Görev Onayları */}
                   {pendingTasks.map((task) => renderTaskCard(task, true))}
+                  
+                  {/* Görev Havuzu Talepleri */}
+                  {poolRequestTasks.map((task) => {
+                    const poolRequests = task.poolRequests || [];
+                    if (!Array.isArray(poolRequests) || poolRequests.length === 0) return null;
+                    
+                    return (
+                      <Card
+                        key={task.id}
+                        className="border-amber-200 bg-amber-50/30 hover:bg-amber-50/50 transition-all duration-200 shadow-sm hover:shadow-md"
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex flex-col gap-4">
+                            {/* Header */}
+                            <div className="flex items-start gap-2">
+                              <div className="p-2 rounded-lg bg-amber-100">
+                                <ListTodo className="h-5 w-5 text-amber-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <h3 className="font-semibold text-[14px] sm:text-[15px] leading-tight line-clamp-2">{task.title}</h3>
+                                  <Badge className="bg-amber-100 text-amber-900 border-amber-300 text-xs flex-shrink-0">
+                                    Havuz Talebi
+                                  </Badge>
+                                </div>
+                                {task.projectId && projects.has(task.projectId) && (
+                                  <Badge 
+                                    variant="outline" 
+                                    className="bg-blue-50 text-blue-700 border-blue-200 text-xs mb-2"
+                                  >
+                                    <Folder className="h-3 w-3 mr-1" />
+                                    {projects.get(task.projectId)?.name}
+                                  </Badge>
+                                )}
+                                {task.description && (
+                                  <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed mb-1.5">
+                                    {task.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Requests */}
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-amber-900">
+                                {poolRequests.length} talep var:
+                              </p>
+                              <div className="space-y-2">
+                                {poolRequests.map((requestingUserId: string) => {
+                                  const requestingUser = allUsers.find(u => u.id === requestingUserId);
+                                  const userName = requestingUser?.fullName || requestingUser?.displayName || requestingUser?.email?.split("@")[0] || "Bilinmeyen Kullanıcı";
+                                  
+                                  return (
+                                    <div key={requestingUserId} className="flex items-center justify-between gap-1.5 p-2 bg-white rounded-lg border border-amber-200 hover:border-amber-300 transition-colors min-w-0">
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <Avatar className="h-8 w-8 flex-shrink-0">
+                                          <AvatarFallback className="bg-amber-100 text-amber-700 text-xs">
+                                            {getInitials(userName)}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium text-gray-900 truncate">{userName}</p>
+                                          <p className="text-xs text-gray-500 truncate">Görevi talep etti</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2 flex-shrink-0">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="border-red-300 text-red-700 hover:bg-red-50 h-8 px-2"
+                                          onClick={() => handleRejectPoolRequest(task, requestingUserId)}
+                                        >
+                                          <X className="h-3.5 w-3.5 mr-1" />
+                                          Reddet
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          className="bg-amber-600 hover:bg-amber-700 text-white border-none h-8 px-3"
+                                          onClick={() => handleApprovePoolRequest(task, requestingUserId)}
+                                        >
+                                          <Check className="h-3.5 w-3.5 mr-1" />
+                                          Onayla
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            
+                            {/* Action */}
+                            <div className="pt-3 border-t" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTaskClick(task);
+                                }}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                Detay
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </TabsContent>
 
-            <TabsContent value="approved" className="space-y-4 mt-4">
+            <TabsContent value="approved" className="space-y-1 mt-1 max-h-[60vh] overflow-y-auto">
               {approvedTasks.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  <div className="flex justify-center mb-3">
+                  <div className="flex justify-center mb-1.5">
                     <CheckCircle2 className="h-10 w-10 text-muted-foreground/20" />
                   </div>
                   <p>Onaylanmış görev bulunmuyor.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-1.5">
                   {approvedTasks.map((task) => renderTaskCard(task, false))}
                 </div>
               )}
             </TabsContent>
 
-            <TabsContent value="rejected" className="space-y-4 mt-4">
+            <TabsContent value="rejected" className="space-y-1 mt-1 max-h-[60vh] overflow-y-auto">
               {rejectedTasks.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  <div className="flex justify-center mb-3">
+                  <div className="flex justify-center mb-1.5">
                     <XCircle className="h-10 w-10 text-muted-foreground/20" />
                   </div>
                   <p>Reddedilmiş görev bulunmuyor.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-1">
                   {rejectedTasks.map((task) => renderTaskCard(task, false))}
                 </div>
               )}
             </TabsContent>
           </Tabs>
-        </CardContent>
-      </Card>
+      </div>
 
       <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Görevi Reddet</DialogTitle>
-            <DialogDescription>
+          <DialogTitle className="sr-only">Görevi Reddet</DialogTitle>
+          <DialogDescription className="sr-only">
               Görevi neden reddettiğinizi belirtebilirsiniz. Görev "Devam Ediyor" statüsüne geri dönecektir.
             </DialogDescription>
+          <DialogHeader>
+            <h2 className="text-lg sm:text-xl font-semibold text-foreground">Görevi Reddet</h2>
+            <p className="text-sm text-muted-foreground">
+              Görevi neden reddettiğinizi belirtebilirsiniz. Görev "Devam Ediyor" statüsüne geri dönecektir.
+            </p>
           </DialogHeader>
           <div className="space-y-2 py-2">
             <Label>Red Nedeni</Label>
@@ -1103,11 +1155,15 @@ export const PendingTaskApprovals = () => {
 
       <Dialog open={taskDetailModalOpen} onOpenChange={setTaskDetailModalOpen}>
         <DialogContent className="max-w-4xl w-[95vw] overflow-y-auto max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle>Görev Detayları</DialogTitle>
-            <DialogDescription>
+          <DialogTitle className="sr-only">Görev Detayları</DialogTitle>
+          <DialogDescription className="sr-only">
               Görev detaylarını, ekibi ve checklist'i görüntüleyin.
             </DialogDescription>
+          <DialogHeader>
+            <h2 className="text-lg sm:text-xl font-semibold text-foreground">Görev Detayları</h2>
+            <p className="text-sm text-muted-foreground">
+              Görev detaylarını, ekibi ve checklist'i görüntüleyin.
+            </p>
           </DialogHeader>
           {selectedTaskId && (
             <TaskInlineForm

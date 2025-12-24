@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { canUpdateResource, canDeleteResource } from "@/utils/permissions";
+import { UserProfile } from "@/services/firebase/authService";
 import { getCustomerNotes, createCustomerNote, CustomerNote } from "@/services/firebase/customerNoteService";
 import { getSavedReports, SavedReport } from "@/services/firebase/reportService";
 import { getOrders, Order } from "@/services/firebase/orderService";
@@ -19,7 +21,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { format } from "date-fns";
 import { formatPhoneForDisplay, formatPhoneForTelLink, normalizePhone } from "@/utils/phoneNormalizer";
 import { tr } from "date-fns/locale";
-import { updateCustomer, deleteCustomer } from "@/services/firebase/customerService";
+import { updateCustomer, deleteCustomer, addCustomerComment, getCustomerComments, getCustomerActivities } from "@/services/firebase/customerService";
+import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +37,7 @@ import {
 interface CustomerDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  customer: any;
+  customer: Customer;
   onUpdate?: () => void;
   onDelete?: () => void;
 }
@@ -54,6 +57,11 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [canUpdate, setCanUpdate] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  
+  // Personel kontrolü - Personel müşteri detayını görebilir ama düzenleyemez
+  const isPersonnel = user?.roles?.includes("personnel") || false;
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -63,6 +71,44 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
     tax_number: "",
     notes: "",
   });
+
+  // Yetki kontrolleri - Firestore'dan kontrol et
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user || !customer) {
+        setCanUpdate(false);
+        setCanDelete(false);
+        return;
+      }
+      try {
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: null,
+          dateOfBirth: null,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const [canUpdateCustomer, canDeleteCustomer] = await Promise.all([
+          canUpdateResource(userProfile, "customers"),
+          canDeleteResource(userProfile, "customers"),
+        ]);
+        setCanUpdate(canUpdateCustomer);
+        setCanDelete(canDeleteCustomer);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking customer permissions:", error);
+        }
+        setCanUpdate(false);
+        setCanDelete(false);
+      }
+    };
+    checkPermissions();
+  }, [user, customer]);
 
   useEffect(() => {
     if (open && customer?.id) {
@@ -97,13 +143,14 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
       setNotes(notesData);
       // Quotes'ları customerId'ye göre filtrele
       const customerQuotes = quotesData.filter((quote) => {
-        const metadata = quote.metadata as any;
+        const metadata = quote.metadata as { customerId?: string } | null | undefined;
         return metadata?.customerId === customer.id;
       });
       setQuotes(customerQuotes);
       setOrders(ordersData);
-    } catch (error: any) {
-      toast.error("Veriler yüklenirken hata: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Veriler yüklenirken hata: " + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -128,14 +175,29 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
       setNoteDialogOpen(false);
       setNoteForm({ type: "general", title: "", content: "" });
       fetchData();
-    } catch (error: any) {
-      toast.error("Not eklenirken hata: " + error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Not eklenirken hata: " + errorMessage);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customer?.id || !user?.id) return;
+
+    // Yetki kontrolü - Personel düzenleme yapamaz
+    if (isPersonnel) {
+      toast.error("Müşteri düzenleme yetkiniz yok.");
+      setIsEditing(false);
+      return;
+    }
+
+    // Yetki kontrolü
+    if (!canUpdate && customer.createdBy !== user.id) {
+      toast.error("Müşteri düzenleme yetkiniz yok.");
+      setIsEditing(false);
+      return;
+    }
 
     if (!formData.name.trim()) {
       toast.error("İsim gereklidir");
@@ -164,9 +226,10 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
         onUpdate();
       }
       fetchData();
-    } catch (error: any) {
-      console.error("Update customer error:", error);
-      toast.error(error.message || "Müşteri güncellenirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Update customer error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(errorMessage || "Müşteri güncellenirken hata oluştu");
     } finally {
       setSaving(false);
     }
@@ -174,6 +237,20 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
 
   const handleDelete = async () => {
     if (!customer?.id) return;
+
+    // Yetki kontrolü - Personel silme yapamaz
+    if (isPersonnel) {
+      toast.error("Müşteri silme yetkiniz yok.");
+      setDeleteDialogOpen(false);
+      return;
+    }
+
+    // Yetki kontrolü
+    if (!canDelete && customer.createdBy !== user?.id) {
+      toast.error("Müşteri silme yetkiniz yok.");
+      setDeleteDialogOpen(false);
+      return;
+    }
 
     try {
       await deleteCustomer(customer.id, user?.id);
@@ -183,9 +260,10 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
       if (onDelete) {
         onDelete();
       }
-    } catch (error: any) {
-      console.error("Delete customer error:", error);
-      toast.error(error.message || "Müşteri silinirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Delete customer error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(errorMessage || "Müşteri silinirken hata oluştu");
     }
   };
 
@@ -225,7 +303,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
     const totalOrderAmount = orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
     const totalQuotes = quotes.length;
     const totalQuoteAmount = quotes.reduce((sum, quote) => {
-      const metadata = quote.metadata as any;
+      const metadata = quote.metadata as { grandTotal?: number } | null | undefined;
       return sum + (metadata?.grandTotal || 0);
     }, 0);
     const completedOrders = orders.filter((o) => o.status === "completed" || o.status === "delivered").length;
@@ -247,7 +325,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
     }).format(value);
   };
 
-  const formatDateSafe = (dateInput?: any) => {
+  const formatDateSafe = (dateInput?: Timestamp | Date | string | null) => {
     if (!dateInput) return "-";
     try {
       let date: Date;
@@ -289,7 +367,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
       if (Number.isNaN(date.getTime())) return "-";
       return format(date, "dd MMM yyyy", { locale: tr });
     } catch (error) {
-      console.error("Date formatting error:", error, dateInput);
+      if (import.meta.env.DEV) console.error("Date formatting error:", error, dateInput);
       return "-";
     }
   };
@@ -298,7 +376,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           {/* Header */}
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -308,7 +386,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                   <User className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                  <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                     {isEditing ? "Müşteri Düzenle" : customer.name}
                   </DialogTitle>
                   {!isEditing && customer.company ? (
@@ -349,24 +427,29 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                       Ara
                     </Button>
                   )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
-                    onClick={() => setIsEditing(true)}
-                  >
-                    <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
-                    Düzenle
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-destructive/20 hover:bg-destructive/5 text-destructive rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
-                    onClick={() => setDeleteDialogOpen(true)}
-                  >
-                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
-                    Sil
-                  </Button>
+                  {!isPersonnel && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
+                      onClick={() => setIsEditing(true)}
+                      disabled={!canUpdate && customer.createdBy !== user?.id}
+                    >
+                      <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
+                      Düzenle
+                    </Button>
+                  )}
+                  {!isPersonnel && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-destructive/20 hover:bg-destructive/5 text-destructive rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
+                      onClick={() => setDeleteDialogOpen(true)}
+                    >
+                      <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
+                      Sil
+                    </Button>
+                  )}
                 </>
               ) : (
                 <>
@@ -726,7 +809,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                       </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
                           <Badge variant="outline" className="text-sm font-semibold px-3 py-1 whitespace-nowrap">
-                          ₺{((quote.metadata as any)?.grandTotal || 0).toLocaleString("tr-TR")}
+                          ₺{((quote.metadata as { grandTotal?: number } | null | undefined)?.grandTotal || 0).toLocaleString("tr-TR")}
                         </Badge>
                         <Button
                           size="sm"
@@ -793,11 +876,17 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                 {orders.map((order) => {
                   const getStatusBadge = (status: string) => {
                     const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+                      draft: { label: "Taslak", variant: "outline" },
                       pending: { label: "Beklemede", variant: "outline" },
+                      planned: { label: "Planlandı", variant: "outline" },
+                      confirmed: { label: "Onaylandı", variant: "default" },
                       in_progress: { label: "Üretimde", variant: "default" },
+                      in_production: { label: "Üretimde", variant: "default" },
                       quality_check: { label: "Kalite Kontrol", variant: "secondary" },
                       completed: { label: "Tamamlandı", variant: "default" },
+                      shipped: { label: "Kargoda", variant: "secondary" },
                       delivered: { label: "Teslim Edildi", variant: "default" },
+                      on_hold: { label: "Beklemede", variant: "outline" },
                       cancelled: { label: "İptal", variant: "destructive" },
                     };
                     return statusMap[status] || { label: status, variant: "outline" };
@@ -969,6 +1058,32 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
           </DialogContent>
         </Dialog>
       </DialogContent>
+      
+      {/* Activity Comments Panel */}
+      {customer?.id && user && (
+        <ActivityCommentsPanel
+          entityId={customer.id}
+          entityType="customer"
+          onAddComment={async (content: string) => {
+            await addCustomerComment(
+              customer.id,
+              user.id,
+              content,
+              user.fullName || user.displayName,
+              user.email
+            );
+          }}
+          onGetComments={async () => {
+            return await getCustomerComments(customer.id);
+          }}
+          onGetActivities={async () => {
+            return await getCustomerActivities(customer.id);
+          }}
+          currentUserId={user.id}
+          currentUserName={user.fullName || user.displayName}
+          currentUserEmail={user.email}
+        />
+      )}
     </Dialog>
   );
 };

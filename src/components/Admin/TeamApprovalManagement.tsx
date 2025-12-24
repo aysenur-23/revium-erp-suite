@@ -14,6 +14,8 @@ import {
 } from "@/services/firebase/teamApprovalService";
 import { collection, onSnapshot, Unsubscribe } from "firebase/firestore";
 import { firestore } from "@/lib/firebase";
+import { UserProfile } from "@/services/firebase/authService";
+import { getDepartments } from "@/services/firebase/departmentService";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +31,41 @@ import { Label } from "@/components/ui/label";
 
 export const TeamApprovalManagement = () => {
   const { user, isAdmin } = useAuth();
+  const [canApprove, setCanApprove] = useState(false);
+  
+  // Ekip talebi onaylama yetkisi - Firestore'dan kontrol et
+  useEffect(() => {
+    const checkPermission = async () => {
+      if (!user) {
+        setCanApprove(false);
+        return;
+      }
+      try {
+        const { canApproveTeamRequest } = await import("@/utils/permissions");
+        const departments = await getDepartments();
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
+          role: user.roles,
+          createdAt: null,
+          updatedAt: null,
+        };
+        const result = await canApproveTeamRequest(userProfile, departments);
+        setCanApprove(result);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking approve team request permission:", error);
+        }
+        setCanApprove(false);
+      }
+    };
+    checkPermission();
+  }, [user]);
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<TeamApprovalRequest[]>([]);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -53,7 +90,9 @@ export const TeamApprovalManagement = () => {
         }
       },
       (error) => {
-        console.error("Users snapshot error:", error);
+        if (import.meta.env.DEV) {
+          console.error("Users snapshot error:", error);
+        }
       }
     );
     
@@ -77,35 +116,43 @@ export const TeamApprovalManagement = () => {
         data = await getPendingTeamRequests(user.id);
       }
       setRequests(data);
-    } catch (error: any) {
-      toast.error("Talepler yüklenirken hata: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Talepler yüklenirken hata: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setLoading(false);
     }
   };
 
   const handleApprove = async (request: TeamApprovalRequest) => {
+    if (!canApprove) {
+      toast.error("Ekip talebi onaylama yetkiniz yok.");
+      return;
+    }
     try {
       await approveTeamRequest(request.userId, request.teamId, user?.id || "");
       toast.success(`${request.userName} kullanıcısı ${request.teamName} ekibine onaylandı`);
       fetchRequests();
-    } catch (error: any) {
-      toast.error("Onaylama hatası: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Onaylama hatası: " + (error instanceof Error ? error.message : String(error)));
     }
   };
 
   const handleReject = async () => {
     if (!selectedRequest) return;
+    if (!canApprove) {
+      toast.error("Ekip talebi reddetme yetkiniz yok.");
+      return;
+    }
     
     try {
-      await rejectTeamRequest(selectedRequest.userId, selectedRequest.teamId, rejectReason);
+      await rejectTeamRequest(selectedRequest.userId, selectedRequest.teamId, rejectReason, user?.id);
       toast.success(`${selectedRequest.userName} kullanıcısının ${selectedRequest.teamName} ekibi talebi reddedildi`);
       setRejectDialogOpen(false);
       setSelectedRequest(null);
       setRejectReason("");
       fetchRequests();
-    } catch (error: any) {
-      toast.error("Reddetme hatası: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Reddetme hatası: " + (error instanceof Error ? error.message : String(error)));
     }
   };
 

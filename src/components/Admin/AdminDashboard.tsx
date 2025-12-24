@@ -5,7 +5,7 @@ import { DepartmentStatsTable } from "./DepartmentStatsTable";
 import { TaskStatusPieChart } from "./TaskStatusPieChart";
 import { ProductionStatusBarChart } from "./ProductionStatusBarChart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckSquare, Package, Users, UserPlus, Building2, FileText, Settings, Shield, BarChart3, Zap } from "lucide-react";
+import { CheckSquare, Package, Users, UserPlus, Building2, FileText, Settings, Shield, BarChart3, Zap, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { CreateTaskDialog } from "@/components/Tasks/CreateTaskDialog";
@@ -24,6 +24,7 @@ export const AdminDashboard = () => {
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
   const [salesOrderDialogOpen, setSalesOrderDialogOpen] = useState(false);
   const [departmentDialogOpen, setDepartmentDialogOpen] = useState(false);
+  const statsExpanded = true; // İstatistikler her zaman açık
 
   if (error) {
     return (
@@ -191,9 +192,17 @@ export const AdminDashboard = () => {
 
   return (
     <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      {/* Başlık */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">Admin Dashboard</h1>
+          <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Sistem yönetimi ve istatistikler</p>
+        </div>
+      </div>
 
       {/* Ana İstatistik Kartları - Yan yana */}
-      <div className="grid gap-2 sm:gap-3 md:gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      {statsExpanded && (
+        <div className="grid gap-2 sm:gap-3 md:gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Toplam Görevler"
           value={stats.tasks.total}
@@ -234,7 +243,8 @@ export const AdminDashboard = () => {
           onClick={() => navigate("/admin?tab=departments")}
           clickable
         />
-      </div>
+        </div>
+      )}
 
       {/* Grafikler */}
       <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-2">

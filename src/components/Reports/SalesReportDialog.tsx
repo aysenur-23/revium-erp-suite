@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { getOrders, getOrderItems, Order, OrderItem } from "@/services/firebase/orderService";
 import { Download, TrendingUp, Package, Users, Calendar, Clock } from "lucide-react";
-import { generateSalesReportPDF } from "@/services/pdfGenerator";
+// pdfGenerator will be dynamically imported when needed
 import { useAuth } from "@/contexts/AuthContext";
 import { Timestamp } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -161,6 +160,8 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
 
     setLoading(true);
     try {
+      // Dynamically import pdfGenerator to avoid loading it on initial page load
+      const { generateSalesReportPDF } = await import("@/services/pdfGenerator");
       // Generate PDF - await ile bekle
       const pdfBlob = await generateSalesReportPDF(reportData, startDate, endDate);
       
@@ -208,22 +209,26 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-[98vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b bg-gradient-to-r from-primary/5 to-transparent flex-shrink-0">
-          <DialogTitle className="text-lg sm:text-xl font-bold flex items-center gap-2">
+      <DialogContent className="w-full max-w-[80vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
+        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+        <DialogTitle className="sr-only">Satış Raporu Oluştur</DialogTitle>
+        <DialogDescription className="sr-only">Tarih aralığı seçerek detaylı satış raporu oluşturun ve PDF olarak indirin</DialogDescription>
+        
+        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b bg-[rgb(255,255,255)] flex-shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
               <Download className="h-4 w-4 text-primary" />
             </div>
             Satış Raporu Oluştur
-          </DialogTitle>
-          <DialogDescription className="text-xs sm:text-sm text-muted-foreground mt-1">
+          </h2>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Tarih aralığı seçerek detaylı satış raporu oluşturun ve PDF olarak indirin
-          </DialogDescription>
+          </p>
         </DialogHeader>
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch overscroll-behavior-contain">
           <div className="w-full p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Tarih Seçimi - Profesyonel Tasarım */}
-          <Card className="bg-gradient-to-br from-gray-50/50 to-white border-2">
+          <Card className="bg-[rgb(249,250,251)] border-2">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-muted-foreground">Tarih Aralığı Seçimi</CardTitle>
             </CardHeader>
@@ -345,9 +350,9 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
                   {startDate} - {endDate}
                 </Badge>
               </div>
-              {/* İstatistik Kartları - Gradient ve İkonlu */}
+              {/* İstatistik Kartları - Profesyonel ve Sade */}
               <div className="grid grid-cols-3 gap-4">
-                <Card className="bg-gradient-to-br from-primary/10 via-white to-white border-primary/20 hover:shadow-lg transition-all duration-300">
+                <Card className="bg-[rgb(255,255,255)] border-[rgb(221,83,53)] border-2" style={{ backgroundColor: 'rgba(221, 83, 53, 0.05)' }}>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 text-primary" />
@@ -359,7 +364,7 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
                     <p className="text-xs text-muted-foreground mt-1">Ortalama: ₺{reportData.avgOrderValue.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-blue-50 via-white to-white border-blue-200 hover:shadow-lg transition-all duration-300">
+                <Card className="bg-[rgb(239,246,255)] border-[rgb(191,219,254)] border-2">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
                       <Package className="h-4 w-4 text-blue-500" />
@@ -371,7 +376,7 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
                     <p className="text-xs text-muted-foreground mt-1">Tarih aralığında</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-green-50 via-white to-white border-green-200 hover:shadow-lg transition-all duration-300">
+                <Card className="bg-[rgb(240,253,244)] border-[rgb(187,247,208)] border-2">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
                       <Users className="h-4 w-4 text-green-500" />
@@ -387,8 +392,8 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
 
               {/* Sipariş Durumu Dağılımı */}
               <Card className="border-2 shadow-sm">
-                <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b">
-                  <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <CardHeader className="bg-[rgb(249,250,251)] border-b">
+                  <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
                     <div className="h-1 w-1 rounded-full bg-primary"></div>
                     Sipariş Durumu Dağılımı
                   </CardTitle>
@@ -421,7 +426,11 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
                             draft: "Taslak",
                             pending: "Beklemede",
                             confirmed: "Onaylandı",
+                            planned: "Planlandı",
                             in_production: "Üretimde",
+                            in_progress: "Üretimde",
+                            quality_check: "Kalite Kontrol",
+                            on_hold: "Beklemede",
                             completed: "Tamamlandı",
                             shipped: "Kargoda",
                             delivered: "Teslim Edildi",
@@ -447,8 +456,8 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
 
               {/* Ürün Tablosu - Profesyonel Tasarım */}
               <Card className="border-2 shadow-sm">
-                <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b">
-                  <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <CardHeader className="bg-[rgb(249,250,251)] border-b">
+                  <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
                     <div className="h-1 w-1 rounded-full bg-primary"></div>
                     En Çok Satan Ürünler
                   </CardTitle>
@@ -492,7 +501,7 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
             </Card>
           )}
           </div>
-        </ScrollArea>
+        </div>
         <div className="flex-shrink-0 px-4 sm:px-6 pb-4 sm:pb-6 pt-4 border-t">
           <Button 
             onClick={generateReport} 

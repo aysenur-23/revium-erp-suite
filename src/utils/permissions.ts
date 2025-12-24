@@ -19,50 +19,35 @@ export const isMainAdmin = async (user: UserProfile | null): Promise<boolean> =>
   const hasSuperAdminRole = user.role?.includes("super_admin") || user.role?.includes("main_admin") || false;
   if (!hasSuperAdminRole) return false;
   
-  // Super admin için role_permissions sisteminden kontrol et
-  // Super admin her zaman tüm yetkilere sahip olduğu için direkt true dönebiliriz
-  // Ancak yine de role_permissions sisteminde super_admin rolünün varlığını kontrol edelim
+  // Super admin her zaman true döner - role_permissions kontrolüne gerek yok
+  // Ancak yine de sistemin doğru çalıştığından emin olmak için permission'ı kontrol edelim
   try {
-    const permission = await getPermission("super_admin", "role_permissions");
-    // Super admin rolü varsa ve yetkisi varsa true döner
+    // Ensure permissions are initialized
+    const { getRolePermissions } = await import("@/services/firebase/rolePermissionsService");
+    await getRolePermissions(); // This will initialize if needed
+    
+    const permission = await getPermission("super_admin", "role_permissions", true);
+    // Super admin rolü varsa ve yetkisi varsa true döner, yoksa da true döner (super admin her zaman yetkilidir)
     return permission?.canRead === true || hasSuperAdminRole;
-  } catch (error) {
-    // Hata durumunda fallback: rol array'inden kontrol et
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error checking super admin permission:", error);
+    }
+    // Hata durumunda fallback: rol array'inden kontrol et - super admin her zaman true
     return hasSuperAdminRole;
   }
 };
 
 /**
  * Admin kontrolü
- * role_permissions sisteminden kontrol eder
+ * Artık sadece Super Admin için true döner (Admin rolü kaldırıldı)
  */
 export const isAdmin = async (user: UserProfile | null): Promise<boolean> => {
   if (!user) return false;
   
-  // Super admin her zaman admin'dir
+  // Sadece Super Admin admin yetkisine sahiptir
   const hasSuperAdminRole = user.role?.includes("super_admin") || user.role?.includes("main_admin") || false;
-  if (hasSuperAdminRole) {
-    try {
-      const permission = await getPermission("super_admin", "audit_logs");
-      return permission?.canRead === true || true; // Super admin her zaman true
-    } catch (error) {
-      return true; // Super admin her zaman true
-    }
-  }
-  
-  // Admin rolüne sahip mi?
-  const hasAdminRole = user.role?.includes("admin") || false;
-  if (!hasAdminRole) return false;
-  
-  // Admin için role_permissions sisteminden kontrol et
-  try {
-    const permission = await getPermission("admin", "audit_logs");
-    // Admin rolü varsa ve audit_logs kaynağına canRead yetkisi varsa true döner
-    return permission?.canRead === true;
-  } catch (error) {
-    // Hata durumunda fallback: rol array'inden kontrol et
-    return hasAdminRole;
-  }
+  return hasSuperAdminRole;
 };
 
 /**
@@ -132,19 +117,22 @@ export const canCreateProject = async (
 /**
  * Proje düzenleyebilir mi?
  * role_permissions koleksiyonundan yetkileri kontrol eder
+ * 
+ * Kurallar:
+ * - Süper yönetici/yönetici: Her zaman düzenleyebilir
+ * - Diğer kullanıcılar: Sadece oluşturan düzenleyebilir
  */
 export const canEditProject = async (project: Project, user: UserProfile | null): Promise<boolean> => {
   if (!user || !project) return false;
   
-  // Super admin her zaman tüm yetkilere sahiptir
+  // Süper yönetici/yönetici her zaman tüm yetkilere sahiptir
   if (await isMainAdmin(user)) return true;
   
   // Projeyi oluşturan kişi düzenleyebilir
   if (project.createdBy === user.id) return true;
   
-  // Rol yetkilerini kontrol et - role_permissions sisteminden kontrol eder
-  const hasPermission = await canUpdateResource(user, "projects");
-  return hasPermission;
+  // Diğer kullanıcılar düzenleyemez (sadece oluşturan düzenleyebilir)
+  return false;
 };
 
 /**
@@ -168,12 +156,16 @@ export const canDeleteProject = async (project: Project, user: UserProfile | nul
 /**
  * Görev düzenleyebilir mi? (İçerik değiştirme - başlık, açıklama, etiketler vb.)
  * role_permissions koleksiyonundan yetkileri kontrol eder
+ * NOT: Göreve atanan kişiler düzenleme yapamaz, sadece checklist ekleyebilir ve durum değiştirebilir
  */
 export const canEditTask = async (task: Task, user: UserProfile | null): Promise<boolean> => {
   if (!user || !task) return false;
   
   // Super admin her zaman tüm yetkilere sahiptir
   if (await isMainAdmin(user)) return true;
+  
+  // Görevi oluşturan kişi düzenleyebilir
+  if (task.createdBy === user.id || (task as { created_by?: string }).created_by === user.id) return true;
   
   // Rol yetkilerini kontrol et - role_permissions sisteminden kontrol eder
   const hasPermission = await canUpdateResource(user, "tasks");
@@ -183,6 +175,10 @@ export const canEditTask = async (task: Task, user: UserProfile | null): Promise
 /**
  * Görevle etkileşim kurabilir mi? (Taşıma, durum değiştirme, checkbox işaretleme vb.)
  * role_permissions koleksiyonundan yetkileri kontrol eder
+ * SISTEM_YETKILERI.md'ye göre:
+ * - Super Admin: Tüm görevlerle etkileşim kurabilir
+ * - Team Leader: Tüm görevlerle etkileşim kurabilir
+ * - Personnel: Sadece atanan görevlerle etkileşim kurabilir
  */
 export const canInteractWithTask = async (task: Task, user: UserProfile | null, assignedUserIds: string[] = []): Promise<boolean> => {
   if (!user || !task) return false;
@@ -190,15 +186,25 @@ export const canInteractWithTask = async (task: Task, user: UserProfile | null, 
   // Super admin her zaman tüm yetkilere sahiptir
   if (await isMainAdmin(user)) return true;
   
-  // Rol yetkilerini kontrol et (güncelleme yetkisi varsa etkileşim kurabilir)
-  const hasPermission = await canUpdateResource(user, "tasks");
-  if (hasPermission) return true;
+  // Görevi oluşturan kişi etkileşim kurabilir
+  if (task.createdBy === user.id || (task as { created_by?: string }).created_by === user.id) return true;
   
+  // Personnel ve diğer kullanıcılar için: Sadece atanan görevlerle etkileşim kurabilir
+  // Kullanıcı isteği: Göreve üye edilen herkes (ekip lideri, personel, yönetici) görevi ilerletebilmeli
   // Görevde atanan kullanıcılar etkileşim kurabilir (taşıyabilir, işaretleyebilir, checkbox işaretleyebilir)
+  // Rejected hariç tüm durumlardaki kullanıcılar (pending, accepted, completed) buton görebilir
   if (assignedUserIds.includes(user.id)) return true;
   
   // assignedUsers array'inde varsa etkileşim kurabilir
   if (task.assignedUsers && task.assignedUsers.includes(user.id)) return true;
+  
+  // Firestore'dan kontrol: canUpdateResource yetkisi varsa ve canChangeStatus alt yetkisi varsa
+  const hasUpdatePermission = await canUpdateResource(user, "tasks");
+  if (hasUpdatePermission) {
+    // Alt yetki kontrolü: canChangeStatus
+    const canChangeStatus = await canPerformSubPermission(user, "tasks", "canChangeStatus");
+    if (canChangeStatus) return true;
+  }
   
   return false;
 };
@@ -223,21 +229,9 @@ export const canViewTask = async (task: Task, user: UserProfile | null, assigned
     return true;
   }
   
-  // Gizli görevler için özel kontroller
+  // Gizli görevler için özel kontroller - canViewPrivateTask kullan
   if (task.isPrivate) {
-    // Rol yetkilerini kontrol et
-    const hasReadPermission = await canReadResource(user, "tasks");
-    
-    // Okuma yetkisi varsa görüntüleyebilir
-    if (hasReadPermission) return true;
-    
-    // Görevde atanan kullanıcılar görebilir
-    if (assignedUserIds.includes(user.id)) return true;
-    // assignedUsers array'inde varsa görebilir
-    if (task.assignedUsers && task.assignedUsers.includes(user.id)) return true;
-    // Görevi oluşturan kişi görebilir
-    if (task.createdBy === user.id) return true;
-    return false;
+    return await canViewPrivateTask(task, user, assignedUserIds);
   }
   
   return false;
@@ -257,14 +251,12 @@ export const canApproveTask = async (
   // Ana yöneticiler tüm görevleri onaylayabilir
   if (await isMainAdmin(user)) return true;
   
-  // Adminler tüm görevleri onaylayabilir
-  if (await isAdmin(user)) return true;
-  
-  // Ekip liderleri tüm görevleri onaylayabilir (tek onay yeterli)
-  if (user.role?.includes("team_leader")) return true;
-  
-  // Görevi veren kişi onaylayabilir
+  // Görevi oluşturan kişi onaylayabilir
   if (task.createdBy === user.id) return true;
+  
+  // Firestore'dan kontrol: canApprove alt yetkisi
+  const canApprove = await canPerformSubPermission(user, "tasks", "canApprove");
+  if (canApprove) return true;
   
   return false;
 };
@@ -350,8 +342,9 @@ export const canViewUserLogs = async (
   // Ana yöneticiler tüm logları görebilir
   if (await isMainAdmin(viewer)) return true;
   
-  // Adminler tüm logları görebilir
-  if (await isAdmin(viewer)) return true;
+  // Firestore'dan kontrol: canViewAuditLogs alt yetkisi
+  const canViewAuditLogs = await canPerformSubPermission(viewer, "users", "canViewAuditLogs");
+  if (canViewAuditLogs) return true;
   
   // Ekip liderleri ekip üyelerinin loglarını görebilir
   const teamMembers = await getTeamMembers(viewer.id, departments, allUsers);
@@ -371,15 +364,28 @@ const checkRolePermission = async (
 ): Promise<boolean> => {
   if (!user || !user.role || user.role.length === 0) return false;
 
+  // Ensure permissions are initialized before checking
+  try {
+    const { getRolePermissions } = await import("@/services/firebase/rolePermissionsService");
+    await getRolePermissions(); // This will initialize if needed
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error initializing permissions:", error);
+    }
+    // Continue even if initialization fails - permissions might already exist
+  }
+
   // Kullanıcının tüm rollerini kontrol et
   for (const role of user.role) {
     try {
-      const permission = await getPermission(role, resource);
+      const permission = await getPermission(role, resource, true);
       if (permission && permission[operation]) {
         return true;
       }
-    } catch (error) {
-      console.error(`Error checking permission for role ${role} and resource ${resource}:`, error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error(`Error checking permission for role ${role} and resource ${resource}:`, error);
+      }
       // Hata durumunda devam et, diğer rolleri kontrol et
     }
   }
@@ -401,15 +407,28 @@ export const canPerformSubPermission = async (
   // Super admin her zaman tüm yetkilere sahiptir
   if (await isMainAdmin(user)) return true;
 
+  // Ensure permissions are initialized before checking
+  try {
+    const { getRolePermissions } = await import("@/services/firebase/rolePermissionsService");
+    await getRolePermissions(); // This will initialize if needed
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Error initializing permissions:", error);
+    }
+    // Continue even if initialization fails - permissions might already exist
+  }
+
   // Kullanıcının tüm rollerini kontrol et
   for (const role of user.role) {
     try {
-      const permission = await getPermission(role, resource);
+      const permission = await getPermission(role, resource, true);
       if (permission && permission.subPermissions && permission.subPermissions[subPermissionKey]) {
         return true;
       }
-    } catch (error) {
-      console.error(`Error checking sub-permission for role ${role}, resource ${resource}, subPermission ${subPermissionKey}:`, error);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error(`Error checking sub-permission for role ${role}, resource ${resource}, subPermission ${subPermissionKey}:`, error);
+      }
       // Hata durumunda devam et, diğer rolleri kontrol et
     }
   }
@@ -525,5 +544,232 @@ export const canCreateStockTransaction = async (
   
   // Stok işlemi için canCreateTransactions yetkisi gerekli
   return await canPerformSubPermission(user, resource, "canCreateTransactions");
+};
+
+/**
+ * Checklist ekleyebilir mi?
+ * role_permissions koleksiyonundan yetkileri kontrol eder
+ * Göreve atanan kullanıcılar da checklist ekleyebilir
+ */
+export const canAddChecklist = async (
+  task: Task,
+  user: UserProfile | null,
+  assignedUserIds: string[] = []
+): Promise<boolean> => {
+  if (!user || !task) return false;
+  
+  // Super admin her zaman tüm yetkilere sahiptir
+  if (await isMainAdmin(user)) return true;
+  
+  // Görevi oluşturan kişi ekleyebilir
+  if (task.createdBy === user.id) return true;
+  
+  // Göreve atanan kullanıcılar ekleyebilir (accepted veya pending durumunda)
+  if (assignedUserIds.includes(user.id)) return true;
+  if (task.assignedUsers && task.assignedUsers.includes(user.id)) return true;
+  
+  // Firestore'dan kontrol: canAddChecklist alt yetkisi
+  return await canPerformSubPermission(user, "tasks", "canAddChecklist");
+};
+
+/**
+ * Checklist düzenleyebilir/silebilir mi?
+ * role_permissions koleksiyonundan yetkileri kontrol eder
+ * Göreve atanan kullanıcılar da checklist düzenleyebilir/silebilir
+ */
+export const canEditChecklist = async (
+  task: Task,
+  user: UserProfile | null,
+  assignedUserIds: string[] = []
+): Promise<boolean> => {
+  if (!user || !task) return false;
+  
+  // Super admin her zaman tüm yetkilere sahiptir
+  if (await isMainAdmin(user)) return true;
+  
+  // Görevi oluşturan kişi düzenleyebilir/silebilir
+  if (task.createdBy === user.id) return true;
+  
+  // Göreve atanan kullanıcılar düzenleyebilir/silebilir (accepted veya pending durumunda)
+  if (assignedUserIds.includes(user.id)) return true;
+  if (task.assignedUsers && task.assignedUsers.includes(user.id)) return true;
+  
+  // Firestore'dan kontrol: canEditChecklist alt yetkisi
+  return await canPerformSubPermission(user, "tasks", "canEditChecklist");
+};
+
+/**
+ * Gizli görevi görüntüleyebilir mi?
+ * role_permissions koleksiyonundan yetkileri kontrol eder
+ */
+export const canViewPrivateTask = async (
+  task: Task,
+  user: UserProfile | null,
+  assignedUserIds: string[] = []
+): Promise<boolean> => {
+  if (!user || !task) return false;
+  
+  // Gizli olmayan görevler herkes tarafından görülebilir
+  if (!task.isPrivate) return true;
+  
+  // Super admin her zaman tüm yetkilere sahiptir
+  if (await isMainAdmin(user)) return true;
+  
+  // Görevi oluşturan kişi görebilir
+  if (task.createdBy === user.id) return true;
+  
+  // Göreve atanan kullanıcılar görebilir
+  if (assignedUserIds.includes(user.id)) return true;
+  if (task.assignedUsers && task.assignedUsers.includes(user.id)) return true;
+  
+  // Firestore'dan kontrol: canViewPrivate alt yetkisi
+  return await canPerformSubPermission(user, "tasks", "canViewPrivate");
+};
+
+/**
+ * Gizli projeyi görüntüleyebilir mi?
+ * role_permissions koleksiyonundan yetkileri kontrol eder
+ * 
+ * Kurallar:
+ * - Süper yönetici/yönetici: Her zaman görebilir
+ * - Ekip lideri: Kendisi oluşturduysa VEYA görev üyesiyse görebilir
+ * - Personel: Sadece görev üyesiyse görebilir
+ */
+export const canViewPrivateProject = async (
+  project: Project,
+  user: UserProfile | null
+): Promise<boolean> => {
+  if (!user || !project) return false;
+  
+  // Gizli olmayan projeler herkes tarafından görülebilir
+  if (!project.isPrivate) return true;
+  
+  // Süper yönetici/yönetici her zaman tüm yetkilere sahiptir
+  if (await isMainAdmin(user)) return true;
+  
+  // Projeyi oluşturan kişi görebilir
+  if (project.createdBy === user.id) return true;
+  
+  // Kullanıcının rolünü kontrol et
+  const userRoles = user.role || [];
+  const isTeamLeader = userRoles.includes("team_leader");
+  const isPersonnel = userRoles.includes("personnel");
+  const isAdmin = userRoles.includes("admin") || userRoles.includes("super_admin");
+  
+  // Admin/yönetici her zaman görebilir (yukarıda zaten kontrol edildi ama ekstra güvenlik için)
+  if (isAdmin) return true;
+  
+  // Projede görevi olan kullanıcıları kontrol et
+  try {
+    const { getTasks, getTaskAssignments } = await import("@/services/firebase/taskService");
+    const projectTasks = await getTasks({ projectId: project.id });
+    
+    // Kullanıcının bu projede görevi var mı kontrol et
+    for (const task of projectTasks) {
+      if (!task?.id) continue;
+      
+      // Görevi oluşturan kişi
+      if (task.createdBy === user.id) {
+        // Ekip lideri veya personel görebilir
+        if (isTeamLeader || isPersonnel) return true;
+      }
+      
+      // Atanan kullanıcılar
+      if (task.assignedUsers && Array.isArray(task.assignedUsers) && task.assignedUsers.includes(user.id)) {
+        // Ekip lideri veya personel görebilir
+        if (isTeamLeader || isPersonnel) return true;
+      }
+      
+      // Assignments kontrolü
+      try {
+        const assignments = await getTaskAssignments(task.id);
+        const isAssigned = assignments.some(
+          (a) => a.assignedTo === user.id && (a.status === "accepted" || a.status === "pending")
+        );
+        if (isAssigned) {
+          // Ekip lideri veya personel görebilir
+          if (isTeamLeader || isPersonnel) return true;
+        }
+      } catch (error: unknown) {
+        // Hata durumunda devam et
+        if (import.meta.env.DEV) {
+          console.error("Error checking task assignments:", error);
+        }
+      }
+    }
+  } catch (error: unknown) {
+    // Hata durumunda devam et
+    if (import.meta.env.DEV) {
+      console.error("Error checking project tasks:", error);
+    }
+  }
+  
+  // Firestore'dan kontrol: canViewPrivate alt yetkisi (ekip lideri için)
+  if (isTeamLeader) {
+    const canViewPrivate = await canPerformSubPermission(user, "projects", "canViewPrivate");
+    if (canViewPrivate) return true;
+  }
+  
+  return false;
+};
+
+/**
+ * Ekip talebini onaylayabilir mi?
+ * role_permissions koleksiyonundan yetkileri kontrol eder
+ */
+export const canApproveTeamRequest = async (
+  user: UserProfile | null,
+  departments: Department[] = []
+): Promise<boolean> => {
+  if (!user) return false;
+  
+  // Super admin her zaman tüm yetkilere sahiptir
+  if (await isMainAdmin(user)) return true;
+  
+  // Firestore'dan kontrol: canApproveTeamRequest alt yetkisi
+  const hasPermission = await canPerformSubPermission(user, "departments", "canApproveTeamRequest");
+  if (hasPermission) return true;
+  
+  // Ekip lideri kendi ekibine ait talepleri onaylayabilir
+  const isManager = departments.some((dept) => dept.managerId === user.id);
+  return isManager;
+};
+
+/**
+ * Ekip yönetimi menüsünü görebilir mi?
+ * role_permissions koleksiyonundan yetkileri kontrol eder
+ */
+export const canViewTeamManagement = async (
+  user: UserProfile | null,
+  departments: Department[] = []
+): Promise<boolean> => {
+  if (!user) return false;
+  
+  // Super admin her zaman tüm yetkilere sahiptir
+  if (await isMainAdmin(user)) return true;
+  
+  // Firestore'dan kontrol: canViewTeamManagement alt yetkisi
+  const hasPermission = await canPerformSubPermission(user, "departments", "canViewTeamManagement");
+  if (hasPermission) return true;
+  
+  // Ekip lideri görebilir
+  const isManager = departments.some((dept) => dept.managerId === user.id);
+  return isManager;
+};
+
+/**
+ * Admin paneli menüsünü görebilir mi?
+ * role_permissions koleksiyonundan yetkileri kontrol eder
+ */
+export const canViewAdminPanel = async (
+  user: UserProfile | null
+): Promise<boolean> => {
+  if (!user) return false;
+  
+  // Super admin her zaman tüm yetkilere sahiptir
+  if (await isMainAdmin(user)) return true;
+  
+  // Firestore'dan kontrol: canViewAdminPanel alt yetkisi
+  return await canPerformSubPermission(user, "role_permissions", "canViewAdminPanel");
 };
 

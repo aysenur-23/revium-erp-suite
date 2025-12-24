@@ -11,7 +11,7 @@ import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Download, CheckCircle2, Clock, XCircle, ListTodo, TrendingUp, ArrowRight } from "lucide-react";
-import { generateUserStatsPDF } from "@/services/pdfGenerator";
+// pdfGenerator will be dynamically imported when needed
 import { useNavigate } from "react-router-dom";
 
 interface AssignmentWithTask extends TaskAssignment {
@@ -70,7 +70,9 @@ export const UserPersonalInsights = () => {
                     taskStatus: task.status,
                   }));
               } catch (error) {
-                console.error(`Error fetching assignments for task ${task.id}:`, error);
+                if (import.meta.env.DEV) {
+                  console.error(`Error fetching assignments for task ${task.id}:`, error);
+                }
                 return [];
               }
             })
@@ -82,9 +84,11 @@ export const UserPersonalInsights = () => {
         // Logs için limit ekle
         const logsData = await getAuditLogs({ userId: user.id, limit: 200 }).catch(() => []);
         setLogs(logsData);
-      } catch (error: any) {
-        console.error("User personal insights error:", error);
-        toast.error(error?.message || "Profil istatistikleri alınamadı");
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("User personal insights error:", error);
+        }
+        toast.error(error instanceof Error ? error.message : "Profil istatistikleri alınamadı");
       } finally {
         setLoading(false);
       }
@@ -115,6 +119,7 @@ export const UserPersonalInsights = () => {
   const handleExportPDF = async () => {
     if (!user) return;
     try {
+      const { generateUserStatsPDF } = await import("@/services/pdfGenerator");
       const pdfBlob = await generateUserStatsPDF({
         userName: user.fullName || user.email,
         userEmail: user.email,
@@ -142,9 +147,11 @@ export const UserPersonalInsights = () => {
       URL.revokeObjectURL(url);
 
       toast.success("PDF raporu indirildi");
-    } catch (error: any) {
-      console.error("PDF export error:", error);
-      toast.error("PDF oluşturulurken hata: " + error.message);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("PDF export error:", error);
+      }
+      toast.error("PDF oluşturulurken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     }
   };
 

@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/ui/search-input";
-import { Plus, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X } from "lucide-react";
+import { Plus, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, MoreVertical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { getOrders, deleteOrder, getOrderItems, subscribeToOrders, Order } from "@/services/firebase/orderService";
 import { getCustomerById } from "@/services/firebase/customerService";
@@ -28,10 +29,14 @@ import { CustomerDetailModal } from "@/components/Customers/CustomerDetailModal"
 import { useIsMobile } from "@/hooks/use-mobile";
 import { LoadingState } from "@/components/ui/loading-state";
 import { CURRENCY_SYMBOLS, Currency } from "@/utils/currency";
+import { useAuth } from "@/contexts/AuthContext";
+import { canCreateResource, canDeleteResource, canUpdateResource } from "@/utils/permissions";
+import { UserProfile } from "@/services/firebase/authService";
 
 const Orders = () => {
   const isMobile = useIsMobile();
-  const [orders, setOrders] = useState<any[]>([]);
+  const { user } = useAuth();
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -42,9 +47,12 @@ const Orders = () => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
-  const [customerModalData, setCustomerModalData] = useState<any | null>(null);
+  const [customerModalData, setCustomerModalData] = useState<Awaited<ReturnType<typeof getCustomerById>> | null>(null);
+  const [canCreate, setCanCreate] = useState(false);
+  const [canUpdate, setCanUpdate] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
 
 
   // Gerçek zamanlı sipariş güncellemeleri için subscribe
@@ -77,10 +85,13 @@ const Orders = () => {
           total_amount: order.totalAmount || order.total_amount,
         })) as Order[];
         
-        // TotalAmount'u olmayanları batch olarak işle (performans için sadece ilk 20'sini)
-        const limitedOrdersWithoutTotal = ordersWithoutTotal.slice(0, 20);
+        // TotalAmount'u olmayanları batch olarak işle (performans için sadece görünen sayfa için)
+        // Sadece görünen sayfadaki siparişler için totalAmount hesapla
+        const startIndex = (page - 1) * 50;
+        const endIndex = startIndex + 50;
+        const visibleOrdersWithoutTotal = ordersWithoutTotal.slice(startIndex, endIndex);
         const ordersWithCalculatedTotals = await Promise.allSettled(
-          limitedOrdersWithoutTotal.map(async (order) => {
+          visibleOrdersWithoutTotal.map(async (order) => {
             if (!order?.id) return null;
             try {
               const items = await getOrderItems(order.id);
@@ -105,7 +116,7 @@ const Orders = () => {
                 total_quantity: calculatedQuantity,
                 subtotal: subtotal,
               } as Order;
-            } catch (error) {
+            } catch (error: unknown) {
               // Sessizce handle et - performans için
               return {
                 ...order,
@@ -116,8 +127,13 @@ const Orders = () => {
           })
         );
         
-        // Geri kalan siparişleri totalAmount=0 ile ekle
-        const remainingOrders: Order[] = ordersWithoutTotal.slice(20).map(order => ({
+        // Görünmeyen siparişleri totalAmount=0 ile ekle
+        const beforeVisible = ordersWithoutTotal.slice(0, startIndex).map(order => ({
+          ...order,
+          totalAmount: 0,
+          total_amount: 0,
+        })) as Order[];
+        const afterVisible = ordersWithoutTotal.slice(endIndex).map(order => ({
           ...order,
           totalAmount: 0,
           total_amount: 0,
@@ -127,8 +143,8 @@ const Orders = () => {
           .filter((result) => result.status === 'fulfilled' && result.value !== null)
           .map(result => (result as PromiseFulfilledResult<Order>).value);
         
-        // Tüm siparişleri birleştir
-        const validOrders = [...processedWithTotal, ...calculatedOrders, ...remainingOrders];
+        // Tüm siparişleri birleştir (sıralama: processedWithTotal, beforeVisible, calculatedOrders, afterVisible)
+        const validOrders = [...processedWithTotal, ...beforeVisible, ...calculatedOrders, ...afterVisible];
         
         // Search ve sort işlemleri frontend'de yapılacak
         let filtered = validOrders;
@@ -144,7 +160,7 @@ const Orders = () => {
         
         // Sort
         filtered.sort((a, b) => {
-          let aValue: any, bValue: any;
+          let aValue: unknown, bValue: unknown;
           if (sortBy === 'order_date') {
             aValue = a.orderDate || a.createdAt;
             bValue = b.orderDate || b.createdAt;
@@ -152,8 +168,8 @@ const Orders = () => {
             aValue = a.totalAmount || 0;
             bValue = b.totalAmount || 0;
           } else if (sortBy === 'priority') {
-            aValue = (a as any).priority ?? 0;
-            bValue = (b as any).priority ?? 0;
+            aValue = (a as Order & { priority?: number }).priority ?? 0;
+            bValue = (b as Order & { priority?: number }).priority ?? 0;
           } else {
             aValue = a.orderNumber || '';
             bValue = b.orderNumber || '';
@@ -169,14 +185,14 @@ const Orders = () => {
             : (aValue < bValue ? 1 : -1);
         });
         
-        // Pagination
-        const startIndex = (page - 1) * 50;
-        const endIndex = startIndex + 50;
+        // Pagination (startIndex ve endIndex zaten yukarıda hesaplandı)
         setOrders(filtered.slice(startIndex, endIndex));
         setTotalPages(Math.ceil(filtered.length / 50));
         setLoading(false);
-      } catch (error: any) {
-        console.error("Real-time orders update error:", error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.error("Real-time orders update error:", error);
+        }
         setLoading(false);
       }
     });
@@ -197,9 +213,12 @@ const Orders = () => {
       } else {
         toast.error("Müşteri bulunamadı");
       }
-    } catch (error: any) {
-      console.error("Get customer error:", error);
-      toast.error(error.message || "Müşteri bilgileri alınamadı");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Get customer error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Müşteri bilgileri alınamadı");
     }
   };
 
@@ -209,6 +228,43 @@ const Orders = () => {
       setPage(1);
     }
   }, [statusFilter, sortBy, sortOrder, searchQuery]);
+
+  // Permission kontrolü
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user) {
+        setCanCreate(false);
+        setCanUpdate(false);
+        setCanDelete(false);
+        return;
+      }
+
+      const userProfile: UserProfile = {
+        id: user.id,
+        email: user.email || "",
+        emailVerified: user.emailVerified || false,
+        fullName: user.fullName || "",
+        displayName: user.fullName || "",
+        phone: null,
+        dateOfBirth: null,
+        role: user.roles || [],
+        createdAt: null,
+        updatedAt: null,
+      };
+
+      const [canCreateOrder, canUpdateOrder, canDeleteOrder] = await Promise.all([
+        canCreateResource(userProfile, "orders"),
+        canUpdateResource(userProfile, "orders"),
+        canDeleteResource(userProfile, "orders"),
+      ]);
+
+      setCanCreate(canCreateOrder);
+      setCanUpdate(canUpdateOrder);
+      setCanDelete(canDeleteOrder);
+    };
+
+    checkPermissions();
+  }, [user]);
 
   const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
@@ -265,6 +321,13 @@ const Orders = () => {
 
   const handleDelete = async () => {
     if (!selectedOrder) return;
+    
+    // Yetki kontrolü
+    if (!canDelete) {
+      toast.error("Sipariş silme yetkiniz yok.");
+      setDeleteDialogOpen(false);
+      return;
+    }
 
     try {
       await deleteOrder(selectedOrder.id);
@@ -272,9 +335,12 @@ const Orders = () => {
       // Real-time subscribe otomatik güncelleyecek
       setDeleteDialogOpen(false);
       setSelectedOrder(null);
-    } catch (error: any) {
-      console.error("Delete order error:", error);
-      toast.error(error.message || "Sipariş silinirken hata oluştu");
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) {
+        console.error("Delete order error:", error);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || "Sipariş silinirken hata oluştu");
     }
   };
 
@@ -323,17 +389,24 @@ const Orders = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">Siparişler</h1>
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Siparişler</h1>
             <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Sipariş takibi ve yönetimi</p>
           </div>
-          <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Yeni Sipariş</span>
-            <span className="sm:hidden">Yeni</span>
-          </Button>
+          {canCreate && (
+            <Button 
+              className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" 
+              onClick={() => {
+                setCreateDialogOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Yeni Sipariş</span>
+              <span className="sm:hidden">Yeni</span>
+            </Button>
+          )}
         </div>
 
         <Card>
@@ -409,37 +482,38 @@ const Orders = () => {
               <Table className="min-w-[800px] sm:min-w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs sm:text-sm px-2 sm:px-4">Sipariş No</TableHead>
-                    <TableHead className="text-xs sm:text-sm px-2 sm:px-4 hidden md:table-cell">Müşteri</TableHead>
-                    <TableHead className="text-xs sm:text-sm px-2 sm:px-4 hidden lg:table-cell">Tarih</TableHead>
-                    <TableHead className="text-xs sm:text-sm px-2 sm:px-4">Durum</TableHead>
-                    <TableHead className="text-xs sm:text-sm px-2 sm:px-4 hidden xl:table-cell">Öncelik</TableHead>
-                    <TableHead className="text-right text-xs sm:text-sm px-2 sm:px-4">Tutar</TableHead>
-                    <TableHead className="text-right text-xs sm:text-sm px-2 sm:px-4">İşlemler</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4">Sipariş No</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden md:table-cell">Müşteri</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden lg:table-cell">Tarih</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4">Durum</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden xl:table-cell">Öncelik</TableHead>
+                    <TableHead className="text-right text-xs font-semibold px-2 sm:px-4">Tutar</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {orders.map((order) => (
                     <TableRow
                       key={order.id}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        setSelectedOrder(order);
-                        setDetailModalOpen(true);
-                      }}
+                      className="hover:bg-muted/50 transition-colors"
                     >
-                      <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 py-2 sm:py-3">
+                      <TableCell 
+                        className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 cursor-pointer"
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setDetailModalOpen(true);
+                        }}
+                      >
                         <div className="flex flex-col gap-0.5">
                           <span>{order.order_number}</span>
                           <span className="md:hidden text-[10px] text-muted-foreground">
-                            {order.customer_name || order.customers?.name}
+                            {order.customer_name || "-"}
                           </span>
                           <span className="lg:hidden text-[10px] text-muted-foreground">
                             {order.order_date ? new Date(order.order_date).toLocaleDateString("tr-TR") : "-"}
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-2 sm:py-3 hidden md:table-cell">
+                      <TableCell className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 hidden md:table-cell">
                         <button
                           type="button"
                           className="text-left hover:text-primary focus:outline-none truncate max-w-[200px]"
@@ -448,16 +522,13 @@ const Orders = () => {
                             handleShowCustomer(order.customer_id);
                           }}
                         >
-                          {order.customer_name || order.customers?.name}
+                          {order.customer_name || "-"}
                           {order.customer_company && (
                             <span className="text-muted-foreground"> - {order.customer_company}</span>
                           )}
-                          {order.customers?.company && (
-                            <span className="text-muted-foreground"> - {order.customers.company}</span>
-                          )}
                         </button>
                       </TableCell>
-                      <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">
+                      <TableCell className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">
                         {order.order_date ? new Date(order.order_date).toLocaleDateString("tr-TR") : "-"}
                       </TableCell>
                       <TableCell className="px-2 sm:px-4 py-2 sm:py-3">
@@ -470,34 +541,14 @@ const Orders = () => {
                           {getPriorityMeta(order.priority || 0).label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right font-semibold text-xs sm:text-sm px-2 sm:px-4 py-2 sm:py-3">
+                      <TableCell 
+                        className="text-right text-xs font-semibold px-2 sm:px-4 py-2 sm:py-3 cursor-pointer"
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setDetailModalOpen(true);
+                        }}
+                      >
                         {formatCurrency(order.totalAmount || order.total_amount || 0, order.currency)}
-                      </TableCell>
-                      <TableCell className="text-right px-2 sm:px-4 py-2 sm:py-3">
-                        <div className="flex items-center justify-end gap-1 sm:gap-2" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 w-8 sm:h-9 sm:w-9 p-0"
-                            onClick={() => {
-                              setSelectedOrder(order);
-                              setDetailModalOpen(true);
-                            }}
-                          >
-                            <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 w-8 sm:h-9 sm:w-9 p-0"
-                            onClick={() => {
-                              setSelectedOrder(order);
-                              setDeleteDialogOpen(true);
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                          </Button>
-                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

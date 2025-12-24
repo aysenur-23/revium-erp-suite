@@ -35,9 +35,9 @@ const DialogContent = React.forwardRef<
   // Eğer data-task-modal attribute'u varsa, varsayılan sm:max-w-lg sınıfını kaldır
   // React'te data attribute'ları props'da doğrudan geçer (data-task-modal olarak)
   // Props'tan kontrol et - React'te data attribute'ları props'da doğrudan geçer
-  const propsAny = props as any;
-  const hasTaskModal = propsAny['data-task-modal'] !== undefined || 
-                       propsAny['dataTaskModal'] !== undefined ||
+  const propsObj = props as Record<string, unknown>;
+  const hasTaskModal = ('data-task-modal' in propsObj && propsObj['data-task-modal'] !== undefined) || 
+                       ('dataTaskModal' in propsObj && propsObj['dataTaskModal'] !== undefined) ||
                        (typeof className === 'string' && className.includes('task-modal-full-width'));
   
   const sidebarContext = useSidebarContext();

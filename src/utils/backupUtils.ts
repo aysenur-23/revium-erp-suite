@@ -21,7 +21,7 @@ const COLLECTIONS_TO_BACKUP = [
 
 export const downloadDatabaseBackup = async () => {
   try {
-    const backupData: Record<string, any[]> = {};
+    const backupData: Record<string, Array<Record<string, unknown>>> = {};
 
     for (const collectionName of COLLECTIONS_TO_BACKUP) {
       try {
@@ -30,8 +30,10 @@ export const downloadDatabaseBackup = async () => {
           id: doc.id,
           ...doc.data()
         }));
-      } catch (error) {
-        console.warn(`Skipping collection ${collectionName}:`, error);
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) {
+          console.warn(`Skipping collection ${collectionName}:`, error);
+        }
         backupData[collectionName] = [];
       }
     }
@@ -50,9 +52,11 @@ export const downloadDatabaseBackup = async () => {
     URL.revokeObjectURL(href);
 
     toast.success("Yedek dosyası indirildi.");
-  } catch (error: any) {
-    console.error("Backup failed:", error);
-    toast.error("Yedek alma işlemi başarısız oldu: " + error.message);
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Backup failed:", error);
+    }
+    toast.error("Yedek alma işlemi başarısız oldu: " + (error instanceof Error ? error.message : String(error)));
     throw error;
   }
 };
