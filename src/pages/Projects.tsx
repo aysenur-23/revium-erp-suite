@@ -363,16 +363,16 @@ const Projects = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-4 sm:space-y-5 w-[90%] max-w-[90%] mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
           <div className="flex-1 min-w-0">
-            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Projeler</h1>
+            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Projeler</h1>
             <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
               Projelerinizi yönetin ve görevlerinizi takip edin
             </p>
           </div>
           {canCreate && (
-            <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={() => {
+            <Button className="gap-1 w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs" onClick={() => {
               setFormData({ name: "", description: "", status: "active", isPrivate: false });
               setCreateDialogOpen(true);
             }}>
@@ -384,7 +384,7 @@ const Projects = () => {
         </div>
 
         {/* Proje İstatistikleri */}
-        <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid gap-1.5 sm:gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
           {[
             { 
               label: "Toplam Proje", 
@@ -567,10 +567,10 @@ const Projects = () => {
                     </div>
                     {activeProjectForm === project.id && (
                       <Dialog open={true} onOpenChange={() => setActiveProjectForm(null)}>
-                        <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+                        <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
                           <div className="flex flex-col h-full min-h-0">
                             <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
-                              <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground">Yeni Görev</DialogTitle>
+                              <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground">Yeni Görev</DialogTitle>
                             </DialogHeader>
                             <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
                               <div className="max-w-full mx-auto h-full overflow-y-auto">
@@ -608,7 +608,7 @@ const Projects = () => {
 
         {/* Create Dialog */}
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+          <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
             <div className="flex flex-col h-full min-h-0">
               {/* Header */}
               <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -617,7 +617,7 @@ const Projects = () => {
                     <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                       <FolderKanban className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                     </div>
-                    <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                    <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground truncate">
                       Yeni Proje
                     </DialogTitle>
                   </div>
@@ -723,7 +723,7 @@ const Projects = () => {
 
         {/* Edit Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+          <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
             <div className="flex flex-col h-full min-h-0">
               {/* Header */}
               <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -732,7 +732,7 @@ const Projects = () => {
                     <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                       <FolderKanban className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                     </div>
-                    <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
+                    <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground truncate">
                       Proje Düzenle
                     </DialogTitle>
                   </div>

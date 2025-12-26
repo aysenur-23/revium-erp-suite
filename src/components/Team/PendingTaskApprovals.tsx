@@ -1133,7 +1133,7 @@ export const PendingTaskApprovals = () => {
               Görevi neden reddettiğinizi belirtebilirsiniz. Görev "Devam Ediyor" statüsüne geri dönecektir.
             </DialogDescription>
           <DialogHeader>
-            <h2 className="text-lg sm:text-xl font-semibold text-foreground">Görevi Reddet</h2>
+            <h2 className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görevi Reddet</h2>
             <p className="text-sm text-muted-foreground">
               Görevi neden reddettiğinizi belirtebilirsiniz. Görev "Devam Ediyor" statüsüne geri dönecektir.
             </p>
@@ -1154,13 +1154,13 @@ export const PendingTaskApprovals = () => {
       </Dialog>
 
       <Dialog open={taskDetailModalOpen} onOpenChange={setTaskDetailModalOpen}>
-        <DialogContent className="max-w-4xl w-[95vw] overflow-y-auto max-h-[90vh]">
+        <DialogContent className="max-w-4xl w-[80vw] overflow-y-auto max-h-[90vh]">
           <DialogTitle className="sr-only">Görev Detayları</DialogTitle>
           <DialogDescription className="sr-only">
               Görev detaylarını, ekibi ve checklist'i görüntüleyin.
             </DialogDescription>
           <DialogHeader>
-            <h2 className="text-lg sm:text-xl font-semibold text-foreground">Görev Detayları</h2>
+            <h2 className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görev Detayları</h2>
             <p className="text-sm text-muted-foreground">
               Görev detaylarını, ekibi ve checklist'i görüntüleyin.
             </p>

@@ -14,7 +14,7 @@ import { Timestamp } from "firebase/firestore";
 import { formatDistanceToNow, format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { Loader2, Filter, UserCheck, ClipboardList, Download, Users, CheckCircle2, XCircle, FileText, Eye } from "lucide-react";
+import { Loader2, UserCheck, ClipboardList, Download, Users, CheckCircle2, XCircle, FileText, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 // pdfGenerator will be dynamically imported when needed
 import { useAuth } from "@/contexts/AuthContext";
@@ -483,16 +483,10 @@ export const UserInsights = () => {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4 md:space-y-6">
+    <div className="space-y-2">
       <Card>
-        <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Filter className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-            Filtreler
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-2 sm:gap-3 md:gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <CardContent className="pt-3">
+          <div className="grid gap-2 sm:gap-3 md:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-2">
               <Label>Kullanıcı</Label>
               <Select value={selectedUser} onValueChange={setSelectedUser}>
@@ -669,7 +663,7 @@ export const UserInsights = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between text-lg">
+          <CardTitle className="flex items-center justify-between text-[13px] sm:text-[14px]">
             <div className="flex items-center gap-2">
               <UserCheck className="h-5 w-5 text-primary" />
               Kullanıcı Görev Özeti
@@ -751,7 +745,7 @@ export const UserInsights = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
+          <CardTitle className="flex items-center gap-2 text-[13px] sm:text-[14px]">
             <ClipboardList className="h-5 w-5 text-primary" />
             Görev Detayları
           </CardTitle>
@@ -825,7 +819,7 @@ export const UserInsights = () => {
       <Card>
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <CardTitle className="text-lg">Reddetme Notları</CardTitle>
+            <CardTitle className="text-[13px] sm:text-[14px]">Reddetme Notları</CardTitle>
             <p className="text-sm text-muted-foreground">
               Kullanıcıların reddetme gerekçeleri
             </p>
@@ -892,7 +886,7 @@ export const UserInsights = () => {
       <Card>
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <CardTitle className="text-lg">
+            <CardTitle className="text-[13px] sm:text-[14px]">
               {isUserMainAdmin || isUserAdmin 
                 ? "Kullanıcı Logları" 
                 : isTeamLeader 
@@ -995,7 +989,7 @@ export const UserInsights = () => {
 
       {/* Rapor Önizleme Modal */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="w-full max-w-[98vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
+        <DialogContent className="w-full max-w-[80vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
           <DialogTitle className="sr-only">Kullanıcı Raporu Önizleme</DialogTitle>
           <DialogDescription className="sr-only">Kullanıcı istatistikleri ve görev detayları</DialogDescription>
           <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b">

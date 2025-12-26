@@ -48,11 +48,11 @@ const Profile = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-6 sm:space-y-8 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Profilim</h1>
+            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Profilim</h1>
             <p className="text-muted-foreground mt-1.5 text-sm sm:text-base">
               Profil bilgilerinizi görüntüleyin ve yönetin
             </p>

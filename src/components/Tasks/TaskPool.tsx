@@ -521,7 +521,7 @@ const TaskPool = () => {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Görev Havuzu</h1>
+            <h1 className="text-[16px] sm:text-[18px] font-bold text-foreground">Görev Havuzu</h1>
             <p className="text-muted-foreground mt-1 text-sm sm:text-base">
               Henüz atanmamış görevleri görüntüleyin ve talep edin
             </p>
@@ -798,7 +798,7 @@ const TaskPool = () => {
         </Dialog>
 
         <Dialog open={addTaskDialogOpen} onOpenChange={setAddTaskDialogOpen}>
-          <DialogContent className="max-w-4xl w-[95vw] overflow-y-auto max-h-[90vh]">
+          <DialogContent className="max-w-4xl w-[80vw] overflow-y-auto max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>Havuza Görev Ekle</DialogTitle>
               <DialogDescription>
@@ -851,7 +851,7 @@ const TaskPool = () => {
         </Dialog>
 
         <Dialog open={viewTaskDialogOpen} onOpenChange={setViewTaskDialogOpen}>
-          <DialogContent className="max-w-4xl w-[95vw] overflow-y-auto max-h-[90vh]">
+          <DialogContent className="max-w-4xl w-[80vw] overflow-y-auto max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>Görev Detayı</DialogTitle>
               <DialogDescription>

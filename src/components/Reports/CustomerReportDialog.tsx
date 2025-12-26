@@ -232,24 +232,24 @@ export const CustomerReportDialog = ({ open, onOpenChange }: CustomerReportDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-[98vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="w-full max-w-[80vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">Müşteri Raporu Oluştur</DialogTitle>
         <DialogDescription className="sr-only">Tarih aralığı seçerek detaylı müşteri raporu oluşturun ve PDF olarak indirin</DialogDescription>
         
-        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b bg-[rgb(255,255,255)] flex-shrink-0">
-          <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-              <Users className="h-4 w-4 text-purple-600" />
+        <DialogHeader className="px-3 pt-3 pb-2 border-b bg-[rgb(255,255,255)] flex-shrink-0">
+          <h2 className="text-[14px] sm:text-[15px] font-bold flex items-center gap-2">
+            <div className="h-6 w-6 rounded-lg bg-purple-500/10 flex items-center justify-center">
+              <Users className="h-3.5 w-3.5 text-purple-600" />
             </div>
             Müşteri Raporu Oluştur
           </h2>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+          <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-1">
             Tarih aralığı seçerek detaylı müşteri raporu oluşturun ve PDF olarak indirin
           </p>
         </DialogHeader>
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch overscroll-behavior-contain">
-          <div className="w-full p-4 sm:p-6 space-y-4 sm:space-y-6">
+          <div className="w-full p-2 space-y-2">
           {/* Tarih Seçimi - Profesyonel Tasarım */}
           <Card className="bg-[rgb(249,250,251)] border-2">
             <CardHeader className="pb-3">
@@ -375,7 +375,7 @@ export const CustomerReportDialog = ({ open, onOpenChange }: CustomerReportDialo
           {reportData && (
             <div className="space-y-6 border-t pt-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold flex items-center gap-2">
+                <h3 className="text-[13px] sm:text-[14px] font-bold flex items-center gap-2">
                   <div className="h-2 w-2 rounded-full bg-primary"></div>
                   Rapor Önizlemesi
                 </h3>
@@ -425,7 +425,7 @@ export const CustomerReportDialog = ({ open, onOpenChange }: CustomerReportDialo
               {/* Müşteri Segmentasyonu Tablosu */}
               <Card className="border-2 shadow-sm">
                 <CardHeader className="bg-[rgb(249,250,251)] border-b">
-                  <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+                  <CardTitle className="text-[13px] sm:text-[14px] font-semibold flex items-center gap-2">
                     <div className="h-1 w-1 rounded-full bg-primary"></div>
                     Müşteri Segmentasyonu
                   </CardTitle>
@@ -468,7 +468,7 @@ export const CustomerReportDialog = ({ open, onOpenChange }: CustomerReportDialo
               {/* En Değerli Müşteriler Tablosu */}
               <Card className="border-2 shadow-sm">
                 <CardHeader className="bg-[rgb(249,250,251)] border-b">
-                  <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+                  <CardTitle className="text-[13px] sm:text-[14px] font-semibold flex items-center gap-2">
                     <div className="h-1 w-1 rounded-full bg-primary"></div>
                     En Değerli Müşteriler
                   </CardTitle>
@@ -503,7 +503,7 @@ export const CustomerReportDialog = ({ open, onOpenChange }: CustomerReportDialo
 
           </div>
         </div>
-        <div className="flex-shrink-0 px-4 sm:px-6 pb-4 sm:pb-6 pt-4 border-t">
+        <div className="flex-shrink-0 px-3 pb-3 pt-2 border-t">
           <Button 
             onClick={generateReport} 
             disabled={loading || !reportData} 

@@ -322,11 +322,11 @@ const TeamManagement = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 min-w-0 max-w-full overflow-x-hidden w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2 border-b">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Ekip Yönetimi</h1>
+            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Ekip Yönetimi</h1>
           </div>
         </div>
 

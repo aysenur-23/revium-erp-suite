@@ -437,12 +437,12 @@ const RawMaterials = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
+      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground break-words">Hammadde Yönetimi</h1>
+                <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground break-words">Hammadde Yönetimi</h1>
                 <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Hammadde stoklarını yönetin ve takip edin</p>
               </div>
               {/* İstatistikler Açılma Butonu */}
@@ -471,7 +471,7 @@ const RawMaterials = () => {
           </div>
           {canCreate && (
             <Button 
-              className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" 
+              className="gap-1 w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs" 
               onClick={() => {
                 setCreateDialogOpen(true);
               }}
@@ -486,8 +486,8 @@ const RawMaterials = () => {
         {/* İstatistikler */}
         {statsExpanded && (
           <Card className="border-2">
-            <CardContent className="p-4 sm:p-5 md:pt-6">
-              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+            <CardContent className="p-2">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2">
                 {rawMaterialStatCards.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -508,7 +508,7 @@ const RawMaterials = () => {
                       }}
                       aria-label={`${item.label} kartı`}
                     >
-                      <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-4 flex-1">
+                      <CardContent className="p-2 flex items-center gap-1.5 sm:gap-2 flex-1">
                         <div className={cn("h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0", item.accent)}>
                           <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                         </div>
@@ -528,8 +528,8 @@ const RawMaterials = () => {
 
         {/* Filtreler */}
         <Card>
-          <CardContent className="p-3 sm:p-4 md:p-6">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4">
+          <CardContent className="p-1.5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2">
               {/* Arama Kutusu */}
               <div className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] md:min-w-[250px]">
                 <SearchInput
@@ -590,11 +590,11 @@ const RawMaterials = () => {
                   <Table className="w-full table-fixed border-collapse">
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[30%] sm:w-[35%]">Malzeme Adı</TableHead>
-                          <TableHead className="w-[25%] sm:w-[30%]">Açıklamalar</TableHead>
-                          <TableHead className="w-[15%] sm:w-[10%] text-right whitespace-nowrap">Mevcut</TableHead>
-                          <TableHead className="w-[15%] sm:w-[15%]">Oluşturan</TableHead>
-                          <TableHead className="w-[15%] sm:w-[10%] text-right whitespace-nowrap">İşlemler</TableHead>
+                          <TableHead className="w-[30%] sm:w-[35%] text-[11px] font-semibold px-1.5 py-1">Malzeme Adı</TableHead>
+                          <TableHead className="w-[25%] sm:w-[30%] text-[11px] font-semibold px-1.5 py-1">Açıklamalar</TableHead>
+                          <TableHead className="w-[15%] sm:w-[10%] text-right whitespace-nowrap text-[11px] font-semibold px-1.5 py-1">Mevcut</TableHead>
+                          <TableHead className="w-[15%] sm:w-[15%] text-[11px] font-semibold px-1.5 py-1">Oluşturan</TableHead>
+                          <TableHead className="w-[15%] sm:w-[10%] text-right whitespace-nowrap text-[11px] font-semibold px-1.5 py-1">İşlemler</TableHead>
                         </TableRow>
                       </TableHeader>
                     <TableBody>
@@ -616,13 +616,13 @@ const RawMaterials = () => {
                               setDetailModalOpen(true);
                             }}
                           >
-                            <TableCell className="font-medium">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0" />
+                            <TableCell className="font-medium px-1.5 py-1.5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Package className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className="truncate text-sm sm:text-base font-semibold" title={material.name}>
+                                      <span className="truncate text-[11px] font-semibold" title={material.name}>
                                         {material.name}
                                       </span>
                                     </TooltipTrigger>
@@ -633,11 +633,11 @@ const RawMaterials = () => {
                                 </TooltipProvider>
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-1.5 py-1.5">
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 truncate" title={material.description || material.notes || "-"}>
+                                    <p className="text-[11px] text-muted-foreground line-clamp-2 truncate" title={material.description || material.notes || "-"}>
                                       {material.description || material.notes || "-"}
                                     </p>
                                   </TooltipTrigger>
@@ -649,9 +649,9 @@ const RawMaterials = () => {
                                 </Tooltip>
                               </TooltipProvider>
                             </TableCell>
-                            <TableCell className="text-right font-semibold whitespace-nowrap">
-                              <div className="flex flex-col items-end gap-1">
-                                <span className={cn(stockStatus.color, "text-sm sm:text-base")}>
+                            <TableCell className="text-right font-semibold whitespace-nowrap px-1.5 py-1.5">
+                              <div className="flex flex-col items-end gap-0.5">
+                                <span className={cn(stockStatus.color, "text-[11px]")}>
                                   {currentStock} {material.unit}
                                 </span>
                                 <Badge
@@ -667,11 +667,11 @@ const RawMaterials = () => {
                                 </Badge>
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-1.5 py-1.5">
                               {material.createdBy ? (
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1">
                                   <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                  <span className="text-xs text-muted-foreground truncate">
+                                  <span className="text-[11px] text-muted-foreground truncate">
                                     {users.find(u => u.id === material.createdBy)?.fullName || 
                                      users.find(u => u.id === material.createdBy)?.displayName || 
                                      users.find(u => u.id === material.createdBy)?.email || 
@@ -679,11 +679,11 @@ const RawMaterials = () => {
                                   </span>
                                 </div>
                               ) : (
-                                <span className="text-xs text-muted-foreground">-</span>
+                                <span className="text-[11px] text-muted-foreground">-</span>
                               )}
                             </TableCell>
-                            <TableCell className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-end gap-1 flex-wrap">
+                            <TableCell className="text-right whitespace-nowrap px-1.5 py-1.5" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1">
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>

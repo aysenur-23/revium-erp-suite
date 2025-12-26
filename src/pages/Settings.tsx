@@ -35,16 +35,16 @@ const Settings = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
         <div>
-          <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Ayarlar</h1>
+            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Ayarlar</h1>
           <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
             {isSuperAdmin ? "Sistem ve şirket ayarlarını yönetin" : "Profil bilgilerinizi yönetin"}
           </p>
         </div>
 
         {isSuperAdmin ? (
-          <Tabs defaultValue="company" className="w-full space-y-3 sm:space-y-4">
+          <Tabs defaultValue="company" className="w-full space-y-2 sm:space-y-3">
             <TabsList className="grid grid-cols-2 w-full sm:w-auto">
               <TabsTrigger value="company" className="flex items-center gap-1.5 sm:gap-2 text-[14px] sm:text-[15px] min-h-[44px] sm:min-h-0">
                 <Building2 className="h-4 w-4" />

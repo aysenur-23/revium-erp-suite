@@ -192,7 +192,7 @@ export const EditRawMaterialDialog = ({
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <DialogTitle className="text-[18px] sm:text-[20px] font-semibold text-foreground truncate">
+                <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground truncate">
                   Hammadde Düzenle
                 </DialogTitle>
                 <DialogDescription className="sr-only">
@@ -230,7 +230,7 @@ export const EditRawMaterialDialog = ({
         
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
             <div className="max-w-full mx-auto h-full overflow-y-auto">
-              <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-4 sm:space-y-6">
+              <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-2">
                 {/* Temel Bilgiler */}
                 <Card className="border shadow-sm">
                   <CardHeader className="pb-3">
@@ -240,7 +240,7 @@ export const EditRawMaterialDialog = ({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label htmlFor="name" className="text-sm font-medium flex items-center gap-1.5">
                           Hammadde Adı
@@ -270,7 +270,7 @@ export const EditRawMaterialDialog = ({
                         />
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label htmlFor="category" className="text-sm font-medium">Kategori</Label>
                         <Select
@@ -348,7 +348,7 @@ export const EditRawMaterialDialog = ({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label htmlFor="stock" className="text-sm font-medium flex items-center gap-1.5">
                           Mevcut Stok
@@ -400,7 +400,7 @@ export const EditRawMaterialDialog = ({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">Para Birimi</Label>
                         <Select
@@ -475,7 +475,7 @@ export const EditRawMaterialDialog = ({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label htmlFor="supplier" className="text-sm font-medium flex items-center gap-1.5">
                           <Building2 className="h-3.5 w-3.5" />

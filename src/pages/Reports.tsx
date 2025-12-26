@@ -21,7 +21,7 @@ const Reports = () => {
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
   const [financialDialogOpen, setFinancialDialogOpen] = useState(false);
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
-  const [savedReports, setSavedReports] = useState<Array<{ id: string; title: string; reportType: string; createdAt?: unknown; [key: string]: unknown }>>([]);
+  const [savedReports, setSavedReports] = useState<Array<{ id: string; title: string; reportType: string; createdAt?: unknown; fileUrl?: string; fileName?: string; [key: string]: unknown }>>([]);
   const [reportsIndexLink, setReportsIndexLink] = useState<string | null>(null);
   const [auditIndexLink, setAuditIndexLink] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -42,7 +42,7 @@ const Reports = () => {
     try {
       const { getSavedReports } = await import("@/services/firebase/reportService");
       const reports = await getSavedReports({ createdBy: user?.id });
-      setSavedReports(reports);
+      setSavedReports(reports as unknown as Array<{ id: string; title: string; reportType: string; createdAt?: unknown; fileUrl?: string; fileName?: string; [key: string]: unknown }>);
       setReportsIndexLink(null);
     } catch (error: unknown) {
       if (import.meta.env.DEV) {
@@ -58,14 +58,16 @@ const Reports = () => {
     }
   };
 
-  const downloadReport = async (report: { id: string; title: string; createdAt?: unknown; [key: string]: unknown }) => {
+  const downloadReport = async (report: { id: string; title: string; createdAt?: unknown; fileUrl?: string; fileName?: string; [key: string]: unknown }) => {
     setDownloading(report.id);
     try {
-      if (report.fileUrl) {
+      const fileUrl = typeof report.fileUrl === 'string' ? report.fileUrl : undefined;
+      const fileName = typeof report.fileName === 'string' ? report.fileName : undefined;
+      if (fileUrl) {
         // Firebase Storage'dan indirme
         const a = document.createElement("a");
-        a.href = report.fileUrl;
-        a.download = report.fileName || `rapor-${report.id}.pdf`;
+        a.href = fileUrl;
+        a.download = fileName || `rapor-${report.id}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -77,7 +79,7 @@ const Reports = () => {
       if (import.meta.env.DEV) {
         console.error("Download report error:", error);
       }
-      toast.error(error.message || "Rapor indirilemedi");
+      toast.error(error instanceof Error ? error.message : "Rapor indirilemedi");
     } finally {
       setDownloading(null);
     }
@@ -133,27 +135,27 @@ const Reports = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
         <div>
-          <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Raporlar</h1>
+            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Raporlar</h1>
           <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">İş analizleri ve raporlama</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
           {reportTypes.map((report, index) => (
             <Card key={index} className="hover:shadow-lg transition-all duration-300 cursor-pointer touch-manipulation min-h-[44px]" onClick={report.onClick}>
-              <CardHeader className="p-3 sm:p-4 md:p-6">
-                <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-                  <div className="p-2 sm:p-2.5 md:p-3 rounded-lg bg-primary/10 flex-shrink-0">
-                    <report.icon className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-primary" />
+              <CardHeader className="p-2">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-2 sm:p-2.5 rounded-lg bg-primary/10 flex-shrink-0">
+                    <report.icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
                   <CardTitle className="text-[14px] sm:text-[15px]">{report.title}</CardTitle>
                 </div>
               </CardHeader>
-              <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
-                <p className="text-muted-foreground mb-2 sm:mb-3 md:mb-4 text-xs sm:text-sm md:text-base">{report.description}</p>
+              <CardContent className="p-2 pt-0">
+                <p className="text-muted-foreground mb-2 sm:mb-3 text-xs sm:text-sm">{report.description}</p>
                 <Button
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm"
+                  className="w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs"
                   variant="outline"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -218,10 +220,10 @@ const Reports = () => {
         )}
 
         <Card>
-          <CardHeader className="p-3 sm:p-4 md:p-6">
+          <CardHeader className="p-2">
             <CardTitle className="text-[14px] sm:text-[15px]">Son Oluşturulan Raporlar</CardTitle>
           </CardHeader>
-          <CardContent className="p-3 sm:p-4 md:p-6">
+          <CardContent className="p-2">
             {savedReports.length === 0 ? (
               <p className="text-muted-foreground text-center py-6 sm:py-8 text-xs sm:text-sm md:text-base">Henüz rapor oluşturulmamış</p>
             ) : (

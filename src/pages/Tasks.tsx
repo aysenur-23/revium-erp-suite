@@ -327,28 +327,15 @@ const Tasks = () => {
   const [viewMode, setViewMode] = useState<"list" | "board">(
     viewFromUrl === "list" ? "list" : (viewFromUrl === "board" ? "board" : "list")
   );
-  // Sütun genişlikleri - localStorage'dan yükle veya varsayılan değerleri kullan
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem('tasks-column-widths');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return {};
-      }
-    }
-    return {
-      title: 300,
-      status: 130,
-      assignee: 150,
-      people: 180,
-      priority: 90,
-      dueDate: 110,
-    };
-  });
-  const [resizingColumn, setResizingColumn] = useState<string | null>(null);
-  const resizeStartX = useRef<number>(0);
-  const resizeStartWidth = useRef<number>(0);
+  // Sabit sütun genişlikleri
+  const columnWidths = {
+    title: 300,
+    status: 160,
+    assignee: 150,
+    people: 180,
+    priority: 120,
+    dueDate: 110,
+  };
   const [focusFilter, setFocusFilter] = useState<"all" | "due_soon" | "overdue" | "high_priority">("all");
   // Filtre tipi: all, my-tasks, general, pool, archive
   const [activeFilter, setActiveFilter] = useState<"all" | "my-tasks" | "general" | "pool" | "archive">(
@@ -1775,120 +1762,8 @@ const Tasks = () => {
     }
   };
 
-  // Sütun genişliği resize fonksiyonları
-  const handleResizeStart = (column: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setResizingColumn(column);
-    resizeStartX.current = e.clientX;
-    resizeStartWidth.current = columnWidths[column] || 100;
-  };
-
-  // Sütun sırası - yanındaki sütunu bulmak için
-  const getColumnOrder = () => ['title', 'status', 'assignee', 'people', 'priority', 'dueDate'];
-  
   // Tablo toplam genişliğini hesapla
-  const totalTableWidth = useMemo(() => {
-    const columnOrder = getColumnOrder();
-    const defaultWidths: Record<string, number> = {
-      title: 300,
-      status: 130,
-      assignee: 150,
-      people: 180,
-      priority: 90,
-      dueDate: 110,
-    };
-    return columnOrder.reduce((sum, col) => {
-      return sum + (columnWidths[col] || defaultWidths[col] || 100);
-    }, 0);
-  }, [columnWidths]);
-
-  useEffect(() => {
-    const handleResizeMove = (e: MouseEvent) => {
-      if (!resizingColumn) return;
-      
-      const diff = e.clientX - resizeStartX.current;
-      const columnOrder = getColumnOrder();
-      const currentIndex = columnOrder.indexOf(resizingColumn);
-      
-      if (currentIndex === -1) return;
-      
-      const defaultWidths: Record<string, number> = {
-        title: 300,
-        status: 130,
-        assignee: 150,
-        people: 180,
-        priority: 90,
-        dueDate: 110,
-      };
-      
-      const minWidths: Record<string, number> = {
-        title: 100,
-        status: 100,
-        assignee: 100,
-        people: 120,
-        priority: 70,
-        dueDate: 90,
-      };
-      
-      setColumnWidths(prev => {
-        const updated = { ...prev };
-        const newWidth = Math.max(minWidths[resizingColumn] || 50, resizeStartWidth.current + diff);
-        const widthDiff = newWidth - resizeStartWidth.current;
-        
-        // Değişen sütunun genişliğini güncelle
-        updated[resizingColumn] = newWidth;
-        
-        // Sağındaki sütunu daralt (eğer varsa)
-        if (currentIndex < columnOrder.length - 1) {
-          const nextColumn = columnOrder[currentIndex + 1];
-          const nextWidth = prev[nextColumn] || defaultWidths[nextColumn] || 100;
-          const newNextWidth = Math.max(minWidths[nextColumn] || 50, nextWidth - widthDiff);
-          updated[nextColumn] = newNextWidth;
-          
-          // Eğer sağındaki sütun minimum genişliğe ulaştıysa, solundaki sütunu da etkile
-          if (newNextWidth === (minWidths[nextColumn] || 50) && currentIndex > 0) {
-            const prevColumn = columnOrder[currentIndex - 1];
-            const prevWidth = prev[prevColumn] || defaultWidths[prevColumn] || 100;
-            const remainingDiff = widthDiff - (nextWidth - newNextWidth);
-            if (remainingDiff > 0) {
-              const newPrevWidth = Math.max(minWidths[prevColumn] || 50, prevWidth - remainingDiff);
-              updated[prevColumn] = newPrevWidth;
-            }
-          }
-        } else {
-          // Son sütunsa, sadece solundaki sütunu daralt
-          if (currentIndex > 0) {
-            const prevColumn = columnOrder[currentIndex - 1];
-            const prevWidth = prev[prevColumn] || defaultWidths[prevColumn] || 100;
-            const newPrevWidth = Math.max(minWidths[prevColumn] || 50, prevWidth - widthDiff);
-            updated[prevColumn] = newPrevWidth;
-          }
-        }
-        
-        localStorage.setItem('tasks-column-widths', JSON.stringify(updated));
-        return updated;
-      });
-    };
-
-    const handleResizeEnd = () => {
-      setResizingColumn(null);
-    };
-
-    if (resizingColumn) {
-      document.addEventListener('mousemove', handleResizeMove);
-      document.addEventListener('mouseup', handleResizeEnd);
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleResizeMove);
-      document.removeEventListener('mouseup', handleResizeEnd);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [resizingColumn, columnWidths]);
+  const totalTableWidth = Object.values(columnWidths).reduce((sum, width) => sum + width, 0);
 
   const getInitials = (name: string) => {
     return name
@@ -2723,7 +2598,7 @@ const Tasks = () => {
   return (
     <MainLayout disableScroll={false}>
         <div className={cn(
-        "space-y-2 w-[95%] max-w-[95%] min-w-0 mx-auto",
+        "space-y-2 w-[90%] max-w-[90%] mx-auto",
         viewMode === "board" ? "pb-0" : "pb-8"
       )}>
         {/* Hata Durumu */}
@@ -2764,7 +2639,7 @@ const Tasks = () => {
         
         {/* Sayfa Başlığı - Sade */}
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground" id="page-title">
+          <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground" id="page-title">
             {getPageTitle()}
           </h1>
           {/* İstatistikler Açılma Butonu */}
@@ -3398,7 +3273,7 @@ const Tasks = () => {
         </Card>
 
         <Dialog open={inlineFormVisible} onOpenChange={setInlineFormVisible}>
-          <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+          <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
             {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
             <DialogTitle className="sr-only">
                   {inlineFormMode === "edit" ? "Görevi Düzenle" : "Yeni Görev"}
@@ -3619,8 +3494,8 @@ const Tasks = () => {
                 <div className="table-header-group bg-[#F4F5F7] dark:bg-[#22272B] border-b-2 border-[#DFE1E6] dark:border-[#38414A] sticky top-0 z-10 shadow-sm">
                   <div className="table-row">
                     <div 
-                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.title || 300, minWidth: 100 }}
+                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      style={{ width: columnWidths.title }}
                       onClick={() => handleSort("title")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -3629,14 +3504,10 @@ const Tasks = () => {
                           sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
                         )}
                       </div>
-                      <div 
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("title", e)}
-                      />
                     </div>
                     <div 
-                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.status || 130, minWidth: 100 }}
+                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      style={{ width: columnWidths.status }}
                       onClick={() => handleSort("status")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -3645,34 +3516,22 @@ const Tasks = () => {
                           sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
                         )}
                       </div>
-                      <div 
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("status", e)}
-                      />
                     </div>
                     <div 
-                      className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.assignee || 150, minWidth: 100 }}
+                      className="table-cell px-2 py-1.5 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      style={{ width: columnWidths.assignee }}
                     >
                       Atanan
-                      <div 
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("assignee", e)}
-                      />
                     </div>
                     <div 
-                      className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.people || 180, minWidth: 120 }}
+                      className="table-cell px-2 py-1.5 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      style={{ width: columnWidths.people }}
                     >
                       Görevi Oluşturan
-                      <div 
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("people", e)}
-                      />
                     </div>
                     <div 
-                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.priority || 90, minWidth: 70 }}
+                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      style={{ width: columnWidths.priority }}
                       onClick={() => handleSort("priority")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -3681,14 +3540,10 @@ const Tasks = () => {
                           sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
                         )}
                       </div>
-                      <div 
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("priority", e)}
-                      />
                     </div>
                     <div 
-                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.dueDate || 110, minWidth: 90 }}
+                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      style={{ width: columnWidths.dueDate }}
                       onClick={() => handleSort("dueDate")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -3697,10 +3552,6 @@ const Tasks = () => {
                           sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
                         )}
                       </div>
-                      <div 
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("dueDate", e)}
-                      />
                     </div>
                   </div>
                 </div>
@@ -3822,7 +3673,7 @@ const Tasks = () => {
                       {/* Title */}
                       <div 
                         className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A] cursor-pointer"
-                        style={{ width: columnWidths.title || 300, minWidth: 100 }}
+                        style={{ width: columnWidths.title }}
                               onClick={(e) => {
                                 e.stopPropagation();
                               openTaskDetail(task.id, task.status);
@@ -3845,7 +3696,7 @@ const Tasks = () => {
                           </div>
                           
                       {/* Status - Inline Editable */}
-                      <div onClick={(e) => e.stopPropagation()} className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.status || 130, minWidth: 100 }}>
+                      <div onClick={(e) => e.stopPropagation()} className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.status }}>
                         <Select
                           value={displayStatus}
                           onValueChange={(newStatus) => {
@@ -3920,7 +3771,7 @@ const Tasks = () => {
                       </div>
                       
                       {/* Assignee - Inline Editable - Tüm atanan kişileri göster */}
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.assignee || 150, minWidth: 100 }} onClick={(e) => e.stopPropagation()}>
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.assignee }} onClick={(e) => e.stopPropagation()}>
                         <Popover>
                           <PopoverTrigger asChild>
                             <button className="flex items-center gap-1.5 hover:opacity-80 transition-opacity w-full">
@@ -3994,7 +3845,7 @@ const Tasks = () => {
                       </div>
                       
                       {/* Görevi Oluşturan */}
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.people || 180, minWidth: 120 }}>
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.people }}>
                         {(() => {
                           const creatorId = (task as any).createdBy || (task as any).created_by;
                           const creator = creatorId ? cachedUsers.find(u => u.id === creatorId) : null;
@@ -4010,7 +3861,7 @@ const Tasks = () => {
                       </div>
                       
                       {/* Priority - Inline Editable */}
-                      <div onClick={(e) => e.stopPropagation()} className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.priority || 90, minWidth: 70 }}>
+                      <div onClick={(e) => e.stopPropagation()} className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.priority }}>
                         <Select
                           value={String(task.priority || 1)}
                           onValueChange={async (newPriority) => {
@@ -4076,7 +3927,7 @@ const Tasks = () => {
                       </div>
                       
                       {/* Due Date */}
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.dueDate || 110, minWidth: 90 }}>
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.dueDate }}>
                         {dueDate ? (
                           <div className={cn(
                             "inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium",

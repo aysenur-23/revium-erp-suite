@@ -146,13 +146,13 @@ export const EditProductDialog = ({ open, onOpenChange, onSuccess, product }: Ed
         
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
             <div className="max-w-full mx-auto h-full overflow-y-auto">
-              <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-4 sm:space-y-6">
+              <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-2">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-[14px] sm:text-[15px] font-semibold">Temel Bilgiler</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label htmlFor="name" className="text-sm sm:text-base">Ürün Adı</Label>
                         <Input
@@ -186,7 +186,7 @@ export const EditProductDialog = ({ open, onOpenChange, onSuccess, product }: Ed
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label htmlFor="category" className="text-sm sm:text-base">Kategori</Label>
                         <Select value={formData.category ? formData.category : "none"} onValueChange={(value) => setFormData({ ...formData, category: value === "none" ? "" : value })}>
@@ -231,7 +231,7 @@ export const EditProductDialog = ({ open, onOpenChange, onSuccess, product }: Ed
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label htmlFor="price" className="text-sm sm:text-base">Satış Fiyatı</Label>
                         <Input
@@ -256,7 +256,7 @@ export const EditProductDialog = ({ open, onOpenChange, onSuccess, product }: Ed
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label htmlFor="min_stock" className="text-sm sm:text-base">Min. Stok</Label>
                         <Input

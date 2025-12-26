@@ -161,7 +161,7 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <User className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <DialogTitle className="text-[18px] sm:text-[20px] font-semibold text-foreground truncate">
+                <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground truncate">
                   Yeni Müşteri
                 </DialogTitle>
                 <DialogDescription className="sr-only">
@@ -199,15 +199,15 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
         
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
             <div className="max-w-full mx-auto h-full overflow-y-auto">
-              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-2">
                 <Card>
-                  <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+                  <CardContent className="p-2 space-y-2">
                     <div>
                       <h3 className="text-[14px] sm:text-[15px] font-semibold text-foreground mb-1">Müşteri Bilgileri</h3>
                       <p className="text-xs sm:text-sm text-muted-foreground">Temel müşteri bilgilerini girin</p>
                     </div>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label htmlFor="name" showRequired className="text-sm sm:text-base">İsim</Label>
                         <Input
@@ -230,7 +230,7 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label htmlFor="email" className="text-sm sm:text-base">E-posta</Label>
                         <Input
@@ -254,7 +254,7 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                       <div className="space-y-2">
                         <Label htmlFor="address" className="text-sm sm:text-base">Adres</Label>
                         <Textarea

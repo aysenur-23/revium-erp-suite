@@ -412,13 +412,13 @@ const Customers = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
+      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Müşteriler</h1>
-                <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Müşteri ve tedarikçi listenizi yönetin</p>
+                <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Müşteriler</h1>
+                <p className="text-muted-foreground mt-0.5 text-[11px] sm:text-xs">Müşteri ve tedarikçi listenizi yönetin</p>
               </div>
               {/* İstatistikler Açılma Butonu */}
               {!statsExpanded ? (
@@ -446,7 +446,7 @@ const Customers = () => {
           </div>
           {canCreate && (
             <Button 
-              className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" 
+              className="gap-1 w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs" 
               onClick={() => {
                 setCreateDialogOpen(true);
               }}
@@ -461,8 +461,8 @@ const Customers = () => {
         {/* İstatistikler */}
         {statsExpanded && (
           <Card className="border-2">
-          <CardContent className="p-4 sm:p-5 md:pt-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <CardContent className="p-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-2">
               {customerStatCards.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -483,7 +483,7 @@ const Customers = () => {
                     }}
                     aria-label={`${item.label} kartı`}
                   >
-                    <CardContent className="p-3 sm:p-4 md:p-5 flex items-center gap-2 sm:gap-3 md:gap-4">
+                    <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
                       <div className={cn("h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-md flex-shrink-0", item.accent)}>
                         <Icon className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6" />
                       </div>
@@ -503,7 +503,7 @@ const Customers = () => {
 
         {/* Filtreler */}
         <Card className="border-2">
-          <CardContent className="p-3 sm:p-4 md:p-6">
+          <CardContent className="p-2">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4">
               {/* Arama Kutusu */}
               <div className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] md:min-w-[250px]">
@@ -556,14 +556,14 @@ const Customers = () => {
         </Card>
 
         {/* Liste Görünümü */}
-        <div className="w-full max-w-full min-w-0 overflow-x-auto">
-          <div className="hidden md:block border border-[#DFE1E6] dark:border-[#38414A] rounded-sm bg-white dark:bg-[#1D2125] min-w-full">
-            <div className="table border-collapse" style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="w-full max-w-full">
+          <div className="hidden md:block border border-[#DFE1E6] dark:border-[#38414A] rounded-sm bg-white dark:bg-[#1D2125] w-full">
+            <div className="table border-collapse w-full" style={{ tableLayout: 'auto', width: '100%' }}>
               {/* Tablo Başlıkları */}
               <div className="table-header-group bg-[#F4F5F7] dark:bg-[#22272B]">
                 <div className="table-row">
                   <div 
-                    className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
                     style={{ width: columnWidths.name || 250, minWidth: 150 }}
                     onClick={() => handleSort("name")}
                   >
@@ -579,7 +579,7 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                    className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
                     style={{ width: columnWidths.email || 200, minWidth: 150 }}
                     onClick={() => handleSort("email")}
                   >
@@ -595,7 +595,7 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                    className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      className="table-cell px-2 py-1.5 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
                     style={{ width: columnWidths.phone || 150, minWidth: 120 }}
                   >
                     Telefon
@@ -605,7 +605,7 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                    className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
                     style={{ width: columnWidths.orderCount || 120, minWidth: 100 }}
                     onClick={() => handleSort("orderCount")}
                   >
@@ -621,7 +621,7 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                    className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
                     style={{ width: columnWidths.totalAmount || 150, minWidth: 120 }}
                     onClick={() => handleSort("totalAmount")}
                   >
@@ -637,7 +637,7 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                    className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      className="table-cell px-2 py-1.5 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
                     style={{ width: columnWidths.status || 120, minWidth: 100 }}
                   >
                     Durum
@@ -647,7 +647,7 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                    className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      className="table-cell px-2 py-1.5 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
                     style={{ width: columnWidths.createdBy || 150, minWidth: 120 }}
                   >
                     Oluşturan
@@ -681,7 +681,7 @@ const Customers = () => {
                         setDetailModalOpen(true);
                       }}
                     >
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         <div className="flex flex-col gap-1">
                           <span className="font-semibold text-sm text-[#172B4D] dark:text-[#B6C2CF]">
                             {customer.name}
@@ -693,7 +693,7 @@ const Customers = () => {
                           )}
                         </div>
                       </div>
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         {customer.email ? (
                           <div className="flex items-center gap-1.5">
                             <Mail className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
@@ -705,7 +705,7 @@ const Customers = () => {
                           <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
                         )}
                       </div>
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         {customer.phone ? (
                           <div className="flex items-center gap-1.5">
                             <Phone className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
@@ -717,7 +717,7 @@ const Customers = () => {
                           <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
                         )}
                       </div>
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         <div className="flex items-center gap-1.5">
                           <Package className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
                           <span className="text-xs font-medium text-[#42526E] dark:text-[#B6C2CF]">
@@ -725,12 +725,12 @@ const Customers = () => {
                           </span>
                         </div>
                       </div>
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         <span className="text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF]">
                           ₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalAmount)}
                         </span>
                       </div>
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         <Badge 
                           variant={isActive ? "default" : "secondary"} 
                           className={cn(
@@ -743,7 +743,7 @@ const Customers = () => {
                           {isActive ? "Aktif" : "Pasif"}
                         </Badge>
                       </div>
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         {customer.createdBy ? (
                           <span className="text-xs text-[#42526E] dark:text-[#B6C2CF]">
                             {usersMap[customer.createdBy] || "Bilinmeyen"}

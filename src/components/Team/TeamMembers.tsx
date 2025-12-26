@@ -892,7 +892,7 @@ export const TeamMembers = ({ departmentFilter: externalDepartmentFilter = "all"
 
       {/* Rapor Önizleme Modal */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="w-full max-w-[98vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
+        <DialogContent className="w-full max-w-[80vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
           <DialogTitle className="sr-only">Kullanıcı Raporu Önizleme</DialogTitle>
           <DialogDescription className="sr-only">Kullanıcı istatistikleri ve görev detayları</DialogDescription>
           <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b">

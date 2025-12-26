@@ -422,7 +422,7 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-[98vw] md:max-w-6xl h-[95vh] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-gradient-to-br from-background via-background to-muted/20">
+      <DialogContent className="w-full max-w-[80vw] md:max-w-6xl h-[95vh] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-gradient-to-br from-background via-background to-muted/20">
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">Satış Teklif Formu</DialogTitle>
         <DialogDescription className="sr-only">Teklif formunu düzenleyip PDF olarak indirebilirsiniz</DialogDescription>
@@ -434,7 +434,7 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
                 <Package className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+                <h2 className="text-[16px] sm:text-[18px] font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
                   Satış Teklif Formu
                 </h2>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
@@ -457,8 +457,8 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
         </DialogHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch overscroll-behavior-contain">
-          <div className="w-full p-4 sm:p-6 flex justify-center bg-gradient-to-br from-muted/20 via-background to-muted/10">
-            <div className="w-full max-w-[820px] space-y-4 sm:space-y-6">
+          <div className="w-full p-2 flex justify-center bg-gradient-to-br from-muted/20 via-background to-muted/10">
+            <div className="w-full max-w-[820px] space-y-2">
           {/* Edit Mode Controls */}
           {isEditing && (
             <div className="space-y-4 p-5 bg-gradient-to-br from-primary/5 via-white to-white rounded-xl border-2 border-primary/20 shadow-lg backdrop-blur-sm">

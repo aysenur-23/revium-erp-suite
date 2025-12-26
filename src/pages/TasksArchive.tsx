@@ -254,7 +254,7 @@ const TasksArchive = () => {
     <MainLayout>
       <div className="space-y-3 sm:space-y-4 md:space-y-6">
         <div>
-          <h1 className="text-[20px] sm:text-[24px] font-bold text-foreground flex items-center gap-1.5 sm:gap-2">
+          <h1 className="text-[16px] sm:text-[18px] font-bold text-foreground flex items-center gap-1.5 sm:gap-2">
             <Archive className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" />
             Arşiv
           </h1>

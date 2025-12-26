@@ -224,10 +224,10 @@ const Dashboard = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 sm:space-y-3 md:space-y-4 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Dashboard</h1>
+            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Dashboard</h1>
             <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Hoş geldiniz, işte bugünkü özet</p>
           </div>
         </div>

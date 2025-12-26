@@ -272,15 +272,15 @@ const Requests = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
           <div className="flex-1 min-w-0">
-            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Talep Yönetimi</h1>
-            <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
+            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Talep Yönetimi</h1>
+            <p className="text-muted-foreground mt-0.5 text-[11px] sm:text-xs">
               İzin, satın alma ve diğer taleplerinizi yönetin.
             </p>
           </div>
-          <Button onClick={() => setModalOpen(true)} className="w-full sm:w-auto min-h-[44px] sm:min-h-10 gap-1.5 sm:gap-2 text-xs sm:text-sm">
+          <Button onClick={() => setModalOpen(true)} className="w-full sm:w-auto min-h-[36px] sm:min-h-8 gap-1 text-[11px] sm:text-xs">
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Yeni Talep</span>
             <span className="sm:hidden">Yeni</span>

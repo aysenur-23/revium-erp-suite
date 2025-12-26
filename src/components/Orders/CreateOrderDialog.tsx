@@ -631,8 +631,8 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                             Sipariş Bilgileri
                           </CardTitle>
                         </CardHeader>
-                        <CardContent className="p-3 sm:p-6 space-y-3 sm:space-y-4 flex-1 overflow-y-auto">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                        <CardContent className="p-2 space-y-2 flex-1 overflow-y-auto">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                             <div className="space-y-2">
                               <Label className="text-sm font-medium" showRequired>
                                 Sipariş Numarası
@@ -686,7 +686,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                             <div className="space-y-2">
                               <Label className="text-sm font-medium">
                                 Sipariş Edilen Tarih
@@ -761,7 +761,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                             </div>
                             </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                             <div className="space-y-2">
                               <Label className="text-sm font-medium">
                                 Teslim Alınan Tarih
@@ -862,7 +862,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                                 Müşteri bilgileri yükleniyor...
                               </div>
                             ) : customerDetails ? (
-                              <div className="grid gap-3 sm:gap-4 text-sm sm:grid-cols-2">
+                              <div className="grid gap-1.5 sm:gap-2 text-sm sm:grid-cols-2">
                                 <div>
                                   <p className="text-xs text-muted-foreground mb-1">Müşteri</p>
                                   <p className="font-medium">{customerDetails.name}</p>
@@ -996,7 +996,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                         </Button>
                       )}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5 sm:gap-2">
                       <div className="col-span-1 sm:col-span-5 space-y-2">
                         <Label className="text-sm font-medium" showRequired>
                           Ürün/Hizmet
@@ -1188,7 +1188,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
 
                 {/* Step 3: Final Summary */}
                 {step === 3 && (
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 h-full">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-1.5 sm:gap-2 h-full">
                     <div className="col-span-1 lg:col-span-8 space-y-3 sm:space-y-4 flex flex-col">
                       <Card className="rounded-xl shadow-lg border bg-white flex-1 flex flex-col min-h-0">
                         <CardHeader className="p-4 sm:p-6 border-b flex-shrink-0">
@@ -1198,7 +1198,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 sm:p-6 space-y-3 sm:space-y-4 flex-1 overflow-y-auto">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                             <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-100">
                               <Label className="text-xs text-muted-foreground mb-1">Müşteri</Label>
                               <p className="font-semibold text-base">{orderData.customer_name || "-"}</p>

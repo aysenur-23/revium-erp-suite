@@ -442,11 +442,11 @@ export default function Notifications() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 w-[90%] max-w-[90%]">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
+      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2 mb-3">
           <div className="flex items-center gap-2 sm:gap-3">
             <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-primary flex-shrink-0" />
-            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Bildirimler</h1>
+            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Bildirimler</h1>
             {unreadCount > 0 && (
               <Badge variant="destructive" className="h-5 sm:h-6 px-2 text-xs sm:text-sm">
                 {unreadCount} okunmamış
@@ -457,7 +457,7 @@ export default function Notifications() {
             <Button
               variant="outline"
               size="sm"
-              className="w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm"
+              className="w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs"
               onClick={markAllAsRead}
               disabled={processing}
             >
@@ -469,7 +469,7 @@ export default function Notifications() {
 
         {/* Filters */}
         <Card>
-          <CardContent className="p-3 sm:p-4 md:p-6">
+          <CardContent className="p-2">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4">
               <Select value={filterType} onValueChange={setFilterType}>
                 <SelectTrigger className="w-full sm:w-[160px] md:w-[180px] h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-xs sm:text-sm">
@@ -522,7 +522,7 @@ export default function Notifications() {
         ) : filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-4 bg-card border rounded-lg">
             <Bell className="h-16 w-16 text-muted-foreground/40 mb-4" />
-            <p className="text-lg font-medium text-muted-foreground">Bildirim bulunamadı</p>
+            <p className="text-sm font-medium text-muted-foreground">Bildirim bulunamadı</p>
             <p className="text-sm text-muted-foreground/70 mt-2">
               {filterType !== "all" || filterRead !== "all"
                 ? "Filtreleri değiştirerek tekrar deneyin"
@@ -621,7 +621,7 @@ export default function Notifications() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className={`text-base font-semibold leading-tight ${
+                            <p className={`text-sm font-semibold leading-tight ${
                               !notification.read 
                                 ? "text-slate-900 dark:text-slate-100" 
                                 : "text-slate-700 dark:text-slate-300"
@@ -831,20 +831,20 @@ export default function Notifications() {
 
       {/* Reject Task Dialog */}
       <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
           <div className="flex flex-col h-full min-h-0">
-            <DialogHeader className="p-4 sm:p-6 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
-              <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground">Görevi Reddet</DialogTitle>
+            <DialogHeader className="p-2 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
+              <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görevi Reddet</DialogTitle>
               <DialogDescription className="mt-1 text-xs sm:text-sm text-muted-foreground">
                 Görevi reddetmek için lütfen en az 20 karakterlik bir sebep belirtin.
               </DialogDescription>
             </DialogHeader>
-            <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
+            <div className="flex-1 overflow-hidden bg-gray-50/50 p-2 min-h-0">
               <div className="max-w-full mx-auto h-full overflow-y-auto">
                 <Card>
                   <CardContent className="space-y-4 pt-6">
                     <div className="space-y-2">
-                      <Label htmlFor="rejection_reason" className="text-sm sm:text-base" showRequired>Reddetme Sebebi</Label>
+                      <Label htmlFor="rejection_reason" className="text-[11px] sm:text-xs" showRequired>Reddetme Sebebi</Label>
                       <Textarea
                         id="rejection_reason"
                         value={rejectionReason}
@@ -863,7 +863,7 @@ export default function Notifications() {
                 </Card>
               </div>
             </div>
-            <div className="p-4 sm:p-6 border-t bg-white flex-shrink-0 flex flex-wrap gap-2 justify-end">
+            <div className="p-2 border-t bg-white flex-shrink-0 flex flex-wrap gap-2 justify-end">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -891,20 +891,20 @@ export default function Notifications() {
 
       {/* Reject Rejection Dialog */}
       <Dialog open={rejectRejectionDialogOpen} onOpenChange={setRejectRejectionDialogOpen}>
-        <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
           <div className="flex flex-col h-full min-h-0">
-            <DialogHeader className="p-4 sm:p-6 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
-              <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground">Görev Reddi Reddet</DialogTitle>
+            <DialogHeader className="p-2 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
+              <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görev Reddi Reddet</DialogTitle>
               <DialogDescription className="mt-1 text-xs sm:text-sm text-muted-foreground">
                 Görev reddi reddedildiğinde görev tekrar atanan kişiye döner. Lütfen en az 20 karakterlik bir sebep belirtin.
               </DialogDescription>
             </DialogHeader>
-            <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
+            <div className="flex-1 overflow-hidden bg-gray-50/50 p-2 min-h-0">
               <div className="max-w-full mx-auto h-full overflow-y-auto">
                 <Card>
                   <CardContent className="space-y-4 pt-6">
                     <div className="space-y-2">
-                      <Label htmlFor="rejection_rejection_reason" className="text-sm sm:text-base" showRequired>Reddetme Sebebi</Label>
+                      <Label htmlFor="rejection_rejection_reason" className="text-[11px] sm:text-xs" showRequired>Reddetme Sebebi</Label>
                       <Textarea
                         id="rejection_rejection_reason"
                         value={rejectionRejectionReason}
@@ -923,7 +923,7 @@ export default function Notifications() {
                 </Card>
               </div>
             </div>
-            <div className="p-4 sm:p-6 border-t bg-white flex-shrink-0 flex flex-wrap gap-2 justify-end">
+            <div className="p-2 border-t bg-white flex-shrink-0 flex flex-wrap gap-2 justify-end">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -951,20 +951,20 @@ export default function Notifications() {
 
       {/* Reject Task Approval Dialog */}
       <Dialog open={rejectApprovalDialogOpen} onOpenChange={setRejectApprovalDialogOpen}>
-        <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
           <div className="flex flex-col h-full min-h-0">
-            <DialogHeader className="p-4 sm:p-6 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
-              <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground">Görev Onayını Reddet</DialogTitle>
+            <DialogHeader className="p-2 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
+              <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görev Onayını Reddet</DialogTitle>
               <DialogDescription className="mt-1 text-xs sm:text-sm text-muted-foreground">
                 Görev onayını reddetmek için lütfen bir not ekleyin. Görev tekrar panoya dönecektir.
               </DialogDescription>
             </DialogHeader>
-            <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
+            <div className="flex-1 overflow-hidden bg-gray-50/50 p-2 min-h-0">
               <div className="max-w-full mx-auto h-full overflow-y-auto">
                 <Card>
                   <CardContent className="space-y-4 pt-6">
                     <div className="space-y-2">
-                      <Label htmlFor="rejection_approval_reason" className="text-sm sm:text-base" showRequired>
+                      <Label htmlFor="rejection_approval_reason" className="text-[11px] sm:text-xs" showRequired>
                         Reddetme Notu
                       </Label>
                       <Textarea
@@ -980,7 +980,7 @@ export default function Notifications() {
                 </Card>
               </div>
             </div>
-            <div className="p-4 sm:p-6 border-t bg-white flex-shrink-0 flex flex-wrap gap-2 justify-end">
+            <div className="p-2 border-t bg-white flex-shrink-0 flex flex-wrap gap-2 justify-end">
               <Button
                 variant="outline"
                 onClick={() => {

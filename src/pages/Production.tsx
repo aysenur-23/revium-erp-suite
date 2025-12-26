@@ -426,14 +426,14 @@ const priorityOptions = [
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
+      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
           <div className="flex-1 min-w-0">
-            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Üretim Siparişleri</h1>
-            <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Üretim süreçlerini yönetin</p>
+            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Üretim Siparişleri</h1>
+            <p className="text-muted-foreground mt-0.5 text-[11px] sm:text-xs">Üretim süreçlerini yönetin</p>
           </div>
           {canCreate && (
-            <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={() => setCreateDialogOpen(true)}>
+            <Button className="gap-1 w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs" onClick={() => setCreateDialogOpen(true)}>
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Yeni Sipariş</span>
               <span className="sm:hidden">Yeni</span>
@@ -442,8 +442,8 @@ const priorityOptions = [
         </div>
 
         <Card>
-          <CardContent className="p-3 sm:p-4 md:p-6">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4">
+          <CardContent className="p-1.5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2">
               {/* Arama Kutusu */}
               <div className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] md:min-w-[250px]">
                 <SearchInput
@@ -507,12 +507,12 @@ const priorityOptions = [
                 <Table className="min-w-[1000px] sm:min-w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs font-semibold px-2 sm:px-4">Sipariş No</TableHead>
-                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden md:table-cell">Müşteri</TableHead>
-                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden lg:table-cell">Termin</TableHead>
-                    <TableHead className="text-xs font-semibold px-2 sm:px-4">Durum</TableHead>
-                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden xl:table-cell">Öncelik</TableHead>
-                    <TableHead className="text-right text-xs font-semibold px-2 sm:px-4">Tutar</TableHead>
+                    <TableHead className="text-[11px] font-semibold px-1.5 py-1">Sipariş No</TableHead>
+                    <TableHead className="text-[11px] font-semibold px-1.5 py-1 hidden md:table-cell">Müşteri</TableHead>
+                    <TableHead className="text-[11px] font-semibold px-1.5 py-1 hidden lg:table-cell">Termin</TableHead>
+                    <TableHead className="text-[11px] font-semibold px-1.5 py-1">Durum</TableHead>
+                    <TableHead className="text-[11px] font-semibold px-1.5 py-1 hidden xl:table-cell">Öncelik</TableHead>
+                    <TableHead className="text-right text-[11px] font-semibold px-1.5 py-1">Tutar</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -524,7 +524,7 @@ const priorityOptions = [
                         className="hover:bg-muted/50 transition-colors"
                       >
                         <TableCell 
-                          className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 cursor-pointer"
+                          className="text-[11px] font-medium px-1.5 py-1.5 cursor-pointer"
                           onClick={() => {
                             setSelectedOrder(order);
                             setDetailModalOpen(true);
@@ -540,7 +540,7 @@ const priorityOptions = [
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 hidden md:table-cell">
+                        <TableCell className="text-[11px] font-medium px-1.5 py-1.5 hidden md:table-cell">
                           <div className="flex flex-col">
                             <span className="font-medium">{order.customer_name || order.customerName || "-"}</span>
                             {order.customer_company && (
@@ -548,23 +548,23 @@ const priorityOptions = [
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">
+                        <TableCell className="text-[11px] font-medium px-1.5 py-1.5 hidden lg:table-cell">
                           {formatDate(
                             order.due_date || order.dueDate || order.created_at || order.createdAt
                           )}
                         </TableCell>
-                        <TableCell className="px-2 sm:px-4 py-2 sm:py-3">
-                          <Badge className={`${getStatusColor(order.status)} text-[10px] sm:text-xs`}>
+                        <TableCell className="px-1.5 py-1.5">
+                          <Badge className={`${getStatusColor(order.status)} text-[10px]`}>
                             {getStatusLabel(order.status)}
                           </Badge>
                         </TableCell>
                         <TableCell className="px-2 sm:px-4 py-2 sm:py-3 hidden xl:table-cell">
-                          <Badge className={`${priorityMeta.className} text-[10px] sm:text-xs`}>
+                          <Badge className={`${priorityMeta.className} text-[10px]`}>
                             {priorityMeta.label}
                           </Badge>
                         </TableCell>
                         <TableCell 
-                          className="text-right text-xs font-semibold px-2 sm:px-4 py-2 sm:py-3 cursor-pointer"
+                          className="text-right text-[11px] font-semibold px-1.5 py-1.5 cursor-pointer"
                           onClick={() => {
                             setSelectedOrder(order);
                             setDetailModalOpen(true);
@@ -587,7 +587,7 @@ const priorityOptions = [
               </div>
             </div>
             {totalPages > 1 && (
-              <div className="flex flex-col gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-2 px-3 py-2 border-t md:flex-row md:items-center md:justify-between">
                 <div className="text-xs sm:text-sm text-muted-foreground text-center md:text-left">
                   Sayfa {page} / {totalPages}
                 </div>
