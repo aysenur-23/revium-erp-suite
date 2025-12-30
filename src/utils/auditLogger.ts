@@ -14,10 +14,11 @@ export const logAudit = async (
   recordId: string | null,
   userId: string | null,
   oldData: unknown = null,
-  newData: unknown = null
+  newData: unknown = null,
+  metadata?: Record<string, unknown>
 ): Promise<void> => {
   try {
-    await createAuditLog(action, tableName, recordId, oldData, newData, userId);
+    await createAuditLog(action, tableName, recordId, oldData, newData, userId, metadata);
   } catch (error: unknown) {
     // Audit log hataları ana işlemi etkilememeli
     if (import.meta.env.DEV) {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useMemo, useRef, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useMemo, useRef, useCallback, ReactNode } from "react";
 import {
   register,
   login,
@@ -83,14 +83,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Son kontrol edilen user ID ve rolleri cache'le (performans için)
+  const lastCheckedUserIdRef = useRef<string | null>(null);
+  const lastCheckedRolesRef = useRef<{ isSuperAdmin: boolean; isAdmin: boolean; isTeamLeader: boolean } | null>(null);
+
   // Check roles based on role_permissions system - Firestore'dan kontrol et
-  const checkRoles = async (userProfile: UserProfile | null) => {
+  // useCallback ile memoize et (performans için)
+  const checkRoles = useCallback(async (userProfile: UserProfile | null) => {
     const normalizedRoles = normalizeRoles(userProfile?.role);
 
     if (!userProfile || normalizedRoles.length === 0) {
       setIsSuperAdmin(false);
       setIsAdmin(false);
       setIsTeamLeader(false);
+      lastCheckedUserIdRef.current = null;
+      lastCheckedRolesRef.current = null;
+      return;
+    }
+
+    // Aynı user için cache'den döndür (performans için)
+    if (lastCheckedUserIdRef.current === userProfile.id && lastCheckedRolesRef.current) {
+      setIsSuperAdmin(lastCheckedRolesRef.current.isSuperAdmin);
+      setIsAdmin(lastCheckedRolesRef.current.isAdmin);
+      setIsTeamLeader(lastCheckedRolesRef.current.isTeamLeader);
       return;
     }
 
@@ -152,7 +167,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     }
     setIsTeamLeader(hasTeamLeaderPermission);
-  };
+
+    // Cache'e kaydet (performans için)
+    lastCheckedUserIdRef.current = userProfile.id;
+    lastCheckedRolesRef.current = {
+      isSuperAdmin: hasSuperAdminPermission,
+      isAdmin: hasSuperAdminPermission,
+      isTeamLeader: hasTeamLeaderPermission,
+    };
+  }, []);
 
   const normalizeRoles = (roles?: string[] | null): string[] => {
     if (!roles || roles.length === 0) return [];
@@ -259,6 +282,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setIsAdmin(false);
             setIsSuperAdmin(false);
             setIsTeamLeader(false);
+            // Cache'i temizle
+            lastCheckedUserIdRef.current = null;
+            lastCheckedRolesRef.current = null;
           }
         } catch (error) {
           // Callback içinde hata oluşursa
@@ -311,8 +337,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         windowWithUnsubscribe.__unsubscribePermissions();
         delete windowWithUnsubscribe.__unsubscribePermissions;
       }
+      // Cache'i temizle
+      lastCheckedUserIdRef.current = null;
+      lastCheckedRolesRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [checkRoles]); // checkRoles dependency eklendi
 
   const signIn = async (email: string, password: string) => {
     try {

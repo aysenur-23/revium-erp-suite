@@ -352,11 +352,11 @@ export const RolePermissions = () => {
       <CardHeader>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <Shield className="h-5 w-5" />
+            <CardTitle className="flex items-center gap-2 text-[14px] sm:text-[15px] leading-tight">
+              <Shield className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Rol Yetkileri
             </CardTitle>
-            <CardDescription className="text-xs sm:text-sm mt-1">
+            <CardDescription className="text-[11px] sm:text-xs mt-1 leading-snug">
               Rollerin hangi kaynaklara erişebileceğini ve hangi işlemleri yapabileceğini yönetin.
             </CardDescription>
           </div>

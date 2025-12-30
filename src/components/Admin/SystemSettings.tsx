@@ -124,17 +124,17 @@ export const SystemSettings = () => {
       {/* Genel Ayarlar */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Activity className="h-4 w-4 sm:h-5 sm:w-5" />
+          <CardTitle className="flex items-center gap-2 text-[14px] sm:text-[15px] leading-tight">
+            <Activity className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Genel Ayarlar
           </CardTitle>
-          <CardDescription className="text-xs sm:text-sm">Sistem genelindeki temel yapılandırmalar</CardDescription>
+          <CardDescription className="text-[11px] sm:text-xs leading-snug">Sistem genelindeki temel yapılandırmalar</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 sm:space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
             <div className="space-y-0.5 flex-1">
-              <Label className="text-sm sm:text-base">Bakım Modu</Label>
-              <p className="text-xs sm:text-sm text-muted-foreground">Sistemi geçici olarak devre dışı bırak</p>
+              <Label className="text-[11px] sm:text-xs">Bakım Modu</Label>
+              <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">Sistemi geçici olarak devre dışı bırak</p>
             </div>
             <Switch
               checked={settings.maintenanceMode}
@@ -144,8 +144,8 @@ export const SystemSettings = () => {
           <Separator />
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
             <div className="space-y-0.5 flex-1">
-              <Label className="text-sm sm:text-base">Yeni Kayıtlar</Label>
-              <p className="text-xs sm:text-sm text-muted-foreground">Yeni kullanıcı kayıtlarına izin ver</p>
+              <Label className="text-[11px] sm:text-xs">Yeni Kayıtlar</Label>
+              <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">Yeni kullanıcı kayıtlarına izin ver</p>
             </div>
             <Switch
               checked={settings.allowNewRegistrations}
@@ -154,20 +154,18 @@ export const SystemSettings = () => {
           </div>
           <Separator />
           <div className="space-y-2">
-            <Label className="text-sm sm:text-base">Şirket Adı</Label>
+            <Label className="text-[11px] sm:text-xs">Şirket Adı</Label>
             <Input
               value={settings.companyName}
               onChange={(e) => setSettings((prev) => prev ? { ...prev, companyName: e.target.value } : null)}
-              className="text-sm sm:text-base"
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-sm sm:text-base">Destek Email</Label>
+            <Label className="text-[11px] sm:text-xs">Destek Email</Label>
             <Input
               type="email"
               value={settings.supportEmail}
               onChange={(e) => setSettings((prev) => prev ? { ...prev, supportEmail: e.target.value } : null)}
-              className="text-sm sm:text-base"
             />
           </div>
         </CardContent>
@@ -176,11 +174,11 @@ export const SystemSettings = () => {
       {/* Bildirim Ayarları */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
+          <CardTitle className="flex items-center gap-2 text-[14px] sm:text-[15px] leading-tight">
+            <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Bildirim Ayarları
           </CardTitle>
-          <CardDescription className="text-xs sm:text-sm">Sistem bildirimleri ve uyarı yapılandırması</CardDescription>
+          <CardDescription className="text-[11px] sm:text-xs leading-snug">Sistem bildirimleri ve uyarı yapılandırması</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 sm:space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">

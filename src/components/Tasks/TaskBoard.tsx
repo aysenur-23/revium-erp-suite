@@ -82,6 +82,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
+import { getPriorityOption, convertOldPriorityToNew } from "@/utils/priority";
 
 type Task = {
   id: string;
@@ -305,7 +306,14 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
     if (currentIndex === -1 || currentIndex >= taskStatusWorkflow.length - 1) {
       return null;
     }
-    return taskStatusWorkflow[currentIndex + 1];
+    const nextStatus = taskStatusWorkflow[currentIndex + 1];
+    
+    // "approved" durumuna direkt geçiş yapılamaz - sadece onay süreci ile geçilebilir
+    if (nextStatus && nextStatus.value === "approved") {
+      return null;
+    }
+    
+    return nextStatus;
   };
 
   const [boardState, setBoardState] = useState<BoardState>({
@@ -755,32 +763,9 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
       
       const isCreator = task.createdBy === user?.id || (task as { created_by?: string }).created_by === user?.id;
       
-      // Firestore'dan yetki kontrolü
-      let canMoveTask = isAssigned || isCreator;
-      if (!canMoveTask && user) {
-        try {
-          const userProfile: UserProfile = {
-            id: user.id,
-            email: user.email,
-            emailVerified: user.emailVerified,
-            fullName: user.fullName,
-            displayName: user.fullName,
-            phone: null,
-            dateOfBirth: null,
-            role: user.roles || [],
-            createdAt: null,
-            updatedAt: null,
-          };
-          const isMainAdminUser = await isMainAdmin(userProfile);
-          const canUpdate = await canUpdateResource(userProfile, "tasks");
-          const canChangeStatus = await canPerformSubPermission(userProfile, "tasks", "canChangeStatus");
-          canMoveTask = isMainAdminUser || (canUpdate && canChangeStatus) || isAssigned || isCreator;
-        } catch (error: unknown) {
-          if (import.meta.env.DEV) {
-            console.error("Error checking move task permission:", error);
-          }
-        }
-      }
+      // Yetki kontrolü: SADECE görev üyesi (rejected hariç) veya oluşturan durum değiştirebilir
+      // Yöneticiler için özel durum YOK - sadece görev üyeleri durum değiştirebilir
+      const canMoveTask = isAssigned || isCreator;
       
       if (!canMoveTask) {
         toast.error("Bu görevi taşıma yetkiniz yok. Sadece size atanan görevleri veya oluşturduğunuz görevleri taşıyabilirsiniz.");
@@ -789,32 +774,10 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
 
       // Tamamlandı durumuna geçerken onaya gönder
       if (nextStatus === "completed" && currentStatus === "in_progress") {
-        // SISTEM_YETKILERI.md'ye göre: Super Admin, Team Leader, görevi oluşturan direkt tamamlayabilir
+        // SADECE görev üyesi (rejected hariç) veya oluşturan direkt tamamlayabilir
+        // Yöneticiler için özel durum YOK
         const isCreator = task.createdBy === user?.id;
-        let canDirectComplete = isCreator;
-        if (!canDirectComplete && user) {
-          try {
-            const userProfile: UserProfile = {
-              id: user.id,
-              email: user.email,
-              emailVerified: user.emailVerified,
-              fullName: user.fullName,
-              displayName: user.fullName,
-              phone: null,
-              dateOfBirth: null,
-              role: user.roles || [],
-              createdAt: null,
-              updatedAt: null,
-            };
-            const isMainAdminUser = await isMainAdmin(userProfile);
-            const canUpdate = await canUpdateResource(userProfile, "tasks");
-            canDirectComplete = isMainAdminUser || canUpdate || isCreator;
-          } catch (error: unknown) {
-            if (import.meta.env.DEV) {
-              console.error("Error checking direct complete permission:", error);
-            }
-          }
-        }
+        const canDirectComplete = isAssigned || isCreator;
         
         if (!canDirectComplete) {
           // Normal kullanıcı onaya gönderir
@@ -1001,7 +964,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                     userId: userId,
                     type: "task_assigned",
                     title: "Yeni görev atandı",
-                    message: `${user.fullName || user.email || "Bir kullanıcı"} size "${newTaskTitle.trim()}" görevini atadı. Görevi kabul etmek veya reddetmek için bildirime tıklayın.`,
+                    message: `${user.fullName || user.email || "Bir kullanıcı"} size "${newTaskTitle.trim()}" görevini atadı. Görev detaylarını görüntülemek için bildirime tıklayabilirsiniz.`,
                     read: false,
                     relatedId: taskId,
                     metadata: { assignment_id: assignment.id }, // Assignment ID'yi metadata'ya ekle
@@ -1512,13 +1475,18 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
     return { text: format(date, "dd MMM", { locale: tr }), className: "bg-[#DFE1E6] text-[#172B4D]" };
   };
 
+  // Öncelik gösterimi için helper - Eski sistem (1-5) varsa yeni sisteme (0-5) çevir
   const getPriorityDisplay = (priority: number | undefined) => {
-    if (!priority || priority === 1) return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
-    if (priority === 2) return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
-    if (priority === 3) return { label: "Orta", icon: Minus, color: "text-gray-600 dark:text-gray-400" };
-    if (priority === 4) return { label: "Yüksek", icon: ChevronUp, color: "text-red-600 dark:text-red-400" };
-    if (priority >= 5) return { label: "Yüksek", icon: ChevronUp, color: "text-red-600 dark:text-red-400" };
-    return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
+    if (!priority) {
+      const option = getPriorityOption(0);
+      return { label: option.label, icon: ChevronDown, color: option.color };
+    }
+    // Eski sistem (1-5) varsa yeni sisteme (0-5) çevir
+    const newPriority = convertOldPriorityToNew(priority);
+    const option = getPriorityOption(newPriority);
+    // Icon seçimi: 0-1 = down, 2-3 = minus, 4-5 = up
+    const icon = newPriority <= 1 ? ChevronDown : newPriority <= 3 ? Minus : ChevronUp;
+    return { label: option.label, icon, color: option.color };
   };
 
   const quickActionButtons = [
@@ -1575,19 +1543,18 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
 
       {/* Board - Sabit kolonlar, drag & drop yok */}
       <div 
-        className="pb-8 px-2 sm:px-3 md:px-6 pt-3 sm:pt-4 md:pt-6 overflow-x-auto -mx-2 sm:-mx-3 md:-mx-6"
+        className="pb-8 px-2 sm:px-3 md:px-6 pt-3 sm:pt-4 md:pt-6 -mx-2 sm:-mx-3 md:-mx-6"
         draggable={false}
         onDragStart={(e) => e.preventDefault()}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => e.preventDefault()}
       >
         <div 
-          className="flex gap-2 sm:gap-3 md:gap-4 pb-6 w-full min-w-max lg:min-w-0 overflow-x-auto"
+          className="flex gap-2 sm:gap-3 md:gap-4 pb-6 w-full lg:min-w-0"
           draggable={false}
           onDragStart={(e) => e.preventDefault()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => e.preventDefault()}
-          style={{ scrollbarWidth: 'thin' }}
         >
           {boardState.columnOrder.map((columnId) => {
               const column = boardState.columns.find((c) => c.id === columnId);
@@ -1611,12 +1578,12 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                   onDragStart={(e) => e.preventDefault()}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => e.preventDefault()}
-                  className="flex-shrink-0 w-[260px] sm:w-[280px] md:w-[300px] lg:flex-1 lg:min-w-0 bg-[#EBECF0] rounded-lg p-2 sm:p-3 flex flex-col transition-all shadow-sm"
+                  className="flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] lg:flex-1 lg:min-w-0 bg-[#EBECF0] rounded-lg p-2 sm:p-3 flex flex-col transition-all shadow-sm"
                   style={{ overflow: 'visible' }}
                 >
                       {/* Column Header - Sabit kolonlar, düzenleme yok */}
                       <div className="flex items-center justify-between mb-2 px-2 py-1">
-                        <h3 className="font-semibold text-sm text-[#172B4D] flex-1 px-2 py-1">
+                        <h3 className="font-semibold text-[11px] sm:text-xs text-[#172B4D] flex-1 px-2 py-1">
                           {(() => {
                             // Eğer column.id teknik bir ID ise (column_ ile başlıyorsa), defaultColumns'dan title'ı al
                             if (column.id.startsWith("column_")) {
@@ -1661,7 +1628,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                     >
                       {/* Title and Menu Row - Menu moved to top */}
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-tight break-words flex-1">
+                        <h3 className="font-semibold text-[11px] sm:text-xs text-gray-900 dark:text-gray-100 leading-tight break-words flex-1">
                           {task.title}
                         </h3>
                         
@@ -1698,7 +1665,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                                     setOpenDropdownMenuId(null);
                                     openTaskModal(task);
                                   }}
-                                  className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+                                  className="cursor-pointer rounded-md px-3 py-2.5 text-[11px] sm:text-xs font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
                                 >
                                   <Edit className="h-4 w-4 mr-2.5 stroke-[2]" />
                                   Düzenle
@@ -1712,7 +1679,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                                         handleRemoveFromPool(task.id);
                                       }
                                     }}
-                                    className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+                                    className="cursor-pointer rounded-md px-3 py-2.5 text-[11px] sm:text-xs font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
                                   >
                                     <XCircle className="h-4 w-4 mr-2.5 stroke-[2]" />
                                     Havuzdan Kaldır
@@ -1724,7 +1691,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                                     setOpenDropdownMenuId(null);
                                     handleArchiveTask(task.id);
                                   }}
-                                  className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+                                  className="cursor-pointer rounded-md px-3 py-2.5 text-[11px] sm:text-xs font-medium transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
                                 >
                                   <Archive className="h-4 w-4 mr-2.5 stroke-[2]" />
                                   {(task as BoardTaskInput).isArchived || (task as BoardTaskInput).is_archived ? "Arşivden Çıkar" : "Arşivle"}
@@ -1737,7 +1704,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                                       handleDeleteTask(task.id);
                                     }
                                   }}
-                                  className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium text-destructive focus:text-destructive hover:bg-destructive/10 focus:bg-destructive/10 transition-colors"
+                                  className="cursor-pointer rounded-md px-3 py-2.5 text-[11px] sm:text-xs font-medium text-destructive focus:text-destructive hover:bg-destructive/10 focus:bg-destructive/10 transition-colors"
                                 >
                                   <Trash2 className="h-4 w-4 mr-2.5 stroke-[2]" />
                                   Sil
@@ -1889,7 +1856,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                   <div className="mt-3 rounded-lg bg-white border-2 border-[#0079BF]/20 shadow-lg p-4 space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
                           {/* Başlık */}
                           <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-[#172B4D] flex items-center gap-1.5">
+                            <Label className="text-[11px] sm:text-xs font-semibold text-[#172B4D] flex items-center gap-1.5">
                               <Package className="h-3.5 w-3.5 text-[#0079BF]" />
                               Kart Başlığı <span className="text-destructive">*</span>
                             </Label>
@@ -1914,13 +1881,13 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                               }}
                               autoFocus
                               disabled={saving}
-                              className="h-10 bg-white border-[#DFE1E6] text-[#172B4D] focus-visible:ring-2 focus-visible:ring-[#0079BF] focus-visible:border-[#0079BF] text-sm font-medium placeholder:text-[#5E6C84]"
+                              className="h-10 bg-white border-[#DFE1E6] text-[#172B4D] focus-visible:ring-2 focus-visible:ring-[#0079BF] focus-visible:border-[#0079BF] text-[11px] sm:text-xs font-medium placeholder:text-[#5E6C84]"
                             />
                           </div>
                           
                           {/* Açıklama */}
                           <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-[#172B4D] flex items-center gap-1.5">
+                            <Label className="text-[11px] sm:text-xs font-semibold text-[#172B4D] flex items-center gap-1.5">
                               <MessageSquare className="h-3.5 w-3.5 text-[#0079BF]" />
                               Açıklama
                             </Label>
@@ -1930,20 +1897,20 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                               onChange={(e) => setNewTaskDescription(e.target.value)}
                               rows={3}
                               disabled={saving}
-                              className="bg-white border-[#DFE1E6] text-[#172B4D] focus-visible:ring-2 focus-visible:ring-[#0079BF] focus-visible:border-[#0079BF] resize-none text-sm placeholder:text-[#5E6C84]"
+                              className="bg-white border-[#DFE1E6] text-[#172B4D] focus-visible:ring-2 focus-visible:ring-[#0079BF] focus-visible:border-[#0079BF] resize-none text-[11px] sm:text-xs placeholder:text-[#5E6C84]"
                             />
                           </div>
                           
                           {/* Checklist */}
                           <div className="space-y-2">
-                            <Label className="text-xs font-semibold text-[#172B4D] flex items-center gap-1.5">
+                            <Label className="text-[11px] sm:text-xs font-semibold text-[#172B4D] flex items-center gap-1.5">
                               <CheckCircle2 className="h-3.5 w-3.5 text-[#0079BF]" />
                               Kontrol Listesi
                             </Label>
                             {newTaskChecklistItems.length > 0 && (
                               <div className="space-y-1.5 bg-[#F4F5F7] rounded-md p-2.5 border border-[#DFE1E6]">
                                 {newTaskChecklistItems.map((item, idx) => (
-                                  <div key={idx} className="flex items-center gap-2.5 text-sm group">
+                                  <div key={idx} className="flex items-center gap-2.5 text-[11px] sm:text-xs group">
                                     <input
                                       type="checkbox"
                                       checked={item.completed}
@@ -2013,7 +1980,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                           
                           {/* Kişi Ata */}
                           <div className="space-y-2">
-                            <Label className="text-xs font-semibold text-[#172B4D] flex items-center gap-1.5">
+                            <Label className="text-[11px] sm:text-xs font-semibold text-[#172B4D] flex items-center gap-1.5">
                               <User className="h-3.5 w-3.5 text-[#0079BF]" />
                               Kişi Ata
                             </Label>
@@ -2061,7 +2028,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                           onClick={() => {
                             onTaskClick("new", column.id);
                           }}
-                          className="w-full mt-2 text-left text-sm text-[#5E6C84] hover:text-[#172B4D] hover:bg-white/80 py-2.5 px-3 rounded-md transition-all flex items-center gap-2 font-medium group border border-transparent hover:border-[#DFE1E6] shadow-sm hover:shadow-md"
+                          className="w-full mt-2 text-left text-[11px] sm:text-xs text-[#5E6C84] hover:text-[#172B4D] hover:bg-white/80 py-2.5 px-3 rounded-md transition-all flex items-center gap-2 font-medium group border border-transparent hover:border-[#DFE1E6] shadow-sm hover:shadow-md"
                         >
                           <div className="p-1 rounded bg-[#0079BF]/10 group-hover:bg-[#0079BF]/20 transition-colors">
                             <Plus className="h-4 w-4 text-[#0079BF] group-hover:text-[#005A8B]" />
@@ -2095,7 +2062,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                     <Input
                       value={taskForm.title}
                       onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
-                      className="text-xl font-semibold text-[#172B4D] border-none shadow-none p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0"
+                      className="text-[16px] sm:text-[18px] font-semibold text-[#172B4D] border-none shadow-none p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0 leading-tight"
                       placeholder="Kart başlığı"
                     />
                     <Button

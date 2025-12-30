@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Timestamp } from "firebase/firestore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { updateOrder, addOrderComment, getOrderComments, getOrderActivities, Order, OrderItem } from "@/services/firebase/orderService";
 import { useAuth } from "@/contexts/AuthContext";
-import { canUpdateResource, canDeleteResource, UserProfile } from "@/utils/permissions";
+import { canUpdateResource, canDeleteResource } from "@/utils/permissions";
+import { UserProfile } from "@/services/firebase/authService";
 import { formatPhoneForDisplay, formatPhoneForTelLink } from "@/utils/phoneNormalizer";
 import { getAllUsers } from "@/services/firebase/authService";
 import { CURRENCY_SYMBOLS, Currency } from "@/utils/currency";
@@ -80,10 +81,14 @@ const resolveDateValue = (value?: unknown): Date | string | null => {
   if (!value) return null;
   if (typeof value === "string") return value;
   if (value instanceof Date) return value;
-  if (value?.seconds) {
-    return new Date(value.seconds * 1000);
+  if (value instanceof Timestamp) {
+    return value.toDate();
   }
-  return value ?? null;
+  if (typeof value === "object" && value !== null && "seconds" in value) {
+    const timestamp = value as { seconds: number; nanoseconds?: number };
+    return new Date(timestamp.seconds * 1000);
+  }
+  return null;
 };
 
 const formatCurrency = (value?: number | null, currency?: Currency | string) => {
@@ -113,7 +118,7 @@ interface OrderDetailModalProps {
 }
 
 export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }: OrderDetailModalProps) => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isTeamLeader } = useAuth();
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
@@ -152,9 +157,9 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
   const currency = order?.currency || "TRY";
   const totalQuantity = orderItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const totalDiscount = orderItems.reduce((sum, item) => sum + (Number(item.discount) || 0), 0);
-  const subtotalValue = Number(order?.subtotal ?? order?.totalAmount ?? order?.total ?? 0);
-  const taxValue = Number(order?.tax ?? order?.taxAmount ?? 0);
-  const totalValue = Number(order?.total ?? order?.totalAmount ?? subtotalValue + taxValue - totalDiscount);
+  const subtotalValue = Number(order?.subtotal ?? order?.totalAmount ?? 0);
+  const taxValue = Number(order?.taxAmount ?? 0);
+  const totalValue = Number(order?.totalAmount ?? subtotalValue + taxValue - totalDiscount);
   
   const [canUpdate, setCanUpdate] = useState(false);
   const [canDeleteState, setCanDeleteState] = useState(false);
@@ -165,12 +170,6 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
     if (order?.status) {
       const normalized = normalizeStatusValue(order.status);
       setCurrentStatus(normalized);
-      if (import.meta.env.DEV) {
-        console.log("OrderDetailModal: Status güncellendi", {
-          original: order.status,
-          normalized,
-        });
-      }
     }
     if (order?.approvalStatus !== undefined) {
       setApprovalStatus(order.approvalStatus);
@@ -191,8 +190,8 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
           id: user.id,
           email: user.email,
           emailVerified: user.emailVerified,
+          displayName: user.fullName || user.email || "",
           fullName: user.fullName,
-          displayName: user.fullName,
           phone: null,
           dateOfBirth: null,
           role: user.roles || [],
@@ -206,9 +205,15 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
         setCanUpdate(canUpdateOrder);
         setCanDeleteState(canDeleteOrder);
         
+        // Admin ve ekip lideri her zaman düzenleyebilir
+        if (isAdmin || isTeamLeader) {
+          setCanUpdate(true);
+          setCanDeleteState(true);
+        }
+        
         // Onaylama yetkisi: Güncelleme yetkisi varsa veya oluşturan kişi ise
         const isCreator = user.id === order.createdBy;
-        setCanApprove(canUpdateOrder || isCreator);
+        setCanApprove(canUpdateOrder || isCreator || isTeamLeader);
       } catch (error: unknown) {
         if (import.meta.env.DEV) {
           console.error("Error checking order permissions:", error);
@@ -243,7 +248,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
     },
     {
       label: "Ara Toplam",
-      value: formatCurrency(order?.subtotal ?? order?.total ?? 0, currency),
+      value: formatCurrency(order?.subtotal ?? order?.totalAmount ?? 0, currency),
       icon: CreditCard,
       helper: "Vergi & indirim öncesi",
       accent: "from-slate-50/80 via-white to-white border-slate-100",
@@ -267,8 +272,8 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
     { label: "Para Birimi", value: currency },
     { label: "Ödeme Şartı", value: paymentTerms },
     { label: "Oluşturan", value: order?.createdBy 
-      ? (usersMap[order.createdBy] || order?.creator?.full_name || "-")
-      : (order?.creator?.full_name || "-") },
+      ? (usersMap[order.createdBy] || "-")
+      : "-" },
     { label: "Son Güncelleme", value: formatDateSafe(updatedAtValue as Date | string | Timestamp | null) },
   ];
   const quickMetaChips = [
@@ -291,7 +296,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
         const allUsers = await getAllUsers();
         const userMap: Record<string, string> = {};
         allUsers.forEach((u) => {
-          userMap[u.id] = u.fullName || u.displayName || u.email || "Bilinmeyen";
+          userMap[u.id] = u.fullName || u.email || "Bilinmeyen";
         });
         setUsersMap(userMap);
       } catch (error) {
@@ -373,51 +378,26 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
     return labels[normalized] || normalized;
   };
 
-  const getCurrentStatusIndex = () => {
+  const getCurrentStatusIndex = useCallback(() => {
     // currentStatus zaten normalize edilmiş olmalı ama yine de normalize et
     const normalized = normalizeStatusValue(currentStatus);
     const index = statusWorkflow.findIndex((statusItem) => statusItem.value === normalized);
     // Eğer bulunamazsa, "pending" olarak kabul et (index 1)
     if (index === -1) {
-      if (import.meta.env.DEV) {
-        console.warn("OrderDetailModal: Status workflow'da bulunamadı:", {
-          original: order?.status,
-          currentStatus,
-          normalized,
-          availableStatuses: statusWorkflow.map(s => s.value),
-        });
-      }
       // "pending" index'i 1 (draft'tan sonra)
       return 1;
     }
     return index;
-  };
+  }, [currentStatus, statusWorkflow]);
 
-  const getNextStatus = () => {
+  const nextStatus = useMemo(() => {
     const currentIndex = getCurrentStatusIndex();
     // currentIndex artık -1 dönmeyecek (minimum 1 döner), ama yine de kontrol et
     if (currentIndex < 0 || currentIndex >= statusWorkflow.length - 1) {
-      if (import.meta.env.DEV) {
-        console.log("OrderDetailModal: getNextStatus null döndü", {
-          currentIndex,
-          workflowLength: statusWorkflow.length,
-          currentStatus,
-          normalizedStatus: normalizeStatusValue(currentStatus),
-        });
-      }
       return null;
     }
-    const nextStatus = statusWorkflow[currentIndex + 1];
-    if (import.meta.env.DEV) {
-      console.log("OrderDetailModal: getNextStatus", {
-        currentIndex,
-        currentStatus: normalizeStatusValue(currentStatus),
-        nextStatus: nextStatus?.value,
-        nextLabel: nextStatus?.label,
-      });
-    }
-    return nextStatus;
-  };
+    return statusWorkflow[currentIndex + 1];
+  }, [getCurrentStatusIndex, statusWorkflow]);
 
   const handleStatusChange = async (nextStatus: string) => {
     if (!order?.id || !user?.id) {
@@ -534,6 +514,14 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+        <DialogTitle className="sr-only">
+          Sipariş Detayı - {orderNumber}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          Sipariş detayları ve bilgileri
+        </DialogDescription>
+        
         <div className="flex flex-col h-full min-h-0">
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
             <div className="flex items-center justify-between gap-3">
@@ -541,12 +529,9 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
+                <h2 className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                   Sipariş Detayı - {orderNumber}
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Sipariş detayları ve bilgileri
-                </DialogDescription>
+                </h2>
               </div>
               <div className="flex flex-wrap gap-2 flex-shrink-0 relative z-10 pr-10 sm:pr-12">
                 {approvalStatus === "pending" && (
@@ -652,7 +637,6 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                     <p className="text-sm text-muted-foreground">
                       {(() => {
                         const normalizedStatus = normalizeStatusValue(currentStatus);
-                        const nextStatus = getNextStatus();
                         if (nextStatus) {
                           return `${getStatusLabel(normalizedStatus)} aşamasındasınız. Sıradaki adım: ${nextStatus.label}`;
                         }
@@ -724,7 +708,6 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                   
                   {/* Next Status Button */}
                   {(() => {
-                    const nextStatus = getNextStatus();
                     const normalizedCurrentStatus = normalizeStatusValue(currentStatus);
                     // Buton gösterilme koşulları: next status var, delivered/cancelled değil, approval pending değil
                     const shouldShowButton = nextStatus && 
@@ -737,13 +720,6 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                     if (!shouldShowButton) {
                       // Debug için konsola yaz (sadece dev modda)
                       if (import.meta.env.DEV && nextStatus) {
-                        console.log("Buton gösterilmedi:", {
-                          nextStatus: nextStatus.value,
-                          normalizedCurrentStatus,
-                          approvalStatus,
-                          canUpdate,
-                          isCreator,
-                        });
                       }
                       return null;
                     }
@@ -906,9 +882,9 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                         {orderItems.map((item) => (
                           <TableRow key={item.id}>
                             <TableCell className="font-medium">
-                              {item.products?.name || item.productName || item.product_name || "-"}
+                              {item.productName || item.product_name || "-"}
                             </TableCell>
-                            <TableCell>{item.products?.sku || "-"}</TableCell>
+                            <TableCell>-</TableCell>
                             <TableCell>{item.category || "-"}</TableCell>
                             <TableCell className="text-right">{item.quantity}</TableCell>
                             <TableCell className="text-right">{formatCurrency(item.unit_price ?? item.unitPrice, currency)}</TableCell>
@@ -955,12 +931,10 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
               </CardContent>
             </Card>
 
-            {((order?.createdBy && usersMap[order.createdBy]) || order?.creator?.full_name) && (
+            {order?.createdBy && usersMap[order.createdBy] && (
               <p className="text-xs text-muted-foreground text-right">
                 Siparişi ekleyen: <span className="font-medium">
-                  {order?.createdBy 
-                    ? (usersMap[order.createdBy] || order?.creator?.full_name || "Bilinmeyen")
-                    : (order?.creator?.full_name || "Bilinmeyen")}
+                  {usersMap[order.createdBy] || "Bilinmeyen"}
                 </span>
               </p>
             )}
@@ -973,7 +947,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                         Sil
                       </Button>
                     )}
-                    {!isPersonnel && onEdit && (
+                    {!isPersonnel && (canUpdate || isAdmin || isTeamLeader) && onEdit && (
                       <Button onClick={onEdit} className="gap-2 h-10 bg-primary hover:bg-primary/90 text-white">
                         <Edit className="h-4 w-4" />
                         Düzenle
@@ -984,33 +958,33 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
               )}
             </div>
           </div>
+          
+          {/* Activity Comments Panel */}
+          {order?.id && user && (
+            <ActivityCommentsPanel
+              entityId={order.id}
+              entityType="order"
+              onAddComment={async (content: string) => {
+                await addOrderComment(
+                  order.id,
+                  user.id,
+                  content,
+                  user.fullName,
+                  user.email
+                );
+              }}
+              onGetComments={async () => {
+                return await getOrderComments(order.id);
+              }}
+              onGetActivities={async () => {
+                return await getOrderActivities(order.id);
+              }}
+              currentUserId={user.id}
+              currentUserName={user.fullName}
+              currentUserEmail={user.email}
+            />
+          )}
         </div>
-        
-        {/* Activity Comments Panel */}
-        {order?.id && user && (
-          <ActivityCommentsPanel
-            entityId={order.id}
-            entityType="order"
-            onAddComment={async (content: string) => {
-              await addOrderComment(
-                order.id,
-                user.id,
-                content,
-                user.fullName || user.displayName,
-                user.email
-              );
-            }}
-            onGetComments={async () => {
-              return await getOrderComments(order.id);
-            }}
-            onGetActivities={async () => {
-              return await getOrderActivities(order.id);
-            }}
-            currentUserId={user.id}
-            currentUserName={user.fullName || user.displayName}
-            currentUserEmail={user.email}
-          />
-        )}
       </DialogContent>
     </Dialog>
   );

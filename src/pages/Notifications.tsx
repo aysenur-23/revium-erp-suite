@@ -46,7 +46,7 @@ const hasActionMetadata = (notification: FirebaseNotification): boolean => {
   const meta = notification.metadata;
   if (meta && typeof meta === "object" && "action" in meta) {
     const value = (meta as Record<string, unknown>).action;
-    return typeof value === "string" && (value === "accepted" || value === "rejected" || value === "rejection_approved" || value === "rejection_rejected" || value === "pool_request_approved");
+    return typeof value === "string" && (value === "accepted" || value === "rejected" || value === "rejection_approved" || value === "rejection_rejected" || value === "pool_request_approved" || value === "approved");
   }
   return false;
 };
@@ -442,13 +442,13 @@ export default function Notifications() {
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2 mb-3">
           <div className="flex items-center gap-2 sm:gap-3">
             <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-primary flex-shrink-0" />
             <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Bildirimler</h1>
             {unreadCount > 0 && (
-              <Badge variant="destructive" className="h-5 sm:h-6 px-2 text-xs sm:text-sm">
+              <Badge variant="destructive" className="h-5 sm:h-6 px-2 text-[10px]">
                 {unreadCount} okunmamış
               </Badge>
             )}
@@ -472,7 +472,7 @@ export default function Notifications() {
           <CardContent className="p-2">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4">
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-full sm:w-[160px] md:w-[180px] h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-xs sm:text-sm">
+                <SelectTrigger className="w-full sm:w-[160px] md:w-[180px] h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs">
                   <SelectValue placeholder="Bildirim Tipi" />
                 </SelectTrigger>
                 <SelectContent>
@@ -487,7 +487,7 @@ export default function Notifications() {
                 </SelectContent>
               </Select>
               <Select value={filterRead} onValueChange={setFilterRead}>
-                <SelectTrigger className="w-full sm:w-[160px] md:w-[180px] h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-xs sm:text-sm">
+                <SelectTrigger className="w-full sm:w-[160px] md:w-[180px] h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs">
                   <SelectValue placeholder="Okunma Durumu" />
                 </SelectTrigger>
                 <SelectContent>
@@ -504,7 +504,7 @@ export default function Notifications() {
                     setFilterType("all");
                     setFilterRead("all");
                   }}
-                  className="h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-xs sm:text-sm"
+                  className="h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
                 >
                   <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Temizle</span>
@@ -522,8 +522,8 @@ export default function Notifications() {
         ) : filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-4 bg-card border rounded-lg">
             <Bell className="h-16 w-16 text-muted-foreground/40 mb-4" />
-            <p className="text-sm font-medium text-muted-foreground">Bildirim bulunamadı</p>
-            <p className="text-sm text-muted-foreground/70 mt-2">
+            <p className="text-[11px] sm:text-xs font-medium text-muted-foreground">Bildirim bulunamadı</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-2">
               {filterType !== "all" || filterRead !== "all"
                 ? "Filtreleri değiştirerek tekrar deneyin"
                 : "Henüz bildirim yok"}
@@ -621,7 +621,7 @@ export default function Notifications() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className={`text-sm font-semibold leading-tight ${
+                            <p className={`text-[11px] sm:text-xs font-semibold leading-tight ${
                               !notification.read 
                                 ? "text-slate-900 dark:text-slate-100" 
                                 : "text-slate-700 dark:text-slate-300"
@@ -635,7 +635,7 @@ export default function Notifications() {
                         </div>
                       </div>
                       {notification.message && (
-                        <p className={`text-sm leading-relaxed ${
+                        <p className={`text-[11px] sm:text-xs leading-relaxed ${
                           !notification.read 
                             ? "text-slate-700 dark:text-slate-300" 
                             : "text-slate-600 dark:text-slate-400"
@@ -683,7 +683,7 @@ export default function Notifications() {
                       )}
                       <div className="flex items-center gap-2 pt-1">
                         <Clock className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">
                           {notification.createdAt 
                             ? formatDistanceToNow(notification.createdAt.toDate(), {
                                 addSuffix: true,
@@ -831,13 +831,21 @@ export default function Notifications() {
 
       {/* Reject Task Dialog */}
       <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+          {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+          <DialogTitle className="sr-only">
+            Görevi Reddet
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Görevi reddetmek için lütfen en az 20 karakterlik bir sebep belirtin.
+          </DialogDescription>
+          
           <div className="flex flex-col h-full min-h-0">
             <DialogHeader className="p-2 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
-              <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görevi Reddet</DialogTitle>
-              <DialogDescription className="mt-1 text-xs sm:text-sm text-muted-foreground">
+              <h2 className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görevi Reddet</h2>
+              <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground">
                 Görevi reddetmek için lütfen en az 20 karakterlik bir sebep belirtin.
-              </DialogDescription>
+              </p>
             </DialogHeader>
             <div className="flex-1 overflow-hidden bg-gray-50/50 p-2 min-h-0">
               <div className="max-w-full mx-auto h-full overflow-y-auto">
@@ -854,7 +862,7 @@ export default function Notifications() {
                         className={`min-h-[100px] sm:min-h-[120px] ${rejectionReason.length > 0 && rejectionReason.length < 20 ? "border-destructive" : ""}`}
                       />
                       {rejectionReason.length > 0 && rejectionReason.length < 20 && (
-                        <p className="text-xs text-destructive">
+                        <p className="text-[11px] sm:text-xs text-destructive">
                           En az {20 - rejectionReason.length} karakter daha gerekli
                         </p>
                       )}
@@ -891,11 +899,11 @@ export default function Notifications() {
 
       {/* Reject Rejection Dialog */}
       <Dialog open={rejectRejectionDialogOpen} onOpenChange={setRejectRejectionDialogOpen}>
-        <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
           <div className="flex flex-col h-full min-h-0">
             <DialogHeader className="p-2 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
               <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görev Reddi Reddet</DialogTitle>
-              <DialogDescription className="mt-1 text-xs sm:text-sm text-muted-foreground">
+              <DialogDescription className="mt-1 text-[11px] sm:text-xs text-muted-foreground">
                 Görev reddi reddedildiğinde görev tekrar atanan kişiye döner. Lütfen en az 20 karakterlik bir sebep belirtin.
               </DialogDescription>
             </DialogHeader>
@@ -914,7 +922,7 @@ export default function Notifications() {
                         className={`min-h-[100px] sm:min-h-[120px] ${rejectionRejectionReason.length > 0 && rejectionRejectionReason.length < 20 ? "border-destructive" : ""}`}
                       />
                       {rejectionRejectionReason.length > 0 && rejectionRejectionReason.length < 20 && (
-                        <p className="text-xs text-destructive">
+                        <p className="text-[11px] sm:text-xs text-destructive">
                           En az {20 - rejectionRejectionReason.length} karakter daha gerekli
                         </p>
                       )}
@@ -951,11 +959,11 @@ export default function Notifications() {
 
       {/* Reject Task Approval Dialog */}
       <Dialog open={rejectApprovalDialogOpen} onOpenChange={setRejectApprovalDialogOpen}>
-        <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
           <div className="flex flex-col h-full min-h-0">
             <DialogHeader className="p-2 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
               <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görev Onayını Reddet</DialogTitle>
-              <DialogDescription className="mt-1 text-xs sm:text-sm text-muted-foreground">
+              <DialogDescription className="mt-1 text-[11px] sm:text-xs text-muted-foreground">
                 Görev onayını reddetmek için lütfen bir not ekleyin. Görev tekrar panoya dönecektir.
               </DialogDescription>
             </DialogHeader>

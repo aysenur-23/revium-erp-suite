@@ -29,11 +29,11 @@ export const Header = ({ onMenuClick, sidebarOpen = true }: HeaderProps) => {
   return (
     <header 
       className={cn(
-        "h-12 sm:h-14 md:h-16 bg-background border-b border-border z-20 flex-shrink-0",
-        "w-full"
+        "h-12 xs:h-12 sm:h-14 md:h-16 bg-background border-b border-border z-20 flex-shrink-0",
+        "w-full max-w-full overflow-hidden"
       )}
     >
-      <div className="flex h-full items-center px-2 sm:px-3 md:px-4 lg:px-6 gap-2 sm:gap-3 w-full min-w-0 max-w-full overflow-hidden">
+      <div className="flex h-full items-center px-2 xs:px-2.5 sm:px-3 md:px-4 lg:px-6 gap-2 xs:gap-2.5 sm:gap-3 w-full min-w-0 max-w-full overflow-hidden">
         {/* Sol taraf - Menu */}
         {onMenuClick && (
           <div className="flex-shrink-0">
@@ -65,7 +65,7 @@ export const Header = ({ onMenuClick, sidebarOpen = true }: HeaderProps) => {
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="right" className="text-sm">
+                <TooltipContent side="right" className="text-[11px] sm:text-xs">
                   {sidebarOpen ? "Menüyü Kapat" : "Menüyü Aç"}
                 </TooltipContent>
               </Tooltip>
@@ -97,11 +97,11 @@ export const Header = ({ onMenuClick, sidebarOpen = true }: HeaderProps) => {
                 size={isMobile ? "default" : "default"}
                 className={cn(
                   "touch-manipulation flex-shrink-0 whitespace-nowrap",
-                  isMobile && "min-h-[44px] px-2 text-xs",
+                  isMobile && "min-h-[44px] px-2 text-[11px] sm:text-xs",
                   !isMobile && "px-3"
                 )}
               >
-                <span className="font-medium text-sm truncate" style={{ maxWidth: isMobile ? '80px' : '150px' }}>
+                <span className="font-medium text-[11px] sm:text-xs truncate" style={{ maxWidth: isMobile ? '80px' : '150px' }}>
                   {user?.fullName || user?.email || "Kullanıcı"}
                 </span>
               </Button>
@@ -110,19 +110,19 @@ export const Header = ({ onMenuClick, sidebarOpen = true }: HeaderProps) => {
               align="end" 
               className="min-w-[200px] !max-h-fit !h-auto !overflow-visible p-1.5"
             >
-              <DropdownMenuLabel className="text-base px-2 py-1.5">
+              <DropdownMenuLabel className="text-[11px] sm:text-xs px-2 py-1.5">
                 {user?.fullName || user?.email}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => navigate("/profile")}
-                className="min-h-[44px] text-base touch-manipulation"
+                className="min-h-[44px] text-[11px] sm:text-xs touch-manipulation"
               >
                 Profilim
               </DropdownMenuItem>
               <DropdownMenuItem 
                 onClick={() => signOut()}
-                className="min-h-[44px] text-base touch-manipulation"
+                className="min-h-[44px] text-[11px] sm:text-xs touch-manipulation"
               >
                 <LogOut className="mr-2 h-5 w-5" />
                 Çıkış Yap

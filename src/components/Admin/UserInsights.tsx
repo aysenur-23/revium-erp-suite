@@ -487,7 +487,7 @@ export const UserInsights = () => {
       <Card>
         <CardContent className="pt-3">
           <div className="grid gap-2 sm:gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <Label>Kullanıcı</Label>
               <Select value={selectedUser} onValueChange={setSelectedUser}>
                 <SelectTrigger>
@@ -505,7 +505,7 @@ export const UserInsights = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <Label>Görev Durumu</Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
@@ -520,7 +520,7 @@ export const UserInsights = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <Label>Görev Araması</Label>
               <Input
                 placeholder="Görev veya proje adı"
@@ -528,7 +528,7 @@ export const UserInsights = () => {
                 onChange={(e) => setTaskSearch(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <Label>Log Araması</Label>
               <Input
                 placeholder="Log içeriğinde ara"
@@ -579,9 +579,9 @@ export const UserInsights = () => {
               <CardContent className="pt-4 pb-4 px-4 sm:pt-6 sm:pb-6 sm:px-6">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3 truncate">{item.label}</p>
-                    <div className="text-2xl sm:text-3xl xl:text-4xl font-bold mb-1 sm:mb-2">{item.value}</div>
-                    <p className="text-xs font-medium text-muted-foreground line-clamp-2">{item.sub}</p>
+                    <p className="text-[11px] sm:text-xs text-muted-foreground mb-2 sm:mb-3 truncate">{item.label}</p>
+                    <div className="text-lg sm:text-xl font-bold mb-1 sm:mb-2">{item.value}</div>
+                    <p className="text-[11px] sm:text-xs font-medium text-muted-foreground line-clamp-2">{item.sub}</p>
                   </div>
                   <div className={`p-2.5 rounded-lg ${
                     item.variant === "primary" ? "bg-blue-100 text-blue-600" :
@@ -602,9 +602,9 @@ export const UserInsights = () => {
             <CardContent className="pt-4 pb-4 px-4 sm:pt-6 sm:pb-6 sm:px-6">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3 truncate">Aktif Kullanıcı Sayısı</p>
-                  <div className="text-2xl sm:text-3xl xl:text-4xl font-bold mb-1 sm:mb-2">{users.length}</div>
-                  <p className="text-xs font-medium text-muted-foreground line-clamp-2">Sistemdeki aktif kullanıcılar</p>
+                  <p className="text-[11px] sm:text-xs text-muted-foreground mb-2 sm:mb-3 truncate">Aktif Kullanıcı Sayısı</p>
+                  <div className="text-lg sm:text-xl font-bold mb-1 sm:mb-2">{users.length}</div>
+                  <p className="text-[11px] sm:text-xs font-medium text-muted-foreground line-clamp-2">Sistemdeki aktif kullanıcılar</p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-blue-100 text-blue-600">
                   <Users className="h-5 w-5" />
@@ -616,9 +616,9 @@ export const UserInsights = () => {
             <CardContent className="pt-4 pb-4 px-4 sm:pt-6 sm:pb-6 sm:px-6">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3 truncate">Toplam Atanan Görev</p>
-                  <div className="text-2xl sm:text-3xl xl:text-4xl font-bold mb-1 sm:mb-2">{assignments.length}</div>
-                  <p className="text-xs font-medium text-muted-foreground line-clamp-2">Tüm atanan görevler</p>
+                  <p className="text-[11px] sm:text-xs text-muted-foreground mb-2 sm:mb-3 truncate">Toplam Atanan Görev</p>
+                  <div className="text-lg sm:text-xl font-bold mb-1 sm:mb-2">{assignments.length}</div>
+                  <p className="text-[11px] sm:text-xs font-medium text-muted-foreground line-clamp-2">Tüm atanan görevler</p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-emerald-100 text-emerald-600">
                   <FileText className="h-5 w-5" />
@@ -630,11 +630,11 @@ export const UserInsights = () => {
             <CardContent className="pt-4 pb-4 px-4 sm:pt-6 sm:pb-6 sm:px-6">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3 truncate">Reddedilen Görev</p>
-                  <div className="text-2xl sm:text-3xl xl:text-4xl font-bold mb-1 sm:mb-2">
+                  <p className="text-[11px] sm:text-xs text-muted-foreground mb-2 sm:mb-3 truncate">Reddedilen Görev</p>
+                  <div className="text-lg sm:text-xl font-bold mb-1 sm:mb-2">
                     {assignments.filter((assignment) => assignment.status === "rejected").length}
                   </div>
-                  <p className="text-xs font-medium text-muted-foreground line-clamp-2">Reddedilen görev sayısı</p>
+                  <p className="text-[11px] sm:text-xs font-medium text-muted-foreground line-clamp-2">Reddedilen görev sayısı</p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-amber-100 text-amber-600">
                   <XCircle className="h-5 w-5" />
@@ -646,11 +646,11 @@ export const UserInsights = () => {
             <CardContent className="pt-4 pb-4 px-4 sm:pt-6 sm:pb-6 sm:px-6">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3 truncate">Kabul Edilen Görev</p>
-                  <div className="text-2xl sm:text-3xl xl:text-4xl font-bold mb-1 sm:mb-2">
+                  <p className="text-[11px] sm:text-xs text-muted-foreground mb-2 sm:mb-3 truncate">Kabul Edilen Görev</p>
+                  <div className="text-lg sm:text-xl font-bold mb-1 sm:mb-2">
                     {assignments.filter((assignment) => assignment.status === "accepted").length}
                   </div>
-                  <p className="text-xs font-medium text-muted-foreground line-clamp-2">Kabul edilen görev sayısı</p>
+                  <p className="text-[11px] sm:text-xs font-medium text-muted-foreground line-clamp-2">Kabul edilen görev sayısı</p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-emerald-100 text-emerald-600">
                   <CheckCircle2 className="h-5 w-5" />
@@ -663,7 +663,7 @@ export const UserInsights = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between text-[13px] sm:text-[14px]">
+          <CardTitle className="flex items-center justify-between text-[14px] sm:text-[15px]">
             <div className="flex items-center gap-2">
               <UserCheck className="h-5 w-5 text-primary" />
               Kullanıcı Görev Özeti
@@ -700,7 +700,7 @@ export const UserInsights = () => {
             )}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4">
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <div className="inline-block min-w-full align-middle px-4 sm:px-0">
               <Table>
@@ -726,7 +726,7 @@ export const UserInsights = () => {
                       <TableCell className="min-w-[150px]">
                         <div className="flex flex-col min-w-0">
                           <span className="font-medium truncate">{row.name}</span>
-                          <span className="text-xs text-muted-foreground truncate">{row.email}</span>
+                          <span className="text-[11px] sm:text-xs text-muted-foreground truncate">{row.email}</span>
                         </div>
                       </TableCell>
                       <TableCell className="font-semibold whitespace-nowrap">{row.stats.total}</TableCell>
@@ -750,7 +750,7 @@ export const UserInsights = () => {
             Görev Detayları
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4">
           {filteredAssignments.length === 0 ? (
             <div className="text-center text-muted-foreground py-6">
               Filtrelere uygun görev bulunamadı.
@@ -796,13 +796,13 @@ export const UserInsights = () => {
                               {statusLabels[assignment.status] || assignment.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs sm:text-sm">
+                          <TableCell className="whitespace-nowrap text-[11px] sm:text-xs">
                             {formatDate(assignment.assignedAt?.toDate?.())}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs sm:text-sm">
+                          <TableCell className="whitespace-nowrap text-[11px] sm:text-xs">
                             {assignment.acceptedAt ? formatDate(assignment.acceptedAt.toDate()) : "-"}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs sm:text-sm">
+                          <TableCell className="whitespace-nowrap text-[11px] sm:text-xs">
                             {assignment.completedAt ? formatDate(assignment.completedAt.toDate()) : "-"}
                           </TableCell>
                         </TableRow>
@@ -832,7 +832,7 @@ export const UserInsights = () => {
             />
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4">
           {rejectionEntries.length === 0 ? (
             <div className="text-center text-muted-foreground py-6">
               Reddetme notu bulunamadı.
@@ -861,10 +861,10 @@ export const UserInsights = () => {
                           <TableCell className="min-w-[150px]">
                             <div className="truncate max-w-[150px]">{entry.taskTitle}</div>
                           </TableCell>
-                          <TableCell className="max-w-[200px] sm:max-w-2xl whitespace-pre-line text-sm">
+                          <TableCell className="max-w-[200px] sm:max-w-2xl whitespace-pre-line text-[11px] sm:text-xs">
                             <div className="break-words">{entry.rejectionReason}</div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs sm:text-sm">
+                          <TableCell className="whitespace-nowrap text-[11px] sm:text-xs">
                             {entry.assignedAt
                               ? formatDistanceToNow(entry.assignedAt.toDate(), {
                                   addSuffix: true,
@@ -915,7 +915,7 @@ export const UserInsights = () => {
             </Select>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4">
           {filteredLogs.length === 0 ? (
             <div className="text-center text-muted-foreground py-6">
               Log bulunamadı.
@@ -989,7 +989,7 @@ export const UserInsights = () => {
 
       {/* Rapor Önizleme Modal */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="w-full max-w-[80vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
+        <DialogContent className="w-full max-w-[85vw] md:max-w-[85vw] max-h-[80vh] flex flex-col p-0 overflow-hidden">
           <DialogTitle className="sr-only">Kullanıcı Raporu Önizleme</DialogTitle>
           <DialogDescription className="sr-only">Kullanıcı istatistikleri ve görev detayları</DialogDescription>
           <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b">

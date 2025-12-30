@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getDepartments, DepartmentWithStats } from "@/services/firebase/departmentService";
+import { getDepartments, DepartmentWithStats, Department } from "@/services/firebase/departmentService";
 import { subscribeToTasks, Task } from "@/services/firebase/taskService";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { DepartmentDetailModal } from "./DepartmentDetailModal";
@@ -258,12 +258,12 @@ export const DepartmentStatsTable = () => {
               >
                 <div className="flex items-center justify-between">
                   <h4 className="font-medium">{stat.name}</h4>
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-[11px] sm:text-xs text-muted-foreground">
                     {stat.completion_rate.toFixed(0)}%
                   </span>
                 </div>
                 <Progress value={stat.completion_rate} className="h-2" />
-                <div className="flex justify-between text-xs text-muted-foreground flex-wrap gap-2">
+                <div className="flex justify-between text-[11px] sm:text-xs text-muted-foreground flex-wrap gap-2">
                   <span>Üyeler: {stat.team_members}</span>
                   <span>Aktif: {stat.active_tasks}</span>
                   <span>Tamamlanan: {stat.completed_tasks}</span>

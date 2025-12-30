@@ -76,7 +76,14 @@ const getNextStatus = (currentStatus: string) => {
   if (currentIndex === -1 || currentIndex >= taskStatusWorkflow.length - 1) {
     return null;
   }
-  return taskStatusWorkflow[currentIndex + 1];
+  const nextStatus = taskStatusWorkflow[currentIndex + 1];
+  
+  // "approved" durumuna direkt geçiş yapılamaz - sadece onay süreci ile geçilebilir
+  if (nextStatus && nextStatus.value === "approved") {
+    return null;
+  }
+  
+  return nextStatus;
 };
 
 const TaskPool = () => {
@@ -407,12 +414,23 @@ const TaskPool = () => {
       const toISO = (value: Timestamp | Date | string | null | undefined) => {
         if (!value) return null;
         if (value instanceof Timestamp) return value.toDate().toISOString();
-        if (typeof value?.toDate === "function") return value.toDate().toISOString();
-        try {
-          return new Date(value).toISOString();
-        } catch {
-          return null;
+        if (value instanceof Date) return value.toISOString();
+        // String kontrolü
+        if (typeof value === "string") {
+          try {
+            return new Date(value).toISOString();
+          } catch {
+            return null;
+          }
         }
+        // Firestore Timestamp objesi kontrolü (toDate metodu varsa)
+        if (typeof value === "object" && value !== null) {
+          const objValue = value as Record<string, unknown>;
+          if ("toDate" in objValue && typeof objValue.toDate === "function") {
+            return (objValue.toDate as () => Date)().toISOString();
+          }
+        }
+        return null;
       };
 
       let labels: Array<{ name: string; color: string }> = [];
@@ -469,21 +487,40 @@ const TaskPool = () => {
         return;
       }
 
-      // Yetki kontrolü: Sadece atanan kullanıcılar ve adminler durum değiştirebilir
-      if (!isSuperAdmin && !canUpdate) {
-        // Görevin atanan kullanıcılarını kontrol et
-        const taskAssignments = await getTaskAssignments(taskId);
-        const assignedUserIds = taskAssignments.map(a => a.assignedTo);
-        const isAssigned = assignedUserIds.includes(user.id);
-        
-        if (!isAssigned) {
-          toast.error("Bu görevin durumunu değiştirme yetkiniz yok. Sadece size atanan görevlerin durumunu değiştirebilirsiniz.");
-          return;
+      // Yetki kontrolü: SADECE görev üyeleri (rejected hariç) ve görevi oluşturan durum değiştirebilir
+      // Personel, ekip lideri, yönetici - görev üyesi olduğu görevin durumunu değiştirebilir
+      const isCreator = targetTask?.createdBy === user.id;
+      
+      // Görevin atanan kullanıcılarını kontrol et (rejected hariç)
+      const taskAssignments = await getTaskAssignments(taskId);
+      const assignedUserIds = Array.isArray(taskAssignments) 
+        ? taskAssignments
+            .filter(a => a?.status !== "rejected")
+            .map(a => a?.assignedTo)
+            .filter((id): id is string => !!id) 
+        : [];
+      const isAssignedFromAssignments = assignedUserIds.includes(user.id);
+      
+      // Fallback: task.assignedUsers array'inden kontrol
+      const isInTaskAssignedUsers = Array.isArray(targetTask.assignedUsers) && targetTask.assignedUsers.some((u) => {
+        if (typeof u === 'string') {
+          return u === user.id;
         }
+        if (typeof u === 'object' && u !== null && 'id' in u) {
+          return (u as { id: string }).id === user.id;
+        }
+        return false;
+      });
+      
+      const isAssigned = isAssignedFromAssignments || isInTaskAssignedUsers;
+      
+      // Sadece görev üyesi (rejected hariç) veya oluşturan ise izin var
+      if (!isAssigned && !isCreator) {
+        toast.error("Bu görevin durumunu değiştirme yetkiniz yok. Sadece görev üyesi olduğunuz görevlerin durumunu değiştirebilirsiniz.");
+        return;
       }
 
-      const isCreator = targetTask?.createdBy === user.id;
-      const canDirectComplete = isSuperAdmin || canUpdate || isCreator;
+      const canDirectComplete = isCreator;
 
       if (normalizedStatus === "completed" && !canDirectComplete) {
         await requestTaskApproval(taskId, user.id);
@@ -607,9 +644,22 @@ const TaskPool = () => {
                                 {project.name}
                               </Badge>
                             )}
-                            {task.priority === 5 && (
-                              <Badge variant="destructive" className="text-xs">Kritik</Badge>
-                            )}
+                            {(() => {
+                              const { getPriorityOption, convertOldPriorityToNew } = require("@/utils/priority");
+                              const taskPriority = task.priority || 0;
+                              // Eski sistem (1-5) varsa yeni sisteme (0-5) çevir
+                              const newPriority = convertOldPriorityToNew(taskPriority);
+                              const option = getPriorityOption(newPriority);
+                              // Sadece yüksek öncelikli görevleri göster (3 = Yüksek, 4 = Çok Yüksek, 5 = Acil)
+                              if (newPriority >= 3) {
+                                return (
+                                  <Badge variant={newPriority >= 4 ? "destructive" : "secondary"} className="text-xs">
+                                    {option.label}
+                                  </Badge>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
                           {task.description && (
                             <p className="text-sm text-muted-foreground line-clamp-2">

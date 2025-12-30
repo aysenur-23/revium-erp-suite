@@ -137,28 +137,28 @@ export const MaterialTransactionsDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl w-[80vw] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{materialName} - İşlem Geçmişi</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-[16px] sm:text-[18px]">{materialName} - İşlem Geçmişi</DialogTitle>
+          <DialogDescription className="text-[11px] sm:text-xs">
             Bu hammadde için yapılan tüm stok hareketlerini görüntüleyin
           </DialogDescription>
         </DialogHeader>
 
         {loading ? (
-          <p className="text-center py-8 text-muted-foreground">Yükleniyor...</p>
+          <p className="text-center py-8 text-[11px] sm:text-xs text-muted-foreground">Yükleniyor...</p>
         ) : transactions.length === 0 ? (
-          <p className="text-center py-8 text-muted-foreground">Henüz işlem yapılmamış</p>
+          <p className="text-center py-8 text-[11px] sm:text-xs text-muted-foreground">Henüz işlem yapılmamış</p>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tarih</TableHead>
-                  <TableHead>İşlem Türü</TableHead>
-                  <TableHead className="text-right">Miktar</TableHead>
-                  <TableHead>Sipariş</TableHead>
-                  <TableHead>Ürün</TableHead>
-                  <TableHead>Kullanıcı</TableHead>
-                  <TableHead>Açıklama</TableHead>
+                  <TableHead className="text-[11px] sm:text-xs">Tarih</TableHead>
+                  <TableHead className="text-[11px] sm:text-xs">İşlem Türü</TableHead>
+                  <TableHead className="text-[11px] sm:text-xs text-right">Miktar</TableHead>
+                  <TableHead className="text-[11px] sm:text-xs">Sipariş</TableHead>
+                  <TableHead className="text-[11px] sm:text-xs">Ürün</TableHead>
+                  <TableHead className="text-[11px] sm:text-xs">Kullanıcı</TableHead>
+                  <TableHead className="text-[11px] sm:text-xs">Açıklama</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -168,23 +168,23 @@ export const MaterialTransactionsDialog = ({
                   
                   return (
                     <TableRow key={t.id}>
-                      <TableCell className="text-sm whitespace-nowrap">
+                      <TableCell className="text-[11px] sm:text-xs whitespace-nowrap">
                         {formatDate(t.createdAt)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={t.type === "in" ? "default" : "destructive"}>
+                        <Badge variant={t.type === "in" ? "default" : "destructive"} className="text-[10px]">
                           {t.type === "in" ? "Giriş" : "Çıkış"}
                         </Badge>
                       </TableCell>
                       <TableCell
-                        className={`text-right font-medium whitespace-nowrap ${
+                        className={`text-[11px] sm:text-xs text-right font-medium whitespace-nowrap ${
                           t.type === "in" ? "text-green-600" : "text-red-600"
                         }`}
                       >
                         {t.type === "in" ? "+" : "-"}
                         {t.quantity}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-[11px] sm:text-xs">
                         {orderInfo ? (
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{orderInfo.orderNumber}</span>
@@ -192,7 +192,7 @@ export const MaterialTransactionsDialog = ({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 w-6 p-0"
+                                className="text-[11px] sm:text-xs h-6 w-6 p-0"
                                 onClick={() => {
                                   window.open(`/production?orderId=${t.relatedOrderId}`, '_blank');
                                 }}
@@ -206,13 +206,13 @@ export const MaterialTransactionsDialog = ({
                           "-"
                         )}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-[11px] sm:text-xs">
                         {orderInfo?.productName || "-"}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-[11px] sm:text-xs">
                         {userName}
                       </TableCell>
-                      <TableCell className="text-sm max-w-xs truncate" title={t.reason}>
+                      <TableCell className="text-[11px] sm:text-xs max-w-xs truncate" title={t.reason}>
                         {t.reason || "-"}
                       </TableCell>
                     </TableRow>

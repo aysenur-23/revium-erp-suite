@@ -25,12 +25,12 @@ export const PageContainer = ({
         <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           <div className="flex-1 min-w-0">
             {title && (
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground mb-1">
+              <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground mb-1 leading-tight">
                 {title}
               </h1>
             )}
             {description && (
-              <p className="text-xs sm:text-sm text-muted-foreground">
+              <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">
                 {description}
               </p>
             )}
@@ -42,7 +42,7 @@ export const PageContainer = ({
           )}
         </div>
       )}
-      <div className="space-y-4 sm:space-y-6">
+      <div className="space-y-3 sm:space-y-4">
         {children}
       </div>
     </div>

@@ -6,11 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { createOrder, OrderItem as FirebaseOrderItem, Order as FirebaseOrder } from "@/services/firebase/orderService";
+import { createOrder, updateOrder, getOrderItems, getOrderById, OrderItem as FirebaseOrderItem, Order as FirebaseOrder } from "@/services/firebase/orderService";
 import { getProducts, createProduct } from "@/services/firebase/productService";
 import { getCustomerById, Customer as FirebaseCustomer } from "@/services/firebase/customerService";
 import { useAuth } from "@/contexts/AuthContext";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, doc, deleteDoc, addDoc, collection } from "firebase/firestore";
+import { firestore } from "@/lib/firebase";
 import { Plus, Trash2, Save, Loader2, RefreshCcw, ChevronsUpDown, Pencil, ShoppingCart, User, CreditCard, CalendarIcon, Package, Search, ArrowLeft, ArrowRight } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +39,7 @@ interface CreateOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  order?: FirebaseOrder | null; // Edit modu için mevcut sipariş
 }
 
 interface OrderItem {
@@ -46,6 +48,7 @@ interface OrderItem {
   quantity: number;
   unit_price: number;
   discount: number;
+  discountType?: "amount" | "percentage"; // İndirim tipi: tutar veya yüzde
   total: number;
   is_manual?: boolean;
   category?: string;
@@ -68,6 +71,7 @@ const PRODUCT_CATEGORIES = [
 ] as const;
 
 import { CURRENCY_OPTIONS, CURRENCY_SYMBOLS, DEFAULT_CURRENCY } from "@/utils/currency";
+import { PRIORITY_OPTIONS, getPrioritySelectOptions } from "@/utils/priority";
 
 const ORDER_STATUS_OPTIONS: { value: FirebaseOrder["status"]; label: string }[] = [
   { value: "pending", label: "Beklemede" },
@@ -83,6 +87,7 @@ const createEmptyItem = (): OrderItem => ({
   quantity: 1,
   unit_price: 0,
   discount: 0,
+  discountType: "amount", // Varsayılan olarak tutar
   total: 0,
   is_manual: false,
   category: undefined,
@@ -139,7 +144,7 @@ const ProductSelector = ({
         avoidCollisions={true}
       >
         <Command>
-          <CommandInput placeholder="Ürün ara..." className="text-sm" />
+          <CommandInput placeholder="Ürün ara..." className="text-[11px] sm:text-xs" />
           <CommandList className="!max-h-[350px] !h-auto" style={{ maxHeight: '350px', height: 'auto' }}>
             <CommandEmpty>Ürün bulunamadı. Manuel ürün eklemek için aşağıdaki seçeneği kullanın.</CommandEmpty>
             {products.length > 0 && (
@@ -157,12 +162,12 @@ const ProductSelector = ({
                     <div className="flex flex-col w-full">
                       <span className="font-medium">{product.name}</span>
                       {(product.sku || product.category) && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-[11px] sm:text-xs text-muted-foreground">
                           {product.sku || product.category}
                         </span>
                       )}
                       {product.price && (
-                        <span className="text-xs text-primary font-medium mt-0.5">
+                        <span className="text-[11px] sm:text-xs text-primary font-medium mt-0.5">
                           {CURRENCY_SYMBOLS["TRY"] || "₺"}{product.price.toFixed(2)}
                         </span>
                       )}
@@ -191,7 +196,7 @@ const ProductSelector = ({
   );
 };
 
-export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrderDialogProps) => {
+export const CreateOrderDialog = ({ open, onOpenChange, onSuccess, order }: CreateOrderDialogProps) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState<CatalogProduct[]>([]);
@@ -215,6 +220,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
     status: "pending" as FirebaseOrder["status"],
     tax_rate: 20,
     deductMaterials: false, // Hammadde düşürme varsayılan kapalı
+    priority: 0, // Öncelik: 0-5 arası (0 = düşük, 5 = çok yüksek)
   });
 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([createEmptyItem()]);
@@ -253,6 +259,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
       status: "pending",
       tax_rate: 20,
       deductMaterials: false,
+      priority: 0,
     });
     setOrderItems([createEmptyItem()]);
     setOrderNumberTouched(false);
@@ -264,35 +271,137 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
   const fetchProducts = useCallback(async () => {
     try {
       const fetched = await getProducts();
-      setProducts(
-        fetched.map((product: { id: string; name: string; sku?: string; price?: number; category?: string }) => ({
-          id: product.id,
-          name: product.name,
-          sku: product.sku,
-          price: product.price,
-          category: product.category,
-        }))
-      );
+      const mappedProducts = fetched.map((product: { id: string; name: string; sku?: string; price?: number; unitPrice?: number; category?: string }) => ({
+        id: product.id,
+        name: product.name,
+        sku: product.sku,
+        price: product.price || product.unitPrice || null,
+        category: product.category,
+      }));
+      setProducts(mappedProducts);
+      
+      if (import.meta.env.DEV && mappedProducts.length === 0) {
+        console.warn("⚠️ Ürün listesi boş. Firestore'da ürün var mı kontrol edin.");
+      }
     } catch (error: unknown) {
       if (import.meta.env.DEV) {
         console.error("Ürünler yüklenemedi:", error);
       }
+      // Hata durumunda boş array set et, böylece kullanıcı manuel ürün ekleyebilir
+      setProducts([]);
       toast.error("Ürünler yüklenirken hata oluştu: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     }
   }, []);
 
+  // Edit modu: Mevcut sipariş bilgilerini yükle
   useEffect(() => {
     if (!open) return;
-    fetchProducts();
-    assignOrderNumber();
+    
+    if (order) {
+      // Edit modu - mevcut sipariş bilgilerini yükle
+      const loadOrderData = async () => {
+        try {
+          // Order bilgilerini form'a yükle
+          const orderDate = order.order_date || order.orderDate;
+          const deliveryDate = order.delivery_date || order.deliveryDate;
+          const receivedDate = order.received_date || order.receivedDate;
+          
+          setOrderData({
+            customer_id: order.customer_id || order.customerId || "",
+            customer_name: order.customer_name || order.customerName || "",
+            order_date: orderDate instanceof Date 
+              ? format(orderDate, "yyyy-MM-dd")
+              : orderDate instanceof Timestamp
+              ? format(orderDate.toDate(), "yyyy-MM-dd")
+              : typeof orderDate === "string"
+              ? orderDate
+              : "",
+            delivery_date: deliveryDate instanceof Date
+              ? format(deliveryDate, "yyyy-MM-dd")
+              : deliveryDate instanceof Timestamp
+              ? format(deliveryDate.toDate(), "yyyy-MM-dd")
+              : typeof deliveryDate === "string"
+              ? deliveryDate
+              : "",
+            received_date: receivedDate instanceof Date
+              ? format(receivedDate, "yyyy-MM-dd")
+              : receivedDate instanceof Timestamp
+              ? format(receivedDate.toDate(), "yyyy-MM-dd")
+              : typeof receivedDate === "string"
+              ? receivedDate
+              : "",
+            notes: order.notes || "",
+            order_number: order.order_number || order.orderNumber || "",
+            currency: order.currency || "TRY",
+            status: order.status || "pending",
+            tax_rate: order.tax_rate || order.taxRate || 20,
+            deductMaterials: order.deductMaterials || false,
+            priority: order.priority ?? 0,
+          });
+          
+          // Order items'ı yükle
+          const items = await getOrderItems(order.id);
+          if (items.length > 0) {
+            setOrderItems(
+              items.map((item) => ({
+                product_id: item.product_id || item.productId || null,
+                product_name: item.product_name || item.productName || "",
+                quantity: item.quantity || 0,
+                unit_price: item.unit_price || item.unitPrice || 0,
+                discount: item.discount || 0,
+                discountType: item.discountType || "amount",
+                total: item.total || 0,
+                is_manual: !item.product_id && !item.productId,
+                category: item.category || undefined,
+              }))
+            );
+          } else {
+            setOrderItems([createEmptyItem()]);
+          }
+          
+          // Müşteri detaylarını yükle
+          if (order.customer_id || order.customerId) {
+            try {
+              setCustomerDetailsLoading(true);
+              const customer = await getCustomerById(order.customer_id || order.customerId || "");
+              setCustomerDetails(customer);
+            } catch (error) {
+              // Müşteri yüklenemezse sessizce devam et
+            } finally {
+              setCustomerDetailsLoading(false);
+            }
+          }
+        } catch (error) {
+          console.error("Error loading order data:", error);
+          toast.error("Sipariş bilgileri yüklenirken hata oluştu");
+        }
+      };
+      
+      loadOrderData();
+    } else {
+      // Create modu - formu sıfırla
+      resetForm();
+      assignOrderNumber();
+    }
+    
+    // Dialog açıldığında ürünleri hemen yükle
+    fetchProducts().catch((error) => {
+      if (import.meta.env.DEV) {
+        console.error("Initial product fetch failed:", error);
+      }
+    });
     
     // Dialog açıkken her 30 saniyede bir ürün listesini güncelle
     const interval = setInterval(() => {
-      fetchProducts();
+      fetchProducts().catch((error) => {
+        if (import.meta.env.DEV) {
+          console.error("Periodic product fetch failed:", error);
+        }
+      });
     }, 30000); // 30 saniye
     
     return () => clearInterval(interval);
-  }, [open, fetchProducts, assignOrderNumber]);
+  }, [open, order, fetchProducts, assignOrderNumber, resetForm]);
 
   const fetchCustomerDetails = useCallback(async (customerId: string) => {
     setCustomerDetailsLoading(true);
@@ -333,7 +442,16 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
 
   const subtotal = useMemo(() => validItems.reduce((sum, item) => sum + item.total, 0), [validItems]);
   const discountTotal = useMemo(
-    () => validItems.reduce((sum, item) => sum + (item.discount || 0), 0),
+    () => validItems.reduce((sum, item) => {
+      const discount = item.discount || 0;
+      const discountType = item.discountType || "amount";
+      if (discountType === "percentage") {
+        const itemSubtotal = (item.quantity || 0) * (item.unit_price || 0);
+        return sum + (itemSubtotal * (discount / 100));
+      } else {
+        return sum + discount;
+      }
+    }, 0),
     [validItems]
   );
   const taxRate = Number(orderData.tax_rate) || 0;
@@ -398,6 +516,8 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
       } else if (field === "unit_price" || field === "discount") {
         const numericValue = Number(value);
         current[field] = Number.isFinite(numericValue) ? numericValue : 0;
+      } else if (field === "discountType") {
+        current.discountType = value as "amount" | "percentage";
       } else {
         (current as Record<string, unknown>)[field] = value;
       }
@@ -405,7 +525,18 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
       const quantity = current.quantity || 0;
       const unitPrice = current.unit_price || 0;
       const discount = current.discount || 0;
-      current.total = Math.max(quantity * unitPrice - discount, 0);
+      const discountType = current.discountType || "amount";
+      
+      // İndirim hesaplama: yüzde ise birim fiyat * miktar * (yüzde / 100), tutar ise direkt tutar
+      let calculatedDiscount = 0;
+      if (discountType === "percentage") {
+        const subtotal = quantity * unitPrice;
+        calculatedDiscount = subtotal * (discount / 100);
+      } else {
+        calculatedDiscount = discount;
+      }
+      
+      current.total = Math.max(quantity * unitPrice - calculatedDiscount, 0);
 
       updated[index] = current;
       return updated;
@@ -472,11 +603,19 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
     }
   };
 
-  const handleCustomerChange = (customerId: string, customerName: string) => {
-    setOrderData((prev) => ({ ...prev, customer_id: customerId, customer_name: customerName }));
+  const handleCustomerChange = useCallback((customerId: string, customerName: string) => {
+    setOrderData((prev) => {
+      // Sipariş numarasını koru - sadece müşteri bilgilerini güncelle
+      return {
+        ...prev,
+        customer_id: customerId,
+        customer_name: customerName,
+        // order_number'ı koru - değiştirme
+      };
+    });
     setCustomerDetails(null);
     setCustomerDetailsError(null);
-  };
+  }, []);
 
   const handleCustomerUpdate = () => {
     if (orderData.customer_id) {
@@ -534,54 +673,131 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
         unitPrice: item.unit_price || 0,
         unit_price: item.unit_price || 0,
         discount: item.discount || 0,
+        discountType: item.discountType || "amount",
         total: item.total,
         category: item.category || null,
       }));
 
-      await createOrder(
-        {
-          orderNumber: orderData.order_number,
-          order_number: orderData.order_number,
-          customerId: orderData.customer_id,
-          customer_id: orderData.customer_id,
-          customerName: orderData.customer_name || customerDetails?.name || null,
-          customer_name: orderData.customer_name || customerDetails?.name || null,
-          customerCompany: customerDetails?.company || null,
-          customer_company: customerDetails?.company || null,
-          customerEmail: customerDetails?.email || null,
-          customer_email: customerDetails?.email || null,
-          customerPhone: customerDetails?.phone || null,
-          customer_phone: customerDetails?.phone || null,
-          status: selectedStatus,
-          subtotal,
-          discountTotal,
-          taxAmount,
-          totalAmount: grandTotal,
-          total_amount: grandTotal,
-          itemsCount: lineItemCount,
-          items_count: lineItemCount,
-          totalQuantity,
-          total_quantity: totalQuantity,
-          currency: orderData.currency,
-          taxRate,
-          tax_rate: taxRate,
-          orderDate: orderDateTimestamp,
-          order_date: orderData.order_date || new Date().toISOString().split("T")[0],
-          deliveryDate: deliveryTimestamp,
-          delivery_date: orderData.delivery_date || null,
-          receivedDate: receivedTimestamp,
-          received_date: orderData.received_date || null,
-          notes: orderData.notes || null,
-          createdBy: user.id,
-          created_by: user.id,
-          deductMaterials: orderData.deductMaterials, // Hammadde düşürme seçeneği
-        },
-        itemsPayload
-      );
-
-      toast.success("Sipariş başarıyla oluşturuldu");
+      if (order) {
+        // Edit modu - mevcut siparişi güncelle
+        await updateOrder(
+          order.id,
+          {
+            orderNumber: orderData.order_number,
+            order_number: orderData.order_number,
+            customerId: orderData.customer_id,
+            customer_id: orderData.customer_id,
+            customerName: orderData.customer_name || customerDetails?.name || null,
+            customer_name: orderData.customer_name || customerDetails?.name || null,
+            customerCompany: customerDetails?.company || null,
+            customer_company: customerDetails?.company || null,
+            customerEmail: customerDetails?.email || null,
+            customer_email: customerDetails?.email || null,
+            customerPhone: customerDetails?.phone || null,
+            customer_phone: customerDetails?.phone || null,
+            status: selectedStatus,
+            subtotal,
+            discountTotal,
+            taxAmount,
+            totalAmount: grandTotal,
+            total_amount: grandTotal,
+            itemsCount: lineItemCount,
+            items_count: lineItemCount,
+            totalQuantity,
+            total_quantity: totalQuantity,
+            currency: orderData.currency,
+            taxRate,
+            tax_rate: taxRate,
+            orderDate: orderDateTimestamp,
+            order_date: orderData.order_date || new Date().toISOString().split("T")[0],
+            deliveryDate: deliveryTimestamp,
+            delivery_date: orderData.delivery_date || null,
+            receivedDate: receivedTimestamp,
+            received_date: orderData.received_date || null,
+            notes: orderData.notes || null,
+            deductMaterials: orderData.deductMaterials, // Hammadde düşürme seçeneği
+            priority: orderData.priority ?? 0,
+          },
+          user.id,
+          true // skipStatusValidation - admin için
+        );
+        
+        // Order items'ı güncelle
+        const existingItems = await getOrderItems(order.id);
+        
+        // Mevcut items'ları sil
+        for (const existingItem of existingItems) {
+          await deleteDoc(doc(firestore, "orders", order.id, "items", existingItem.id));
+        }
+        
+        // Yeni items'ları ekle
+        const itemsCollection = collection(firestore, "orders", order.id, "items");
+        for (const item of itemsPayload) {
+          await addDoc(itemsCollection, {
+            productId: item.product_id || null,
+            product_id: item.product_id || null,
+            productName: item.product_name || null,
+            product_name: item.product_name || null,
+            quantity: item.quantity,
+            unitPrice: item.unit_price || 0,
+            unit_price: item.unit_price || 0,
+            discount: item.discount || 0,
+            discountType: item.discountType || "amount",
+            total: item.total,
+            category: item.category || null,
+          });
+        }
+        
+        toast.success("Sipariş başarıyla güncellendi");
+      } else {
+        // Create modu - yeni sipariş oluştur
+        await createOrder(
+          {
+            orderNumber: orderData.order_number,
+            order_number: orderData.order_number,
+            customerId: orderData.customer_id,
+            customer_id: orderData.customer_id,
+            customerName: orderData.customer_name || customerDetails?.name || null,
+            customer_name: orderData.customer_name || customerDetails?.name || null,
+            customerCompany: customerDetails?.company || null,
+            customer_company: customerDetails?.company || null,
+            customerEmail: customerDetails?.email || null,
+            customer_email: customerDetails?.email || null,
+            customerPhone: customerDetails?.phone || null,
+            customer_phone: customerDetails?.phone || null,
+            status: selectedStatus,
+            subtotal,
+            discountTotal,
+            taxAmount,
+            totalAmount: grandTotal,
+            total_amount: grandTotal,
+            itemsCount: lineItemCount,
+            items_count: lineItemCount,
+            totalQuantity,
+            total_quantity: totalQuantity,
+            currency: orderData.currency,
+            taxRate,
+            tax_rate: taxRate,
+            orderDate: orderDateTimestamp,
+            order_date: orderData.order_date || new Date().toISOString().split("T")[0],
+            deliveryDate: deliveryTimestamp,
+            delivery_date: orderData.delivery_date || null,
+            receivedDate: receivedTimestamp,
+            received_date: orderData.received_date || null,
+            notes: orderData.notes || null,
+            createdBy: user.id,
+            created_by: user.id,
+            deductMaterials: orderData.deductMaterials, // Hammadde düşürme seçeneği
+            priority: orderData.priority ?? 0,
+          },
+          itemsPayload
+        );
+        
+        toast.success("Sipariş başarıyla oluşturuldu");
+        resetForm();
+      }
+      
       onSuccess();
-      resetForm();
       onOpenChange(false);
     } catch (error: unknown) {
       if (import.meta.env.DEV) {
@@ -596,7 +812,15 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden overflow-x-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+          {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+          <DialogTitle className="sr-only">
+            {order ? "Sipariş Düzenle" : "Yeni Satış Siparişi"}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {order ? "Sipariş bilgilerini düzenleyin" : "Yeni satış siparişi oluşturun"}
+          </DialogDescription>
+          
           <div className="flex flex-col h-full min-h-0">
             <DialogHeader className="p-3 sm:p-4 pr-12 sm:pr-14 md:pr-16 border-b bg-white flex-shrink-0 relative">
               <div className="flex items-center justify-between gap-3">
@@ -604,26 +828,23 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                   <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                     <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <DialogTitle className="text-[18px] sm:text-[20px] font-semibold text-foreground truncate">
-                    Yeni Satış Siparişi
-                  </DialogTitle>
-                  <DialogDescription className="sr-only">
-                    Yeni satış siparişi oluşturun
-                  </DialogDescription>
+                  <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground truncate">
+                    {order ? "Sipariş Düzenle" : "Yeni Satış Siparişi"}
+                  </h2>
                 </div>
-                <Badge variant="outline" className="text-xs px-2 sm:px-3 py-1 flex-shrink-0">
+                <Badge variant="outline" className="text-[10px] px-2 sm:px-3 py-1 flex-shrink-0">
                   Adım {step}/3
                 </Badge>
               </div>
             </DialogHeader>
 
-            <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-6 min-h-0">
-              <div className="max-w-full mx-auto h-full overflow-y-auto">
+            <div className="flex-1 overflow-hidden overflow-x-hidden bg-gray-50/50 p-3 sm:p-6 min-h-0">
+              <div className="max-w-full mx-auto h-full overflow-y-auto overflow-x-hidden">
                 {/* Step 1: Customer & Order Info */}
                 {step === 1 && (
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 h-full">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 h-full min-w-0 overflow-x-hidden">
                     {/* Left Column: Order Details */}
-                    <div className="col-span-1 lg:col-span-8 space-y-4 sm:space-y-6 flex flex-col">
+                    <div className="col-span-1 lg:col-span-8 space-y-3 sm:space-y-4 flex flex-col">
                       <Card className="rounded-xl shadow-lg border bg-white flex-1 flex flex-col min-h-0">
                         <CardHeader className="p-4 sm:p-6 border-b flex-shrink-0">
                           <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
@@ -631,10 +852,10 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                             Sipariş Bilgileri
                           </CardTitle>
                         </CardHeader>
-                        <CardContent className="p-2 space-y-2 flex-1 overflow-y-auto">
+                        <CardContent className="p-3 sm:p-4 space-y-1.5 sm:space-y-2 flex-1 overflow-y-auto overflow-x-hidden">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium" showRequired>
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <Label className="text-[11px] sm:text-xs font-medium" showRequired>
                                 Sipariş Numarası
                               </Label>
                               <div className="flex gap-2">
@@ -646,7 +867,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                                   }}
                                   placeholder="ORD-20240101-0001"
                                   className={cn(
-                                    "h-10 transition-all",
+                                    "h-10 transition-all text-[11px] sm:text-xs",
                                     !orderData.order_number && orderNumberTouched && "border-destructive"
                                   )}
                                   required
@@ -657,20 +878,20 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                                   size="icon"
                                   onClick={handleRegenerateOrderNumber}
                                   title="Numarayı yenile"
-                                  className="h-10 w-10 hover:bg-primary/5 transition-colors"
-                                >
-                                  <RefreshCcw className="h-4 w-4" />
-                                </Button>
+                                className="h-10 w-10 hover:bg-primary/5 transition-colors min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs"
+                              >
+                                <RefreshCcw className="h-4 w-4" />
+                              </Button>
                               </div>
                               {!orderData.order_number && orderNumberTouched && (
-                                <p className="text-xs text-destructive">
+                                <p className="text-[11px] sm:text-xs text-destructive">
                                   Sipariş numarası gereklidir
                                 </p>
                               )}
                             </div>
 
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium" showRequired>
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <Label className="text-[11px] sm:text-xs font-medium" showRequired>
                                 Müşteri
                               </Label>
                               <CustomerCombobox
@@ -679,7 +900,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                                 placeholder="Müşteri seçin veya ekleyin"
                               />
                               {!orderData.customer_id && (
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-[11px] sm:text-xs text-muted-foreground">
                                   Lütfen siparişi ilişkilendireceğiniz müşteriyi seçin
                                 </p>
                               )}
@@ -687,8 +908,8 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <Label className="text-[11px] sm:text-xs font-medium">
                                 Sipariş Edilen Tarih
                               </Label>
                               <Popover>
@@ -696,7 +917,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                                   <Button
                                     variant="outline"
                                     className={cn(
-                                      "w-full justify-start text-left font-normal h-10 transition-all",
+                                      "w-full justify-start text-left font-normal h-10 transition-all text-[11px] sm:text-xs min-h-[36px] sm:min-h-8",
                                       !orderData.order_date && "text-muted-foreground"
                                     )}
                                   >
@@ -723,8 +944,8 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                                 </PopoverContent>
                               </Popover>
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <Label className="text-[11px] sm:text-xs font-medium">
                                 Teslimat Tarihi
                               </Label>
                               <Popover>
@@ -762,8 +983,8 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                             </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <Label className="text-[11px] sm:text-xs font-medium">
                                 Teslim Alınan Tarih
                               </Label>
                               <Popover>
@@ -798,15 +1019,15 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                                 </PopoverContent>
                               </Popover>
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <Label className="text-[11px] sm:text-xs font-medium">
                                 Para Birimi
                               </Label>
                               <Select
                                 value={orderData.currency}
                                 onValueChange={(value) => setOrderData((prev) => ({ ...prev, currency: value }))}
                               >
-                                <SelectTrigger className="h-10">
+                                <SelectTrigger className="h-10 text-[11px] sm:text-xs">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -820,8 +1041,31 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                             </div>
                           </div>
 
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <Label className="text-[11px] sm:text-xs font-medium">
+                                Öncelik
+                              </Label>
+                              <Select
+                                value={orderData.priority?.toString() || "0"}
+                                onValueChange={(value) => setOrderData((prev) => ({ ...prev, priority: parseInt(value) || 0 }))}
+                              >
+                                <SelectTrigger className="h-10 text-[11px] sm:text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {PRIORITY_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value.toString()}>
+                                      {option.label} ({option.value})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5 sm:space-y-2">
+                            <Label className="text-[11px] sm:text-xs font-medium">
                               Notlar
                             </Label>
                             <Textarea
@@ -829,7 +1073,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                               onChange={(e) => setOrderData((prev) => ({ ...prev, notes: e.target.value }))}
                               rows={3}
                               placeholder="Sipariş ile ilgili notlarınızı buraya yazabilirsiniz..."
-                              className="resize-none transition-all"
+                              className="text-[11px] sm:text-xs resize-none transition-all"
                             />
                           </div>
                         </CardContent>
@@ -847,7 +1091,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="gap-2 h-8 hover:bg-primary/5 transition-colors"
+                                className="gap-2 h-8 hover:bg-primary/5 transition-colors min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs"
                                 onClick={() => setCustomerDetailModalOpen(true)}
                               >
                                 <Pencil className="h-3 w-3" />
@@ -857,37 +1101,37 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                           </CardHeader>
                           <CardContent className="p-6">
                             {customerDetailsLoading ? (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
+                              <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground py-8 justify-center">
                                 <Loader2 className="h-4 w-4 animate-spin" />
                                 Müşteri bilgileri yükleniyor...
                               </div>
                             ) : customerDetails ? (
-                              <div className="grid gap-1.5 sm:gap-2 text-sm sm:grid-cols-2">
+                              <div className="grid gap-1.5 sm:gap-2 text-[11px] sm:text-xs sm:grid-cols-2">
                                 <div>
-                                  <p className="text-xs text-muted-foreground mb-1">Müşteri</p>
+                                  <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Müşteri</p>
                                   <p className="font-medium">{customerDetails.name}</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-muted-foreground mb-1">Şirket</p>
+                                  <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Şirket</p>
                                   <p className="font-medium">{customerDetails.company || "—"}</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-muted-foreground mb-1">E-posta</p>
+                                  <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">E-posta</p>
                                   <p className="font-medium">{customerDetails.email || "—"}</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-muted-foreground mb-1">Telefon</p>
+                                  <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Telefon</p>
                                   <p className="font-medium">{customerDetails.phone || "—"}</p>
                                 </div>
                                 {customerDetails.address && (
                                   <div className="md:col-span-2">
-                                    <p className="text-xs text-muted-foreground mb-1">Adres</p>
+                                    <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Adres</p>
                                     <p className="font-medium">{customerDetails.address}</p>
                                   </div>
                                 )}
                               </div>
                             ) : customerDetailsError ? (
-                              <p className="text-sm text-destructive py-4">{customerDetailsError}</p>
+                              <p className="text-[11px] sm:text-xs text-destructive py-4">{customerDetailsError}</p>
                             ) : null}
                           </CardContent>
                         </Card>
@@ -904,28 +1148,28 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                               Özet
                             </CardTitle>
                           </CardHeader>
-                          <CardContent className="p-6 space-y-4 flex-1 overflow-y-auto">
+                          <CardContent className="p-3 sm:p-4 space-y-3 sm:space-y-4 flex-1 overflow-y-auto overflow-x-hidden">
                             <div className="space-y-3">
-                              <div className="flex justify-between text-sm">
+                              <div className="flex justify-between text-[11px] sm:text-xs">
                                 <span className="text-muted-foreground">Ara Toplam:</span>
                                 <span className="font-medium">{currencySymbol}{subtotal.toFixed(2)}</span>
                               </div>
-                              <div className="flex justify-between text-sm">
+                              <div className="flex justify-between text-[11px] sm:text-xs">
                                 <span className="text-muted-foreground">KDV ({taxRate}%):</span>
                                 <span className="font-medium">{currencySymbol}{taxAmount.toFixed(2)}</span>
                               </div>
                               <Separator />
                               <div className="flex justify-between pt-1">
                                 <span className="font-semibold">Genel Toplam:</span>
-                                <span className="font-bold text-lg text-primary">{currencySymbol}{grandTotal.toFixed(2)}</span>
+                                <span className="font-bold text-[11px] sm:text-xs text-primary">{currencySymbol}{grandTotal.toFixed(2)}</span>
                               </div>
                             </div>
-                            <div className="pt-3 border-t space-y-2">
-                              <div className="flex justify-between text-xs text-muted-foreground">
+                            <div className="pt-3 border-t space-y-1.5 sm:space-y-2">
+                              <div className="flex justify-between text-[11px] sm:text-xs text-muted-foreground">
                                 <span>Ürün Sayısı:</span>
                                 <span>{lineItemCount}</span>
                               </div>
-                              <div className="flex justify-between text-xs text-muted-foreground">
+                              <div className="flex justify-between text-[11px] sm:text-xs text-muted-foreground">
                                 <span>Toplam Miktar:</span>
                                 <span>{totalQuantity} adet</span>
                               </div>
@@ -939,22 +1183,22 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
 
                 {/* Step 2: Products */}
                 {step === 2 && (
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 h-full">
-                    <div className="col-span-1 lg:col-span-8 space-y-4 sm:space-y-6 flex flex-col">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 h-full min-w-0 overflow-x-hidden">
+                    <div className="col-span-1 lg:col-span-8 space-y-3 sm:space-y-4 flex flex-col">
                       <Card className="rounded-xl shadow-lg border bg-white flex-1 flex flex-col min-h-0">
                         <CardHeader className="p-4 sm:p-6 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 flex-shrink-0">
                           <CardTitle className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2">
                             <ShoppingCart className="h-5 w-5 text-primary" />
                             Ürünler
                           </CardTitle>
-                          <Button variant="outline" onClick={handleAddItem} size="sm" className="gap-2 h-10 hover:bg-primary/5 transition-colors">
+                          <Button variant="outline" onClick={handleAddItem} size="sm" className="gap-2 h-10 hover:bg-primary/5 transition-colors min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs">
                             <Plus className="h-4 w-4" />
                             Ürün Ekle
                           </Button>
                         </CardHeader>
-                        <CardContent className="p-6 flex-1 overflow-hidden">
-                          <ScrollArea className="h-full min-h-[400px] sm:min-h-[500px] pr-4">
-                            <div className="space-y-4">
+                        <CardContent className="p-6 flex-1 overflow-hidden overflow-x-hidden">
+                          <ScrollArea className="h-full min-h-[400px] sm:min-h-[500px] pr-4 overflow-x-hidden">
+                            <div className="space-y-3 sm:space-y-4">
                 {orderItems.map((item, index) => (
                   <div
                     key={index}
@@ -971,13 +1215,13 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                           {index + 1}
                         </div>
                         {item.is_manual && (
-                          <Badge variant="outline" className="border-primary/50 text-primary bg-primary/10 text-xs">
+                          <Badge variant="outline" className="border-primary/50 text-primary bg-primary/10 text-[10px]">
                             <Plus className="h-3 w-3 mr-1" />
                             Manuel Ürün
                           </Badge>
                         )}
                         {!item.is_manual && item.product_id && (
-                          <Badge variant="outline" className="border-green-500/50 text-green-700 bg-green-50 text-xs">
+                          <Badge variant="outline" className="border-green-500/50 text-green-700 bg-green-50 text-[10px]">
                             <Package className="h-3 w-3 mr-1" />
                             Kayıtlı Ürün
                           </Badge>
@@ -989,7 +1233,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                           variant="ghost"
                           size="icon"
                           onClick={() => handleRemoveItem(index)}
-                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 transition-colors min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs"
                           title="Ürünü kaldır"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -997,19 +1241,19 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                       )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5 sm:gap-2">
-                      <div className="col-span-1 sm:col-span-5 space-y-2">
-                        <Label className="text-sm font-medium" showRequired>
+                      <div className="col-span-1 sm:col-span-5 space-y-1.5 sm:space-y-2">
+                        <Label className="text-[11px] sm:text-xs font-medium" showRequired>
                           Ürün/Hizmet
                         </Label>
                         {item.is_manual ? (
-                          <div className="space-y-2">
+                          <div className="space-y-1.5 sm:space-y-2">
                             <div className="flex gap-2">
                               <Input
                                 placeholder="Ürün/Hizmet adı girin"
                                 value={item.product_name}
                                 onChange={(e) => updateItem(index, "product_name", e.target.value)}
                                 required
-                                className="flex-1 h-10 transition-all"
+                                className="flex-1 h-10 transition-all text-[11px] sm:text-xs"
                               />
                               <Button
                                 type="button"
@@ -1019,7 +1263,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                                   updateItem(index, "product_id", null);
                                   updateItem(index, "product_name", "");
                                 }}
-                                className="h-10 w-10 hover:bg-primary/5 transition-colors"
+                                className="h-10 w-10 hover:bg-primary/5 transition-colors min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs"
                               >
                                 <RefreshCcw className="h-4 w-4" />
                               </Button>
@@ -1031,7 +1275,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                                 size="sm"
                                 onClick={() => handleSaveManualProduct(index)}
                                 disabled={savingProduct[index] || !item.product_name.trim() || !item.unit_price || item.unit_price <= 0}
-                                className="w-full text-xs h-8 hover:bg-primary/10 transition-colors"
+                                className="w-full text-[11px] sm:text-xs h-8 hover:bg-primary/10 transition-colors"
                               >
                                 {savingProduct[index] ? (
                                   <>
@@ -1059,12 +1303,12 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                       </div>
 
                       <div className="col-span-1 sm:col-span-2 space-y-2">
-                        <Label className="text-sm font-medium">Kategori</Label>
+                        <Label className="text-[11px] sm:text-xs font-medium">Kategori</Label>
                         <Select
                           value={item.category || "none"}
                           onValueChange={(value) => updateItem(index, "category", value === "none" ? undefined : value)}
                         >
-                          <SelectTrigger className="h-10 transition-all">
+                          <SelectTrigger className="h-10 transition-all text-[11px] sm:text-xs">
                             <SelectValue placeholder="Kategori" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1079,7 +1323,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                       </div>
 
                       <div className="col-span-1 sm:col-span-1 space-y-2">
-                        <Label className="text-sm font-medium" showRequired>Miktar</Label>
+                        <Label className="text-[11px] sm:text-xs font-medium" showRequired>Miktar</Label>
                         <Input
                           type="number"
                           min="1"
@@ -1088,12 +1332,12 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                           value={item.quantity || ""}
                           onChange={(e) => updateItem(index, "quantity", parseInt(e.target.value) || 0)}
                           required
-                          className="h-10 transition-all"
+                          className="h-10 transition-all text-[11px] sm:text-xs"
                         />
                       </div>
 
                       <div className="col-span-1 sm:col-span-2 space-y-2">
-                        <Label className="text-sm font-medium" showRequired>Birim Fiyat</Label>
+                        <Label className="text-[11px] sm:text-xs font-medium" showRequired>Birim Fiyat</Label>
                         <Input
                           type="number"
                           step="0.01"
@@ -1102,35 +1346,60 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                           value={item.unit_price || ""}
                           onChange={(e) => updateItem(index, "unit_price", parseFloat(e.target.value) || 0)}
                           required
-                          className="h-10 transition-all"
+                          className="h-10 transition-all text-[11px] sm:text-xs"
                         />
                       </div>
 
                       <div className="col-span-1 sm:col-span-2 space-y-2">
-                        <Label className="text-sm font-medium">İndirim</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={item.discount || ""}
-                          onChange={(e) => updateItem(index, "discount", parseFloat(e.target.value) || 0)}
-                          className="h-10 transition-all"
-                        />
+                        <Label className="text-[11px] sm:text-xs font-medium">İndirim</Label>
+                        <div className="flex gap-2">
+                          <Select
+                            value={item.discountType || "amount"}
+                            onValueChange={(value) => updateItem(index, "discountType", value)}
+                          >
+                            <SelectTrigger className="w-[100px] sm:w-[120px] h-10 text-[11px] sm:text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="amount">Tutar</SelectItem>
+                              <SelectItem value="percentage">Yüzde (%)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            step={item.discountType === "percentage" ? "0.01" : "0.01"}
+                            min="0"
+                            max={item.discountType === "percentage" ? "100" : undefined}
+                            placeholder={item.discountType === "percentage" ? "0.00" : "0.00"}
+                            value={item.discount || ""}
+                            onChange={(e) => updateItem(index, "discount", parseFloat(e.target.value) || 0)}
+                            className="flex-1 h-10 transition-all text-[11px] sm:text-xs"
+                          />
+                          {item.discountType === "percentage" && (
+                            <span className="flex items-center text-[11px] sm:text-xs text-muted-foreground px-2">
+                              %
+                            </span>
+                          )}
+                        </div>
+                        {item.discountType === "percentage" && item.discount > 0 && item.quantity > 0 && item.unit_price > 0 && (
+                          <p className="text-[10px] text-muted-foreground">
+                            İndirim tutarı: {currencySymbol}{((item.quantity * item.unit_price) * (item.discount / 100)).toFixed(2)}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="mt-4 pt-4 border-t flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {(!item.product_id && !item.is_manual) && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <p className="text-[11px] sm:text-xs text-muted-foreground flex items-center gap-1">
                             <Package className="h-3 w-3" />
                             Lütfen bir ürün seçin veya manuel ürün ekleyin
                           </p>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Toplam:</span>
-                        <span className="text-lg font-bold text-primary">
+                        <span className="text-[11px] sm:text-xs text-muted-foreground">Toplam:</span>
+                        <span className="text-[11px] sm:text-xs font-bold text-primary">
                           {currencySymbol}{(item.total || 0).toFixed(2)}
                         </span>
                       </div>
@@ -1153,28 +1422,34 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                               Özet
                             </CardTitle>
                           </CardHeader>
-                          <CardContent className="p-6 space-y-4 flex-1 overflow-y-auto">
+                          <CardContent className="p-3 sm:p-4 space-y-3 sm:space-y-4 flex-1 overflow-y-auto overflow-x-hidden">
                             <div className="space-y-3">
-                              <div className="flex justify-between text-sm">
+                              <div className="flex justify-between text-[11px] sm:text-xs">
                                 <span className="text-muted-foreground">Ara Toplam:</span>
-                                <span className="font-medium">{currencySymbol}{subtotal.toFixed(2)}</span>
+                                <span className="font-medium">{currencySymbol}{validItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_price || 0)), 0).toFixed(2)}</span>
                               </div>
-                              <div className="flex justify-between text-sm">
+                              {discountTotal > 0 && (
+                                <div className="flex justify-between text-[11px] sm:text-xs text-red-600">
+                                  <span className="text-muted-foreground">İndirim:</span>
+                                  <span className="font-medium">-{currencySymbol}{discountTotal.toFixed(2)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between text-[11px] sm:text-xs">
                                 <span className="text-muted-foreground">KDV ({taxRate}%):</span>
                                 <span className="font-medium">{currencySymbol}{taxAmount.toFixed(2)}</span>
                               </div>
                               <Separator />
                               <div className="flex justify-between pt-1">
                                 <span className="font-semibold">Genel Toplam:</span>
-                                <span className="font-bold text-lg text-primary">{currencySymbol}{grandTotal.toFixed(2)}</span>
+                                <span className="font-bold text-[11px] sm:text-xs text-primary">{currencySymbol}{grandTotal.toFixed(2)}</span>
                               </div>
                             </div>
-                            <div className="pt-3 border-t space-y-2">
-                              <div className="flex justify-between text-xs text-muted-foreground">
+                            <div className="pt-3 border-t space-y-1.5 sm:space-y-2">
+                              <div className="flex justify-between text-[11px] sm:text-xs text-muted-foreground">
                                 <span>Ürün Sayısı:</span>
                                 <span>{lineItemCount}</span>
                               </div>
-                              <div className="flex justify-between text-xs text-muted-foreground">
+                              <div className="flex justify-between text-[11px] sm:text-xs text-muted-foreground">
                                 <span>Toplam Miktar:</span>
                                 <span>{totalQuantity} adet</span>
                               </div>
@@ -1197,14 +1472,14 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                             Sipariş Özeti
                           </CardTitle>
                         </CardHeader>
-                        <CardContent className="p-4 sm:p-6 space-y-3 sm:space-y-4 flex-1 overflow-y-auto">
+                        <CardContent className="p-3 sm:p-4 space-y-3 sm:space-y-4 flex-1 overflow-y-auto overflow-x-hidden">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                             <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-100">
-                              <Label className="text-xs text-muted-foreground mb-1">Müşteri</Label>
+                              <Label className="text-[11px] sm:text-xs text-muted-foreground mb-1">Müşteri</Label>
                               <p className="font-semibold text-base">{orderData.customer_name || "-"}</p>
                             </div>
                             <div className="p-4 rounded-xl bg-purple-50/50 border border-purple-100">
-                              <Label className="text-xs text-muted-foreground mb-1">Sipariş No</Label>
+                              <Label className="text-[11px] sm:text-xs text-muted-foreground mb-1">Sipariş No</Label>
                               <p className="font-semibold text-base font-mono">{orderData.order_number || "-"}</p>
                             </div>
                           </div>
@@ -1214,7 +1489,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                               <Package className="h-4 w-4 text-primary" />
                               Ürün Listesi
                             </h4>
-                            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                            <div className="space-y-2 max-h-[300px] overflow-y-auto overflow-x-hidden">
                               {validItems.map((item, index) => (
                                 <div
                                   key={index}
@@ -1224,7 +1499,14 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                                     <p className="font-medium truncate">{item.product_name || "Ürün"}</p>
                                     <p className="text-xs text-muted-foreground">
                                       {item.quantity} adet × {currencySymbol}{(item.unit_price || 0).toFixed(2)}
-                                      {item.discount > 0 && ` - İndirim: ${currencySymbol}${(item.discount || 0).toFixed(2)}`}
+                                      {item.discount > 0 && (
+                                        <>
+                                          {" - İndirim: "}
+                                          {item.discountType === "percentage" 
+                                            ? `${item.discount}% (${currencySymbol}${((item.quantity * item.unit_price) * (item.discount / 100)).toFixed(2)})`
+                                            : `${currencySymbol}${item.discount.toFixed(2)}`}
+                                        </>
+                                      )}
                                     </p>
                                   </div>
                                   <p className="font-bold text-primary ml-4">{currencySymbol}{(item.total || 0).toFixed(2)}</p>
@@ -1245,28 +1527,34 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                               Fiyat Özeti
                             </CardTitle>
                           </CardHeader>
-                          <CardContent className="p-4 sm:p-6 space-y-3 sm:space-y-4 flex-1 overflow-y-auto">
+                          <CardContent className="p-3 sm:p-4 space-y-3 sm:space-y-4 flex-1 overflow-y-auto overflow-x-hidden">
                             <div className="space-y-3">
-                              <div className="flex justify-between text-sm">
+                              <div className="flex justify-between text-[11px] sm:text-xs">
                                 <span className="text-muted-foreground">Ara Toplam:</span>
-                                <span className="font-medium">{currencySymbol}{subtotal.toFixed(2)}</span>
+                                <span className="font-medium">{currencySymbol}{validItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_price || 0)), 0).toFixed(2)}</span>
                               </div>
-                              <div className="flex justify-between text-sm">
+                              {discountTotal > 0 && (
+                                <div className="flex justify-between text-[11px] sm:text-xs text-red-600">
+                                  <span className="text-muted-foreground">İndirim:</span>
+                                  <span className="font-medium">-{currencySymbol}{discountTotal.toFixed(2)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between text-[11px] sm:text-xs">
                                 <span className="text-muted-foreground">KDV ({taxRate}%):</span>
                                 <span className="font-medium">{currencySymbol}{taxAmount.toFixed(2)}</span>
                               </div>
                               <Separator />
                               <div className="flex justify-between pt-1">
                                 <span className="font-semibold">Genel Toplam:</span>
-                                <span className="font-bold text-lg text-primary">{currencySymbol}{grandTotal.toFixed(2)}</span>
+                                <span className="font-bold text-[11px] sm:text-xs text-primary">{currencySymbol}{grandTotal.toFixed(2)}</span>
                               </div>
                             </div>
-                            <div className="pt-3 border-t space-y-2">
-                              <div className="flex justify-between text-xs text-muted-foreground">
+                            <div className="pt-3 border-t space-y-1.5 sm:space-y-2">
+                              <div className="flex justify-between text-[11px] sm:text-xs text-muted-foreground">
                                 <span>Ürün Sayısı:</span>
                                 <span>{lineItemCount}</span>
                               </div>
-                              <div className="flex justify-between text-xs text-muted-foreground">
+                              <div className="flex justify-between text-[11px] sm:text-xs text-muted-foreground">
                                 <span>Toplam Miktar:</span>
                                 <span>{totalQuantity} adet</span>
                               </div>
@@ -1328,7 +1616,7 @@ export const CreateOrderDialog = ({ open, onOpenChange, onSuccess }: CreateOrder
                 <Button 
                   onClick={handleSubmit} 
                   disabled={loading || disableSubmit} 
-                  className="gap-2 h-11 sm:h-10 bg-primary hover:bg-primary/90 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto order-1"
+                  className="gap-2 h-11 sm:h-10 bg-primary hover:bg-primary/90 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto order-1 min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs"
                 >
                   {loading ? (
                     <>

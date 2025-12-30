@@ -35,10 +35,10 @@ const Settings = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
         <div>
             <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Ayarlar</h1>
-          <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
             {isSuperAdmin ? "Sistem ve şirket ayarlarını yönetin" : "Profil bilgilerinizi yönetin"}
           </p>
         </div>

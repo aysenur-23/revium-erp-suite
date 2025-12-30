@@ -437,7 +437,7 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
                 <h2 className="text-[16px] sm:text-[18px] font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
                   Satış Teklif Formu
                 </h2>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">
                   Teklif formunu düzenleyip PDF olarak indirebilirsiniz
                 </p>
               </div>
@@ -467,7 +467,7 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
                   <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Edit2 className="h-4 w-4 text-primary" />
                   </div>
-                  <h3 className="font-semibold text-lg text-foreground">Form Bilgilerini Düzenle</h3>
+                  <h3 className="font-semibold text-[16px] sm:text-[18px] text-foreground">Form Bilgilerini Düzenle</h3>
                 </div>
                 <div className="flex gap-2">
                   <Button 
@@ -492,7 +492,7 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-foreground/80">Teklif No</Label>
+                  <Label className="text-[11px] sm:text-xs font-medium text-foreground/80">Teklif No</Label>
                   <Input
                     value={quote.quoteNumber}
                     onChange={(e) => setQuote((prev) => ({ ...prev, quoteNumber: e.target.value }))}
@@ -536,7 +536,7 @@ export const SalesQuoteForm = ({ open, onOpenChange, orderId }: SalesQuoteFormPr
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-foreground/80">Para Birimi</Label>
                   <select
-                    className="w-full rounded-md border border-primary/20 bg-background px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full rounded-md border border-primary/20 bg-background px-3 py-2 text-[11px] sm:text-xs focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                     value={quote.currency}
                     onChange={(e) => setQuote((prev) => ({ ...prev, currency: e.target.value as Currency }))}
                   >

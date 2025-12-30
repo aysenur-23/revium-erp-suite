@@ -39,6 +39,7 @@ import { Timestamp } from "firebase/firestore";
 import { Loader2, Plus, Link as LinkIcon, ListChecks, X, Check, Paperclip, Lock } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
+import { PRIORITY_OPTIONS, PriorityLevel, convertOldPriorityToNew, convertNewPriorityToOld } from "@/utils/priority";
 
 type TaskInlineFormMode = "create" | "edit";
 
@@ -148,7 +149,7 @@ export const TaskInlineForm = ({
     return (
       <Card className={className}>
         <Card className="p-4 border-destructive/50 bg-destructive/5">
-          <p className="text-sm text-destructive font-medium">
+          <p className="text-[11px] sm:text-xs text-destructive font-medium">
             Görev oluşturma yetkiniz yok. Sadece yönetici veya ekip lideri görev oluşturabilir.
           </p>
         </Card>
@@ -158,7 +159,7 @@ export const TaskInlineForm = ({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [priority, setPriority] = useState<1 | 2 | 3 | 4 | 5>(2);
+  const [priority, setPriority] = useState<PriorityLevel>(1); // Default: Normal (1)
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [checklistItems, setChecklistItems] = useState<ChecklistItemState[]>([]);
   const [newChecklistText, setNewChecklistText] = useState("");
@@ -254,7 +255,7 @@ export const TaskInlineForm = ({
     setTitle("");
     setDescription("");
     setDueDate("");
-    setPriority(2);
+    setPriority(1); // Default: Normal (1)
     setSelectedMembers([]);
     setChecklistItems([]);
     setNewChecklistText("");
@@ -287,7 +288,9 @@ export const TaskInlineForm = ({
       setTitle(task.title);
       setDescription(task.description || "");
       setDueDate(formatDateInput(task.dueDate));
-      setPriority((task.priority as 1 | 2 | 3 | 4 | 5) || 2);
+      // Eski sistem (1-5) varsa yeni sisteme (0-5) çevir
+      const oldPriority = task.priority || 2;
+      setPriority(convertOldPriorityToNew(oldPriority));
       setApprovalStatus(task.approvalStatus);
       setApprovalRequestedBy(task.approvalRequestedBy);
       setTaskCreatorId(task.createdBy);
@@ -766,20 +769,82 @@ export const TaskInlineForm = ({
       return;
     }
 
-    await Promise.all(
-      toAdd.map((memberId) => assignTask(id, memberId, user.id))
-    );
+    // Atama işlemleri - permission hatalarını throw et
+    try {
+      const assignErrors: Error[] = [];
+      await Promise.all(
+        toAdd.map(async (memberId) => {
+          try {
+            await assignTask(id, memberId, user.id);
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            // Permission hatası ise throw et
+            if (errorMessage.includes("permission") || errorMessage.includes("Permission") || errorMessage.includes("Missing or insufficient")) {
+              assignErrors.push(new Error(`Görev üyesi ekleme yetkisi yok: ${errorMessage}`));
+            } else {
+              // Email servisi hatası gibi diğer hatalar sessizce devam eder
+              if (import.meta.env.DEV) {
+                console.debug("Görev atama hatası (email servisi çalışmıyor olabilir):", memberId);
+              }
+            }
+          }
+        })
+      );
+      // Permission hataları varsa throw et
+      if (assignErrors.length > 0) {
+        throw assignErrors[0];
+      }
+    } catch (error) {
+      // Permission hatası ise throw et
+      if (error instanceof Error && (error.message.includes("permission") || error.message.includes("Permission") || error.message.includes("Missing or insufficient"))) {
+        throw error;
+      }
+      // Diğer hatalar sessizce devam eder
+      if (import.meta.env.DEV) {
+        console.debug("Görev atamaları sırasında hata oluştu (email servisi çalışmıyor olabilir)");
+      }
+    }
 
-    await Promise.all(
-      toRemove.map(async (memberId) => {
-        const assignment = existingAssignments.find(
-          (a) => a.assignedTo === memberId && a.status !== "rejected"
-        );
-        if (assignment) {
-          await deleteTaskAssignment(id, assignment.id, user?.id);
-        }
-      })
-    );
+    // Kaldırma işlemleri - permission hatalarını throw et
+    try {
+      const deleteErrors: Error[] = [];
+      await Promise.all(
+        toRemove.map(async (memberId) => {
+          try {
+            const assignment = existingAssignments.find(
+              (a) => a.assignedTo === memberId && a.status !== "rejected"
+            );
+            if (assignment) {
+              await deleteTaskAssignment(id, assignment.id, user?.id);
+            }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            // Permission hatası ise throw et
+            if (errorMessage.includes("permission") || errorMessage.includes("Permission") || errorMessage.includes("Missing or insufficient")) {
+              deleteErrors.push(new Error(`Görev üyesi kaldırma yetkisi yok: ${errorMessage}`));
+            } else {
+              // Email servisi hatası gibi diğer hatalar sessizce devam eder
+              if (import.meta.env.DEV) {
+                console.debug("Görev ataması kaldırma hatası (email servisi çalışmıyor olabilir):", memberId);
+              }
+            }
+          }
+        })
+      );
+      // Permission hataları varsa throw et
+      if (deleteErrors.length > 0) {
+        throw deleteErrors[0];
+      }
+    } catch (error) {
+      // Permission hatası ise throw et
+      if (error instanceof Error && (error.message.includes("permission") || error.message.includes("Permission") || error.message.includes("Missing or insufficient"))) {
+        throw error;
+      }
+      // Diğer hatalar sessizce devam eder
+      if (import.meta.env.DEV) {
+        console.debug("Görev ataması kaldırmaları sırasında hata oluştu (email servisi çalışmıyor olabilir)");
+      }
+    }
   };
 
   const handleApproveTask = async () => {
@@ -909,14 +974,29 @@ export const TaskInlineForm = ({
             title: title.trim(),
             description: description.trim() || null,
             dueDate: parsedDueDate,
-            priority: priority,
+            priority: convertNewPriorityToOld(priority), // TaskService hala 1-5 kullanıyor
             projectId: finalProjectId || null,
             isPrivate: finalIsPrivate,
           },
           user.id
         );
 
-        await syncAssignments(taskId);
+        // Görev üyelerini senkronize et - hata varsa kullanıcıya bildir
+        try {
+          await syncAssignments(taskId);
+        } catch (error: unknown) {
+          // Permission hatası ise kullanıcıya bildir
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (errorMessage.includes("permission") || errorMessage.includes("Permission") || errorMessage.includes("Missing or insufficient")) {
+            toast.error("Görev üyelerini değiştirme yetkiniz yok. Sadece yöneticiler, ekip liderleri veya görevi oluşturan kişi değiştirebilir.");
+            setSaving(false);
+            return;
+          }
+          // Diğer hatalar için genel mesaj
+          toast.error("Görev üyeleri güncellenirken hata oluştu: " + errorMessage);
+          setSaving(false);
+          return;
+        }
 
         // Eğer checklist yoksa ve yeni maddeler varsa oluştur
         // Yetki kontrolü: Firestore'dan kontrol et
@@ -1080,8 +1160,8 @@ export const TaskInlineForm = ({
             <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                  <h4 className="text-sm font-semibold text-yellow-900">Onay Bekliyor</h4>
-                  <p className="text-sm text-yellow-700">
+                  <h4 className="text-[11px] sm:text-xs font-semibold text-yellow-900">Onay Bekliyor</h4>
+                  <p className="text-[11px] sm:text-xs text-yellow-700">
                     Bu görev tamamlandı olarak işaretlendi ve onayınızı bekliyor.
                   </p>
                 </div>
@@ -1114,7 +1194,7 @@ export const TaskInlineForm = ({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label className="text-sm sm:text-base">Görev Başlığı *</Label>
+              <Label className="text-[11px] sm:text-xs">Görev Başlığı *</Label>
               <Input
                 placeholder="Görev başlığı"
                 value={title}
@@ -1138,7 +1218,7 @@ export const TaskInlineForm = ({
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-sm sm:text-base">Bitiş Tarihi</Label>
+              <Label className="text-[11px] sm:text-xs">Bitiş Tarihi</Label>
               <Input
                 type="date"
                 value={dueDate}
@@ -1149,27 +1229,27 @@ export const TaskInlineForm = ({
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm sm:text-base">Öncelik</Label>
+            <Label className="text-[11px] sm:text-xs">Öncelik</Label>
             <Select
               value={priority.toString()}
-              onValueChange={(value) => setPriority(Number(value) as 1 | 2 | 3 | 4 | 5)}
+              onValueChange={(value) => setPriority(Number(value) as PriorityLevel)}
               disabled={isRestrictedUser}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">Çok Düşük</SelectItem>
-                <SelectItem value="2">Düşük</SelectItem>
-                <SelectItem value="3">Orta</SelectItem>
-                <SelectItem value="4">Yüksek</SelectItem>
-                <SelectItem value="5">Kritik</SelectItem>
+                {PRIORITY_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value.toString()}>
+                    {option.label} ({option.value})
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm sm:text-base">
+            <Label className="text-[11px] sm:text-xs">
               Proje {!showOnlyInMyTasks && <span className="text-destructive">*</span>}
             </Label>
             <Select
@@ -1251,7 +1331,7 @@ export const TaskInlineForm = ({
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm sm:text-base">Açıklama</Label>
+            <Label className="text-[11px] sm:text-xs">Açıklama</Label>
             <Textarea
               rows={3}
               placeholder="Görev açıklaması"
@@ -1274,7 +1354,7 @@ export const TaskInlineForm = ({
           </div>
 
           <div className="space-y-3">
-            <Label className="text-sm sm:text-base">Görev Üyeleri</Label>
+            <Label className="text-[11px] sm:text-xs">Görev Üyeleri</Label>
             <UserMultiSelect
               selectedUsers={selectedMembers}
               onSelectionChange={setSelectedMembers}
@@ -1288,7 +1368,7 @@ export const TaskInlineForm = ({
                     checked={isTaskInPool}
                     onCheckedChange={(checked) => setIsTaskInPool(checked as boolean)}
                   />
-                  <Label htmlFor="pool-mode" className="text-sm font-normal cursor-pointer text-muted-foreground">
+                  <Label htmlFor="pool-mode" className="text-[11px] sm:text-xs font-normal cursor-pointer text-muted-foreground">
                     Bu görevi Görev Havuzuna gönder (Atama yapılsa bile havuzda görünür)
                   </Label>
                 </div>
@@ -1309,7 +1389,7 @@ export const TaskInlineForm = ({
                       }
                     }}
                   />
-                  <Label htmlFor="only-my-tasks-inline" className="text-sm font-normal cursor-pointer text-muted-foreground">
+                  <Label htmlFor="only-my-tasks-inline" className="text-[11px] sm:text-xs font-normal cursor-pointer text-muted-foreground">
                     Sadece "Benim Görevlerim" sayfasında göster (Sadece ben görebilirim)
                   </Label>
                 </div>
@@ -1346,7 +1426,7 @@ export const TaskInlineForm = ({
                     <Label 
                       htmlFor="private-task-inline" 
                       className={cn(
-                        "text-sm font-normal text-muted-foreground flex items-center gap-1",
+                        "text-[11px] sm:text-xs font-normal text-muted-foreground flex items-center gap-1",
                         selectedProjectId && projects.find(p => p.id === selectedProjectId)?.isPrivate 
                           ? "cursor-default" 
                           : "cursor-pointer"
@@ -1387,7 +1467,7 @@ export const TaskInlineForm = ({
           )}
 
           <div className="space-y-3">
-            <Label className="flex items-center gap-2 text-sm sm:text-base">
+            <Label className="flex items-center gap-2 text-[11px] sm:text-xs">
               <ListChecks className="h-4 w-4" />
               Checklist
             </Label>
@@ -1420,7 +1500,7 @@ export const TaskInlineForm = ({
                         checked={!!item.completed}
                         onCheckedChange={() => handleToggleChecklistItem(item.id)}
                       />
-                      <span className="text-sm">{item.text}</span>
+                      <span className="text-[11px] sm:text-xs">{item.text}</span>
                     </div>
                     <Button
                       variant="ghost"
@@ -1436,7 +1516,7 @@ export const TaskInlineForm = ({
           </div>
 
           <div className="space-y-3">
-            <Label className="flex items-center gap-2 text-sm sm:text-base">
+            <Label className="flex items-center gap-2 text-[11px] sm:text-xs">
               <Paperclip className="h-4 w-4" />
               Ekler (Dosya & Link)
             </Label>
@@ -1502,7 +1582,7 @@ export const TaskInlineForm = ({
                 {attachments.map((att) => (
                   <div
                     key={att.id}
-                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded-md border px-3 py-2 text-[11px] sm:text-xs"
                   >
                     <div className="truncate flex items-center">
                       {att.type === "file" ? (

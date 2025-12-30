@@ -50,6 +50,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { getProjectById, getProjects, createProject, deleteProject, Project } from "@/services/firebase/projectService";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getPriorityOption, convertOldPriorityToNew, convertNewPriorityToOld, PRIORITY_OPTIONS, PriorityLevel } from "@/utils/priority";
 // PieChart kaldırıldı - artık kullanılmıyor
 
 interface Task {
@@ -329,11 +330,11 @@ const Tasks = () => {
   );
   // Sabit sütun genişlikleri
   const columnWidths = {
-    title: 300,
-    status: 160,
-    assignee: 150,
-    people: 180,
-    priority: 120,
+    title: 250,
+    project: 180,
+    status: 140,
+    assignee: 140,
+    priority: 110,
     dueDate: 110,
   };
   const [focusFilter, setFocusFilter] = useState<"all" | "due_soon" | "overdue" | "high_priority">("all");
@@ -349,6 +350,7 @@ const Tasks = () => {
     projectFromUrl || (projectId ? projectId : (taskTypeFromUrl === 'general' ? "general" : "all"))
   );
   const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [assignedUserFilter, setAssignedUserFilter] = useState<string>("all");
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectingAssignment, setRejectingAssignment] = useState<TaskAssignment | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -418,15 +420,19 @@ const Tasks = () => {
   const taskRefs = useRef<(HTMLElement | null)[]>([]);
 
 
-  // URL'den view parametresini oku ve viewMode'u ayarla
+  // URL'den view parametresini oku ve viewMode'u ayarla (sadece ilk yüklemede)
+  const viewModeInitialized = useRef(false);
   useEffect(() => {
-    if (viewFromUrl === "board") {
-      setViewMode("board");
-    } else if (viewFromUrl === "list") {
-      setViewMode("list");
-    } else {
-      // viewFromUrl yoksa varsayılan olarak list açılır
-      setViewMode("list");
+    if (!viewModeInitialized.current) {
+      if (viewFromUrl === "board") {
+        setViewMode("board");
+      } else if (viewFromUrl === "list") {
+        setViewMode("list");
+      } else {
+        // viewFromUrl yoksa varsayılan olarak list açılır
+        setViewMode("list");
+      }
+      viewModeInitialized.current = true;
     }
   }, [viewFromUrl]);
   
@@ -437,8 +443,11 @@ const Tasks = () => {
     }
   }, [selectedTaskId, viewMode]);
 
-  // View mode değiştiğinde URL'i güncelle
+  // View mode değiştiğinde URL'i güncelle (sadece kullanıcı etkileşimi sonrası)
   useEffect(() => {
+    // İlk yüklemede URL güncellemesi yapma
+    if (!viewModeInitialized.current) return;
+    
     const newParams = new URLSearchParams(searchParams);
     const currentView = newParams.get("view");
     const newView = viewMode === "board" ? "board" : "list";
@@ -1665,7 +1674,7 @@ const Tasks = () => {
     
     return (
       <div className={cn("rounded-full p-1.5 border", config.bgColor)} aria-label={getStatusLabel(status)}>
-        <Icon className={cn("h-4 w-4", config.color)} />
+        <Icon className={cn("h-3 w-3", config.color)} />
       </div>
     );
   };
@@ -1781,14 +1790,18 @@ const Tasks = () => {
     return `TASK-${shortId}`;
   };
 
-  // Öncelik gösterimi için helper
+  // Öncelik gösterimi için helper - Eski sistem (1-5) varsa yeni sisteme (0-5) çevir
   const getPriorityDisplay = (priority: number | undefined) => {
-    if (!priority || priority === 1) return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
-    if (priority === 2) return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
-    if (priority === 3) return { label: "Orta", icon: Minus, color: "text-gray-600 dark:text-gray-400" };
-    if (priority === 4) return { label: "Yüksek", icon: ChevronUp, color: "text-red-600 dark:text-red-400" };
-    if (priority >= 5) return { label: "Yüksek", icon: ChevronUp, color: "text-red-600 dark:text-red-400" };
-    return { label: "Düşük", icon: ChevronDown, color: "text-blue-600 dark:text-blue-400" };
+    if (!priority) {
+      const option = getPriorityOption(0);
+      return { label: option.label, icon: ChevronDown, color: option.color };
+    }
+    // Eski sistem (1-5) varsa yeni sisteme (0-5) çevir
+    const newPriority = convertOldPriorityToNew(priority);
+    const option = getPriorityOption(newPriority);
+    // Icon seçimi: 0-1 = down, 2-3 = minus, 4-5 = up
+    const icon = newPriority <= 1 ? ChevronDown : newPriority <= 3 ? Minus : ChevronUp;
+    return { label: option.label, icon, color: option.color };
   };
 
   const filterTasks = (tasks: (Task | FirebaseTask)[]) => {
@@ -1827,7 +1840,13 @@ const Tasks = () => {
         focusFilter === "all" ||
         (focusFilter === "due_soon" && isTaskDueSoon(task)) ||
         (focusFilter === "overdue" && isTaskOverdue(task)) ||
-        (focusFilter === "high_priority" && (task.priority || 0) >= 4)
+        (focusFilter === "high_priority" && (() => {
+          const taskPriority = task.priority || 0;
+          // Eski sistem (1-5) varsa yeni sisteme (0-5) çevir
+          const newPriority = convertOldPriorityToNew(taskPriority);
+          // Yüksek öncelik: 3 (Yüksek) ve üzeri
+          return newPriority >= 3;
+        })())
       );
       
       // Proje filtresi - selectedProject state'ine göre
@@ -1840,12 +1859,20 @@ const Tasks = () => {
         matchesProject = task.projectId === selectedProject;
       }
       
+      // Kişi filtresi - atanan kişilere göre
+      let matchesAssignedUser = true;
+      if (assignedUserFilter !== "all") {
+        const taskAssignments = assignmentsCacheRef.current.get(task.id) || [];
+        const assignedUserIds = taskAssignments.map(a => a.assignedTo);
+        matchesAssignedUser = assignedUserIds.includes(assignedUserFilter);
+      }
+      
       // activeFilter kontrolleri kaldırıldı çünkü:
       // - pool, archive, my-tasks filtreleri zaten tasksForStatsAndDisplay içinde uygulanmış
       // - general filtresi zaten selectedProject === "general" ile uygulanmış
-      // Burada sadece arama, durum, odak ve proje filtrelerini uyguluyoruz
+      // Burada sadece arama, durum, odak, proje ve kişi filtrelerini uyguluyoruz
       // Hem liste hem pano görünümünde aynı filtreler uygulanır
-      return matchesSearch && matchesStatus && matchesFocus && matchesProject;
+      return matchesSearch && matchesStatus && matchesFocus && matchesProject && matchesAssignedUser;
     });
   };
 
@@ -1953,11 +1980,11 @@ const Tasks = () => {
       return [];
     }
     
-    // İstatistiklerin kullandığı filtrelemeyi koru, sadece ek filtreleri uygula (arama, durum, odak, proje)
+    // İstatistiklerin kullandığı filtrelemeyi koru, sadece ek filtreleri uygula (arama, durum, odak, proje, kişi)
     // Hem liste hem pano görünümünde aynı filtreleri ve sıralamayı uygula
     const filtered = filterTasks(tasksForStatsAndDisplay);
     return sortTasks(filtered);
-  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject, allFirebaseTasks]);
+  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject, assignedUserFilter, allFirebaseTasks]);
 
   const filteredAndSortedAllTasks = useMemo(() => {
     // İstatistiklerin baz aldığı görev setini kullan (tasksForStatsAndDisplay)
@@ -1966,11 +1993,11 @@ const Tasks = () => {
       return [];
     }
     
-    // İstatistiklerin kullandığı filtrelemeyi koru, sadece ek filtreleri uygula (arama, durum, odak, proje)
+    // İstatistiklerin kullandığı filtrelemeyi koru, sadece ek filtreleri uygula (arama, durum, odak, proje, kişi)
     // Hem liste hem pano görünümünde aynı filtreleri ve sıralamayı uygula
     const filtered = filterTasks(tasksForStatsAndDisplay);
     return sortTasks(filtered) as (Task | FirebaseTask)[];
-  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject, allFirebaseTasks]);
+  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject, assignedUserFilter, allFirebaseTasks]);
 
   // Arşivlenmiş görevler için filtrelenmiş ve sıralanmış liste
   const filteredAndSortedArchivedTasks = useMemo(() => {
@@ -1981,7 +2008,7 @@ const Tasks = () => {
     // Hem liste hem pano görünümünde aynı filtreleri ve sıralamayı uygula
     const filtered = filterTasks(tasksForStatsAndDisplay);
     return sortTasks(filtered) as (Task | FirebaseTask)[];
-  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject, allFirebaseTasks]);
+  }, [tasksForStatsAndDisplay, searchTerm, statusFilter, focusFilter, sortBy, activeFilter, selectedProject, assignedUserFilter, allFirebaseTasks]);
 
   // Sıralama fonksiyonu
   const handleSort = (column: string) => {
@@ -2254,10 +2281,25 @@ const Tasks = () => {
   // Bir sonraki durumu bul
   const getNextStatus = (currentStatus: string, approvalStatus?: "pending" | "approved" | "rejected") => {
     const currentIndex = getCurrentStatusIndex(currentStatus, approvalStatus);
+    
+    // Eğer görev "completed" durumundaysa, "approved" durumuna direkt geçiş yapılamaz
+    // Sadece "Onaya Gönder" butonu gösterilir
+    const normalizedStatus = normalizeStatus(currentStatus);
+    if (normalizedStatus === "completed") {
+      return null;
+    }
+    
     if (currentIndex === -1 || currentIndex >= taskStatusWorkflow.length - 1) {
       return null;
     }
-    return taskStatusWorkflow[currentIndex + 1];
+    const nextStatus = taskStatusWorkflow[currentIndex + 1];
+    
+    // "approved" durumuna direkt geçiş yapılamaz - sadece onay süreci ile geçilebilir
+    if (nextStatus && nextStatus.value === "approved") {
+      return null;
+    }
+    
+    return nextStatus;
   };
 
   // Proje seçildiğinde sıralamayı güncelle (sadece proje değiştiğinde)
@@ -2299,6 +2341,12 @@ const Tasks = () => {
 
     // Status'ü normalize et (column_ prefix'ini kaldır)
     const normalizedStatus = normalizeStatus(status);
+    
+    // "approved" durumuna direkt geçiş yapılamaz - sadece onay süreci ile geçilebilir
+    if (normalizedStatus === "approved") {
+      toast.error("Görev 'Onaylandı' durumuna direkt geçirilemez. Lütfen 'Onaya Gönder' butonunu kullanın.");
+      return;
+    }
 
     // Optimistic update: UI'ı hemen güncelle
     const task = Array.isArray(allTasks) ? allTasks.find(t => t?.id === taskId) : null;
@@ -2329,54 +2377,39 @@ const Tasks = () => {
     setArchivedTasks(prev => updateTaskInState(prev as Array<{ id: string; status: string }>) as typeof prev);
 
     try {
-      // Yetki kontrolü: Sadece atanan kullanıcılar ve adminler durum değiştirebilir
-
-      // Alt yetki kontrolü - durum değiştirme
-      try {
-        const { canPerformSubPermission } = await import("@/utils/permissions");
-        const userProfile: UserProfile = {
-          id: user.id,
-          email: user.email,
-          emailVerified: user.emailVerified,
-          fullName: user.fullName,
-          displayName: user.fullName,
-          phone: user.phone,
-          dateOfBirth: user.dateOfBirth,
-          role: user.roles || [],
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now(),
-        };
-        const hasPermission = await canPerformSubPermission(userProfile, "tasks", "canChangeStatus");
-        if (!hasPermission && !isSuperAdmin && !canUpdate && task.createdBy !== user.id) {
-          // Görevin atanan kullanıcılarını kontrol et
-          const taskAssignments = await getTaskAssignments(taskId);
-          const assignedUserIds = Array.isArray(taskAssignments) ? taskAssignments.map(a => a?.assignedTo).filter((id): id is string => !!id) : [];
-          const isAssigned = assignedUserIds.includes(user.id);
-          
-          if (!isAssigned) {
-            toast.error("Durum değiştirme yetkiniz yok");
-            return;
-          }
+      // Yetki kontrolü: SADECE görev üyeleri (rejected hariç) ve görevi oluşturan durum değiştirebilir
+      // Yöneticiler için özel durum YOK - sadece görev üyeleri durum değiştirebilir
+      // Personel, ekip lideri, yönetici - görev üyesi olduğu görevin durumunu değiştirebilir
+      
+      const isCreator = task.createdBy === user.id;
+      
+      // Görevin atanan kullanıcılarını kontrol et (rejected hariç)
+      const taskAssignments = await getTaskAssignments(taskId);
+      const assignedUserIds = Array.isArray(taskAssignments) 
+        ? taskAssignments
+            .filter(a => a?.status !== "rejected")
+            .map(a => a?.assignedTo)
+            .filter((id): id is string => !!id) 
+        : [];
+      const isAssignedFromAssignments = assignedUserIds.includes(user.id);
+      
+      // Fallback: task.assignedUsers array'inden kontrol
+      const isInTaskAssignedUsers = Array.isArray(task.assignedUsers) && task.assignedUsers.some((u) => {
+        if (typeof u === 'string') {
+          return u === user.id;
         }
-      } catch (error) {
-        if (import.meta.env.DEV) {
-          console.error("Permission check error:", error);
+        if (typeof u === 'object' && u !== null && 'id' in u) {
+          return (u as { id: string }).id === user.id;
         }
-        // Hata durumunda eski kontrolü yap
-      }
-
-      // Üst yönetici kontrolü - üst yöneticiler hariç kullanıcılar sadece kendilerine atanan görevlerin durumunu değiştirebilir
-      if (!isSuperAdmin && !canUpdate) {
-        // Görevin atanan kullanıcılarını kontrol et
-        const taskAssignments = await getTaskAssignments(taskId);
-        const assignedUserIds = Array.isArray(taskAssignments) ? taskAssignments.map(a => a?.assignedTo).filter((id): id is string => !!id) : [];
-        const isAssigned = assignedUserIds.includes(user.id);
-        
-        if (!isAssigned) {
-          const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
-          showPermissionErrorToast("update", "task");
-          return;
-        }
+        return false;
+      });
+      
+      const isAssigned = isAssignedFromAssignments || isInTaskAssignedUsers;
+      
+      // Sadece görev üyesi (rejected hariç) veya oluşturan ise izin var
+      if (!isAssigned && !isCreator) {
+        toast.error("Durum değiştirme yetkiniz yok. Sadece görev üyesi olduğunuz görevlerin durumunu değiştirebilirsiniz.");
+        return;
       }
 
       // Durum güncellemesini yap (normalize edilmiş status ile)
@@ -2403,6 +2436,15 @@ const Tasks = () => {
       // subscribeToTasks zaten real-time güncellemeleri dinliyor, 
       // bu yüzden fetchTasks() çağrısına gerek yok
     } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      
+      // Firestore izin hatasını kullanıcıya göster
+      if (errorMsg.includes("Missing or insufficient permissions") || errorMsg.includes("permission-denied") || errorMsg.includes("Firestore güvenlik kuralları")) {
+        toast.error("Görev durumunu değiştirme izniniz yok. Firestore güvenlik kuralları görev üyelerine izin vermiyor. Lütfen yöneticinizle iletişime geçin.");
+      } else {
+        toast.error(errorMsg || "Görev durumu güncellenemedi");
+      }
+      
       if (import.meta.env.DEV) {
         console.error("Update task status error:", error);
       }
@@ -2439,10 +2481,18 @@ const Tasks = () => {
     }
   };
 
-  // Onaya gönder butonu için handler
+  // Onaya gönder butonu için handler - double-click koruması ile
+  const [requestingApproval, setRequestingApproval] = useState<Set<string>>(new Set());
+  
   const handleRequestApproval = async (taskId: string) => {
     if (!user) return;
 
+    // Double-click koruması - eğer bu görev için zaten işlem yapılıyorsa, tekrar çalıştırma
+    if (requestingApproval.has(taskId)) {
+      return;
+    }
+
+    setRequestingApproval(prev => new Set(prev).add(taskId));
     try {
       await requestTaskApproval(taskId, user.id);
       toast.success("Görev onay için yöneticiye gönderildi.");
@@ -2451,6 +2501,12 @@ const Tasks = () => {
         console.error("Request approval error:", error);
       }
       toast.error("Onay isteği gönderilemedi: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
+    } finally {
+      setRequestingApproval(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
     }
   };
 
@@ -2604,12 +2660,12 @@ const Tasks = () => {
         {/* Hata Durumu */}
         {error && (
           <Card className="border-destructive bg-destructive/5">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
                   <h3 className="font-semibold text-destructive mb-1">Hata Oluştu</h3>
-                  <p className="text-sm text-muted-foreground mb-3">{error}</p>
+                  <p className="text-[11px] sm:text-xs text-muted-foreground mb-3">{error}</p>
                   <Button
                     variant="outline"
                     size="sm"
@@ -2648,7 +2704,7 @@ const Tasks = () => {
               variant="ghost"
               size="sm"
               onClick={() => setStatsExpanded(true)}
-              className="h-7 px-2 gap-1 text-xs"
+              className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
               aria-label="İstatistikleri göster"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
@@ -2658,7 +2714,7 @@ const Tasks = () => {
               variant="ghost"
               size="sm"
               onClick={() => setStatsExpanded(false)}
-              className="h-7 px-2 gap-1 text-xs"
+              className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
               aria-label="İstatistikleri gizle"
             >
               <ChevronRight className="h-3.5 w-3.5" />
@@ -2668,9 +2724,9 @@ const Tasks = () => {
 
         {/* Uyarılar Banner - Kompakt */}
         {(pendingApprovalsCount > 0 || pendingAssignmentsCount > 0 || upcomingDeadlinesCount > 0) && (
-          <div className="flex flex-wrap items-center gap-2 text-xs px-2 py-1.5 bg-amber-50/30 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-800/30 rounded-md">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs px-2 py-1.5 bg-amber-50/30 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-800/30 rounded-md">
             {pendingApprovalsCount > 0 && (
-              <Badge variant="outline" className="text-xs h-5 px-1.5 bg-amber-100/50 dark:bg-amber-900/50 border-amber-300/50 dark:border-amber-700/50">
+              <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-amber-100/50 dark:bg-amber-900/50 border-amber-300/50 dark:border-amber-700/50">
                 {pendingApprovalsCount} onay
               </Badge>
             )}
@@ -2704,8 +2760,8 @@ const Tasks = () => {
                 >
                   <CheckSquare className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Tümü</p>
-                    <p className="text-lg font-semibold">{listData.length}</p>
+                    <p className="text-[11px] sm:text-xs text-muted-foreground">Tümü</p>
+                    <p className="text-lg sm:text-xl font-semibold">{listData.length}</p>
                   </div>
                 </div>
 
@@ -2719,8 +2775,8 @@ const Tasks = () => {
                 >
                   <Clock className="h-4 w-4 text-blue-600" />
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Aktif</p>
-                    <p className="text-lg font-semibold text-blue-600">
+                    <p className="text-[11px] sm:text-xs text-muted-foreground">Aktif</p>
+                    <p className="text-lg sm:text-xl font-semibold text-blue-600">
                       {listData.filter((task: Task | FirebaseTask | unknown) => {
                         if (!task || typeof task !== 'object') return false;
                         const t = task as { status?: string; isArchived?: boolean; is_archived?: boolean };
@@ -2740,8 +2796,8 @@ const Tasks = () => {
                 >
                   <AlertCircle className="h-4 w-4 text-orange-600" />
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Onay Bekleyen</p>
-                    <p className="text-lg font-semibold text-orange-600">
+                    <p className="text-[11px] sm:text-xs text-muted-foreground">Onay Bekleyen</p>
+                    <p className="text-lg sm:text-xl font-semibold text-orange-600">
                       {listData.filter((task: Task | FirebaseTask | unknown) => {
                         if (!task || typeof task !== 'object') return false;
                         const t = task as { status?: string; approvalStatus?: string };
@@ -2761,8 +2817,8 @@ const Tasks = () => {
                 >
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Tamamlanan</p>
-                    <p className="text-lg font-semibold text-emerald-600">
+                    <p className="text-[11px] sm:text-xs text-muted-foreground">Tamamlanan</p>
+                    <p className="text-lg sm:text-xl font-semibold text-emerald-600">
                       {listData.filter((task: Task | FirebaseTask | unknown) => {
                         if (!task || typeof task !== 'object') return false;
                         return (task as { status?: string }).status === "completed";
@@ -2781,8 +2837,8 @@ const Tasks = () => {
                 >
                   <AlertCircle className="h-4 w-4 text-red-600" />
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Geciken</p>
-                    <p className="text-lg font-semibold text-red-600">
+                    <p className="text-[11px] sm:text-xs text-muted-foreground">Geciken</p>
+                    <p className="text-lg sm:text-xl font-semibold text-red-600">
                       {listData.filter((task: Task | FirebaseTask | unknown) => {
                         if (!task || typeof task !== 'object') return false;
                         return isTaskOverdue(task as Task | FirebaseTask);
@@ -2801,8 +2857,8 @@ const Tasks = () => {
                 >
                   <CalendarDays className="h-4 w-4 text-amber-600" />
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Yaklaşan</p>
-                    <p className="text-lg font-semibold text-amber-600">
+                    <p className="text-[11px] sm:text-xs text-muted-foreground">Yaklaşan</p>
+                    <p className="text-lg sm:text-xl font-semibold text-amber-600">
                       {listData.filter((task: Task | FirebaseTask | unknown) => {
                         if (!task || typeof task !== 'object') return false;
                         return isTaskDueSoon(task as Task | FirebaseTask);
@@ -2821,12 +2877,16 @@ const Tasks = () => {
                 >
                   <Flame className="h-4 w-4 text-purple-600" />
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Öncelikli</p>
-                    <p className="text-lg font-semibold text-purple-600">
+                    <p className="text-[11px] sm:text-xs text-muted-foreground">Öncelikli</p>
+                    <p className="text-lg sm:text-xl font-semibold text-purple-600">
                       {listData.filter((task: Task | FirebaseTask | unknown) => {
                         if (!task || typeof task !== 'object') return false;
                         const t = task as { priority?: number };
-                        return (t.priority || 0) >= 4;
+                        const taskPriority = t.priority || 0;
+                        // Eski sistem (1-5) varsa yeni sisteme (0-5) çevir
+                        const newPriority = convertOldPriorityToNew(taskPriority);
+                        // Yüksek öncelik: 3 (Yüksek) ve üzeri
+                        return newPriority >= 3;
                       }).length}
                     </p>
                   </div>
@@ -2842,7 +2902,7 @@ const Tasks = () => {
             <CardContent className="p-3">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-foreground">
+                  <span className="text-[11px] sm:text-xs font-medium text-foreground">
                     {selectedTaskIds.size} görev seçildi
                   </span>
                   <Button
@@ -2852,7 +2912,7 @@ const Tasks = () => {
                       setSelectedTaskIds(new Set());
                       setIsMultiSelectMode(false);
                     }}
-                    className="h-7 text-xs"
+                    className="h-7 text-[11px] sm:text-xs"
                   >
                     <X className="h-3.5 w-3.5 mr-1" />
                     Seçimi Temizle
@@ -2881,7 +2941,7 @@ const Tasks = () => {
                       setIsMultiSelectMode(false);
                       toast.success(`${tasksToUpdate.length} görev durumu güncellendi`);
                     }}
-                    className="h-7 text-xs"
+                    className="h-7 text-[11px] sm:text-xs"
                     disabled={selectedTaskIds.size === 0}
                   >
                     <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
@@ -2910,7 +2970,7 @@ const Tasks = () => {
                       setIsMultiSelectMode(false);
                       toast.success(`${tasksToArchive.length} görev arşivlendi`);
                     }}
-                    className="h-7 text-xs"
+                    className="h-7 text-[11px] sm:text-xs"
                     disabled={selectedTaskIds.size === 0}
                   >
                     <Archive className="h-3.5 w-3.5 mr-1" />
@@ -2937,7 +2997,7 @@ const Tasks = () => {
                       setIsMultiSelectMode(false);
                       toast.success(`${tasksToDelete.length} görev silindi`);
                     }}
-                    className="h-7 text-xs"
+                    className="h-7 text-[11px] sm:text-xs"
                     disabled={selectedTaskIds.size === 0}
                   >
                     <Trash2 className="h-3.5 w-3.5 mr-1" />
@@ -2956,7 +3016,7 @@ const Tasks = () => {
               {/* Üst Satır: Proje Tabs ve Ana Aksiyonlar */}
               <div className="flex items-center gap-1.5 flex-wrap">
                 {/* Temizle Butonu - Sadece aktif filtre varsa göster */}
-                {(statusFilter !== "all" || focusFilter !== "all" || selectedProject !== "all") && (
+                {(statusFilter !== "all" || focusFilter !== "all" || selectedProject !== "all" || assignedUserFilter !== "all") && (
                   <Button 
                     variant="ghost" 
                     size="sm"
@@ -2966,6 +3026,7 @@ const Tasks = () => {
                       setFocusFilter("all"); 
                       setSelectedProject("all");
                       setProjectFilter("all");
+                      setAssignedUserFilter("all");
                     }} 
                     className="h-7 text-xs px-2 gap-1 text-muted-foreground hover:text-foreground transition-colors"
                     aria-label="Filtreleri temizle"
@@ -3001,7 +3062,7 @@ const Tasks = () => {
                         placeholder="Proje ara..."
                         value={projectSearchQuery}
                         onValueChange={setProjectSearchQuery}
-                        className="text-sm"
+                        className="text-[11px] sm:text-xs"
                       />
                       <CommandList className="max-h-[300px]">
                         <CommandEmpty>
@@ -3131,6 +3192,80 @@ const Tasks = () => {
                   </PopoverContent>
                 </Popover>
 
+                {/* Kişi Filtresi - Atanan kişilere göre */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="h-7 text-xs px-2.5 border-border/50 hover:border-primary/50 transition-colors min-w-[160px] justify-between"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="truncate">
+                          {assignedUserFilter === "all" 
+                            ? "Tüm Kişiler" 
+                            : cachedUsers.find(u => u.id === assignedUserFilter) 
+                              ? getFirstName(cachedUsers.find(u => u.id === assignedUserFilter)?.fullName || cachedUsers.find(u => u.id === assignedUserFilter)?.displayName) || cachedUsers.find(u => u.id === assignedUserFilter)?.email || "Kişi Seçin"
+                              : "Kişi Seçin"}
+                        </span>
+                      </div>
+                      <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] sm:w-[300px] p-0" align="start" side="bottom" sideOffset={4}>
+                    <Command>
+                      <CommandInput placeholder="Kişi ara..." className="text-[11px] sm:text-xs !h-9 !py-2" />
+                      <CommandList className="max-h-[300px]">
+                        <CommandEmpty className="text-[10px] sm:text-[11px] py-4">Kişi bulunamadı</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="all"
+                            onSelect={() => {
+                              setAssignedUserFilter("all");
+                            }}
+                            className="cursor-pointer px-2 py-1.5"
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <Users className="h-3 w-3" />
+                              <span className="text-[11px] sm:text-xs">Tüm Kişiler</span>
+                              {assignedUserFilter === "all" && (
+                                <Check className="ml-auto h-3 w-3" />
+                              )}
+                            </div>
+                          </CommandItem>
+                        </CommandGroup>
+                        <CommandGroup heading="Kişiler">
+                          {cachedUsers.map((user) => (
+                            <CommandItem
+                              key={user.id}
+                              value={user.id}
+                              onSelect={() => {
+                                setAssignedUserFilter(user.id);
+                              }}
+                              className="cursor-pointer px-2 py-1.5"
+                            >
+                              <div className="flex items-center gap-2 w-full">
+                                <Avatar className="h-5 w-5">
+                                  <AvatarFallback className="text-[9px]">
+                                    {getInitials(user.fullName || user.email)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="flex-1 truncate text-[11px] sm:text-xs" title={user.fullName || user.email}>
+                                  {user.fullName || user.displayName || user.email}
+                                </span>
+                                {assignedUserFilter === user.id && (
+                                  <Check className="ml-auto h-3 w-3" />
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
                 {/* Sağ Taraf: Kategori - İyileştirilmiş */}
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {/* Kategori Filtresi - İyileştirilmiş */}
@@ -3207,7 +3342,12 @@ const Tasks = () => {
                     <Button
                       variant={viewMode === "list" ? "default" : "ghost"}
                       size="sm"
-                      onClick={() => setViewMode("list")}
+                      onClick={() => {
+                        setViewMode("list");
+                        const newParams = new URLSearchParams(searchParams);
+                        newParams.delete("view");
+                        setSearchParams(newParams, { replace: true });
+                      }}
                       className="h-7 text-xs px-2.5 transition-all font-medium"
                       aria-label="Liste görünümü"
                       title="Liste Görünümü"
@@ -3217,7 +3357,12 @@ const Tasks = () => {
                     <Button
                       variant={viewMode === "board" ? "default" : "ghost"}
                       size="sm"
-                      onClick={() => setViewMode("board")}
+                      onClick={() => {
+                        setViewMode("board");
+                        const newParams = new URLSearchParams(searchParams);
+                        newParams.set("view", "board");
+                        setSearchParams(newParams, { replace: true });
+                      }}
                       className="h-7 text-xs px-2.5 transition-all font-medium"
                       aria-label="Pano görünümü"
                       title="Pano Görünümü"
@@ -3273,7 +3418,7 @@ const Tasks = () => {
         </Card>
 
         <Dialog open={inlineFormVisible} onOpenChange={setInlineFormVisible}>
-          <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+          <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
             {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
             <DialogTitle className="sr-only">
                   {inlineFormMode === "edit" ? "Görevi Düzenle" : "Yeni Görev"}
@@ -3315,7 +3460,7 @@ const Tasks = () => {
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <CardTitle className="text-[15px] sm:text-[16px]">Görev Durumu</CardTitle>
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-[11px] sm:text-xs text-muted-foreground">
                                   {(() => {
                                     // Eğer görev onaylandıysa
                                     if (currentStatus === "completed" && currentTask.approvalStatus === "approved") {
@@ -3337,17 +3482,19 @@ const Tasks = () => {
                                   })()}
                                 </p>
                               </div>
-                              <div className="text-xs text-muted-foreground text-right">
+                              <div className="text-[11px] sm:text-xs text-muted-foreground text-right">
                                 Son güncelleyen: {(() => {
-                                  const taskWithStatus = currentTask as unknown as FirebaseTask & { statusUpdatedBy?: string };
-                                  return taskWithStatus.statusUpdatedBy 
-                                    ? (usersMap[taskWithStatus.statusUpdatedBy || ""] || taskWithStatus.statusUpdatedBy)
+                                  const taskWithStatus = currentTask as unknown as FirebaseTask & { updatedBy?: string; statusUpdatedBy?: string };
+                                  // Önce updatedBy kontrol et (her güncellemede güncellenir), yoksa statusUpdatedBy, yoksa mevcut kullanıcı
+                                  const lastEditorId = taskWithStatus.updatedBy || taskWithStatus.statusUpdatedBy;
+                                  return lastEditorId 
+                                    ? (usersMap[lastEditorId] || lastEditorId)
                                     : (user?.fullName || "-");
                                 })()}
                               </div>
                             </div>
                           </CardHeader>
-                          <CardContent className="p-4 sm:p-6">
+                          <CardContent className="p-3 sm:p-4">
                             <div className="space-y-4">
                               {/* Status Timeline */}
                               <div className="flex items-center justify-between overflow-x-auto overflow-y-visible pt-2 pb-4">
@@ -3376,7 +3523,7 @@ const Tasks = () => {
                                         >
                                           <Icon className={`h-5 w-5 ${isActive || isCompleted ? "text-white" : statusItem.color}`} />
                                         </div>
-                                        <p className={`text-xs mt-2 text-center font-medium ${isActive ? "text-primary" : isCompleted ? "text-green-600" : "text-muted-foreground"}`}>
+                                        <p className={`text-[11px] sm:text-xs mt-2 text-center font-medium ${isActive ? "text-primary" : isCompleted ? "text-green-600" : "text-muted-foreground"}`}>
                                           {statusItem.label}
                                         </p>
                                       </div>
@@ -3395,7 +3542,7 @@ const Tasks = () => {
                                   return null;
                                 }
                                 
-                                // Buton SADECE görev üyeleri tarafından görüntülenebilir
+                                // Buton görev üyeleri (personel, ekip lideri, yönetici) ve görevi oluşturan tarafından görüntülenebilir
                                 // assignedUsers array'i bazen string array, bazen Profile array olabilir
                                 let isAssigned = false;
                                 if (currentTask.assignedUsers && Array.isArray(currentTask.assignedUsers)) {
@@ -3410,25 +3557,40 @@ const Tasks = () => {
                                   });
                                 }
                                 
-                                // Eğer assignedUsers array'inde bulunamazsa, assignments'ları kontrol et
+                                // Eğer assignedUsers array'inde bulunamazsa, assignments cache'inden kontrol et
                                 if (!isAssigned && inlineFormTaskId && user?.id) {
-                                  // Async kontrol için bir state kullanmak yerine, mevcut task verisinden kontrol ediyoruz
-                                  // assignedUsers zaten assignments'lardan oluşturulduğu için bu kontrol yeterli
+                                  const taskAssignments = assignmentsCacheRef.current.get(inlineFormTaskId) || [];
+                                  isAssigned = taskAssignments.some(a => a.assignedTo === user.id && a.status !== "rejected");
                                 }
                                 
-                                // Sadece görev üyeleri butonu görebilir
-                                if (!isAssigned) return null;
+                                // Görevi oluşturan kişi de butonu görebilir
+                                const isCreator = currentTask.createdBy === user?.id;
+                                
+                                // Sadece görev üyeleri (rejected hariç) veya oluşturan butonu görebilir
+                                if (!isAssigned && !isCreator) return null;
                                 
                                 // Tamamlandı durumunda ve onaya gönderilmemişse "Onaya Gönder" butonu göster
                                 if (currentStatus === "completed" && currentTask.approvalStatus !== "pending" && currentTask.approvalStatus !== "approved") {
+                                  const isRequesting = requestingApproval.has(inlineFormTaskId);
                                   return (
                                     <div className="flex justify-center pt-4 border-t">
                                       <Button
                                         onClick={() => handleRequestApproval(inlineFormTaskId)}
-                                        className="gap-2"
+                                        disabled={isRequesting}
+                                        className="gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px] min-h-[44px] text-base"
+                                        size="lg"
                                       >
-                                        <Send className="h-4 w-4" />
-                                        Onaya Gönder
+                                        {isRequesting ? (
+                                          <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <span className="font-semibold">Gönderiliyor...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Send className="h-4 w-4" />
+                                            <span className="font-semibold">Onaya Gönder</span>
+                                          </>
+                                        )}
                                       </Button>
                                     </div>
                                   );
@@ -3487,69 +3649,69 @@ const Tasks = () => {
         {viewMode === "list" ? (
           <div className="w-full max-w-full min-w-0 overflow-x-auto">
             {/* Tablo Yapısı */}
-            <div className="hidden md:block border border-[#DFE1E6] dark:border-[#38414A] rounded-sm bg-white dark:bg-[#1D2125]" style={{ width: '100%' }}>
+            <div className="hidden md:block border border-[#DFE1E6] dark:border-[#38414A] rounded-sm bg-white dark:bg-[#1D2125]" style={{ width: '100%', minWidth: `${totalTableWidth}px` }}>
               {/* Tablo - Başlıklar ve İçerik Aynı Tabloda */}
-              <div className="table border-collapse" style={{ tableLayout: 'fixed', width: '100%' }}>
+              <div className="table border-collapse" style={{ tableLayout: 'fixed', width: '100%', minWidth: `${totalTableWidth}px` }}>
                 {/* Tablo Başlıkları */}
                 <div className="table-header-group bg-[#F4F5F7] dark:bg-[#22272B] border-b-2 border-[#DFE1E6] dark:border-[#38414A] sticky top-0 z-10 shadow-sm">
                   <div className="table-row">
                     <div 
-                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      className="table-cell px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[10px] sm:text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
                       style={{ width: columnWidths.title }}
                       onClick={() => handleSort("title")}
                     >
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         Başlık
                         {sortColumn === "title" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          sortDirection === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                         )}
                       </div>
                     </div>
                     <div 
-                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      className="table-cell px-2 py-1 text-[10px] sm:text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      style={{ width: columnWidths.project }}
+                    >
+                      Proje
+                    </div>
+                    <div 
+                      className="table-cell px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[10px] sm:text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
                       style={{ width: columnWidths.status }}
                       onClick={() => handleSort("status")}
                     >
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         Durum
                         {sortColumn === "status" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          sortDirection === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                         )}
                       </div>
                     </div>
                     <div 
-                      className="table-cell px-2 py-1.5 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      className="table-cell px-2 py-1 text-[10px] sm:text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
                       style={{ width: columnWidths.assignee }}
                     >
                       Atanan
                     </div>
                     <div 
-                      className="table-cell px-2 py-1.5 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
-                      style={{ width: columnWidths.people }}
-                    >
-                      Görevi Oluşturan
-                    </div>
-                    <div 
-                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      className="table-cell px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[10px] sm:text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
                       style={{ width: columnWidths.priority }}
                       onClick={() => handleSort("priority")}
                     >
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         Öncelik
                         {sortColumn === "priority" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          sortDirection === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                         )}
                       </div>
                     </div>
                     <div 
-                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
+                      className="table-cell px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[10px] sm:text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A]"
                       style={{ width: columnWidths.dueDate }}
                       onClick={() => handleSort("dueDate")}
                     >
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         Bitiş Tarihi
                         {sortColumn === "dueDate" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          sortDirection === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                         )}
                       </div>
                     </div>
@@ -3589,8 +3751,8 @@ const Tasks = () => {
                                     </Badge>
                                 </div>
                                 <h4 className="font-medium truncate">{req.title}</h4>
-                                <p className="text-sm text-muted-foreground truncate">{req.description}</p>
-                                <div className="mt-2 text-xs text-muted-foreground">
+                                <p className="text-[11px] sm:text-xs text-muted-foreground truncate">{req.description}</p>
+                                <div className="mt-2 text-[11px] sm:text-xs text-muted-foreground">
                                     {req.createdAt instanceof Object ? new Date(req.createdAt.seconds * 1000).toLocaleDateString('tr-TR') : '-'}
                                 </div>
                             </div>
@@ -3610,7 +3772,11 @@ const Tasks = () => {
                   const optimisticUpdate = optimisticUpdates.get(task.id);
                   // Status'ü normalize et (column_ prefix'ini kaldır)
                   const rawStatus = optimisticUpdate ? optimisticUpdate.status : task.status;
-                  const displayStatus = normalizeStatus(rawStatus);
+                  let displayStatus = normalizeStatus(rawStatus);
+                  // Eğer görev tamamlandı ve onaylandıysa, "Onaylandı" olarak göster
+                  if (displayStatus === "completed" && task.approvalStatus === "approved") {
+                    displayStatus = "approved";
+                  }
                   const isOptimistic = !!optimisticUpdate;
                   const isSelected = selectedTaskIds.has(task.id);
                   // Geciken görevler için daha belirgin görsel işaret
@@ -3645,6 +3811,17 @@ const Tasks = () => {
                   // Sadece görevi oluşturan kişi, super admin veya canUpdate yetkisi olanlar düzenleyebilir
                   const isPersonnel = user?.roles?.includes("personnel") || false;
                   const canEditThisTask = !isPersonnel && (isSuperAdmin || canUpdate || task.createdBy === user?.id);
+                  
+                  // Durum değiştirme yetkisi kontrolü
+                  // SADECE görev üyesi (rejected hariç) veya oluşturan durum değiştirebilir
+                  // Yöneticiler için özel durum YOK
+                  const isCreator = task.createdBy === user?.id;
+                  // Önce taskAssignments'tan kontrol et (rejected hariç)
+                  const isAssignedFromAssignments = taskAssignments.some(a => a.assignedTo === user?.id && a.status !== "rejected");
+                  // Fallback: task.assignedUsers array'inden kontrol et
+                  const isAssignedFromTask = Array.isArray(task.assignedUsers) && task.assignedUsers.includes(user?.id || "");
+                  const isAssigned = isAssignedFromAssignments || isAssignedFromTask;
+                  const canChangeStatusForThisTask = isAssigned || isCreator;
 
                   return (
                     <article
@@ -3672,7 +3849,7 @@ const Tasks = () => {
                     >
                       {/* Title */}
                       <div 
-                        className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A] cursor-pointer"
+                        className="table-cell px-2 py-1 align-middle border-r border-[#DFE1E6] dark:border-[#38414A] cursor-pointer"
                         style={{ width: columnWidths.title }}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -3681,33 +3858,39 @@ const Tasks = () => {
                         >
                             <h3 
                               id={`task-title-${task.id}`}
-                          className="font-semibold text-sm text-[#172B4D] dark:text-[#B6C2CF] line-clamp-1 hover:text-[#0052CC] dark:hover:text-[#4C9AFF] transition-colors leading-snug mb-1"
+                          className="font-semibold text-[11px] sm:text-xs text-[#172B4D] dark:text-[#B6C2CF] line-clamp-1 hover:text-[#0052CC] dark:hover:text-[#4C9AFF] transition-colors leading-tight"
                             >
                               {task.title}
                             </h3>
-                            {task.projectId && projects && projects.has(task.projectId) && (
-                              <Badge 
-                                variant="outline" 
-                            className="h-5 px-2 text-[10px] font-medium mt-1 border-[#DFE1E6] dark:border-[#38414A] text-[#42526E] dark:text-[#B6C2CF] bg-[#F4F5F7] dark:bg-[#22272B] leading-tight"
-                              >
-                                {projects.get(task.projectId)?.name || task.projectId}
-                              </Badge>
-                            )}
                           </div>
                           
+                      {/* Project */}
+                      <div className="table-cell px-2 py-1 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.project }}>
+                        {task.projectId && projects && projects.has(task.projectId) ? (
+                          <Badge 
+                            variant="outline" 
+                            className="h-3.5 px-1.5 text-[9px] font-medium border-[#DFE1E6] dark:border-[#38414A] text-[#42526E] dark:text-[#B6C2CF] bg-[#F4F5F7] dark:bg-[#22272B] leading-tight inline-flex"
+                          >
+                            {projects.get(task.projectId)?.name || task.projectId}
+                          </Badge>
+                        ) : (
+                          <span className="text-[10px] sm:text-[11px] text-[#6B778C] dark:text-[#8C9CB8]">-</span>
+                        )}
+                      </div>
+                          
                       {/* Status - Inline Editable */}
-                      <div onClick={(e) => e.stopPropagation()} className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.status }}>
+                      <div onClick={(e) => e.stopPropagation()} className="table-cell px-2 py-1 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.status }}>
                         <Select
                           value={displayStatus}
                           onValueChange={(newStatus) => {
                             handleStatusChange(task.id, newStatus);
                           }}
-                          disabled={!canEditThisTask}
+                          disabled={!canChangeStatusForThisTask}
                         >
                           <SelectTrigger 
                             className={cn(
-                              "h-auto min-h-[32px] px-2 py-1.5 text-xs border-0 bg-transparent rounded-full w-full transition-all duration-200 flex items-center justify-center group",
-                              canEditThisTask 
+                              "h-auto min-h-[24px] px-1.5 py-0.5 text-[10px] sm:text-xs border-0 bg-transparent rounded-full w-full transition-all duration-200 flex items-center justify-center group",
+                              canChangeStatusForThisTask 
                                 ? "hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] cursor-pointer hover:shadow-md focus:ring-2 focus:ring-[#0052CC]/50 focus:ring-offset-2 active:scale-[0.97] focus-visible:outline-none" 
                                 : "cursor-not-allowed opacity-60"
                             )}
@@ -3716,12 +3899,13 @@ const Tasks = () => {
                             <Badge 
                               variant="secondary" 
                               className={cn(
-                                  "h-6 px-3 text-xs font-semibold border-0 leading-tight rounded-full inline-flex items-center justify-center gap-1.5 transition-all duration-200 shadow-sm whitespace-nowrap",
+                                  "h-3.5 px-1.5 text-[9px] sm:text-[10px] font-semibold border-0 leading-tight rounded-full inline-flex items-center justify-center gap-0.5 transition-all duration-200 shadow-sm whitespace-nowrap",
+                                  displayStatus === "approved" && "bg-[#E3FCEF] text-[#006644] dark:bg-[#1C3329] dark:text-[#4BCE97] hover:bg-[#D3FCE3] dark:hover:bg-[#2A4A3A]",
                                   displayStatus === "completed" && "bg-[#E3FCEF] text-[#006644] dark:bg-[#1C3329] dark:text-[#4BCE97] hover:bg-[#D3FCE3] dark:hover:bg-[#2A4A3A]",
                                   displayStatus === "in_progress" && "bg-[#DEEBFF] text-[#0052CC] dark:bg-[#1C2B41] dark:text-[#4C9AFF] hover:bg-[#CEDBEF] dark:hover:bg-[#2A3B51]",
                                   displayStatus === "pending" && "bg-[#DEEBFF] text-[#0052CC] dark:bg-[#1C2B41] dark:text-[#4C9AFF] hover:bg-[#CEDBEF] dark:hover:bg-[#2A3B51]",
                                   isOptimistic && "opacity-50",
-                                  canEditThisTask && "group-hover:shadow-md"
+                                  canChangeStatusForThisTask && "group-hover:shadow-md"
                                 )}
                             >
                               {(() => {
@@ -3730,12 +3914,12 @@ const Tasks = () => {
                                   const Icon = statusItem.icon;
                                   return (
                                     <>
-                                      <Icon className="h-3.5 w-3.5 flex-shrink-0" />
-                                      <span className="whitespace-nowrap">{getStatusLabel(displayStatus)}</span>
+                                      <Icon className="h-3 w-3 flex-shrink-0" />
+                                      <span className="whitespace-nowrap text-[9px] sm:text-[10px]">{getStatusLabel(displayStatus)}</span>
                                     </>
                                   );
                                 }
-                                return <span className="whitespace-nowrap">{getStatusLabel(displayStatus)}</span>;
+                                return <span className="whitespace-nowrap text-[9px] sm:text-[10px]">{getStatusLabel(displayStatus)}</span>;
                               })()}
                             </Badge>
                             </SelectValue>
@@ -3750,18 +3934,16 @@ const Tasks = () => {
                                   value={statusItem.value}
                                   className={cn(
                                     "cursor-pointer rounded-md px-3 py-2.5 transition-all duration-150",
-                                    "hover:bg-[#EBECF0] dark:hover:bg-[#2C333A]",
-                                    "focus:bg-[#EBECF0] dark:focus:bg-[#2C333A]",
+                                    "hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] hover:text-foreground",
+                                    "focus:bg-[#EBECF0] dark:focus:bg-[#2C333A] focus:text-foreground",
                                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC]/50 focus-visible:ring-offset-1",
+                                    "data-[highlighted]:bg-[#EBECF0] data-[highlighted]:dark:bg-[#2C333A] data-[highlighted]:text-foreground",
                                     isSelected && "bg-[#EBECF0] dark:bg-[#2C333A] font-semibold"
                                   )}
                                 >
                                   <div className="flex items-center gap-2.5">
-                                    <Icon className={cn("h-4 w-4 flex-shrink-0", statusItem.color)} />
-                                    <span className="text-xs font-medium">{statusItem.label}</span>
-                                    {isSelected && (
-                                      <Check className="h-3.5 w-3.5 ml-auto text-[#0052CC] dark:text-[#4C9AFF]" />
-                                    )}
+                                    <Icon className={cn("h-3 w-3 flex-shrink-0", statusItem.color)} />
+                                    <span className="text-[10px] sm:text-[11px] font-medium">{statusItem.label}</span>
                                   </div>
                                 </SelectItem>
                               );
@@ -3771,38 +3953,38 @@ const Tasks = () => {
                       </div>
                       
                       {/* Assignee - Inline Editable - Tüm atanan kişileri göster */}
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.assignee }} onClick={(e) => e.stopPropagation()}>
+                      <div className="table-cell px-2 py-1 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.assignee }} onClick={(e) => e.stopPropagation()}>
                         <Popover>
                           <PopoverTrigger asChild>
-                            <button className="flex items-center gap-1.5 hover:opacity-80 transition-opacity w-full">
+                            <button className="flex items-center gap-1 hover:opacity-80 transition-opacity w-full">
                               {assignedUsers.length > 0 ? (
-                                <div className="flex items-center gap-2 flex-wrap">
+                                <div className="flex items-center gap-1 flex-wrap">
                                   {assignedUsers.map((user, index) => {
                                     const firstName = getFirstName(user.fullName);
                                     return (
                                       <span 
                                         key={user.id} 
-                                        className="text-xs text-[#42526E] dark:text-[#B6C2CF] font-medium" 
+                                        className="text-[10px] sm:text-[11px] text-[#42526E] dark:text-[#B6C2CF] font-medium truncate max-w-[120px]" 
                                         title={user.fullName || user.email}
                                       >
                                         {firstName || user.email}
-                                        {index < assignedUsers.length - 1 && <span className="text-[#6B778C] dark:text-[#8C9CB8] ml-1">,</span>}
+                                        {index < assignedUsers.length - 1 && <span className="text-[#6B778C] dark:text-[#8C9CB8] ml-0.5">,</span>}
                                       </span>
                                     );
                                   })}
                                 </div>
                               ) : (
-                                <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8] cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] transition-colors">-</span>
+                                <span className="text-[10px] sm:text-[11px] text-[#6B778C] dark:text-[#8C9CB8] cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] transition-colors">-</span>
                               )}
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-64 p-2" align="start">
-                            <div className="space-y-2">
-                              <div className="text-xs font-semibold mb-2">Kullanıcı Ata</div>
+                          <PopoverContent className="w-64 p-1.5" align="start">
+                            <div className="space-y-1.5">
+                              <div className="text-[10px] sm:text-[11px] font-semibold mb-1.5 px-1">Kullanıcı Ata</div>
                               <Command>
-                                <CommandInput placeholder="Kullanıcı ara..." />
+                                <CommandInput placeholder="Kullanıcı ara..." className="text-[11px] sm:text-xs !h-9 !py-2" />
                                 <CommandList>
-                                  <CommandEmpty>Kullanıcı bulunamadı</CommandEmpty>
+                                  <CommandEmpty className="text-[10px] sm:text-[11px] py-4">Kullanıcı bulunamadı</CommandEmpty>
                                   <CommandGroup>
                                     {cachedUsers.map((user) => {
                                       const isAssigned = assignedUserIds.includes(user.id);
@@ -3820,18 +4002,18 @@ const Tasks = () => {
                                               }
                                             }
                                           }}
-                                          className={cn(isAssigned && "opacity-50")}
+                                          className={cn("px-2 py-1.5", isAssigned && "opacity-50")}
                                         >
                                           <div className="flex items-center gap-2 w-full">
-                                            <Avatar className="h-6 w-6">
-                                              <AvatarFallback className="text-[10px]">
+                                            <Avatar className="h-5 w-5">
+                                              <AvatarFallback className="text-[9px]">
                                                 {getInitials(user.fullName || user.email)}
                                           </AvatarFallback>
                                         </Avatar>
-                                            <span className="flex-1 text-sm" title={user.fullName || user.email}>
+                                            <span className="flex-1 text-[11px] sm:text-xs" title={user.fullName || user.email}>
                                               {getFirstName(user.fullName || user.displayName) || user.email}
                                             </span>
-                                            {isAssigned && <Check className="h-4 w-4 text-primary" />}
+                                            {isAssigned && <Check className="h-3 w-3 text-primary" />}
                                           </div>
                                         </CommandItem>
                                       );
@@ -3844,29 +4026,15 @@ const Tasks = () => {
                         </Popover>
                       </div>
                       
-                      {/* Görevi Oluşturan */}
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.people }}>
-                        {(() => {
-                          const creatorId = (task as any).createdBy || (task as any).created_by;
-                          const creator = creatorId ? cachedUsers.find(u => u.id === creatorId) : null;
-                          if (creator) {
-                            return (
-                              <span className="text-xs text-[#42526E] dark:text-[#B6C2CF] font-medium whitespace-nowrap" title={creator.fullName || creator.email}>
-                                {creator.fullName || creator.displayName || creator.email}
-                              </span>
-                            );
-                          }
-                          return <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>;
-                        })()}
-                      </div>
-                      
                       {/* Priority - Inline Editable */}
-                      <div onClick={(e) => e.stopPropagation()} className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.priority }}>
+                      <div onClick={(e) => e.stopPropagation()} className="table-cell px-2 py-1 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.priority }}>
                         <Select
                           value={String(task.priority || 1)}
                           onValueChange={async (newPriority) => {
                             try {
-                              await updateTask(task.id, { priority: Number(newPriority) as 1 | 2 | 3 | 4 | 5 }, user?.id);
+                              // Yeni 0-5 sistemini eski 1-5 sistemine çevir (backend uyumluluğu için)
+                              const oldPriority = convertNewPriorityToOld(Number(newPriority) as PriorityLevel);
+                              await updateTask(task.id, { priority: oldPriority as 1 | 2 | 3 | 4 | 5 }, user?.id);
                               toast.success("Öncelik güncellendi");
                             } catch (error) {
                               toast.error("Öncelik güncellenirken hata oluştu");
@@ -3876,14 +4044,14 @@ const Tasks = () => {
                         >
                           <SelectTrigger 
                             className={cn(
-                              "h-auto min-h-[28px] px-2 py-1 text-xs border-0 bg-transparent rounded-md w-full transition-all duration-200 group",
+                              "h-auto min-h-[22px] px-1.5 py-0.5 text-[10px] sm:text-[11px] border-0 bg-transparent rounded-md w-full transition-all duration-200 group",
                               canEditThisTask 
                                 ? "hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] cursor-pointer hover:shadow-sm focus:ring-2 focus:ring-[#0052CC]/50 focus:ring-offset-2 active:scale-[0.97] focus-visible:outline-none" 
                                 : "cursor-not-allowed opacity-60"
                             )}
                           >
                             <SelectValue>
-                              <span className={cn("text-xs font-medium", priorityDisplay.color)}>
+                              <span className={cn("text-[10px] sm:text-[11px] font-medium", priorityDisplay.color)}>
                                 {priorityDisplay.label}
                               </span>
                             </SelectValue>
@@ -3900,24 +4068,22 @@ const Tasks = () => {
                               const isSelected = priorityItem.value === String(task.priority || 1);
                               return (
                                 <SelectItem 
-                                  key={priorityItem.value}
+                                  key={priorityItem.value} 
                                   value={priorityItem.value}
                                   className={cn(
                                     "cursor-pointer rounded-md px-3 py-2.5 transition-all duration-150",
-                                    "hover:bg-[#EBECF0] dark:hover:bg-[#2C333A]",
-                                    "focus:bg-[#EBECF0] dark:focus:bg-[#2C333A]",
+                                    "hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] hover:text-foreground",
+                                    "focus:bg-[#EBECF0] dark:focus:bg-[#2C333A] focus:text-foreground",
                                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC]/50 focus-visible:ring-offset-1",
+                                    "data-[highlighted]:bg-[#EBECF0] data-[highlighted]:dark:bg-[#2C333A] data-[highlighted]:text-foreground",
                                     isSelected && "bg-[#EBECF0] dark:bg-[#2C333A] font-semibold"
                                   )}
                                 >
                                   <div className="flex items-center gap-2.5">
                                     <div className={cn("p-1 rounded-md", priorityItem.bgColor)}>
-                                      <Icon className={cn("h-3.5 w-3.5", priorityItem.color)} />
+                                      <Icon className={cn("h-3 w-3", priorityItem.color)} />
                                     </div>
-                                    <span className="text-xs font-medium">{priorityItem.label}</span>
-                                    {isSelected && (
-                                      <Check className="h-3.5 w-3.5 ml-auto text-[#0052CC] dark:text-[#4C9AFF]" />
-                                    )}
+                                    <span className="text-[10px] sm:text-[11px] font-medium">{priorityItem.label}</span>
                                   </div>
                                 </SelectItem>
                               );
@@ -3927,22 +4093,22 @@ const Tasks = () => {
                       </div>
                       
                       {/* Due Date */}
-                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.dueDate }}>
+                      <div className="table-cell px-2 py-1 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]" style={{ width: columnWidths.dueDate }}>
                         {dueDate ? (
                           <div className={cn(
-                            "inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium",
+                            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-medium leading-tight",
                             overdue 
                               ? "bg-[#FFEBE6] text-[#DE350B] dark:bg-[#3D2115] dark:text-[#FF5630] border border-[#FF5630]/30" 
                               : dueSoon 
                                 ? "bg-[#FFF7E6] text-[#FF8B00] dark:bg-[#3D2E1A] dark:text-[#F5CD47] border border-[#FF8B00]/30"
                                 : "text-[#42526E] dark:text-[#B6C2CF]"
                           )}>
-                            {overdue && <AlertCircle className="h-3.5 w-3.5" />}
-                            {!overdue && <CalendarDays className="h-3.5 w-3.5" />}
-                            <span>{formatDueDate(dueDate)}</span>
+                            {overdue && <AlertCircle className="h-3 w-3" />}
+                            {!overdue && <CalendarDays className="h-3 w-3" />}
+                            <span className="whitespace-nowrap">{formatDueDate(dueDate)}</span>
                           </div>
                         ) : (
-                          <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
+                          <span className="text-[10px] sm:text-[11px] text-[#6B778C] dark:text-[#8C9CB8]">-</span>
                         )}
                       </div>
                           
@@ -3960,7 +4126,11 @@ const Tasks = () => {
                   const dueSoon = isTaskDueSoon(task);
                   const optimisticUpdate = optimisticUpdates.get(task.id);
                   const rawStatus = optimisticUpdate ? optimisticUpdate.status : task.status;
-                  const displayStatus = normalizeStatus(rawStatus);
+                  let displayStatus = normalizeStatus(rawStatus);
+                  // Eğer görev tamamlandı ve onaylandıysa, "Onaylandı" olarak göster
+                  if (displayStatus === "completed" && task.approvalStatus === "approved") {
+                    displayStatus = "approved";
+                  }
                   const isOptimistic = !!optimisticUpdate;
                   const isSelected = selectedTaskIds.has(task.id);
                   
@@ -4016,6 +4186,7 @@ const Tasks = () => {
                               variant="secondary" 
                                 className={cn(
                                 "h-4 px-1 text-[10px] font-normal border-0 leading-tight",
+                                displayStatus === "approved" && "bg-[#E3FCEF] text-[#006644] dark:bg-[#1C3329] dark:text-[#4BCE97]",
                                 displayStatus === "completed" && "bg-[#E3FCEF] text-[#006644] dark:bg-[#1C3329] dark:text-[#4BCE97]",
                                 displayStatus === "in_progress" && "bg-[#DEEBFF] text-[#0052CC] dark:bg-[#1C2B41] dark:text-[#4C9AFF]",
                                 displayStatus === "pending" && "bg-[#F4F5F7] text-[#42526E] dark:bg-[#2C333A] dark:text-[#B6C2CF]"
@@ -4263,10 +4434,11 @@ const Tasks = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Tüm Öncelikler</SelectItem>
-                      <SelectItem value="1">P1 - Çok Yüksek</SelectItem>
-                      <SelectItem value="2">P2 - Yüksek</SelectItem>
-                      <SelectItem value="3">P3 - Orta</SelectItem>
-                      <SelectItem value="4">P4 - Düşük</SelectItem>
+                      {PRIORITY_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value.toString()}>
+                          {opt.label} ({opt.value})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

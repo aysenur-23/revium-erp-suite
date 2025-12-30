@@ -32,32 +32,32 @@ const Admin = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
         <div>
-          <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Admin Paneli</h1>
+          <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground leading-tight">Admin Paneli</h1>
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-2">
-          <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:pb-0 scrollbar-hide">
+          <div className="w-full pb-2 sm:pb-0">
             <TabsList className="flex h-auto p-1 gap-1 sm:gap-2 w-full sm:w-auto">
-              <TabsTrigger value="users" className="flex-1 sm:flex-initial gap-1 sm:gap-2 text-[14px] sm:text-[15px] min-h-[44px] sm:min-h-0 whitespace-nowrap">
-                <Users className="h-4 w-4 flex-shrink-0" />
+              <TabsTrigger value="users" className="flex-1 sm:flex-initial gap-1 sm:gap-2 text-[11px] sm:text-xs min-h-[44px] sm:min-h-0 whitespace-nowrap">
+                <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
                 <span>Kullanıcılar</span>
               </TabsTrigger>
-              <TabsTrigger value="permissions" className="flex-1 sm:flex-initial gap-1 sm:gap-2 text-[14px] sm:text-[15px] min-h-[44px] sm:min-h-0 whitespace-nowrap">
-                <Shield className="h-4 w-4 flex-shrink-0" />
+              <TabsTrigger value="permissions" className="flex-1 sm:flex-initial gap-1 sm:gap-2 text-[11px] sm:text-xs min-h-[44px] sm:min-h-0 whitespace-nowrap">
+                <Shield className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
                 <span>Rol Yetkileri</span>
               </TabsTrigger>
-              <TabsTrigger value="logs" className="flex-1 sm:flex-initial gap-1 sm:gap-2 text-[14px] sm:text-[15px] min-h-[44px] sm:min-h-0 whitespace-nowrap">
-                <FileText className="h-4 w-4 flex-shrink-0" />
+              <TabsTrigger value="logs" className="flex-1 sm:flex-initial gap-1 sm:gap-2 text-[11px] sm:text-xs min-h-[44px] sm:min-h-0 whitespace-nowrap">
+                <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
                 <span>Audit Loglar</span>
               </TabsTrigger>
-              <TabsTrigger value="insights" className="flex-1 sm:flex-initial gap-1 sm:gap-2 text-[14px] sm:text-[15px] min-h-[44px] sm:min-h-0 whitespace-nowrap">
-                <UserCheck className="h-4 w-4 flex-shrink-0" />
+              <TabsTrigger value="insights" className="flex-1 sm:flex-initial gap-1 sm:gap-2 text-[11px] sm:text-xs min-h-[44px] sm:min-h-0 whitespace-nowrap">
+                <UserCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
                 <span>Kullanıcı Analizi</span>
               </TabsTrigger>
-              <TabsTrigger value="settings" className="flex-1 sm:flex-initial gap-1 sm:gap-2 text-[14px] sm:text-[15px] min-h-[44px] sm:min-h-0 whitespace-nowrap">
-                <Settings className="h-4 w-4 flex-shrink-0" />
+              <TabsTrigger value="settings" className="flex-1 sm:flex-initial gap-1 sm:gap-2 text-[11px] sm:text-xs min-h-[44px] sm:min-h-0 whitespace-nowrap">
+                <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
                 <span>Ayarlar</span>
               </TabsTrigger>
             </TabsList>

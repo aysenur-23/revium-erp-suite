@@ -308,8 +308,8 @@ const TeamManagement = () => {
               </div>
             </div>
             <div>
-              <p className="text-sm font-medium text-foreground">Yükleniyor...</p>
-              <p className="text-xs text-muted-foreground mt-1">Ekip yönetimi hazırlanıyor</p>
+              <p className="text-[11px] sm:text-xs font-medium text-foreground">Yükleniyor...</p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">Ekip yönetimi hazırlanıyor</p>
             </div>
           </div>
         </div>
@@ -322,7 +322,7 @@ const TeamManagement = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2 border-b">
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -334,7 +334,7 @@ const TeamManagement = () => {
         <div className="flex flex-row items-center justify-between gap-2 pb-2 border-b">
           <div className="flex flex-row items-center gap-2">
             <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-              <SelectTrigger className="w-full sm:w-[200px] h-9 text-sm">
+              <SelectTrigger className="w-full sm:w-[200px] h-9 text-[11px] sm:text-xs">
                 <SelectValue placeholder="Departman Filtrele" />
               </SelectTrigger>
               <SelectContent>
@@ -348,7 +348,7 @@ const TeamManagement = () => {
             </Select>
             {isMainAdminUser && (
               <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter}>
-                <SelectTrigger className="w-full sm:w-[200px] h-9 text-sm">
+                <SelectTrigger className="w-full sm:w-[200px] h-9 text-[11px] sm:text-xs">
                   <SelectValue placeholder="Ekip seçiniz" />
                 </SelectTrigger>
                 <SelectContent>
@@ -368,7 +368,7 @@ const TeamManagement = () => {
               variant="ghost"
               size="sm"
               onClick={() => setHeroStatsExpanded(true)}
-              className="h-7 px-2 gap-1 text-xs"
+              className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
               aria-label="İstatistikleri göster"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
@@ -378,7 +378,7 @@ const TeamManagement = () => {
               variant="ghost"
               size="sm"
               onClick={() => setHeroStatsExpanded(false)}
-              className="h-7 px-2 gap-1 text-xs"
+              className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
               aria-label="İstatistikleri gizle"
             >
               <ChevronRight className="h-3.5 w-3.5" />
@@ -445,52 +445,52 @@ const TeamManagement = () => {
         )}
 
         {/* Two Column Layout - Sol: Görev Onayları + İstatistikler, Sağ: En Aktif Üyeler + Loglar */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0 items-stretch">
           {/* Sol Sütun - Görev Onayları ve İstatistikler */}
-          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col">
+          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col h-full">
             {/* Görev Onayları Bölümü */}
-            <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200">
+            <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200 flex-1 flex flex-col">
               <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-md bg-primary/10">
                     <CheckSquare className="h-4 w-4 text-primary" />
                   </div>
-                  <h3 className="text-sm font-semibold text-foreground">Görev Onayları</h3>
+                  <h3 className="text-[11px] sm:text-xs font-semibold text-foreground">Görev Onayları</h3>
                 </div>
               </div>
-              <CardContent className="p-2">
+              <CardContent className="p-2 flex-1 flex flex-col min-h-0">
                 <PendingTaskApprovals />
                 </CardContent>
               </Card>
 
             {/* İstatistikler Bölümü */}
-            <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200">
+            <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200 flex-1 flex flex-col">
               <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-md bg-primary/10">
                     <BarChart3 className="h-4 w-4 text-primary" />
                   </div>
-                  <h3 className="text-sm font-semibold text-foreground">İstatistikler</h3>
+                  <h3 className="text-[11px] sm:text-xs font-semibold text-foreground">İstatistikler</h3>
                 </div>
               </div>
-              <CardContent className="p-2">
+              <CardContent className="p-2 flex-1 flex flex-col min-h-0">
                 <TeamStatsView selectedTeamFilter={selectedTeamFilter} />
                 </CardContent>
               </Card>
           </div>
 
           {/* Sağ Sütun - En Aktif Üyeler ve Loglar */}
-          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col">
+          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col h-full">
 
             {/* En Aktif Üyeler Bölümü */}
             {mostActiveMembers.length > 0 && (
-              <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200">
+              <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200 flex-shrink-0">
                 <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 rounded-md bg-primary/10">
                       <Award className="h-4 w-4 text-primary" />
                     </div>
-                    <h3 className="text-sm font-semibold text-foreground">En Aktif Üyeler</h3>
+                    <h3 className="text-[11px] sm:text-xs font-semibold text-foreground">En Aktif Üyeler</h3>
                   </div>
                 </div>
                 <CardContent className="p-2">
@@ -502,13 +502,13 @@ const TeamManagement = () => {
                             {index + 1}
                           </div>
                           <div>
-                            <p className="text-sm font-medium">{member.fullName || member.email}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-[11px] sm:text-xs font-medium">{member.fullName || member.email}</p>
+                            <p className="text-[11px] sm:text-xs text-muted-foreground">
                               {completedTasks} tamamlanan / {totalTasks} toplam
                             </p>
                           </div>
                         </div>
-                        <Badge variant="secondary" className="text-xs px-2 py-1">
+                        <Badge variant="secondary" className="text-[10px] px-2 py-1">
                           {completionRate.toFixed(0)}%
                         </Badge>
                       </div>
@@ -525,7 +525,7 @@ const TeamManagement = () => {
                   <div className="p-1.5 rounded-md bg-primary/10">
                     <FileText className="h-4 w-4 text-primary" />
                   </div>
-                  <h3 className="text-sm font-semibold text-foreground">Ekip Logları</h3>
+                  <h3 className="text-[11px] sm:text-xs font-semibold text-foreground">Ekip Logları</h3>
                 </div>
               </div>
               <CardContent className="p-2 flex-1 flex flex-col min-h-0">
@@ -546,7 +546,7 @@ const TeamManagement = () => {
               <div className="p-1.5 rounded-md bg-primary/10">
                 <Users className="h-4 w-4 text-primary" />
               </div>
-              <h3 className="text-sm font-semibold text-foreground">Ekip Üyeleri</h3>
+              <h3 className="text-[11px] sm:text-xs font-semibold text-foreground">Ekip Üyeleri</h3>
             </div>
           </div>
           <CardContent className="p-2">

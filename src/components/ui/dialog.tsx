@@ -68,14 +68,14 @@ const DialogContent = React.forwardRef<
           "fixed left-0 right-0 bottom-0 z-[10001] grid w-full gap-3 sm:gap-4 border-t bg-background p-3 sm:p-4 md:p-6 pb-safe shadow-lg duration-200",
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-          "!max-h-[95vh] sm:!max-h-[90vh] !overflow-hidden",
+          "!max-h-[95vh] sm:!max-h-[80vh] !overflow-hidden",
           "scroll-smooth -webkit-overflow-scrolling-touch overscroll-behavior-contain",
           // Professional mobile optimizations
           "touch-manipulation",
           // Desktop: Centered modal (sadece data-task-modal yoksa)
-          !hasTaskModal && "sm:left-[50%] sm:top-[50%] sm:bottom-auto sm:right-auto sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:border sm:border-t",
-          !hasTaskModal && "sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]",
-          !hasTaskModal && "sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:!max-h-[85vh]",
+          !hasTaskModal && "sm:left-[7.5vw] sm:top-[10vh] sm:bottom-auto sm:right-auto sm:max-w-[85vw] sm:translate-x-0 sm:translate-y-0 sm:rounded-lg sm:border sm:border-t",
+          !hasTaskModal && "sm:data-[state=closed]:slide-out-to-left sm:data-[state=closed]:slide-out-to-top sm:data-[state=open]:slide-in-from-left sm:data-[state=open]:slide-in-from-top",
+          !hasTaskModal && "sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:!max-h-[80vh]",
           className,
         )}
         {...props}

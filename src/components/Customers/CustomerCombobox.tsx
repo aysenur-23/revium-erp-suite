@@ -58,7 +58,13 @@ export const CustomerCombobox = memo(({ value, onChange, placeholder = "Müşter
     try {
       const firebaseCustomers = await getCustomers();
       const convertedCustomers = firebaseCustomers.map(convertFirebaseCustomerToUI);
-      setCustomers(convertedCustomers);
+      
+      // Duplicate kontrolü - aynı ID'ye sahip müşterileri filtrele
+      const uniqueCustomers = convertedCustomers.filter((customer, index, self) =>
+        index === self.findIndex((c) => c.id === customer.id)
+      );
+      
+      setCustomers(uniqueCustomers);
     } catch (error: unknown) {
       setCustomers([]);
       toast.error("Müşteriler yüklenirken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));

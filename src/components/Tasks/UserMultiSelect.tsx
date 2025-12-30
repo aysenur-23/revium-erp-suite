@@ -213,16 +213,16 @@ export const UserMultiSelect = ({ selectedUsers, onSelectionChange, disabled }: 
 
       {selectedUsers.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
-          {getSelectedUserNames().map((name, index) => {
-            const userId = selectedUsers[index];
-            if (!userId) return null;
+          {Array.from(new Set(selectedUsers)).map((userId) => {
+            const user = users.find(u => u.id === userId);
+            if (!user) return null;
             return (
               <Badge 
                 key={userId} 
                 variant="secondary" 
                 className="gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 transition-colors"
               >
-                <span className="truncate max-w-[120px] sm:max-w-none">{name}</span>
+                <span className="truncate max-w-[120px] sm:max-w-none">{user.full_name || "İsimsiz Kullanıcı"}</span>
                 <X
                   className={cn(
                     "h-3.5 w-3.5 shrink-0 rounded-full hover:bg-primary/20 p-0.5 transition-colors",

@@ -830,13 +830,28 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
     // Giriş logları
     if (log.tableName === "user_logins") {
       const metadata = log.metadata && typeof log.metadata === 'object' ? log.metadata as Record<string, unknown> : {};
+      const action = 'action' in metadata && typeof metadata.action === 'string' ? metadata.action : null;
       const method = 'method' in metadata && typeof metadata.method === 'string' ? metadata.method : null;
-      if (method === "GOOGLE") {
-        description = `${userName} Google hesabı ile giriş yaptı`;
-      } else if (method === "EMAIL") {
-        description = `${userName} e-posta ve şifre ile giriş yaptı`;
+      
+      if (action === "LOGOUT") {
+        description = `${userName} sistemden çıkış yaptı`;
+      } else if (action === "LOGIN") {
+        if (method === "GOOGLE") {
+          description = `${userName} Google hesabı ile giriş yaptı`;
+        } else if (method === "EMAIL") {
+          description = `${userName} e-posta ve şifre ile giriş yaptı`;
+        } else {
+          description = `${userName} sisteme giriş yaptı`;
+        }
       } else {
-        description = `${userName} sisteme giriş yaptı`;
+        // Eski format için geriye dönük uyumluluk
+        if (method === "GOOGLE") {
+          description = `${userName} Google hesabı ile giriş yaptı`;
+        } else if (method === "EMAIL") {
+          description = `${userName} e-posta ve şifre ile giriş yaptı`;
+        } else {
+          description = `${userName} sisteme giriş yaptı`;
+        }
       }
     }
     // Görev atama logları - özel format
@@ -1483,8 +1498,8 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                         <div className="mt-4 pt-4 border-t space-y-4">
                           {/* Genel Bilgiler */}
                           <div className="bg-gradient-to-r from-blue-50/50 to-purple-50/50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg p-4 border border-blue-200/50 dark:border-blue-800/50">
-                            <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                              <FileText className="h-4 w-4" />
+                            <h4 className="font-semibold text-[11px] sm:text-xs mb-3 flex items-center gap-2 leading-tight">
+                              <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                               Genel Bilgiler
                             </h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1495,9 +1510,9 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                                     {(log.userName || log.userEmail || "S").charAt(0).toUpperCase()}
                                   </div>
                                   <div className="flex flex-col">
-                                    <span className="font-semibold text-sm">{log.userName || (log.userEmail ? log.userEmail.split("@")[0] : "Sistem")}</span>
+                                    <span className="font-semibold text-[11px] sm:text-xs">{log.userName || (log.userEmail ? log.userEmail.split("@")[0] : "Sistem")}</span>
                                     {log.userEmail && (
-                                      <span className="text-xs text-muted-foreground">{log.userEmail}</span>
+                                      <span className="text-[10px] sm:text-[11px] text-muted-foreground">{log.userEmail}</span>
                                     )}
                                   </div>
                                 </div>

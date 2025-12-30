@@ -5,13 +5,18 @@
 
 // Breakpoint Definitions (Tailwind CSS ile uyumlu)
 export const BREAKPOINTS = {
-  xs: 0,
+  xs: 475,
   sm: 640,
   md: 768,
   lg: 1024,
   xl: 1280,
   '2xl': 1536,
+  '3xl': 1920,
+  '4xl': 2560,
 } as const;
+
+// Breakpoint type for TypeScript
+export type Breakpoint = keyof typeof BREAKPOINTS;
 
 // Touch Target Minimum Sizes (Apple HIG & Material Design)
 export const TOUCH_TARGETS = {
@@ -42,7 +47,7 @@ export const TYPOGRAPHY = {
 } as const;
 
 /**
- * Check if current viewport is mobile
+ * Check if current viewport is mobile (< 768px)
  */
 export const isMobile = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -50,7 +55,7 @@ export const isMobile = (): boolean => {
 };
 
 /**
- * Check if current viewport is tablet
+ * Check if current viewport is tablet (768px - 1023px)
  */
 export const isTablet = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -58,11 +63,57 @@ export const isTablet = (): boolean => {
 };
 
 /**
- * Check if current viewport is desktop
+ * Check if current viewport is desktop (>= 1024px)
  */
 export const isDesktop = (): boolean => {
   if (typeof window === 'undefined') return false;
   return window.innerWidth >= BREAKPOINTS.lg;
+};
+
+/**
+ * Check if current viewport matches a specific breakpoint
+ */
+export const matchesBreakpoint = (breakpoint: Breakpoint): boolean => {
+  if (typeof window === 'undefined') return false;
+  const width = window.innerWidth;
+  
+  switch (breakpoint) {
+    case 'xs':
+      return width < BREAKPOINTS.sm;
+    case 'sm':
+      return width >= BREAKPOINTS.sm && width < BREAKPOINTS.md;
+    case 'md':
+      return width >= BREAKPOINTS.md && width < BREAKPOINTS.lg;
+    case 'lg':
+      return width >= BREAKPOINTS.lg && width < BREAKPOINTS.xl;
+    case 'xl':
+      return width >= BREAKPOINTS.xl && width < BREAKPOINTS['2xl'];
+    case '2xl':
+      return width >= BREAKPOINTS['2xl'] && width < BREAKPOINTS['3xl'];
+    case '3xl':
+      return width >= BREAKPOINTS['3xl'] && width < BREAKPOINTS['4xl'];
+    case '4xl':
+      return width >= BREAKPOINTS['4xl'];
+    default:
+      return false;
+  }
+};
+
+/**
+ * Get current breakpoint name
+ */
+export const getCurrentBreakpoint = (): Breakpoint => {
+  if (typeof window === 'undefined') return 'xs';
+  const width = window.innerWidth;
+  
+  if (width < BREAKPOINTS.sm) return 'xs';
+  if (width < BREAKPOINTS.md) return 'sm';
+  if (width < BREAKPOINTS.lg) return 'md';
+  if (width < BREAKPOINTS.xl) return 'lg';
+  if (width < BREAKPOINTS['2xl']) return 'xl';
+  if (width < BREAKPOINTS['3xl']) return '2xl';
+  if (width < BREAKPOINTS['4xl']) return '3xl';
+  return '4xl';
 };
 
 /**
@@ -105,17 +156,17 @@ export const getGridColumns = (cols: { base: number; sm?: number; md?: number; l
  */
 export const RESPONSIVE_PATTERNS = {
   // Container padding
-  containerPadding: 'p-3 sm:p-4 md:p-6',
+  containerPadding: 'p-3 sm:p-4 md:p-5',
   // Card padding
-  cardPadding: 'p-4 sm:p-5 md:p-6',
+  cardPadding: 'p-3 sm:p-4 md:p-5',
   // Section spacing
-  sectionSpacing: 'space-y-4 sm:space-y-6 md:space-y-8',
+  sectionSpacing: 'space-y-3 sm:space-y-4',
   // Grid gap
-  gridGap: 'gap-3 sm:gap-4 md:gap-6',
+  gridGap: 'gap-2.5 sm:gap-3',
   // Button size
-  buttonSize: 'h-11 sm:h-10 px-4 sm:px-3',
+  buttonSize: 'h-11 sm:h-10 px-3 sm:px-3',
   // Input size
-  inputSize: 'h-11 sm:h-10 px-4 sm:px-3',
+  inputSize: 'h-11 sm:h-10 px-3 sm:px-3',
   // Text size
   heading1: 'text-2xl sm:text-3xl md:text-4xl',
   heading2: 'text-xl sm:text-2xl md:text-3xl',

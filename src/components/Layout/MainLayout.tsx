@@ -144,7 +144,7 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
             className={cn(
               "flex-1",
               disableScroll ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden main-scroll-container",
-              "p-2 sm:p-3 md:p-4 lg:p-6 transition-all duration-300",
+              "p-2 xs:p-2.5 sm:p-3 md:p-4 lg:p-6 transition-all duration-300",
               "pb-safe",
               // Scroll iyileştirmeleri
               "scroll-smooth",
@@ -157,7 +157,9 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
               "-webkit-overflow-scrolling-touch",
               // Küçük ekranlarda taşmaları engelle
               "max-w-full",
-              "min-w-0"
+              "min-w-0",
+              // Responsive width constraints
+              "w-full"
             )}
             onClick={closeSidebar}
           >
@@ -166,7 +168,9 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
               !disableScroll && "min-h-0",
               // Küçük ekranlarda taşmaları engelle
               "max-w-full",
-              "overflow-x-hidden"
+              "overflow-x-hidden",
+              // Ensure no horizontal overflow
+              "min-w-0"
             )}>
               {children}
             </div>

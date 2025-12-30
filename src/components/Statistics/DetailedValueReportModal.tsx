@@ -81,9 +81,9 @@ export const DetailedValueReportModal = ({
             totalValueTRY += amountTRY;
 
             const customerId = order.customerId || order.customer_id;
-            if (customerId) {
+            if (customerId && typeof customerId === 'string') {
               const customer = data.find((c): c is Record<string, unknown> & { id: string } => typeof c === 'object' && c !== null && 'id' in c && typeof c.id === 'string' && c.id === customerId);
-              const customerName = customer?.name || "Bilinmeyen Müşteri";
+              const customerName = (customer?.name && typeof customer.name === 'string') ? customer.name : "Bilinmeyen Müşteri";
               
               const custData = customerMap.get(customerId) || { name: customerName, orderCount: 0, totalAmount: 0, totalAmountTRY: 0 };
               custData.orderCount += 1;
@@ -175,13 +175,13 @@ export const DetailedValueReportModal = ({
             stock = Number(item.currentStock !== undefined ? item.currentStock : item.stock) || 0;
             cost = Number(item.unitPrice !== undefined ? item.unitPrice : item.cost) || 0;
             currency = (item.currency as Currency) || "TRY";
-            category = item.category || "Diğer";
+            category = (item.category && typeof item.category === 'string') ? item.category : "Diğer";
             value = stock * cost;
           } else if (type === "products") {
             stock = Number(item.stock) || 0;
             cost = Number(item.price) || 0;
             currency = (item.currency as Currency) || "TRY";
-            category = item.category || "Diğer";
+            category = (item.category && typeof item.category === 'string') ? item.category : "Diğer";
             value = stock * cost;
           } else if (type === "customers") {
             // Customers için sipariş bazlı hesaplama yapılmalı, şimdilik basit bir yaklaşım
@@ -229,7 +229,7 @@ export const DetailedValueReportModal = ({
 
           // En değerli hammaddeler
           itemsWithValue.push({
-            name: item.name || "İsimsiz",
+            name: (item.name && typeof item.name === 'string') ? item.name : "İsimsiz",
             value,
             valueTRY,
             stock,
@@ -332,13 +332,18 @@ export const DetailedValueReportModal = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl w-[80vw] sm:w-[80vw] max-h-[90vh] flex flex-col p-0 !overflow-hidden">
+        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+        <DialogTitle className="sr-only">
+          {title} - Detaylı Değer Raporu
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          Detaylı değer raporu
+        </DialogDescription>
+        
         <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
-          <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground">
+          <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground">
             {title}
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            Detaylı değer raporu
-          </DialogDescription>
+          </h2>
         </DialogHeader>
         
         <ScrollArea className="flex-1 min-h-0">
@@ -354,13 +359,13 @@ export const DetailedValueReportModal = ({
               <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                 <Card>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <CardTitle className="text-[11px] sm:text-xs font-medium flex items-center gap-2">
                       <DollarSign className="h-4 w-4 text-primary" />
                       Toplam Değer (TRY)
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-xl sm:text-2xl font-bold break-words">{formatCurrency(report.totalValueTRY, "TRY")}</div>
+                    <div className="text-[11px] sm:text-xs font-bold break-words">{formatCurrency(report.totalValueTRY, "TRY")}</div>
                     <p className="text-xs text-muted-foreground mt-1">
                       Tüm para birimleri TRY'ye çevrildi
                     </p>
@@ -369,13 +374,13 @@ export const DetailedValueReportModal = ({
 
                 <Card>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <CardTitle className="text-[11px] sm:text-xs font-medium flex items-center gap-2">
                       <Package className="h-4 w-4 text-primary" />
                       Ortalama Birim Maliyet
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-xl sm:text-2xl font-bold break-words">{formatCurrency(report.averageCost, "TRY")}</div>
+                    <div className="text-[11px] sm:text-xs font-bold break-words">{formatCurrency(report.averageCost, "TRY")}</div>
                     <p className="text-xs text-muted-foreground mt-1">
                       Tüm hammaddelerin ortalaması
                     </p>
@@ -384,13 +389,13 @@ export const DetailedValueReportModal = ({
 
                 <Card>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <CardTitle className="text-[11px] sm:text-xs font-medium flex items-center gap-2">
                       <BarChart3 className="h-4 w-4 text-primary" />
                       Toplam Kayıt
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-xl sm:text-2xl font-bold">{data.length}</div>
+                    <div className="text-[11px] sm:text-xs font-bold">{data.length}</div>
                     <p className="text-xs text-muted-foreground mt-1">
                       Toplam hammadde sayısı
                     </p>
@@ -402,7 +407,7 @@ export const DetailedValueReportModal = ({
               {report.byCategory.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
+                    <CardTitle className="text-[14px] sm:text-[15px] flex items-center gap-2">
                       <TrendingUp className="h-5 w-5" />
                       Kategori Bazında Değer Dağılımı
                     </CardTitle>
@@ -444,7 +449,7 @@ export const DetailedValueReportModal = ({
               {report.byCurrency.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                    <CardTitle className="text-[14px] sm:text-[15px] flex items-center gap-2">
                       <DollarSign className="h-4 w-4 sm:h-5 sm:w-5" />
                       Para Birimi Bazında Değer Dağılımı
                     </CardTitle>
@@ -486,7 +491,7 @@ export const DetailedValueReportModal = ({
               {report.byStatus.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                    <CardTitle className="text-[14px] sm:text-[15px] flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" />
                       Stok Durumuna Göre Değer Dağılımı
                     </CardTitle>
@@ -536,7 +541,7 @@ export const DetailedValueReportModal = ({
               {report.topItems.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                    <CardTitle className="text-[14px] sm:text-[15px] flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
                       <span className="break-words">
                         {type === "rawMaterials" && "En Değerli Hammaddeler (Top 10)"}

@@ -158,11 +158,16 @@ app.post('/api/send-email', async (req, res) => {
   // CORS header'larını manuel ekle (ekstra güvenlik için)
   const origin = req.headers.origin;
   // Tüm origin'lere izin ver (production'da spesifik domain'ler belirtilebilir)
-  res.header('Access-Control-Allow-Origin', origin || '*');
-  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   res.header('Access-Control-Allow-Credentials', 'false');
   res.header('Access-Control-Expose-Headers', 'Content-Type');
+  res.header('Access-Control-Max-Age', '86400');
   
   try {
     const { to, subject, html } = req.body;

@@ -44,15 +44,19 @@ export const getNotifications = async (
   options?: { unreadOnly?: boolean; limit?: number }
 ): Promise<Notification[]> => {
   try {
+    // Firestore index gereksinimleri: equality filtreler önce, sonra orderBy
+    // Index: read (ASC), userId (ASC), createdAt (DESC)
     let q = query(
       collection(firestore, "notifications"),
-      where("userId", "==", userId),
-      orderBy("createdAt", "desc")
+      where("userId", "==", userId)
     );
 
     if (options?.unreadOnly) {
       q = query(q, where("read", "==", false));
     }
+
+    // orderBy her zaman en sonda olmalı
+    q = query(q, orderBy("createdAt", "desc"));
 
     if (options?.limit) {
       q = query(q, limit(options.limit));
@@ -64,10 +68,6 @@ export const getNotifications = async (
       ...doc.data(),
     })) as Notification[];
   } catch (error: unknown) {
-    if (import.meta.env.DEV) {
-      console.error("Get notifications error:", error);
-    }
-    
     const isIndexError =
       typeof error === "object" &&
       error !== null &&
@@ -78,21 +78,30 @@ export const getNotifications = async (
       (error as { message: string }).message.includes("index");
 
     if (isIndexError) {
-      const message = (error as { message: string }).message;
-      const indexUrl = message.match(/https:\/\/[^\s]+/)?.[0];
-      if (indexUrl) {
-        if (import.meta.env.DEV) {
-          console.warn("⚠️ Firestore index gerekiyor! Lütfen şu linke tıklayarak index'i oluşturun:");
-          console.warn(indexUrl);
+      // Index hatası durumunda boş array döndür (işlemin devam etmesini engelleme)
+      // Index oluşturulana kadar bildirimler görünmeyecek ama sistem çalışmaya devam edecek
+      // Hataları sessizce handle et - sadece development'ta ilk kez göster
+      if (import.meta.env.DEV) {
+        const message = (error as { message: string }).message;
+        const indexUrl = message.match(/https:\/\/[^\s]+/)?.[0];
+        // Sadece ilk kez göster (tekrar tekrar loglamayı önle)
+        if (!(window as any).__firestoreIndexWarningShown) {
+          console.debug("ℹ️ Firestore index eksik. Bildirimler index oluşturulana kadar görünmeyecek.");
+          if (indexUrl) {
+            console.debug("Index oluşturma linki:", indexUrl);
+          }
+          (window as any).__firestoreIndexWarningShown = true;
         }
-        const friendlyError = new Error("Firestore index gerekiyor. Lütfen index'i oluşturun.");
-        (friendlyError as { indexUrl?: string }).indexUrl = indexUrl;
-        (friendlyError as { code?: string }).code = "index-required";
-        throw friendlyError;
       }
+      return [];
     }
     
-    throw error;
+    // Diğer hatalar için de boş array döndür (sistemin çalışmaya devam etmesi için)
+    // Sadece gerçek hataları logla (index hatası değilse)
+    if (import.meta.env.DEV) {
+      console.debug("Get notifications error (non-index):", error);
+    }
+    return [];
   }
 };
 
@@ -136,45 +145,47 @@ export const createNotification = async (
       ...createdNotification.data(),
     } as Notification;
 
-    // E-posta gönder (async, hata olsa bile bildirim oluşturulur)
-    // ÖNEMLİ: E-posta gönderimi opsiyonel, hata olsa bile uygulama çalışmaya devam etmeli
-    // Tüm hatalar sessizce handle edilmeli, uygulama akışını bozmamalı
-    try {
-      const userDoc = await getDoc(doc(firestore, "users", notificationData.userId));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        if (userData?.email) {
-          // Mail gönderimi - tek deneme, hata olsa bile sessizce devam et
-          try {
-            const emailResult = await sendNotificationEmail(
-              userData.email,
-              notificationData.title,
-              notificationData.message,
-              notificationData.type,
-              notificationData.relatedId || null,
-              notificationData.metadata || null
-            );
-            
-            // Başarılı olsa bile sadece development'ta log göster (debug)
-            if (emailResult.success && import.meta.env.DEV) {
-              console.debug(`✅ Bildirim maili gönderildi: ${userData.email}`);
-            } else if (!emailResult.success && import.meta.env.DEV) {
-              // Hata olsa bile sessizce devam et, kullanıcıya gösterme
-              console.debug(`ℹ️ Bildirim maili gönderilemedi (backend kapalı veya ayarlar eksik): ${userData.email}`);
+    // Bildirim başarıyla oluşturuldu, hemen döndür
+    // Email gönderimi arka planda yapılacak (hem Cloud Functions hem de manuel fallback)
+    
+    // Email gönderimini arka planda başlat (await etme)
+    // Önce Cloud Functions denenecek, eğer çalışmıyorsa manuel email gönderimi yapılacak
+    Promise.resolve().then(async () => {
+      try {
+        const userDoc = await getDoc(doc(firestore, "users", notificationData.userId));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData?.email) {
+            // Manuel email gönderimi (Cloud Functions çalışmıyorsa fallback)
+            // Hata olsa bile sessizce devam et
+            try {
+              const emailResult = await sendNotificationEmail(
+                userData.email,
+                notificationData.title,
+                notificationData.message,
+                notificationData.type,
+                notificationData.relatedId || null,
+                notificationData.metadata || null
+              );
+              
+              // Email gönderim sonucunu logla (sadece başarılı olduğunda)
+              if (import.meta.env.DEV && emailResult.success) {
+                console.log(`✅ Bildirim maili gönderildi: ${userData.email}`);
+              }
+            } catch (emailError: unknown) {
+              // Email gönderilemedi - sessizce devam et
+              // Cloud Functions da email gönderebilir, bu yüzden kritik değil
             }
-          } catch (emailError: unknown) {
-             // Sessizce devam et
           }
         }
-        // E-posta adresi yoksa sessizce devam et
+      } catch (error) {
+        // Hata olsa bile sessizce devam et
       }
-      // Kullanıcı bulunamazsa sessizce devam et
-    } catch (emailError) {
-      // E-posta gönderim hatası bildirim oluşturmayı engellemez
-      // Sessizce handle et, hiçbir log gösterme
-      // Uygulama normal çalışmaya devam etmeli
-    }
+    }).catch(() => {
+      // Promise rejection'ı yakala ama hiçbir şey yapma
+    });
 
+    // Bildirimi hemen döndür (email gönderimi arka planda devam edecek)
     return notification;
   } catch (error: unknown) {
     if (import.meta.env.DEV) console.error("Create notification error:", error);

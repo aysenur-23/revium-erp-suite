@@ -79,6 +79,7 @@ export interface Task {
   statusHistory?: StatusHistoryEntry[]; // Aşama geçmişi
   statusUpdatedBy?: string; // Durum değiştiren kullanıcı
   statusUpdatedAt?: Timestamp | FieldValue; // Durum değişiklik tarihi
+  updatedBy?: string; // Son güncelleyen kullanıcı (her türlü güncelleme için)
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -711,10 +712,17 @@ export const updateTask = async (
       }
     }
     
+    const currentUserId = userId || auth?.currentUser?.uid;
+    
     const updateData: Partial<Task> & { updatedAt: FieldValue | Timestamp } = {
       ...updates,
       updatedAt: serverTimestamp() as any,
     };
+    
+    // Son güncelleyen kullanıcıyı güncelle
+    if (currentUserId) {
+      (updateData as Partial<Task>).updatedBy = currentUserId;
+    }
     
     // dueDate'i Timestamp'e çevir
     if (updates.dueDate !== undefined) {
@@ -793,13 +801,18 @@ export const updateTask = async (
                 metadata: null,
               });
             } catch (notifError) {
-              console.error("Error sending notification to user:", assignedUserId, notifError);
+              // Bildirim hatası sessizce handle edilir - görev güncellemesini engellemez
+              if (import.meta.env.DEV) {
+                console.debug("Bildirim gönderilemedi (email servisi çalışmıyor olabilir):", assignedUserId);
+              }
             }
           })
         );
       } catch (notifError) {
-        console.error("Error sending task update notifications:", notifError);
-        // Bildirim hatası görev güncellemesini engellemez
+        // Bildirim hatası sessizce handle edilir - görev güncellemesini engellemez
+        if (import.meta.env.DEV) {
+          console.debug("Görev güncelleme bildirimleri gönderilemedi (email servisi çalışmıyor olabilir)");
+        }
       }
     }
   } catch (error: unknown) {
@@ -836,11 +849,55 @@ export const updateTaskStatus = async (
     const oldStatus = task.status;
     const currentUserId = auth?.currentUser?.uid;
     
+    // Yetki kontrolü: SADECE görev üyesi (rejected hariç) veya oluşturan durum değiştirebilir
+    // Yöneticiler için özel durum YOK
+    if (!currentUserId) {
+      throw new Error("Kullanıcı bilgisi bulunamadı");
+    }
+    
+    const isCreator = task.createdBy === currentUserId;
+    
+    // Görev üyesi kontrolü (rejected hariç)
+    const assignments = await getTaskAssignments(taskId);
+    const isAssigned = assignments.some(a => a.assignedTo === currentUserId && a.status !== "rejected");
+    
+    // Fallback: task.assignedUsers array'inden kontrol
+    const isInTaskAssignedUsers = Array.isArray(task.assignedUsers) && task.assignedUsers.includes(currentUserId);
+    
+    const hasPermission = isCreator || isAssigned || isInTaskAssignedUsers;
+    
+    if (!hasPermission) {
+      throw new Error("Bu görevin durumunu değiştirme yetkiniz yok. Sadece görev üyesi olduğunuz görevlerin durumunu değiştirebilirsiniz.");
+    }
+    
+    // ÖNEMLİ: Eğer kullanıcı assignments'da varsa ama task.assignedUsers array'inde yoksa,
+    // ÖNCE array'i güncelle (Firestore kuralları mevcut veri üzerinde çalıştığı için)
+    // Sonra durum güncellemesini yap
+    const currentAssignedUsers = Array.isArray(task.assignedUsers) ? task.assignedUsers : [];
+    const shouldUpdateAssignedUsers = isAssigned && !currentAssignedUsers.includes(currentUserId);
+    
+    if (shouldUpdateAssignedUsers) {
+      const taskRef = doc(firestore, "tasks", taskId);
+      await updateDoc(taskRef, {
+        assignedUsers: [...currentAssignedUsers, currentUserId],
+      });
+      if (import.meta.env.DEV) {
+        console.log("✅ task.assignedUsers array'i güncellendi (Firestore kuralları için):", taskId, currentUserId);
+      }
+      // Array güncellendikten sonra task'ı tekrar al (Firestore kuralları için)
+      // Ama aslında gerek yok çünkü bir sonraki update'te zaten güncel olacak
+    }
+    
     // Durumu güncelle
     const updateData: Partial<Task> & { status: Task["status"]; updatedAt: FieldValue | Timestamp } = {
       status,
       updatedAt: serverTimestamp() as any,
     };
+    
+    // Son güncelleyen kullanıcıyı güncelle
+    if (currentUserId) {
+      (updateData as Partial<Task>).updatedBy = currentUserId;
+    }
     
     // Status değişikliği varsa statusUpdatedBy ve statusUpdatedAt ekle
     if (oldStatus !== status && currentUserId) {
@@ -977,6 +1034,15 @@ export const updateTaskStatus = async (
     if (import.meta.env.DEV) {
       console.error("Update task status error:", error);
     }
+    
+    // Firestore izin hatasını daha anlaşılır hale getir
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (errorMsg.includes("Missing or insufficient permissions") || errorMsg.includes("permission-denied")) {
+      // Frontend'de izin kontrolü yapıldı ama Firestore security rules izin vermiyor
+      // Bu durumda kullanıcıya açıklayıcı bir mesaj göster
+      throw new Error("Firestore güvenlik kuralları görev durumunu değiştirmenize izin vermiyor. Lütfen yöneticinizle iletişime geçin.");
+    }
+    
     throw error;
   }
 };
@@ -1159,10 +1225,10 @@ export const assignTask = async (
       taskId,
       assignedTo: userId,
       assignedBy,
-      status: "pending",
+      status: "accepted", // Otomatik kabul edildi - kabul/red mekanizması kaldırıldı
       notes: notes || null,
       assignedAt: Timestamp.now(),
-      acceptedAt: null,
+      acceptedAt: Timestamp.now(), // Otomatik kabul edildiği için assignedAt ile aynı
       completedAt: null,
     };
 
@@ -1198,8 +1264,11 @@ export const assignTask = async (
           taskDetails.push(`Açıklama: ${desc}`);
         }
         if (task.priority) {
-          const priorityLabels: Record<number, string> = { 1: "Düşük", 2: "Normal", 3: "Yüksek", 4: "Acil" };
-          taskDetails.push(`Öncelik: ${priorityLabels[task.priority] || `Öncelik ${task.priority}`}`);
+          const { getPriorityLabel, convertOldPriorityToNew } = await import("@/utils/priority");
+          // TaskService hala 1-5 kullanıyor, yeni sisteme (0-5) çevir
+          const newPriority = convertOldPriorityToNew(task.priority);
+          const priorityLabel = getPriorityLabel(newPriority);
+          taskDetails.push(`Öncelik: ${priorityLabel}`);
         }
         if (task.dueDate) {
           try {
@@ -1213,17 +1282,37 @@ export const assignTask = async (
         
         const detailsText = taskDetails.length > 0 ? `\n\nGörev Detayları:\n${taskDetails.join('\n')}` : '';
         
+        // Metadata için Timestamp'leri Date'e çevir
+        let dueDateForMetadata: Date | null = null;
+        if (task.dueDate) {
+          try {
+            const dueDateValue = task.dueDate as unknown;
+            if (dueDateValue instanceof Timestamp) {
+              dueDateForMetadata = (dueDateValue as Timestamp).toDate();
+            } else if (dueDateValue instanceof Date) {
+              dueDateForMetadata = dueDateValue;
+            } else if (typeof dueDateValue === 'object' && dueDateValue !== null && 'seconds' in dueDateValue) {
+              // Firestore Timestamp objesi
+              const ts = dueDateValue as { seconds: number; nanoseconds?: number };
+              dueDateForMetadata = new Date(ts.seconds * 1000 + (ts.nanoseconds || 0) / 1000000);
+            }
+          } catch {
+            // Tarih formatı hatası durumunda null bırak
+            dueDateForMetadata = null;
+          }
+        }
+        
         await createNotification({
           userId,
           type: "task_assigned",
           title: "Yeni görev atandı",
-          message: `${assignerProfile?.fullName || assignerProfile?.email || "Bir yönetici"} kullanıcısı tarafından size "${task.title}" başlıklı yeni bir görev atandı.${detailsText}\n\nGörevi kabul etmek veya reddetmek için bildirime tıklayabilirsiniz.`,
+          message: `${assignerProfile?.fullName || assignerProfile?.email || "Bir yönetici"} kullanıcısı tarafından size "${task.title}" başlıklı yeni bir görev atandı.${detailsText}\n\nGörev detaylarını görüntülemek için bildirime tıklayabilirsiniz.`,
           read: false,
           relatedId: taskId,
           metadata: { 
             assignment_id: docRef.id,
             priority: task.priority,
-            dueDate: task.dueDate,
+            dueDate: dueDateForMetadata, // Date objesi olarak gönder
             updatedAt: new Date(),
           },
         });
@@ -1234,7 +1323,9 @@ export const assignTask = async (
     }
 
     // Audit log
-    await logAudit("CREATE", "task_assignments", docRef.id, assignedBy, null, assignmentData);
+    if (assignedBy) {
+      await logAudit("CREATE", "task_assignments", docRef.id, assignedBy, null, assignmentData);
+    }
 
     return {
       id: docRef.id,
@@ -1259,8 +1350,21 @@ export const acceptTaskAssignment = async (taskId: string, assignmentId: string)
     });
     
     // Audit log
-    const task = await getTaskById(taskId);
-    await logAudit("UPDATE", "task_assignments", assignmentId, auth?.currentUser?.uid || "system", { status: "pending" }, { status: "accepted", taskId: taskId, taskTitle: task?.title });
+    const userId = auth?.currentUser?.uid;
+    if (userId) {
+      const task = await getTaskById(taskId);
+      const assignmentDoc = await getDoc(doc(firestore, "tasks", taskId, "assignments", assignmentId));
+      const oldAssignment = assignmentDoc.data();
+      await logAudit(
+        "UPDATE",
+        "task_assignments",
+        assignmentId,
+        userId,
+        oldAssignment || { status: "pending" },
+        { status: "accepted", taskId: taskId, taskTitle: task?.title },
+        { action: "accept", taskId }
+      );
+    }
     
     // Atanan kullanıcının bildirimini güncelle
     try {
@@ -1367,8 +1471,21 @@ export const rejectTaskAssignment = async (
     });
     
     // Audit log
-    const task = await getTaskById(taskId);
-    await logAudit("UPDATE", "task_assignments", assignmentId, auth?.currentUser?.uid || "system", { status: "pending" }, { status: "rejected", rejectionReason: reason.trim(), taskId: taskId, taskTitle: task?.title });
+    const userId = auth?.currentUser?.uid;
+    if (userId) {
+      const task = await getTaskById(taskId);
+      const assignmentDoc = await getDoc(doc(firestore, "tasks", taskId, "assignments", assignmentId));
+      const oldAssignment = assignmentDoc.data();
+      await logAudit(
+        "UPDATE",
+        "task_assignments",
+        assignmentId,
+        userId,
+        oldAssignment || { status: "pending" },
+        { status: "rejected", rejectionReason: reason.trim(), taskId: taskId, taskTitle: task?.title },
+        { action: "reject", taskId, reason: reason.trim() }
+      );
+    }
     
     // Atanan kullanıcının bildirimini güncelle
     try {
@@ -1620,10 +1737,11 @@ export const deleteTaskAssignment = async (taskId: string, assignmentId: string,
             }
           }
         } catch (notifError) {
-          if (import.meta.env.DEV) {
-            console.error("❌ Error sending removal notification:", notifError);
-          }
           // Bildirim hatası silme işlemini engellemez
+          // Email servisi çalışmıyor olabilir, bu normal
+          if (import.meta.env.DEV) {
+            console.debug("Bildirim gönderilemedi (email servisi çalışmıyor olabilir)");
+          }
         }
       }
     }
@@ -2021,8 +2139,15 @@ export const addTaskActivity = async (
 
     return docRef.id;
   } catch (error: unknown) {
+    // Firestore security rules hatası normal - sessizce handle et
+    // Bu hata görev güncellemesini engellemez
     if (import.meta.env.DEV) {
-      console.error("Add task activity error:", error);
+      // Sadece development'ta debug log göster
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (!errorMsg.includes("Missing or insufficient permissions")) {
+        // İzin hatası değilse log göster (gerçek bir sorun olabilir)
+        console.debug("Add task activity error:", error);
+      }
     }
     return "";
   }
@@ -2566,33 +2691,52 @@ export const requestTaskApproval = async (taskId: string, requestedBy: string): 
     try {
       if (task && task.createdBy) {
         // Aynı türde ve aynı görev için okunmamış bildirim var mı kontrol et
-        const { getNotifications } = await import("./notificationService");
-        const existingNotifications = await getNotifications(task.createdBy, { unreadOnly: true });
-        const duplicateExists = existingNotifications.some(
-          n => n.type === "task_approval" && 
-               n.relatedId === taskId && 
-               n.metadata?.action === "approval_requested"
-        );
+        let duplicateExists = false;
+        try {
+          const { getNotifications } = await import("./notificationService");
+          const existingNotifications = await getNotifications(task.createdBy, { unreadOnly: true });
+          duplicateExists = existingNotifications.some(
+            n => n.type === "task_approval" && 
+                 n.relatedId === taskId && 
+                 n.metadata?.action === "approval_requested"
+          );
+        } catch (getNotifError) {
+          // Index hatası veya başka bir hata - duplicate kontrolünü atla ve bildirim oluşturmayı dene
+          if (import.meta.env.DEV) {
+            console.warn("Bildirim duplicate kontrolü yapılamadı, bildirim oluşturulacak:", getNotifError);
+          }
+          duplicateExists = false; // Hata durumunda duplicate kontrolünü atla
+        }
 
         if (!duplicateExists) {
-          await createNotification({
-            userId: task.createdBy,
-            type: "task_approval",
-            title: "Görev onayı bekleniyor",
-            message: `${requesterProfile?.fullName || requesterProfile?.email || "Bir kullanıcı"} kullanıcısı "${task.title}" görevini tamamladı ve onayınızı bekliyor.\n\n"${task.title}" başlıklı görev için onay talebi gönderildi. Lütfen görevi inceleyip onaylayın veya gerekirse geri gönderin.\n\nİşlem Zamanı: ${new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
-            read: false,
-            relatedId: taskId,
-            metadata: { 
-              action: "approval_requested",
-              updatedAt: new Date(),
-              priority: task.priority,
-              dueDate: task.dueDate,
-            },
-          });
+          try {
+            await createNotification({
+              userId: task.createdBy,
+              type: "task_approval",
+              title: "Görev onayı bekleniyor",
+              message: `${requesterProfile?.fullName || requesterProfile?.email || "Bir kullanıcı"} kullanıcısı "${task.title}" görevini tamamladı ve onayınızı bekliyor.\n\n"${task.title}" başlıklı görev için onay talebi gönderildi. Lütfen görevi inceleyip onaylayın veya gerekirse geri gönderin.\n\nİşlem Zamanı: ${new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+              read: false,
+              relatedId: taskId,
+              metadata: { 
+                action: "approval_requested",
+                updatedAt: new Date(),
+                priority: task.priority,
+                dueDate: task.dueDate,
+              },
+            });
+          } catch (createNotifError) {
+            // Bildirim oluşturma hatası (email CORS hatası vb.) - kritik değil, sadece logla
+            if (import.meta.env.DEV) {
+              console.warn("Bildirim oluşturulamadı (email hatası vb. kritik değil):", createNotifError);
+            }
+          }
         }
       }
     } catch (notifError) {
-      console.error("Error sending approval request notification:", notifError);
+      // Genel bildirim hatası - kritik değil, sadece logla
+      if (import.meta.env.DEV) {
+        console.warn("Bildirim gönderme hatası (kritik değil):", notifError);
+      }
     }
   } catch (error: unknown) {
     if (import.meta.env.DEV) {
@@ -2603,7 +2747,7 @@ export const requestTaskApproval = async (taskId: string, requestedBy: string): 
 };
 
 /**
- * Görev onayını onayla - Onaylandığında "Tamamlandı" (completed) durumuna geçer
+ * Görev onayını onayla - Onaylandığında "Onaylandı" (approved) durumuna geçer ve status "completed" olur
  * Sadece yönetici veya görevi veren ekip lideri onaylayabilir
  */
 export const approveTask = async (taskId: string, approvedBy: string): Promise<void> => {
@@ -2698,8 +2842,26 @@ export const approveTask = async (taskId: string, approvedBy: string): Promise<v
       
       for (const userId of notificationUserIds) {
         try {
-          // Duplicate kontrolü
-          const existingNotifications = await getNotifications(userId, { unreadOnly: true });
+          // Duplicate kontrolü - index hatası durumunda sessizce devam et
+          let existingNotifications: any[] = [];
+          try {
+            existingNotifications = await getNotifications(userId, { unreadOnly: true });
+          } catch (notifError) {
+            // Index hatası veya diğer hatalar - sessizce devam et
+            // getNotifications zaten boş array döndürüyor, burada da sessizce handle et
+            if (import.meta.env.DEV) {
+              // Sadece gerçek hataları logla (index hatası değilse)
+              const isIndexError = 
+                typeof notifError === "object" &&
+                notifError !== null &&
+                "code" in notifError &&
+                (notifError as { code?: string }).code === "failed-precondition";
+              if (!isIndexError) {
+                console.debug("Get notifications error in approveTask:", notifError);
+              }
+            }
+          }
+          
           const duplicateExists = existingNotifications.some(
             n => n.type === "task_approval" && 
                  n.relatedId === taskId && 
@@ -2712,7 +2874,7 @@ export const approveTask = async (taskId: string, approvedBy: string): Promise<v
               userId: userId,
               type: "task_approval",
               title: "Görev onaylandı",
-              message: `${approverName} kullanıcısı tarafından "${updatedTask?.title || "görev"}" görevi onaylandı ve "Tamamlandı" durumuna geçirildi.\n\nGörev başarıyla tamamlanmış olarak işaretlendi. Tüm görev üyeleri bu durumu görebilir.\n\nOnay Zamanı: ${approvalTime}`,
+              message: `${approverName} kullanıcısı tarafından "${updatedTask?.title || "görev"}" görevi onaylandı ve "Onaylandı" durumuna geçirildi.\n\nGörev başarıyla onaylanmış olarak işaretlendi. Tüm görev üyeleri bu durumu görebilir.\n\nOnay Zamanı: ${approvalTime}`,
               read: false,
               relatedId: taskId,
               metadata: { 

@@ -48,7 +48,7 @@ const Profile = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -71,8 +71,8 @@ const Profile = () => {
           <>
             {/* Profile Header Card */}
             <Card className="border-2 shadow-lg">
-              <CardContent className="p-6 sm:p-8">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
                   {/* Avatar */}
                   <div className="relative">
                     <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-4 border-background shadow-lg">
@@ -105,7 +105,7 @@ const Profile = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                       <div className="flex items-center gap-2.5 text-sm">
                         <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
                           <Mail className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -170,9 +170,9 @@ const Profile = () => {
             </Card>
 
             {/* Quick Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
               <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-primary group cursor-pointer">
-                <CardContent className="p-5 sm:p-6">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
                       <User className="h-6 w-6 text-primary" />
@@ -186,7 +186,7 @@ const Profile = () => {
               </Card>
 
               <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500 group cursor-pointer">
-                <CardContent className="p-5 sm:p-6">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
                       <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
@@ -200,7 +200,7 @@ const Profile = () => {
               </Card>
 
               <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-purple-500 group cursor-pointer">
-                <CardContent className="p-5 sm:p-6">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="h-12 w-12 rounded-xl bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
                       <Shield className="h-6 w-6 text-purple-600 dark:text-purple-400" />
@@ -227,7 +227,7 @@ const Profile = () => {
               </Card>
 
               <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-emerald-500 group cursor-pointer">
-                <CardContent className="p-5 sm:p-6">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
                       <Clock className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />

@@ -52,7 +52,7 @@ const hasActionMetadata = (notification: FirebaseNotification): boolean => {
   const meta = notification.metadata;
   if (meta && typeof meta === "object" && "action" in meta) {
     const value = (meta as Record<string, unknown>).action;
-    return typeof value === "string" && (value === "accepted" || value === "rejected" || value === "rejection_approved" || value === "rejection_rejected" || value === "pool_request_approved");
+    return typeof value === "string" && (value === "accepted" || value === "rejected" || value === "rejection_approved" || value === "rejection_rejected" || value === "pool_request_approved" || value === "approved");
   }
   return false;
 };

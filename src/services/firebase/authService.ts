@@ -27,6 +27,7 @@ import {
   serverTimestamp,
   query,
   orderBy,
+  limit,
   writeBatch,
   where,
   Timestamp,
@@ -353,16 +354,45 @@ export const login = async (
           userProfile = updatedProfile;
         }
         
-        // Giriş logunu kaydet
+        // Giriş logunu kaydet (retry mekanizması ile)
         try {
           const loginTime = new Date().toISOString();
-          await logAudit("UPDATE", "user_logins", firebaseUser.uid, firebaseUser.uid, 
-            { lastLoginAt: oldLastLoginAt ? (oldLastLoginAt instanceof Timestamp ? oldLastLoginAt.toDate().toISOString() : String(oldLastLoginAt)) : null }, 
-            { lastLoginAt: loginTime, action: "LOGIN", method: "EMAIL", email: email, userId: firebaseUser.uid, timestamp: loginTime }
-          );
+          const oldLastLoginAtValue = oldLastLoginAt ? (oldLastLoginAt instanceof Timestamp ? oldLastLoginAt.toDate().toISOString() : String(oldLastLoginAt)) : null;
+          
+          let retryCount = 0;
+          const maxRetries = 2;
+          while (retryCount <= maxRetries) {
+            try {
+              await logAudit(
+                "UPDATE", 
+                "user_logins", 
+                firebaseUser.uid, 
+                firebaseUser.uid,
+                oldLastLoginAtValue ? { lastLoginAt: oldLastLoginAtValue } : null,
+                null,
+                { 
+                  action: "LOGIN", 
+                  method: "EMAIL", 
+                  email: email, 
+                  timestamp: loginTime 
+                }
+              );
+              break; // Başarılı oldu, döngüden çık
+            } catch (retryError) {
+              retryCount++;
+              if (retryCount > maxRetries) {
+                if (import.meta.env.DEV) {
+                  console.error("Giriş logu kaydedilirken hata (tüm denemeler başarısız):", retryError);
+                }
+              } else {
+                // Kısa bir bekleme sonrası tekrar dene
+                await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+              }
+            }
+          }
         } catch (logError) {
           if (import.meta.env.DEV) {
-            console.error("Giriş logu kaydedilirken hata:", logError);
+            console.error("Giriş logu kaydedilirken beklenmeyen hata:", logError);
           }
           // Log hatası girişi engellememeli
         }
@@ -451,16 +481,45 @@ export const logout = async (): Promise<{ success: boolean; message?: string }> 
     const userId = auth.currentUser?.uid;
     const userEmail = auth.currentUser?.email;
     
-    // Çıkış logunu kaydet (çıkış yapmadan önce)
+    // Çıkış logunu kaydet (çıkış yapmadan önce, retry mekanizması ile)
     if (userId) {
       try {
         const logoutTime = new Date().toISOString();
-        await logAudit("UPDATE", "user_logins", userId, userId, 
-          {}, 
-          { action: "LOGOUT", timestamp: logoutTime, email: userEmail || null, userId: userId }
-        );
+        
+        let retryCount = 0;
+        const maxRetries = 2;
+        while (retryCount <= maxRetries) {
+          try {
+            await logAudit(
+              "UPDATE", 
+              "user_logins", 
+              userId, 
+              userId,
+              null,
+              null,
+              { 
+                action: "LOGOUT", 
+                timestamp: logoutTime, 
+                email: userEmail || null 
+              }
+            );
+            break; // Başarılı oldu, döngüden çık
+          } catch (retryError) {
+            retryCount++;
+            if (retryCount > maxRetries) {
+              if (import.meta.env.DEV) {
+                console.error("Çıkış logu kaydedilirken hata (tüm denemeler başarısız):", retryError);
+              }
+            } else {
+              // Kısa bir bekleme sonrası tekrar dene
+              await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+            }
+          }
+        }
       } catch (logError) {
-        console.error("Çıkış logu kaydedilirken hata:", logError);
+        if (import.meta.env.DEV) {
+          console.error("Çıkış logu kaydedilirken beklenmeyen hata:", logError);
+        }
         // Log hatası çıkışı engellememeli
       }
     }
@@ -606,12 +665,16 @@ export const getUserProfile = async (userId: string, allowDeleted: boolean = fal
  */
 export const updateUserProfile = async (
   userId: string,
-  updates: Partial<Omit<UserProfile, "id" | "email" | "emailVerified" | "createdAt" | "updatedAt">>
+  updates: Partial<Omit<UserProfile, "id" | "email" | "emailVerified" | "createdAt" | "updatedAt">>,
+  updatedBy?: string | null
 ): Promise<{ success: boolean; message?: string }> => {
   try {
     if (!firestore) {
       throw new Error('Firestore is not initialized');
     }
+    
+    // Eski veriyi al (audit log için)
+    const oldProfile = await getUserProfile(userId);
     
     // Firestore undefined değerleri kabul etmez, bu yüzden undefined alanları temizle
     const cleanUpdates: Record<string, unknown> = {
@@ -632,6 +695,28 @@ export const updateUserProfile = async (
       await updateProfile(auth.currentUser, {
         displayName: updates.displayName,
       });
+    }
+
+    // Audit log (rol değişiklikleri hariç - rol değişiklikleri UserManagement'da ayrı loglanıyor)
+    const logUserId = updatedBy || auth?.currentUser?.uid;
+    if (logUserId && oldProfile) {
+      // Rol değişikliği kontrolü - eğer sadece rol değiştiyse log ekleme
+      const hasRoleChange = updates.role && JSON.stringify(updates.role) !== JSON.stringify(oldProfile.role);
+      const hasOtherChanges = Object.keys(updates).some(key => key !== "role");
+      
+      // Eğer rol değişikliği varsa ve başka değişiklik yoksa log ekleme (rol değişiklikleri UserManagement'da loglanıyor)
+      if (!hasRoleChange || hasOtherChanges) {
+        const newProfile = await getUserProfile(userId);
+        await logAudit(
+          "UPDATE",
+          "users",
+          userId,
+          logUserId,
+          oldProfile,
+          newProfile,
+          { action: "update_profile", changedFields: Object.keys(updates).filter(k => k !== "role") }
+        );
+      }
     }
 
     return { success: true };
@@ -897,8 +982,9 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
     const definedRoleKeys = new Set(definedRoles.map(r => r.key));
     
     // Önce orderBy ile deneyelim (index varsa hızlı olur)
+    // Performans için limit ekle (500 kayıt)
     try {
-      const q = query(collection(firestore, "users"), orderBy("displayName", "asc"));
+      const q = query(collection(firestore, "users"), orderBy("displayName", "asc"), limit(500));
       const snapshot = await getDocs(q);
       
       const users = snapshot.docs
@@ -950,7 +1036,9 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
       const definedRoles = await getRoles();
       const definedRoleKeys = new Set(definedRoles.map(r => r.key));
       
-      const snapshot = await getDocs(collection(firestore, "users"));
+      // Performans için limit ekle (500 kayıt)
+      const q = query(collection(firestore, "users"), limit(500));
+      const snapshot = await getDocs(q);
       const users = snapshot.docs
         .map((doc) => {
           const data = doc.data();
@@ -1103,15 +1191,46 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
         userProfile = updatedProfile;
       }
 
-      // Giriş logunu kaydet
+      // Giriş logunu kaydet (retry mekanizması ile)
       try {
         const loginTime = new Date().toISOString();
-        await logAudit("UPDATE", "user_logins", firebaseUser.uid, firebaseUser.uid, 
-          { lastLoginAt: oldLastLoginAt ? (oldLastLoginAt instanceof Timestamp ? oldLastLoginAt.toDate().toISOString() : String(oldLastLoginAt)) : null }, 
-          { lastLoginAt: loginTime, action: "LOGIN", method: "GOOGLE", email: firebaseUser.email, userId: firebaseUser.uid, timestamp: loginTime }
-        );
+        const oldLastLoginAtValue = oldLastLoginAt ? (oldLastLoginAt instanceof Timestamp ? oldLastLoginAt.toDate().toISOString() : String(oldLastLoginAt)) : null;
+        
+        let retryCount = 0;
+        const maxRetries = 2;
+        while (retryCount <= maxRetries) {
+          try {
+            await logAudit(
+              "UPDATE", 
+              "user_logins", 
+              firebaseUser.uid, 
+              firebaseUser.uid,
+              oldLastLoginAtValue ? { lastLoginAt: oldLastLoginAtValue } : null,
+              null,
+              { 
+                action: "LOGIN", 
+                method: "GOOGLE", 
+                email: firebaseUser.email || null, 
+                timestamp: loginTime 
+              }
+            );
+            break; // Başarılı oldu, döngüden çık
+          } catch (retryError) {
+            retryCount++;
+            if (retryCount > maxRetries) {
+              if (import.meta.env.DEV) {
+                console.error("Giriş logu kaydedilirken hata (tüm denemeler başarısız):", retryError);
+              }
+            } else {
+              // Kısa bir bekleme sonrası tekrar dene
+              await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+            }
+          }
+        }
       } catch (logError) {
-        console.error("Giriş logu kaydedilirken hata:", logError);
+        if (import.meta.env.DEV) {
+          console.error("Giriş logu kaydedilirken beklenmeyen hata:", logError);
+        }
         // Log hatası girişi engellememeli
       }
 

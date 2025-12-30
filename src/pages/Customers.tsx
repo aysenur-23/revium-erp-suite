@@ -23,6 +23,8 @@ import { DetailedValueReportModal } from "@/components/Statistics/DetailedValueR
 import { LoadingState } from "@/components/ui/loading-state";
 import { CustomerCard } from "@/components/Customers/CustomerCard";
 import { canCreateResource, canDeleteResource } from "@/utils/permissions";
+import { ResponsiveTable, ResponsiveTableColumn } from "@/components/shared/ResponsiveTable";
+import { Card as ResponsiveCard } from "@/components/ui/card";
 
 const Customers = () => {
   const { user } = useAuth();
@@ -412,13 +414,13 @@ const Customers = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
+      <div className="space-y-2 xs:space-y-2.5 sm:space-y-3 w-full max-w-full mx-auto px-1 xs:px-2">
+        <div className="flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2 xs:gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Müşteriler</h1>
-                <p className="text-muted-foreground mt-0.5 text-[11px] sm:text-xs">Müşteri ve tedarikçi listenizi yönetin</p>
+            <div className="flex items-center justify-between gap-2 xs:gap-3">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-lg sm:text-xl font-semibold text-foreground truncate">Müşteriler</h1>
+                <p className="text-muted-foreground mt-0.5 text-xs sm:text-sm">Müşteri ve tedarikçi listenizi yönetin</p>
               </div>
               {/* İstatistikler Açılma Butonu */}
               {!statsExpanded ? (
@@ -426,7 +428,7 @@ const Customers = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => setStatsExpanded(true)}
-                  className="h-7 px-2 gap-1 text-xs"
+                  className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
                   aria-label="İstatistikleri göster"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
@@ -436,7 +438,7 @@ const Customers = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => setStatsExpanded(false)}
-                  className="h-7 px-2 gap-1 text-xs"
+                  className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
                   aria-label="İstatistikleri gizle"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
@@ -446,7 +448,7 @@ const Customers = () => {
           </div>
           {canCreate && (
             <Button 
-              className="gap-1 w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs" 
+              className="gap-1 w-full xs:w-auto min-h-[44px] xs:min-h-[40px] sm:min-h-8 text-[11px] sm:text-xs" 
               onClick={() => {
                 setCreateDialogOpen(true);
               }}
@@ -462,7 +464,7 @@ const Customers = () => {
         {statsExpanded && (
           <Card className="border-2">
           <CardContent className="p-1.5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-2">
+            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-1.5 xs:gap-2 sm:gap-2">
               {customerStatCards.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -488,9 +490,9 @@ const Customers = () => {
                         <Icon className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] sm:text-xs uppercase tracking-wide text-muted-foreground font-semibold">{item.label}</p>
-                        <p className="text-lg font-semibold text-foreground mt-1 sm:mt-1.5">{item.value}</p>
-                        <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 sm:mt-1 hidden sm:block">{item.description}</p>
+                        <p className="text-[11px] sm:text-xs uppercase tracking-wide text-muted-foreground font-semibold">{item.label}</p>
+                        <p className="text-lg sm:text-xl font-semibold text-foreground mt-1 sm:mt-1.5">{item.value}</p>
+                        <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1 hidden sm:block">{item.description}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -509,7 +511,7 @@ const Customers = () => {
               <div className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] md:min-w-[250px]">
                 <SearchInput
                   placeholder="İsim, e-posta veya şirket ara..."
-                  className="w-full h-9 sm:h-10 text-xs sm:text-sm"
+                  className="w-full h-9 sm:h-10 text-[11px] sm:text-xs"
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
@@ -523,7 +525,7 @@ const Customers = () => {
               {/* Filtreler */}
               <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
                 <Select value={quickFilter} onValueChange={(value) => setQuickFilter(value as typeof quickFilter)}>
-                  <SelectTrigger className="w-full h-9 sm:h-10 text-xs sm:text-sm">
+                  <SelectTrigger className="w-full h-9 sm:h-10 text-[11px] sm:text-xs">
                     <SelectValue placeholder="Filtrele" />
                   </SelectTrigger>
                   <SelectContent>
@@ -545,7 +547,7 @@ const Customers = () => {
                     setQuickFilter("all");
                     setActiveStatCard(null);
                   }}
-                  className="h-9 sm:h-10 text-xs sm:text-sm"
+                  className="h-9 sm:h-10 text-[11px] sm:text-xs"
                 >
                   <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Temizle</span>
@@ -556,15 +558,16 @@ const Customers = () => {
         </Card>
 
         {/* Liste Görünümü */}
-        <div className="w-full max-w-full">
-          <div className="hidden md:block border border-[#DFE1E6] dark:border-[#38414A] rounded-sm bg-white dark:bg-[#1D2125] w-full">
-            <div className="table border-collapse w-full" style={{ tableLayout: 'auto', width: '100%' }}>
-              {/* Tablo Başlıkları */}
+        <div className="w-full max-w-full overflow-hidden">
+          <div className="hidden md:block border border-[#DFE1E6] dark:border-[#38414A] rounded-sm bg-white dark:bg-[#1D2125] w-full overflow-hidden">
+            <div className="w-full overflow-x-auto overflow-y-visible scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/30 -webkit-overflow-scrolling-touch overscroll-behavior-contain">
+              <div className="table border-collapse min-w-full" style={{ tableLayout: 'fixed' }}>
+                {/* Tablo Başlıkları */}
               <div className="table-header-group bg-[#F4F5F7] dark:bg-[#22272B]">
                 <div className="table-row">
                   <div 
-                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.name || 250, minWidth: 150 }}
+                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative sticky left-0 z-20 bg-[#F4F5F7] dark:bg-[#22272B]"
+                    style={{ width: columnWidths.name || 250, minWidth: 250, maxWidth: 250 }}
                     onClick={() => handleSort("name")}
                   >
                     <div className="flex items-center gap-1.5">
@@ -579,8 +582,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.email || 200, minWidth: 150 }}
+                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.email || 180, minWidth: 180, maxWidth: 180 }}
                     onClick={() => handleSort("email")}
                   >
                     <div className="flex items-center gap-1.5">
@@ -595,8 +598,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-2 py-1.5 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.phone || 150, minWidth: 120 }}
+                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.phone || 130, minWidth: 130, maxWidth: 130 }}
                   >
                     Telefon
                     <div 
@@ -605,8 +608,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.orderCount || 120, minWidth: 100 }}
+                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.orderCount || 70, minWidth: 70, maxWidth: 70 }}
                     onClick={() => handleSort("orderCount")}
                   >
                     <div className="flex items-center gap-1.5">
@@ -621,8 +624,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-2 py-1.5 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.totalAmount || 150, minWidth: 120 }}
+                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.totalAmount || 150, minWidth: 150, maxWidth: 150 }}
                     onClick={() => handleSort("totalAmount")}
                   >
                     <div className="flex items-center gap-1.5">
@@ -637,8 +640,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-2 py-1.5 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.status || 120, minWidth: 100 }}
+                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.status || 70, minWidth: 70, maxWidth: 70 }}
                   >
                     Durum
                     <div 
@@ -647,8 +650,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-2 py-1.5 text-[11px] font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.createdBy || 150, minWidth: 120 }}
+                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.createdBy || 140, minWidth: 140, maxWidth: 140 }}
                   >
                     Oluşturan
                     <div 
@@ -662,7 +665,8 @@ const Customers = () => {
               {/* Tablo İçeriği */}
               <div 
                 ref={listContainerRef}
-                style={{ maxHeight: 'calc(100vh - 400px)', overflowY: 'auto', display: 'table-row-group' }}
+                className="table-row-group overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/30 -webkit-overflow-scrolling-touch overscroll-behavior-contain"
+                style={{ maxHeight: 'calc(100vh - 400px)' }}
               >
                 {filteredCustomers.map((customer) => {
                   const customerOrders = orders.filter(
@@ -681,7 +685,7 @@ const Customers = () => {
                         setDetailModalOpen(true);
                       }}
                     >
-                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A] sticky left-0 z-10 bg-white dark:bg-[#1D2125]">
                         <div className="flex flex-col gap-1">
                           <span className="font-semibold text-sm text-[#172B4D] dark:text-[#B6C2CF]">
                             {customer.name}
@@ -693,7 +697,7 @@ const Customers = () => {
                           )}
                         </div>
                       </div>
-                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         {customer.email ? (
                           <div className="flex items-center gap-1.5">
                             <Mail className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
@@ -705,7 +709,7 @@ const Customers = () => {
                           <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
                         )}
                       </div>
-                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         {customer.phone ? (
                           <div className="flex items-center gap-1.5">
                             <Phone className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
@@ -717,7 +721,7 @@ const Customers = () => {
                           <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
                         )}
                       </div>
-                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         <div className="flex items-center gap-1.5">
                           <Package className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
                           <span className="text-xs font-medium text-[#42526E] dark:text-[#B6C2CF]">
@@ -725,12 +729,12 @@ const Customers = () => {
                           </span>
                         </div>
                       </div>
-                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         <span className="text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF]">
                           ₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalAmount)}
                         </span>
                       </div>
-                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         <Badge 
                           variant={isActive ? "default" : "secondary"} 
                           className={cn(
@@ -743,7 +747,7 @@ const Customers = () => {
                           {isActive ? "Aktif" : "Pasif"}
                         </Badge>
                       </div>
-                      <div className="table-cell px-2 py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         {customer.createdBy ? (
                           <span className="text-xs text-[#42526E] dark:text-[#B6C2CF]">
                             {usersMap[customer.createdBy] || "Bilinmeyen"}
@@ -755,6 +759,7 @@ const Customers = () => {
                     </div>
                   );
                 })}
+              </div>
               </div>
             </div>
           </div>
@@ -778,12 +783,12 @@ const Customers = () => {
                     setDetailModalOpen(true);
                   }}
                 >
-                  <CardContent className="p-4 space-y-2">
+                  <CardContent className="p-3 sm:p-4 space-y-2">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <h3 className="font-semibold text-sm">{customer.name}</h3>
+                        <h3 className="font-semibold text-[11px] sm:text-xs">{customer.name}</h3>
                         {customer.company && (
-                          <p className="text-xs text-muted-foreground mt-1">{customer.company}</p>
+                          <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">{customer.company}</p>
                         )}
                       </div>
                       <Badge 
@@ -798,13 +803,13 @@ const Customers = () => {
                       </Badge>
                     </div>
                     {customer.email && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground">
                         <Mail className="h-3.5 w-3.5" />
                         {customer.email}
                       </div>
                     )}
                     {customer.phone && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground">
                         <Phone className="h-3.5 w-3.5" />
                         {formatPhoneForDisplay(customer.phone)}
                       </div>
@@ -812,9 +817,9 @@ const Customers = () => {
                     <div className="flex items-center justify-between pt-2 border-t">
                       <div className="flex items-center gap-1.5">
                         <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-xs font-medium">{orderCount} Sipariş</span>
+                        <span className="text-[11px] sm:text-xs font-medium">{orderCount} Sipariş</span>
                       </div>
-                      <span className="text-xs font-semibold">
+                      <span className="text-[11px] sm:text-xs font-semibold">
                         ₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalAmount)}
                       </span>
                     </div>
@@ -831,11 +836,11 @@ const Customers = () => {
               <User className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />
             </div>
             <h3 className="text-[14px] sm:text-[15px] font-semibold text-foreground">Müşteri Bulunamadı</h3>
-            <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mx-auto mt-2">
+            <p className="text-[11px] sm:text-xs text-muted-foreground max-w-sm mx-auto mt-2">
               {searchTerm ? `"${searchTerm}" aramasıyla eşleşen sonuç yok.` : "Henüz kayıtlı müşteri bulunmuyor. Yeni müşteri ekleyerek başlayın."}
             </p>
             {searchTerm && (
-              <Button variant="link" onClick={() => setSearchTerm("")} className="mt-2 text-xs sm:text-sm">
+              <Button variant="link" onClick={() => setSearchTerm("")} className="mt-2 text-[11px] sm:text-xs">
                 Aramayı temizle
               </Button>
             )}

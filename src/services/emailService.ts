@@ -25,43 +25,80 @@ export const sendEmail = async (options: EmailOptions): Promise<{ success: boole
   let primaryUrl = import.meta.env.VITE_EMAIL_API_URL || 
                    import.meta.env.VITE_API_URL;
   
-  // Eğer primary URL yoksa veya localhost ise, localhost backend'i kullan
-  if (!primaryUrl || primaryUrl.includes('localhost') || primaryUrl.includes('127.0.0.1')) {
-    // Localhost backend'i kullan (port 3000)
-    primaryUrl = "http://localhost:3000/api/send-email";
-  } else if (!primaryUrl.endsWith('/send-email') && !primaryUrl.endsWith('/send-email/')) {
-    // URL'in sonuna /send-email ekle
-    primaryUrl = primaryUrl.replace(/\/$/, "") + "/send-email";
+  // Production modunda environment variable yoksa direkt fallback URL kullan
+  // Development modunda environment variable yoksa localhost kullan
+  const isProduction = import.meta.env.PROD;
+  const fallbackUrl = isProduction ? "https://revpad.net/api/send-email/" : null;
+  
+  // Eğer primary URL yoksa
+  if (!primaryUrl) {
+    if (isProduction) {
+      // Production'da environment variable yoksa fallback URL'i primary olarak kullan
+      primaryUrl = fallbackUrl!;
+    } else {
+      // Development'ta localhost backend'i kullan
+      primaryUrl = "http://localhost:3000/api/send-email/";
+    }
+  } else {
+    // Primary URL var - localhost kontrolü yap
+    const isLocalhost = primaryUrl.includes('localhost') || primaryUrl.includes('127.0.0.1');
+    
+    if (isLocalhost) {
+      // Localhost URL - sadece development'ta kullan
+      if (!isProduction) {
+        primaryUrl = "http://localhost:3000/api/send-email/";
+      } else {
+        // Production'da localhost URL kullanılamaz - fallback'e geç
+        primaryUrl = fallbackUrl!;
+      }
+    } else {
+      // Production URL - formatını düzelt
+      if (!primaryUrl.endsWith('/send-email') && !primaryUrl.endsWith('/send-email/')) {
+        // URL'in sonuna /send-email/ ekle (trailing slash ile)
+        primaryUrl = primaryUrl.replace(/\/$/, "") + "/send-email/";
+      } else if (primaryUrl.endsWith('/send-email') && !primaryUrl.endsWith('/send-email/')) {
+        // Trailing slash ekle
+        primaryUrl = primaryUrl + "/";
+      }
+    }
   }
   
-  // Fallback URL (production) - Sadece localhost başarısız olursa kullan
-  const fallbackUrl = "https://revpad.net/api/send-email";
-  
   // Timeout ile fetch (8 saniye - email gönderimi biraz daha uzun sürebilir)
-  const fetchWithTimeout = (url: string, options: RequestInit, timeout = 8000): Promise<Response> => {
-    return Promise.race([
-      fetch(url, {
-        ...options,
-        // CORS için gerekli header'lar
-        headers: {
-          ...options.headers,
-          'Accept': 'application/json',
-        },
-        // CORS hatalarını sessizce handle et
-        mode: 'cors',
-      }).catch((error) => {
-        // CORS ve network hatalarını sessizce handle et
-        const errorMsg = error?.message || String(error);
-        if (errorMsg.includes('CORS') || errorMsg.includes('Failed to fetch') || errorMsg.includes('ERR_')) {
-          // Sessizce reject et, konsola log basma
-          return Promise.reject(new Error("NetworkError"));
-        }
-        return Promise.reject(error);
-      }),
-      new Promise<Response>((_, reject) =>
-        setTimeout(() => reject(new Error("Timeout")), timeout)
-      ),
-    ]);
+  const fetchWithTimeout = async (url: string, options: RequestInit, timeout = 8000): Promise<Response> => {
+    try {
+      // Önce OPTIONS preflight request'i gönder (CORS için)
+      // Ama eğer bu başarısız olursa direkt POST'u dene (bazı sunucular preflight'a gerek duymaz)
+      const response = await Promise.race([
+        fetch(url, {
+          ...options,
+          // CORS için gerekli header'lar
+          headers: {
+            ...options.headers,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          // CORS hatalarını handle et
+          mode: 'cors',
+          credentials: 'omit', // CORS için credentials gönderme
+        }),
+        new Promise<Response>((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout")), timeout)
+        ),
+      ]);
+      return response;
+    } catch (error) {
+      // Network hatalarını handle et
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes('CORS') || 
+          errorMsg.includes('Failed to fetch') || 
+          errorMsg.includes('ERR_') ||
+          errorMsg.includes('Redirect is not allowed') ||
+          errorMsg.includes('preflight')) {
+        // Network/CORS hatası - normal bir durum (email servisi çalışmıyor olabilir)
+        return Promise.reject(new Error("NetworkError"));
+      }
+      return Promise.reject(error);
+    }
   };
   
   // Önce primary URL'i dene (localhost backend veya production)
@@ -85,59 +122,39 @@ export const sendEmail = async (options: EmailOptions): Promise<{ success: boole
         if (contentType && contentType.includes("application/json")) {
           const result = await response.json();
           if (result.success) {
-            // Başarılı - hem dev hem production'da log göster (kritik işlem)
-            if (import.meta.env.DEV) {
-              if (import.meta.env.DEV) {
-                console.log(`✅ E-posta başarıyla gönderildi (primary): ${options.to}`);
-              }
-            }
+            // Başarılı
             return { success: true };
           } else {
             // API başarısız döndü - fallback'e geç
-            if (import.meta.env.DEV) {
-              if (import.meta.env.DEV) {
-                console.warn(`⚠️ Primary email API başarısız: ${result.error || 'Bilinmeyen hata'}, fallback'e geçiliyor`);
-              }
-            }
+            throw new Error(result.error || "Email API başarısız");
           }
         } else {
           // JSON değilse, endpoint yanlış - fallback'e geç
-          if (import.meta.env.DEV) {
-            if (import.meta.env.DEV) {
-              console.warn("⚠️ Primary email API JSON döndürmüyor, fallback'e geçiliyor");
-            }
-          }
+          throw new Error("Email API JSON döndürmüyor");
         }
       } else {
         // Response başarısız - fallback'e geç
-        if (import.meta.env.DEV) {
-          const errorText = await response.text().catch(() => "");
-          if (import.meta.env.DEV) {
-            console.warn(`⚠️ Primary email API hatası (${response.status}), fallback'e geçiliyor:`, errorText.substring(0, 100));
-          }
-        }
+        const errorText = await response.text().catch(() => "");
+        throw new Error(`Email API hatası (${response.status}): ${errorText.substring(0, 100)}`);
       }
     } catch (error: unknown) {
       // Primary URL bağlantısı başarısız, fallback'e geç
-      // Development'ta hata mesajını göster (debug için)
-      if (import.meta.env.DEV) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        if (errorMsg.includes('ERR_CONNECTION_REFUSED')) {
-          if (import.meta.env.DEV) {
-            console.warn(`⚠️ Localhost backend çalışmıyor (${primaryUrl}). Fallback URL'e geçiliyor...`);
-          }
-        } else if (errorMsg.includes('CORS')) {
-          if (import.meta.env.DEV) {
-            console.warn(`⚠️ CORS hatası (${primaryUrl}). Fallback URL'e geçiliyor...`);
-          }
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      // Network hataları normal (backend çalışmıyor veya CORS sorunu), fallback'e geç
+      // CORS hatalarını sessizce handle et
+      if (!errorMsg.includes('NetworkError') && !errorMsg.includes('ERR_') && !errorMsg.includes('CORS')) {
+        // Network/CORS hatası değilse, gerçek bir sorun olabilir - log göster
+        if (import.meta.env.DEV) {
+          console.debug(`Primary email API hatası: ${errorMsg}`);
         }
       }
     }
   }
   
-  // Fallback URL'i dene (her zaman production URL)
-  try {
-    const response = await fetchWithTimeout(fallbackUrl, {
+  // Fallback URL'i dene (sadece production modunda ve fallback URL varsa)
+  if (fallbackUrl) {
+    try {
+      const response = await fetchWithTimeout(fallbackUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -150,69 +167,44 @@ export const sendEmail = async (options: EmailOptions): Promise<{ success: boole
       }),
     });
 
-    // Content-Type kontrolü - JSON değilse hata
-    const contentType = response.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      // HTML veya başka bir format döndüyse, API endpoint'i yanlış
-      const errorText = await response.text().catch(() => "");
-      if (import.meta.env.DEV) {
-        if (import.meta.env.DEV) {
-          console.warn(`⚠️ Fallback API JSON döndürmüyor. Response: ${errorText.substring(0, 200)}`);
-        }
+      // Content-Type kontrolü - JSON değilse hata
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        // HTML veya başka bir format döndüyse, API endpoint'i yanlış
+        // Email hataları normal, sessizce handle et
+        return { success: false, error: "E-posta servisi şu an meşgul" };
       }
-      return { success: false, error: "E-posta servisi şu an meşgul" };
-    }
 
-    const result = await response.json().catch(() => ({}));
-    
-    if (response.ok && result.success) {
-      // Başarılı
-      if (import.meta.env.DEV) {
-        if (import.meta.env.DEV) {
-          console.log(`✅ E-posta gönderildi: ${options.to}`);
-        }
-      }
-      return { success: true };
-    } else {
-      // Response başarısız
-      const errorMessage = result.error || `E-posta servisi yanıt vermedi (${response.status})`;
-      if (import.meta.env.DEV) {
-        if (import.meta.env.DEV) {
-          console.debug(`ℹ️ ${errorMessage}`);
-        }
-      }
-      return { success: false, error: errorMessage };
-    }
-  } catch (error: unknown) {
-    // Hata yakalandı
-    let errorMessage = error instanceof Error ? error.message : (String(error) || "E-posta gönderilemedi");
-    
-    // CORS ve bağlantı hatalarını tespit et
-    const isCorsError = errorMessage.includes('CORS') || 
-                       errorMessage.includes('Access-Control-Allow-Origin') ||
-                       errorMessage.includes('ERR_CONNECTION_REFUSED') ||
-                       errorMessage.includes('ERR_FAILED');
-    const isNetworkError = errorMessage.includes('Failed to fetch') ||
-                          errorMessage.includes('NetworkError');
-    const isTimeoutError = errorMessage.includes('Timeout');
-    
-    // Development'ta hataları sessizce logla
-    if (import.meta.env.DEV) {
-      if (isCorsError || isNetworkError || errorMessage.includes('ERR_CONNECTION_REFUSED')) {
-        if (import.meta.env.DEV) {
-          console.debug(`ℹ️ E-posta sunucusuna erişilemedi (Backend kapalı olabilir). İşlem devam ediyor...`);
-        }
+      const result = await response.json().catch(() => ({}));
+      
+      if (response.ok && result.success) {
+        // Başarılı
+        return { success: true };
       } else {
-        if (import.meta.env.DEV) {
-          console.debug("ℹ️ E-posta gönderilemedi:", errorMessage);
-        }
+        // Response başarısız
+        const errorMessage = result.error || `E-posta servisi yanıt vermedi (${response.status})`;
+        return { success: false, error: errorMessage };
+      }
+    } catch (fallbackError: unknown) {
+      // Fallback de başarısız oldu
+      const fallbackErrorMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      if (isProduction) {
+        return {
+          success: false,
+          error: "E-posta servisine erişilemedi. Lütfen daha sonra tekrar deneyin veya sistem yöneticisiyle iletişime geçin."
+        };
+      } else {
+        return {
+          success: false,
+          error: "E-posta servisine erişilemedi. Backend server'ın çalıştığından emin olun (http://localhost:3000)"
+        };
       }
     }
-    
-    // Kullanıcıya hata gösterme, sessizce başarısız ol
-    return { 
-      success: false, // Hata olduğunu belirt ama UI'da gösterme
-      error: "E-posta servisine erişilemedi"
+  } else {
+    // Development modunda ve localhost başarısız oldu - hata döndür
+    return {
+      success: false,
+      error: "E-posta servisine erişilemedi. Backend server'ın çalıştığından emin olun (http://localhost:3000)"
     };
   }
 };
@@ -387,15 +379,50 @@ export const sendNotificationEmail = async (
   const formatDate = (date: unknown): string => {
     if (!date) return "";
     try {
+      // Firestore Timestamp kontrolü
+      if (date && typeof date === 'object' && 'seconds' in date && 'nanoseconds' in date) {
+        // Firestore Timestamp objesi
+        const timestamp = date as { seconds: number; nanoseconds?: number };
+        const dateObj = new Date(timestamp.seconds * 1000 + (timestamp.nanoseconds || 0) / 1000000);
+        return dateObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
       if (date instanceof Date) {
         return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       }
       if (typeof date === 'string') {
+        // Timestamp string formatını kontrol et (Timestamp(seconds=..., nanoseconds=...) gibi)
+        if (date.includes('Timestamp(') || date.includes('seconds=')) {
+          // Timestamp string'ini parse et
+          const secondsMatch = date.match(/seconds=(\d+)/);
+          if (secondsMatch) {
+            const seconds = parseInt(secondsMatch[1], 10);
+            const dateObj = new Date(seconds * 1000);
+            return dateObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          }
+        }
         return new Date(date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       }
-      return String(date);
+      // Timestamp objesi gibi görünüyorsa (seconds ve nanoseconds property'leri varsa)
+      if (typeof date === 'object' && date !== null && 'seconds' in date) {
+        const timestamp = date as { seconds: number; nanoseconds?: number };
+        const dateObj = new Date(timestamp.seconds * 1000 + (timestamp.nanoseconds || 0) / 1000000);
+        return dateObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+      // Diğer durumlarda string'e çevir ama Timestamp string'ini parse et
+      const dateStr = String(date);
+      if (dateStr.includes('Timestamp(') || dateStr.includes('seconds=')) {
+        const secondsMatch = dateStr.match(/seconds=(\d+)/);
+        if (secondsMatch) {
+          const seconds = parseInt(secondsMatch[1], 10);
+          const dateObj = new Date(seconds * 1000);
+          return dateObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+      }
+      // Timestamp formatı değilse, boş string döndür (gösterme)
+      return "";
     } catch {
-      return String(date);
+      // Hata durumunda boş string döndür (Timestamp gösterilmesin)
+      return "";
     }
   };
 
@@ -462,8 +489,8 @@ export const sendNotificationEmail = async (
     
     // Öncelik bilgisi
     if (metadata.priority) {
-      const priorityLabels: Record<number, string> = { 1: "Düşük", 2: "Normal", 3: "Yüksek", 4: "Acil" };
-      const priorityLabel = priorityLabels[metadata.priority as number] || `Öncelik ${metadata.priority}`;
+      const { getPriorityLabel } = await import("@/utils/priority");
+      const priorityLabel = getPriorityLabel(metadata.priority as number);
       infoItems.push(`<div style="background: #fff; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin: 15px 0;"><strong style="color: #333;">Öncelik:</strong><br><span style="color: #666;">${priorityLabel}</span></div>`);
     }
     

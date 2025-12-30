@@ -41,11 +41,21 @@ export const createAuditLog = async (
   recordId: string | null,
   oldData: unknown = null,
   newData: unknown = null,
-  userId: string | null = null
+  userId: string | null = null,
+  metadata?: Record<string, unknown>
 ): Promise<string> => {
   try {
     const logsRef = collection(db, AUDIT_LOGS_COLLECTION);
-    const newLog = {
+    const newLog: {
+      userId: string | null;
+      action: "CREATE" | "UPDATE" | "DELETE";
+      tableName: string;
+      recordId: string | null;
+      oldData: unknown;
+      newData: unknown;
+      createdAt: Timestamp;
+      metadata?: Record<string, unknown>;
+    } = {
       userId,
       action,
       tableName,
@@ -54,6 +64,10 @@ export const createAuditLog = async (
       newData,
       createdAt: Timestamp.now(),
     };
+    
+    if (metadata) {
+      newLog.metadata = metadata;
+    }
     
     const docRef = await addDoc(logsRef, newLog);
     return docRef.id;

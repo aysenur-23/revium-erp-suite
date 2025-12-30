@@ -7,6 +7,8 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Plus, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, MoreVertical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ResponsiveTable, ResponsiveTableColumn } from "@/components/shared/ResponsiveTable";
+import { Card as ResponsiveCard } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -32,10 +34,11 @@ import { CURRENCY_SYMBOLS, Currency } from "@/utils/currency";
 import { useAuth } from "@/contexts/AuthContext";
 import { canCreateResource, canDeleteResource, canUpdateResource } from "@/utils/permissions";
 import { UserProfile } from "@/services/firebase/authService";
+import { getPriorityMeta } from "@/utils/priority";
 
 const Orders = () => {
   const isMobile = useIsMobile();
-  const { user } = useAuth();
+  const { user, isTeamLeader } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -164,6 +167,16 @@ const Orders = () => {
           if (sortBy === 'order_date') {
             aValue = a.orderDate || a.createdAt;
             bValue = b.orderDate || b.createdAt;
+          } else if (sortBy === 'created_at') {
+            aValue = a.createdAt;
+            bValue = b.createdAt;
+          } else if (sortBy === 'delivery_date') {
+            aValue = a.deliveryDate || null;
+            bValue = b.deliveryDate || null;
+            // Null değerleri en sona al
+            if (aValue === null && bValue === null) return 0;
+            if (aValue === null) return 1;
+            if (bValue === null) return -1;
           } else if (sortBy === 'total') {
             aValue = a.totalAmount || 0;
             bValue = b.totalAmount || 0;
@@ -261,6 +274,13 @@ const Orders = () => {
       setCanCreate(canCreateOrder);
       setCanUpdate(canUpdateOrder);
       setCanDelete(canDeleteOrder);
+      
+      // Ekip lideri her zaman ekleme/düzenleme/silme yapabilir
+      if (isTeamLeader) {
+        setCanCreate(true);
+        setCanUpdate(true);
+        setCanDelete(true);
+      }
     };
 
     checkPermissions();
@@ -366,18 +386,6 @@ const Orders = () => {
     }
   };
 
-  const getPriorityMeta = (priority?: number | null) => {
-    if (priority === undefined || priority === null) {
-      return { label: "Öncelik: 0", className: "bg-muted text-muted-foreground" };
-    }
-    if (priority >= 4) {
-      return { label: `Öncelik: ${priority}`, className: "bg-destructive/15 text-destructive" };
-    }
-    if (priority >= 2) {
-      return { label: `Öncelik: ${priority}`, className: "bg-amber-100 text-amber-800" };
-    }
-    return { label: `Öncelik: ${priority}`, className: "bg-slate-200 text-slate-800" };
-  };
 
   if (loading) {
     return (
@@ -389,11 +397,11 @@ const Orders = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 xs:space-y-2.5 sm:space-y-3 w-full max-w-full mx-auto px-1 xs:px-2">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
           <div className="flex-1 min-w-0">
-            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Siparişler</h1>
-            <p className="text-muted-foreground mt-0.5 text-[11px] sm:text-xs">Sipariş takibi ve yönetimi</p>
+            <h1 className="text-lg sm:text-xl font-semibold text-foreground">Siparişler</h1>
+            <p className="text-muted-foreground mt-0.5 text-xs sm:text-sm">Sipariş takibi ve yönetimi</p>
           </div>
           {canCreate && (
             <Button 
@@ -416,7 +424,7 @@ const Orders = () => {
               <div className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] md:min-w-[250px]">
                 <SearchInput
                   placeholder="Sipariş ara..."
-                  className="w-full h-9 sm:h-10 text-xs sm:text-sm"
+                  className="w-full h-9 sm:h-10 text-[11px] sm:text-xs"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -425,7 +433,7 @@ const Orders = () => {
               {/* Durum Filtresi */}
               <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full h-9 sm:h-10 text-xs sm:text-sm">
+                  <SelectTrigger className="w-full h-9 sm:h-10 text-[11px] sm:text-xs">
                     <SelectValue placeholder="Durum Filtrele" />
                   </SelectTrigger>
                   <SelectContent>
@@ -449,11 +457,13 @@ const Orders = () => {
               {/* Sıralama */}
               <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-full h-9 sm:h-10 text-xs sm:text-sm">
+                  <SelectTrigger className="w-full h-9 sm:h-10 text-[11px] sm:text-xs">
                     <SelectValue placeholder="Sırala" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="order_date">Tarihe Göre</SelectItem>
+                    <SelectItem value="order_date">Sipariş Tarihine Göre</SelectItem>
+                    <SelectItem value="created_at">Oluşturulma Tarihine Göre</SelectItem>
+                    <SelectItem value="delivery_date">Teslimat Tarihine Göre</SelectItem>
                     <SelectItem value="total">Tutara Göre</SelectItem>
                     <SelectItem value="priority">Önceliğe Göre</SelectItem>
                     <SelectItem value="order_number">Sipariş No</SelectItem>
@@ -466,7 +476,7 @@ const Orders = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                className="h-9 sm:h-10 text-xs sm:text-sm"
+                className="h-9 sm:h-10 text-[11px] sm:text-xs"
               >
                 {sortOrder === "asc" ? <ArrowUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" /> : <ArrowDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />}
                 <span className="hidden sm:inline">{sortOrder === "asc" ? "Artan" : "Azalan"}</span>
@@ -475,103 +485,150 @@ const Orders = () => {
           </CardContent>
         </Card>
 
-        {/* Responsive Table View - Her zaman görünür */}
+        {/* Responsive Table View */}
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-              <Table className="min-w-[800px] sm:min-w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[11px] font-semibold px-1.5 py-1">Sipariş No</TableHead>
-                    <TableHead className="text-[11px] font-semibold px-1.5 py-1 hidden md:table-cell">Müşteri</TableHead>
-                    <TableHead className="text-[11px] font-semibold px-1.5 py-1 hidden lg:table-cell">Tarih</TableHead>
-                    <TableHead className="text-[11px] font-semibold px-1.5 py-1">Durum</TableHead>
-                    <TableHead className="text-[11px] font-semibold px-1.5 py-1 hidden xl:table-cell">Öncelik</TableHead>
-                    <TableHead className="text-right text-[11px] font-semibold px-1.5 py-1">Tutar</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {orders.map((order) => (
-                    <TableRow
-                      key={order.id}
-                      className="hover:bg-muted/50 transition-colors"
+            <ResponsiveTable
+              data={orders}
+              columns={[
+                {
+                  key: "order_number",
+                  header: "Sipariş No",
+                  accessor: (order) => (
+                    <span className="font-medium text-sm whitespace-nowrap">
+                      {order.order_number || "-"}
+                    </span>
+                  ),
+                  priority: "high",
+                  minWidth: 120,
+                  sticky: true,
+                  headerClassName: "text-left",
+                  cellClassName: "text-left",
+                },
+                {
+                  key: "status",
+                  header: "Durum",
+                  accessor: (order) => (
+                    <Badge className={`${getStatusColor(order.status)} text-xs whitespace-nowrap`}>
+                      {getStatusLabel(order.status)}
+                    </Badge>
+                  ),
+                  priority: "high",
+                  minWidth: 120,
+                  headerClassName: "text-left",
+                  cellClassName: "text-left",
+                },
+                {
+                  key: "total",
+                  header: "Tutar",
+                  accessor: (order) => (
+                    <span className="font-semibold whitespace-nowrap">
+                      {formatCurrency(order.totalAmount || order.total_amount || 0, order.currency)}
+                    </span>
+                  ),
+                  priority: "high",
+                  minWidth: 120,
+                  headerClassName: "text-left",
+                  cellClassName: "text-left",
+                },
+                {
+                  key: "customer_name",
+                  header: "Müşteri",
+                  accessor: (order) => (
+                    <button
+                      type="button"
+                      className="hover:text-primary focus:outline-none truncate block text-left w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleShowCustomer(order.customer_id);
+                      }}
                     >
-                      <TableCell 
-                        className="text-[11px] font-medium px-1.5 py-1.5 cursor-pointer"
-                        onClick={() => {
-                          setSelectedOrder(order);
-                          setDetailModalOpen(true);
-                        }}
-                      >
-                        <div className="flex flex-col gap-0.5">
-                          <span>{order.order_number}</span>
-                          <span className="md:hidden text-[10px] text-muted-foreground">
-                            {order.customer_name || "-"}
-                          </span>
-                          <span className="lg:hidden text-[10px] text-muted-foreground">
-                            {order.order_date ? new Date(order.order_date).toLocaleDateString("tr-TR") : "-"}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-[11px] font-medium px-1.5 py-1.5 hidden md:table-cell">
-                        <button
-                          type="button"
-                          className="text-left hover:text-primary focus:outline-none truncate max-w-[200px]"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleShowCustomer(order.customer_id);
-                          }}
-                        >
+                      {order.customer_name || "-"}
+                      {order.customer_company && (
+                        <span className="text-muted-foreground"> - {order.customer_company}</span>
+                      )}
+                    </button>
+                  ),
+                  priority: "medium",
+                  minWidth: 120,
+                  headerClassName: "text-left",
+                  cellClassName: "text-left",
+                },
+                {
+                  key: "order_date",
+                  header: "Tarih",
+                  accessor: (order) => (
+                    <span className="whitespace-nowrap">
+                      {order.order_date ? new Date(order.order_date).toLocaleDateString("tr-TR") : "-"}
+                    </span>
+                  ),
+                  priority: "medium",
+                  minWidth: 120,
+                  headerClassName: "text-left",
+                  cellClassName: "text-left",
+                },
+                {
+                  key: "priority",
+                  header: "Öncelik",
+                  accessor: (order) => (
+                    <Badge className={`${getPriorityMeta(order.priority || 0).className} text-xs whitespace-nowrap`}>
+                      {getPriorityMeta(order.priority || 0).label}
+                    </Badge>
+                  ),
+                  priority: "low",
+                  minWidth: 120,
+                  headerClassName: "text-left",
+                  cellClassName: "text-left",
+                },
+              ]}
+              renderCard={(order) => (
+                <ResponsiveCard 
+                  className="p-3 sm:p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => {
+                    setSelectedOrder(order);
+                    setDetailModalOpen(true);
+                  }}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-sm truncate">{order.order_number}</h3>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
                           {order.customer_name || "-"}
-                          {order.customer_company && (
-                            <span className="text-muted-foreground"> - {order.customer_company}</span>
-                          )}
-                        </button>
-                      </TableCell>
-                      <TableCell className="text-[11px] font-medium px-1.5 py-1.5 hidden lg:table-cell">
+                        </p>
+                      </div>
+                      <Badge className={`${getStatusColor(order.status)} text-[10px] flex-shrink-0`}>
+                        {getStatusLabel(order.status)}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">
                         {order.order_date ? new Date(order.order_date).toLocaleDateString("tr-TR") : "-"}
-                      </TableCell>
-                      <TableCell className="px-1.5 py-1.5">
-                        <Badge className={`${getStatusColor(order.status)} text-[10px]`}>
-                          {getStatusLabel(order.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="px-2 sm:px-4 py-2 sm:py-3 hidden xl:table-cell">
-                        <Badge className={`${getPriorityMeta(order.priority || 0).className} text-[10px]`}>
-                          {getPriorityMeta(order.priority || 0).label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell 
-                        className="text-right text-[11px] font-semibold px-1.5 py-1.5 cursor-pointer"
-                        onClick={() => {
-                          setSelectedOrder(order);
-                          setDetailModalOpen(true);
-                        }}
-                      >
+                      </span>
+                      <span className="font-semibold">
                         {formatCurrency(order.totalAmount || order.total_amount || 0, order.currency)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {orders.length === 0 && !loading && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-6 sm:py-8 text-xs sm:text-sm text-muted-foreground">
-                        {searchQuery || statusFilter !== "all" ? "Arama sonucu bulunamadı" : "Henüz sipariş bulunmuyor"}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                      </span>
+                    </div>
+                  </div>
+                </ResponsiveCard>
+              )}
+              emptyMessage={searchQuery || statusFilter !== "all" ? "Arama sonucu bulunamadı" : "Henüz sipariş bulunmuyor"}
+              onRowClick={(order) => {
+                setSelectedOrder(order);
+                setDetailModalOpen(true);
+              }}
+              keyExtractor={(order) => order.id}
+            />
             {totalPages > 1 && (
-              <div className="flex flex-col gap-2 px-3 py-2 border-t md:flex-row md:items-center md:justify-between">
-                <div className="text-xs sm:text-sm text-muted-foreground text-center md:text-left">
+              <div className="flex flex-col gap-2 p-2 xs:p-3 border-t md:flex-row md:items-center md:justify-between">
+                <div className="text-[11px] sm:text-xs text-muted-foreground text-center md:text-left">
                   Sayfa {page} / {totalPages}
                 </div>
                 <div className="flex gap-2 justify-center md:justify-end">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 sm:h-9 text-xs sm:text-sm"
+                    className="h-8 sm:h-9 text-[11px] sm:text-xs min-h-[44px] sm:min-h-[36px]"
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1 || loading}
                   >
@@ -580,7 +637,7 @@ const Orders = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 sm:h-9 text-xs sm:text-sm"
+                    className="h-8 sm:h-9 text-[11px] sm:text-xs min-h-[44px] sm:min-h-[36px]"
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages || loading}
                   >
@@ -599,7 +656,9 @@ const Orders = () => {
         onSuccess={() => {
           // Real-time subscribe otomatik güncelleyecek
           setCreateDialogOpen(false);
+          setSelectedOrder(null);
         }}
+        order={selectedOrder} // Edit modu için mevcut sipariş
       />
 
       {selectedOrder && (
@@ -608,7 +667,9 @@ const Orders = () => {
           onOpenChange={setDetailModalOpen}
           order={selectedOrder}
           onEdit={() => {
-            // OrderDetailModal içinde düzenleme yapılacak
+            // Düzenleme dialog'unu aç (selectedOrder zaten set edilmiş)
+            setDetailModalOpen(false);
+            setCreateDialogOpen(true);
           }}
           onDelete={() => {
             setDetailModalOpen(false);

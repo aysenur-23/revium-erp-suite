@@ -241,19 +241,19 @@ export const ProductionReportDialog = ({ open, onOpenChange }: ProductionReportD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-[80vw] md:max-w-6xl h-[95vh] max-h-[95vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="sm:!max-w-[85vw] sm:!w-[85vw] sm:!h-[80vh] sm:!max-h-[80vh] sm:!left-[7.5vw] sm:!top-[10vh] sm:!translate-x-0 sm:!translate-y-0 flex flex-col p-0 overflow-hidden">
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">Üretim Raporu Oluştur</DialogTitle>
         <DialogDescription className="sr-only">Tarih aralığı seçerek detaylı üretim raporu oluşturun ve PDF olarak indirin</DialogDescription>
         
         <DialogHeader className="px-3 pt-3 pb-2 border-b bg-[rgb(255,255,255)] flex-shrink-0">
-          <h2 className="text-[14px] sm:text-[15px] font-bold flex items-center gap-2">
-            <div className="h-6 w-6 rounded-lg bg-blue-500/10 flex items-center justify-center">
-              <FileBarChart className="h-3.5 w-3.5 text-blue-600" />
+          <h2 className="text-[16px] sm:text-[18px] font-semibold flex items-center gap-2 leading-tight">
+            <div className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <FileBarChart className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" />
             </div>
             Üretim Raporu Oluştur
           </h2>
-          <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-1">
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-snug">
             Tarih aralığı seçerek detaylı üretim raporu oluşturun ve PDF olarak indirin
           </p>
         </DialogHeader>
@@ -262,7 +262,7 @@ export const ProductionReportDialog = ({ open, onOpenChange }: ProductionReportD
           {/* Tarih Seçimi - Profesyonel Tasarım */}
           <Card className="bg-[rgb(249,250,251)] border-2">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold text-muted-foreground">Tarih Aralığı Seçimi</CardTitle>
+              <CardTitle className="text-[14px] sm:text-[15px] font-semibold text-muted-foreground">Tarih Aralığı Seçimi</CardTitle>
             </CardHeader>
             <CardContent>
               {/* Hızlı Tarih Seçenekleri */}
@@ -349,7 +349,7 @@ export const ProductionReportDialog = ({ open, onOpenChange }: ProductionReportD
               
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-                  <Label className="text-sm font-medium">Başlangıç Tarihi</Label>
+                  <Label className="text-[11px] sm:text-xs font-medium">Başlangıç Tarihi</Label>
                   <Input 
                     type="date" 
                     value={startDate} 
@@ -358,7 +358,7 @@ export const ProductionReportDialog = ({ open, onOpenChange }: ProductionReportD
                   />
             </div>
             <div className="space-y-2">
-                  <Label className="text-sm font-medium">Bitiş Tarihi</Label>
+                  <Label className="text-[11px] sm:text-xs font-medium">Bitiş Tarihi</Label>
                   <Input 
                     type="date" 
                     value={endDate} 
@@ -375,7 +375,7 @@ export const ProductionReportDialog = ({ open, onOpenChange }: ProductionReportD
               <CardContent className="py-12">
                 <div className="flex flex-col items-center justify-center gap-3">
                   <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-sm font-medium text-muted-foreground">Veriler yükleniyor...</p>
+                  <p className="text-[11px] sm:text-xs font-medium text-muted-foreground">Veriler yükleniyor...</p>
                 </div>
               </CardContent>
             </Card>
@@ -395,38 +395,38 @@ export const ProductionReportDialog = ({ open, onOpenChange }: ProductionReportD
               <div className="grid grid-cols-3 gap-4">
                 <Card className="bg-[rgb(239,246,255)] border-[rgb(191,219,254)] border-2">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <CardTitle className="text-[14px] sm:text-[15px] font-semibold text-muted-foreground flex items-center gap-2">
                       <FileBarChart className="h-4 w-4 text-blue-500" />
                       Toplam Sipariş
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-blue-600">{reportData.totalOrders}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Tarih aralığında</p>
+                    <p className="text-[11px] sm:text-xs font-bold text-blue-600">{reportData.totalOrders}</p>
+                    <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">Tarih aralığında</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-[rgb(240,253,244)] border-[rgb(187,247,208)] border-2">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <CardTitle className="text-[14px] sm:text-[15px] font-semibold text-muted-foreground flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-green-500" />
                       Tamamlanan
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-green-600">{reportData.completed}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Başarıyla tamamlandı</p>
+                    <p className="text-[11px] sm:text-xs font-bold text-green-600">{reportData.completed}</p>
+                    <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">Başarıyla tamamlandı</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-[rgb(255,255,255)] border-[rgb(221,83,53)] border-2" style={{ backgroundColor: 'rgba(221, 83, 53, 0.05)' }}>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <CardTitle className="text-[14px] sm:text-[15px] font-semibold text-muted-foreground flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 text-primary" />
                       Tamamlanma Oranı
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-primary">{reportData.completionRate.toFixed(1)}%</p>
-                    <p className="text-xs text-muted-foreground mt-1">Başarı oranı</p>
+                    <p className="text-[11px] sm:text-xs font-bold text-primary">{reportData.completionRate.toFixed(1)}%</p>
+                    <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">Başarı oranı</p>
                   </CardContent>
                 </Card>
               </div>

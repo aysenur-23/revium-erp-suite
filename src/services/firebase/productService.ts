@@ -54,12 +54,42 @@ export const getProducts = async (): Promise<Product[]> => {
       id: doc.id,
       ...doc.data(),
     })) as Product[];
-  } catch (error) {
+  } catch (error: unknown) {
+    // Index hatası durumunda basit query dene
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorCode = (error as { code?: string })?.code;
+    if (errorCode === 'failed-precondition' || errorMessage.includes('index') || errorMessage.includes('requires an index')) {
+      if (import.meta.env.DEV) {
+        console.warn("Products index bulunamadı, basit query kullanılıyor");
+      }
+      try {
+        // Index olmadan sıralama yapmadan dene
+        const simpleQuery = query(collection(firestore, "products"), limit(500));
+        const snapshot = await getDocs(simpleQuery);
+        let products = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Product[];
+        
+        // Client-side sıralama
+        products.sort((a, b) => {
+          const aDate = a.createdAt?.toMillis() || 0;
+          const bDate = b.createdAt?.toMillis() || 0;
+          return bDate - aDate;
+        });
+        
+        return products;
+      } catch (fallbackError) {
+        if (import.meta.env.DEV) {
+          console.error("Fallback query de başarısız:", fallbackError);
+        }
+        // Son çare: boş array döndür
+        return [];
+      }
+    }
     // Sadece development'ta log göster
     if (import.meta.env.DEV) {
-      if (import.meta.env.DEV) {
-        console.error("Get products error:", error);
-      }
+      console.error("Get products error:", error);
     }
     throw error;
   }

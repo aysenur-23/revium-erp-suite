@@ -252,7 +252,7 @@ const TasksArchive = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="space-y-3 sm:space-y-4">
         <div>
           <h1 className="text-[16px] sm:text-[18px] font-bold text-foreground flex items-center gap-1.5 sm:gap-2">
             <Archive className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" />
@@ -265,7 +265,7 @@ const TasksArchive = () => {
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "tasks" | "lists")} className="w-full">
           <Card>
-            <CardHeader className="p-3 sm:p-4 md:p-6">
+            <CardHeader className="p-3 sm:p-4 md:p-5">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
                 <div className="flex-1 min-w-0 w-full sm:w-auto">
                   <SearchInput
@@ -289,7 +289,7 @@ const TasksArchive = () => {
                 </TabsList>
               </div>
             </CardHeader>
-            <CardContent className="p-3 sm:p-4 md:p-6">
+            <CardContent className="p-3 sm:p-4 md:p-5">
               <TabsContent value="tasks" className="mt-0">
               {filteredTasks.length === 0 ? (
                 <EmptyState
@@ -306,7 +306,7 @@ const TasksArchive = () => {
                       className="p-3 sm:p-4 rounded-lg border bg-card hover:shadow-md transition-shadow cursor-pointer"
                       onClick={() => openTaskDetail(task.id, task.status)}
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5 sm:gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 mb-2">
                             <h3 className="font-semibold text-sm sm:text-base flex-1 break-words">{task.title}</h3>
@@ -406,7 +406,7 @@ const TasksArchive = () => {
                       key={list.id}
                       className="p-3 sm:p-4 rounded-lg border bg-card hover:shadow-md transition-shadow"
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-sm sm:text-base mb-1 break-words">{list.title}</h3>
                           <p className="text-xs sm:text-sm text-muted-foreground">

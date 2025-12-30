@@ -17,9 +17,9 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline active:opacity-80",
       },
       size: {
-        default: "h-11 sm:h-10 px-4 sm:px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 text-sm sm:text-sm",
+        default: "h-11 sm:h-10 px-3 sm:px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 text-sm sm:text-sm",
         sm: "h-10 sm:h-9 rounded-md px-3 sm:px-2.5 min-h-[44px] sm:min-h-0 text-xs sm:text-xs",
-        lg: "h-12 sm:h-11 rounded-md px-8 sm:px-6 min-h-[44px] sm:min-h-0 text-base sm:text-sm",
+        lg: "h-12 sm:h-11 rounded-md px-6 sm:px-5 min-h-[44px] sm:min-h-0 text-base sm:text-sm",
         icon: "h-11 w-11 sm:h-10 sm:w-10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0",
       },
     },

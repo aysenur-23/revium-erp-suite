@@ -8,9 +8,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Trash2, Package, Loader2, Plus } from "lucide-react";
-import { deleteRawMaterial, addMaterialComment, getMaterialComments, getMaterialActivities } from "@/services/firebase/materialService";
+import { deleteRawMaterial, addMaterialComment, getMaterialComments, getMaterialActivities, RawMaterial } from "@/services/firebase/materialService";
 import { useAuth } from "@/contexts/AuthContext";
-import { canUpdateResource, canDeleteResource, UserProfile as PermissionUserProfile } from "@/utils/permissions";
+import { canUpdateResource, canDeleteResource } from "@/utils/permissions";
 import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
@@ -35,7 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CURRENCY_SYMBOLS } from "@/utils/currency";
-import { getAllUsers, UserProfile } from "@/services/firebase/authService";
+import { getAllUsers, UserProfile, getUserProfile } from "@/services/firebase/authService";
 import { getMaterialTransactions, MaterialTransaction } from "@/services/firebase/materialService";
 import { getOrderById, getOrderItems } from "@/services/firebase/orderService";
 import { format } from "date-fns";
@@ -57,7 +57,7 @@ export const RawMaterialDetailModal = ({
   onEdit,
   onDelete,
 }: RawMaterialDetailModalProps) => {
-  const { user } = useAuth();
+  const { user, isTeamLeader } = useAuth();
   const [canUpdate, setCanUpdate] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -85,9 +85,16 @@ export const RawMaterialDetailModal = ({
       }
 
       try {
+        const userProfile = await getUserProfile(user.id);
+        if (!userProfile) {
+          setCanUpdate(false);
+          setCanDelete(false);
+          return;
+        }
+        
         const [updatePermission, deletePermission] = await Promise.all([
-          canUpdateResource(user as PermissionUserProfile, "raw_materials"),
-          canDeleteResource(user as PermissionUserProfile, "raw_materials"),
+          canUpdateResource(userProfile, "raw_materials"),
+          canDeleteResource(userProfile, "raw_materials"),
         ]);
 
         setCanUpdate(updatePermission);
@@ -108,7 +115,7 @@ export const RawMaterialDetailModal = ({
     if (!confirm("Bu hammaddeyi silmek istediğinizden emin misiniz?")) return;
 
     // Yetki kontrolü
-    if (!canDelete && material.createdBy !== user?.id) {
+    if (!canDelete && material.createdBy !== user?.id && !isTeamLeader) {
       toast.error("Hammadde silme yetkiniz yok.");
       return;
     }
@@ -354,7 +361,15 @@ export const RawMaterialDetailModal = ({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+          {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+          <DialogTitle className="sr-only">
+            {material.name} - Hammadde Detayı
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Hammadde detayları ve bilgileri
+          </DialogDescription>
+          
           <div className="flex flex-col h-full min-h-0">
             <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
               <div className="flex items-center justify-between gap-3">
@@ -362,17 +377,37 @@ export const RawMaterialDetailModal = ({
                   <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                     <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
+                  <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground truncate">
                     {material.name}
-                  </DialogTitle>
-                  <DialogDescription className="sr-only">
-                    Hammadde detayları ve bilgileri
-                  </DialogDescription>
+                  </h2>
                 </div>
-                <div className="flex flex-wrap gap-2 flex-shrink-0 relative z-10 pr-10 sm:pr-12">
+                <div className="flex flex-wrap items-center gap-2 flex-shrink-0 relative z-10 pr-10 sm:pr-12">
                   <Badge variant={stockStatus.variant} className="text-xs px-2 sm:px-3 py-1 relative z-10">
                     {stockStatus.label}
                   </Badge>
+                  {(canUpdate || material.createdBy === user?.id || isTeamLeader) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onEdit}
+                      className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Düzenle
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {deleting ? "Siliniyor..." : "Sil"}
+                    </Button>
+                  )}
                 </div>
               </div>
             </DialogHeader>
@@ -381,51 +416,51 @@ export const RawMaterialDetailModal = ({
               <div className="max-w-full mx-auto h-full overflow-y-auto">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                   <TabsList className="grid w-full grid-cols-3 mb-4 sm:mb-6 min-h-[44px] sm:min-h-0 overflow-hidden">
-                    <TabsTrigger value="details" className="text-sm sm:text-base whitespace-nowrap overflow-hidden text-ellipsis">
+                    <TabsTrigger value="details" className="text-[11px] sm:text-xs whitespace-nowrap overflow-hidden text-ellipsis">
                       Detaylar
                     </TabsTrigger>
-                    <TabsTrigger value="recipes" className="text-sm sm:text-base whitespace-nowrap overflow-hidden text-ellipsis">
+                    <TabsTrigger value="recipes" className="text-[11px] sm:text-xs whitespace-nowrap overflow-hidden text-ellipsis">
                       Reçete
                     </TabsTrigger>
-                    <TabsTrigger value="transactions" className="text-sm sm:text-base whitespace-nowrap overflow-hidden text-ellipsis">
+                    <TabsTrigger value="transactions" className="text-[11px] sm:text-xs whitespace-nowrap overflow-hidden text-ellipsis">
                       Stok Hareketleri
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="details" className="space-y-4 sm:space-y-6 mt-0">
+                  <TabsContent value="details" className="space-y-3 sm:space-y-4 mt-0">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">Stok Kodu</p>
-                        <p className="font-medium">{material.code || material.sku || "-"}</p>
+                        <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Stok Kodu</p>
+                        <p className="text-[11px] sm:text-xs font-medium">{material.code || material.sku || "-"}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">Kategori</p>
-                        <p className="font-medium">{getCategoryLabel(material.category || "other")}</p>
+                        <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Kategori</p>
+                        <p className="text-[11px] sm:text-xs font-medium">{getCategoryLabel(material.category || "other")}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">Mevcut Stok</p>
-                        <p className="font-medium text-lg">
+                        <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Mevcut Stok</p>
+                        <p className="text-[11px] sm:text-xs font-medium text-lg sm:text-xl">
                           {material.currentStock !== undefined ? material.currentStock : (material.stock || 0)} {material.unit || "Adet"}
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">Minimum Stok</p>
-                        <p className="font-medium">
+                        <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Minimum Stok</p>
+                        <p className="text-[11px] sm:text-xs font-medium">
                           {material.minStock !== undefined ? material.minStock : (material.min_stock || 0)} {material.unit || "Adet"}
                         </p>
                       </div>
                       {(material.maxStock !== undefined && material.maxStock !== null) || material.max_stock ? (
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">Maksimum Stok</p>
-                          <p className="font-medium">
+                          <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Maksimum Stok</p>
+                          <p className="text-[11px] sm:text-xs font-medium">
                             {material.maxStock !== undefined ? material.maxStock : (material.max_stock || 0)} {material.unit || "Adet"}
                           </p>
                         </div>
                       ) : null}
                       {material.unitPrice !== undefined || material.cost ? (
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">Birim Fiyat</p>
-                          <p className="font-medium">
+                          <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Birim Fiyat</p>
+                          <p className="text-[11px] sm:text-xs font-medium">
                             {(() => {
                               const price = material.unitPrice !== undefined && material.unitPrice !== null ? material.unitPrice : (material.cost !== undefined && material.cost !== null ? material.cost : 0);
                               const currency = material.currency || (material.currencies && material.currencies.length > 0 ? material.currencies[0] : "TRY");
@@ -437,14 +472,14 @@ export const RawMaterialDetailModal = ({
                       ) : null}
                       {material.vatRate !== undefined && material.vatRate !== null && material.vatRate > 0 ? (
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">KDV Yüzdesi</p>
-                          <p className="font-medium">%{material.vatRate.toFixed(2)}</p>
+                          <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">KDV Yüzdesi</p>
+                          <p className="text-[11px] sm:text-xs font-medium">%{material.vatRate.toFixed(2)}</p>
                         </div>
                       ) : null}
                       {material.totalPrice !== undefined && material.totalPrice !== null ? (
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">Nihai Fiyat (KDV Dahil)</p>
-                          <p className="font-medium">
+                          <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Nihai Fiyat (KDV Dahil)</p>
+                          <p className="text-[11px] sm:text-xs font-medium">
                             {(() => {
                               const currency = material.currency || (material.currencies && material.currencies.length > 0 ? material.currencies[0] : "TRY");
                               const symbol = CURRENCY_SYMBOLS[currency as keyof typeof CURRENCY_SYMBOLS] || "₺";
@@ -452,26 +487,30 @@ export const RawMaterialDetailModal = ({
                             })()}
                           </p>
                           {material.unitPrice && material.vatRate && material.vatRate > 0 && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Birim: {symbol}{material.unitPrice.toFixed(2)} + KDV (%{material.vatRate.toFixed(2)}): {symbol}{((material.unitPrice * material.vatRate) / 100).toFixed(2)}
+                            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">
+                              {(() => {
+                                const currency = material.currency || (material.currencies && material.currencies.length > 0 ? material.currencies[0] : "TRY");
+                                const symbol = CURRENCY_SYMBOLS[currency as keyof typeof CURRENCY_SYMBOLS] || "₺";
+                                return `Birim: ${symbol}${material.unitPrice.toFixed(2)} + KDV (%${material.vatRate.toFixed(2)}): ${symbol}${((material.unitPrice * material.vatRate) / 100).toFixed(2)}`;
+                              })()}
                             </p>
                           )}
                         </div>
                       ) : null}
                       {material.brand ? (
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">Marka</p>
-                          <p className="font-medium">{material.brand}</p>
+                          <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Marka</p>
+                          <p className="text-[11px] sm:text-xs font-medium">{material.brand}</p>
                         </div>
                       ) : null}
                       {material.link ? (
                       <div>
-                          <p className="text-sm text-muted-foreground mb-1">Link</p>
+                          <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Link</p>
                           <a
                             href={material.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium text-primary hover:underline break-all"
+                            className="text-[11px] sm:text-xs font-medium text-primary hover:underline break-all"
                           >
                             {material.link}
                           </a>
@@ -479,14 +518,14 @@ export const RawMaterialDetailModal = ({
                       ) : null}
                       {material.supplier ? (
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">Tedarikçi</p>
-                          <p className="font-medium">{material.supplier}</p>
+                          <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Tedarikçi</p>
+                          <p className="text-[11px] sm:text-xs font-medium">{material.supplier}</p>
                         </div>
                       ) : null}
                       {material.purchasedBy ? (
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">Satın Alan Kişi</p>
-                          <p className="font-medium">
+                          <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Satın Alan Kişi</p>
+                          <p className="text-[11px] sm:text-xs font-medium">
                             {(() => {
                               const user = users.find(u => u.id === material.purchasedBy);
                               return user ? (user.fullName || user.displayName || user.email || "İsimsiz Kullanıcı") : "Yükleniyor...";
@@ -496,82 +535,62 @@ export const RawMaterialDetailModal = ({
                       ) : null}
                       {material.createdBy ? (
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">Ekleyen Kişi</p>
-                          <p className="font-medium">
+                          <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Ekleyen Kişi</p>
+                          <p className="text-[11px] sm:text-xs font-medium">
                             {(() => {
                               const creator = users.find(u => u.id === material.createdBy);
-                              return creator ? (creator.fullName || creator.displayName || creator.email || "İsimsiz Kullanıcı") : (material.created_by_name || "Yükleniyor...");
+                              return creator ? (creator.fullName || creator.email || "İsimsiz Kullanıcı") : "Yükleniyor...";
                             })()}
                           </p>
                         </div>
                       ) : null}
                       {material.location ? (
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">Hammadde Konumu</p>
-                          <p className="font-medium">{material.location}</p>
+                          <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Hammadde Konumu</p>
+                          <p className="text-[11px] sm:text-xs font-medium">{material.location}</p>
                         </div>
                       ) : null}
                     </div>
 
                     {(material.notes || material.description) && (
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">Açıklama</p>
-                        <p className="text-sm">{material.notes || material.description || ""}</p>
+                        <p className="text-[11px] sm:text-xs text-muted-foreground mb-1">Açıklama</p>
+                        <p className="text-[11px] sm:text-xs">{material.notes || material.description || ""}</p>
                       </div>
                     )}
-
-                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4 border-t">
-                      {(canUpdate || material.createdBy === user?.id) && (
-                        <Button variant="outline" onClick={onEdit} className="min-h-[44px] sm:min-h-0">
-                          <Edit className="mr-2 h-4 w-4" />
-                          Düzenle
-                        </Button>
-                      )}
-                      {canDelete && (
-                        <Button
-                          variant="destructive"
-                          onClick={handleDelete}
-                          disabled={deleting}
-                          className="min-h-[44px] sm:min-h-0"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          {deleting ? "Siliniyor..." : "Sil"}
-                        </Button>
-                      )}
-                    </div>
                   </TabsContent>
 
-                  <TabsContent value="recipes" className="space-y-4 sm:space-y-6 mt-0">
+                  <TabsContent value="recipes" className="space-y-3 sm:space-y-4 mt-0">
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg sm:text-xl">Reçete Yönetimi</CardTitle>
+                        <CardTitle className="text-[14px] sm:text-[15px]">Reçete Yönetimi</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-6">
                         {/* Reçete Ekleme Formu */}
                         <div className="rounded-lg border bg-muted/30 p-4 sm:p-6">
-                          <h3 className="text-sm sm:text-base font-semibold mb-4">Yeni Reçete Ekle</h3>
+                          <h3 className="text-[11px] sm:text-xs font-semibold mb-4">Yeni Reçete Ekle</h3>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="product-select" className="text-sm sm:text-base">Ürün</Label>
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <Label htmlFor="product-select" className="text-[11px] sm:text-xs">Ürün</Label>
                               <Select
                                 value={selectedProduct}
                                 onValueChange={setSelectedProduct}
                                 disabled={productsLoading}
                               >
-                                <SelectTrigger id="product-select" className="min-h-[44px] sm:min-h-0">
+                                <SelectTrigger id="product-select" className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
                                   <SelectValue placeholder="Ürün seçin" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="text-[11px] sm:text-xs">
                                   {products.map((product) => (
-                                    <SelectItem key={product.id} value={product.id}>
+                                    <SelectItem key={product.id} value={product.id} className="text-[11px] sm:text-xs">
                                       {product.name} {product.sku ? `(${product.sku})` : ""}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="quantity-input" className="text-sm sm:text-base">Miktar</Label>
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <Label htmlFor="quantity-input" className="text-[11px] sm:text-xs">Miktar</Label>
                               <Input
                                 id="quantity-input"
                                 type="number"
@@ -580,15 +599,15 @@ export const RawMaterialDetailModal = ({
                                 value={newQuantity}
                                 onChange={(e) => setNewQuantity(e.target.value)}
                                 placeholder="Miktar"
-                                className="min-h-[44px] sm:min-h-0"
+                                className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
                               />
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-sm sm:text-base opacity-0">Ekle</Label>
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <Label className="text-[11px] sm:text-xs opacity-0">Ekle</Label>
                               <Button
                                 onClick={addRecipe}
                                 disabled={recipeLoading || !selectedProduct || !newQuantity}
-                                className="w-full min-h-[44px] sm:min-h-0"
+                                className="text-[11px] sm:text-xs w-full min-h-[44px] sm:min-h-0"
                               >
                                 {recipeLoading ? (
                                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -609,17 +628,17 @@ export const RawMaterialDetailModal = ({
                         ) : recipes.length === 0 ? (
                           <div className="text-center py-8 text-muted-foreground">
                             <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                            <p className="text-sm sm:text-base">Bu hammadde henüz hiçbir üründe kullanılmamış</p>
+                            <p className="text-[11px] sm:text-xs">Bu hammadde henüz hiçbir üründe kullanılmamış</p>
                           </div>
                         ) : (
                           <div className="rounded-lg border bg-white overflow-hidden">
                             <Table>
                               <TableHeader>
                                 <TableRow>
-                                  <TableHead className="text-sm sm:text-base">Ürün Adı</TableHead>
-                                  <TableHead className="text-sm sm:text-base">Stok Kodu</TableHead>
-                                  <TableHead className="text-sm sm:text-base">Miktar</TableHead>
-                                  <TableHead className="text-sm sm:text-base text-right">İşlemler</TableHead>
+                                  <TableHead className="text-[11px] sm:text-xs">Ürün Adı</TableHead>
+                                  <TableHead className="text-[11px] sm:text-xs">Stok Kodu</TableHead>
+                                  <TableHead className="text-[11px] sm:text-xs">Miktar</TableHead>
+                                  <TableHead className="text-[11px] sm:text-xs text-right">İşlemler</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -627,15 +646,15 @@ export const RawMaterialDetailModal = ({
                                   const product = recipe.product;
                                   return (
                                     <TableRow key={recipe.id}>
-                                      <TableCell className="font-medium">
+                                      <TableCell className="text-[11px] sm:text-xs font-medium">
                                         {product?.name || "Silinmiş Ürün"}
                                       </TableCell>
-                                      <TableCell className="text-muted-foreground font-mono text-xs sm:text-sm">
+                                      <TableCell className="text-[11px] sm:text-xs text-muted-foreground font-mono">
                                         {product?.sku || "-"}
                                       </TableCell>
-                                      <TableCell>
+                                      <TableCell className="text-[11px] sm:text-xs">
                                         <span className="font-medium">{recipe.quantityPerUnit}</span>
-                                        <span className="text-sm text-muted-foreground ml-1">
+                                        <span className="text-[11px] sm:text-xs text-muted-foreground ml-1">
                                           {material.unit || "Adet"}
                                         </span>
                                       </TableCell>
@@ -644,7 +663,7 @@ export const RawMaterialDetailModal = ({
                                           variant="ghost"
                                           size="sm"
                                           onClick={() => removeRecipe(recipe.id)}
-                                          className="h-8 w-8 p-0 text-destructive hover:text-destructive min-h-[44px] sm:min-h-0"
+                                          className="text-[11px] sm:text-xs h-8 w-8 p-0 text-destructive hover:text-destructive min-h-[44px] sm:min-h-0"
                                         >
                                           <Trash2 className="h-4 w-4" />
                                         </Button>
@@ -660,10 +679,10 @@ export const RawMaterialDetailModal = ({
                     </Card>
                   </TabsContent>
 
-                  <TabsContent value="transactions" className="space-y-4 sm:space-y-6 mt-0">
+                  <TabsContent value="transactions" className="space-y-3 sm:space-y-4 mt-0">
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg sm:text-xl">Stok Hareketleri</CardTitle>
+                        <CardTitle className="text-[14px] sm:text-[15px]">Stok Hareketleri</CardTitle>
                       </CardHeader>
                       <CardContent>
                         {transactionsLoading ? (
@@ -673,20 +692,20 @@ export const RawMaterialDetailModal = ({
                         ) : transactions.length === 0 ? (
                           <div className="text-center py-8 text-muted-foreground">
                             <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                            <p className="text-sm sm:text-base">Henüz stok hareketi yapılmamış</p>
+                            <p className="text-[11px] sm:text-xs">Henüz stok hareketi yapılmamış</p>
                           </div>
                         ) : (
                           <div className="overflow-x-auto">
                             <Table>
                               <TableHeader>
                                 <TableRow>
-                                  <TableHead>Tarih</TableHead>
-                                  <TableHead>İşlem Türü</TableHead>
-                                  <TableHead className="text-right">Miktar</TableHead>
-                                  <TableHead>Sipariş</TableHead>
-                                  <TableHead>Ürün</TableHead>
-                                  <TableHead>Kullanıcı</TableHead>
-                                  <TableHead>Açıklama</TableHead>
+                                  <TableHead className="text-[11px] sm:text-xs">Tarih</TableHead>
+                                  <TableHead className="text-[11px] sm:text-xs">İşlem Türü</TableHead>
+                                  <TableHead className="text-[11px] sm:text-xs text-right">Miktar</TableHead>
+                                  <TableHead className="text-[11px] sm:text-xs">Sipariş</TableHead>
+                                  <TableHead className="text-[11px] sm:text-xs">Ürün</TableHead>
+                                  <TableHead className="text-[11px] sm:text-xs">Kullanıcı</TableHead>
+                                  <TableHead className="text-[11px] sm:text-xs">Açıklama</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -696,23 +715,23 @@ export const RawMaterialDetailModal = ({
                                   
                                   return (
                                     <TableRow key={t.id}>
-                                      <TableCell className="text-sm whitespace-nowrap">
+                                      <TableCell className="text-[11px] sm:text-xs whitespace-nowrap">
                                         {formatTransactionDate(t.createdAt)}
                                       </TableCell>
                                       <TableCell>
-                                        <Badge variant={t.type === "in" ? "default" : "destructive"}>
+                                        <Badge variant={t.type === "in" ? "default" : "destructive"} className="text-[10px]">
                                           {t.type === "in" ? "Giriş" : "Çıkış"}
                                         </Badge>
                                       </TableCell>
                                       <TableCell
-                                        className={`text-right font-medium whitespace-nowrap ${
+                                        className={`text-[11px] sm:text-xs text-right font-medium whitespace-nowrap ${
                                           t.type === "in" ? "text-green-600" : "text-red-600"
                                         }`}
                                       >
                                         {t.type === "in" ? "+" : "-"}
                                         {t.quantity}
                                       </TableCell>
-                                      <TableCell className="text-sm">
+                                      <TableCell className="text-[11px] sm:text-xs">
                                         {orderInfo ? (
                                           <div className="flex items-center gap-2">
                                             <span className="font-medium">{orderInfo.orderNumber}</span>
@@ -720,7 +739,7 @@ export const RawMaterialDetailModal = ({
                                               <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="h-6 w-6 p-0"
+                                                className="text-[11px] sm:text-xs h-6 w-6 p-0"
                                                 onClick={() => {
                                                   window.open(`/production?orderId=${t.relatedOrderId}`, '_blank');
                                                 }}
@@ -734,13 +753,13 @@ export const RawMaterialDetailModal = ({
                                           "-"
                                         )}
                                       </TableCell>
-                                      <TableCell className="text-sm">
+                                      <TableCell className="text-[11px] sm:text-xs">
                                         {orderInfo?.productName || "-"}
                                       </TableCell>
-                                      <TableCell className="text-sm">
+                                      <TableCell className="text-[11px] sm:text-xs">
                                         {userName}
                                       </TableCell>
-                                      <TableCell className="text-sm max-w-xs truncate" title={t.reason}>
+                                      <TableCell className="text-[11px] sm:text-xs max-w-xs truncate" title={t.reason}>
                                         {t.reason || "-"}
                                       </TableCell>
                                     </TableRow>
@@ -769,7 +788,7 @@ export const RawMaterialDetailModal = ({
                 material.id,
                 user.id,
                 content,
-                user.fullName || user.displayName,
+                user.fullName,
                 user.email
               );
             }}
@@ -780,7 +799,7 @@ export const RawMaterialDetailModal = ({
               return await getMaterialActivities(material.id);
             }}
             currentUserId={user.id}
-            currentUserName={user.fullName || user.displayName}
+            currentUserName={user.fullName}
             currentUserEmail={user.email}
           />
         )}

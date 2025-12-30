@@ -128,6 +128,9 @@ export const canEditProject = async (project: Project, user: UserProfile | null)
   // Süper yönetici/yönetici her zaman tüm yetkilere sahiptir
   if (await isMainAdmin(user)) return true;
   
+  // Ekip lideri her zaman düzenleyebilir
+  if (user.role && user.role.includes("team_leader")) return true;
+  
   // Projeyi oluşturan kişi düzenleyebilir
   if (project.createdBy === user.id) return true;
   
@@ -449,6 +452,9 @@ export const canCreateResource = async (
   // Super admin her zaman tüm yetkilere sahiptir
   if (await isMainAdmin(user)) return true;
   
+  // Ekip lideri her zaman ekleme yapabilir
+  if (user.role && user.role.includes("team_leader")) return true;
+  
   // Rol yetkilerini kontrol et
   return await checkRolePermission(user, resource, "canCreate");
 };
@@ -488,6 +494,9 @@ export const canUpdateResource = async (
   // Super admin her zaman tüm yetkilere sahiptir
   if (await isMainAdmin(user)) return true;
   
+  // Ekip lideri her zaman güncelleme yapabilir
+  if (user.role && user.role.includes("team_leader")) return true;
+  
   // Rol yetkilerini kontrol et
   return await checkRolePermission(user, resource, "canUpdate");
 };
@@ -504,6 +513,9 @@ export const canDeleteResource = async (
   
   // Super admin her zaman tüm yetkilere sahiptir
   if (await isMainAdmin(user)) return true;
+  
+  // Ekip lideri her zaman silme yapabilir
+  if (user.role && user.role.includes("team_leader")) return true;
   
   // Rol yetkilerini kontrol et
   return await checkRolePermission(user, resource, "canDelete");
@@ -618,9 +630,38 @@ export const canViewPrivateTask = async (
   // Görevi oluşturan kişi görebilir
   if (task.createdBy === user.id) return true;
   
-  // Göreve atanan kullanıcılar görebilir
+  // Yöneticiler görebilir (canUpdateResource kontrolü)
+  const hasUpdatePermission = await canUpdateResource(user, "tasks");
+  if (hasUpdatePermission) return true;
+  
+  // Kullanıcının rolünü kontrol et
+  const userRoles = user.role || [];
+  const isTeamLeader = userRoles.includes("team_leader");
+  
+  // Ekip lideri ise sadece kendisi oluşturduysa görebilir (yukarıda zaten kontrol edildi)
+  // Ekip lideri başkasının oluşturduğu gizli görevleri göremez
+  
+  // Göreve atanan kullanıcılar görebilir (proje üyeleri)
   if (assignedUserIds.includes(user.id)) return true;
   if (task.assignedUsers && task.assignedUsers.includes(user.id)) return true;
+  
+  // Proje üyeleri kontrolü - görev bir projeye aitse ve kullanıcı projede görev üyesiyse görebilir
+  if (task.projectId) {
+    try {
+      const { getProjectById } = await import("@/services/firebase/projectService");
+      const project = await getProjectById(task.projectId);
+      if (project) {
+        // Proje üyeleri kontrolü - canViewPrivateProject kullan
+        const canViewProject = await canViewPrivateProject(project, user);
+        if (canViewProject) return true;
+      }
+    } catch (error: unknown) {
+      // Hata durumunda devam et
+      if (import.meta.env.DEV) {
+        console.error("Error checking project for private task:", error);
+      }
+    }
+  }
   
   // Firestore'dan kontrol: canViewPrivate alt yetkisi
   return await canPerformSubPermission(user, "tasks", "canViewPrivate");

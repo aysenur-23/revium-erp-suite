@@ -389,19 +389,19 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-[80vw] md:max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="sm:!max-w-[85vw] sm:!w-[85vw] sm:!h-[80vh] sm:!max-h-[80vh] sm:!left-[7.5vw] sm:!top-[10vh] sm:!translate-x-0 sm:!translate-y-0 flex flex-col p-0 overflow-hidden">
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">Mali Rapor Oluştur</DialogTitle>
         <DialogDescription className="sr-only">Tarih aralığı seçerek detaylı mali rapor oluşturun ve PDF olarak indirin</DialogDescription>
         
         <DialogHeader className="px-3 pt-3 pb-2 border-b bg-[rgb(255,255,255)] flex-shrink-0">
-          <h2 className="text-[14px] sm:text-[15px] font-bold flex items-center gap-2">
-            <div className="h-6 w-6 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-              <DollarSign className="h-3.5 w-3.5 text-emerald-600" />
+          <h2 className="text-[16px] sm:text-[18px] font-semibold flex items-center gap-2 leading-tight">
+            <div className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600" />
             </div>
             Mali Rapor Oluştur
           </h2>
-          <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-1">
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-snug">
             Tarih aralığı seçerek detaylı mali rapor oluşturun ve PDF olarak indirin
           </p>
         </DialogHeader>
@@ -410,7 +410,7 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
           {/* Tarih Seçimi - Profesyonel Tasarım */}
           <Card className="bg-[rgb(249,250,251)] border-2">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold text-muted-foreground">Tarih Aralığı Seçimi</CardTitle>
+              <CardTitle className="text-[14px] sm:text-[15px] font-semibold text-muted-foreground">Tarih Aralığı Seçimi</CardTitle>
             </CardHeader>
             <CardContent>
               {/* Hızlı Tarih Seçenekleri */}
@@ -497,7 +497,7 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
               
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-                  <Label className="text-sm font-medium">Başlangıç Tarihi</Label>
+                  <Label className="text-[11px] sm:text-xs font-medium">Başlangıç Tarihi</Label>
                   <Input 
                     type="date" 
                     value={startDate} 
@@ -506,7 +506,7 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
                   />
             </div>
             <div className="space-y-2">
-                  <Label className="text-sm font-medium">Bitiş Tarihi</Label>
+                  <Label className="text-[11px] sm:text-xs font-medium">Bitiş Tarihi</Label>
                   <Input 
                     type="date" 
                     value={endDate} 
@@ -523,7 +523,7 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
               <CardContent className="py-12">
                 <div className="flex flex-col items-center justify-center gap-3">
                   <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-sm font-medium text-muted-foreground">Veriler yükleniyor...</p>
+                  <p className="text-[11px] sm:text-xs font-medium text-muted-foreground">Veriler yükleniyor...</p>
                 </div>
               </CardContent>
             </Card>
@@ -532,7 +532,7 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
           {reportData && (
             <div className="space-y-6 border-t pt-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold flex items-center gap-2">
+                <h3 className="text-[14px] sm:text-[15px] font-bold flex items-center gap-2">
                   <div className="h-2 w-2 rounded-full bg-primary"></div>
                   Rapor Önizlemesi
                 </h3>
@@ -543,50 +543,50 @@ export const FinancialReportDialog = ({ open, onOpenChange }: FinancialReportDia
               <div className="grid grid-cols-4 gap-4">
                 <Card className="bg-[rgb(240,253,244)] border-[rgb(187,247,208)] border-2">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <CardTitle className="text-[14px] sm:text-[15px] font-semibold text-muted-foreground flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 text-green-500" />
                       Toplam Gelir
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-green-600">₺{reportData.totalRevenue.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Toplam ciro</p>
+                    <p className="text-[11px] sm:text-xs font-bold text-green-600">₺{reportData.totalRevenue.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">Toplam ciro</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-[rgb(254,242,242)] border-[rgb(254,202,202)] border-2">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <CardTitle className="text-[14px] sm:text-[15px] font-semibold text-muted-foreground flex items-center gap-2">
                       <ArrowDown className="h-4 w-4 text-red-500" />
                       Toplam Gider
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-red-600">₺{reportData.totalCost.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Toplam maliyet</p>
+                    <p className="text-[11px] sm:text-xs font-bold text-red-600">₺{reportData.totalCost.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">Toplam maliyet</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-[rgb(236,253,245)] border-[rgb(167,243,208)] border-2">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <CardTitle className="text-[14px] sm:text-[15px] font-semibold text-muted-foreground flex items-center gap-2">
                       <ArrowUp className="h-4 w-4 text-emerald-500" />
                       Brüt Kar
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-emerald-600">₺{reportData.grossProfit.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Net kar</p>
+                    <p className="text-[11px] sm:text-xs font-bold text-emerald-600">₺{reportData.grossProfit.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">Net kar</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-[rgb(255,255,255)] border-[rgb(221,83,53)] border-2" style={{ backgroundColor: 'rgba(221, 83, 53, 0.05)' }}>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <CardTitle className="text-[14px] sm:text-[15px] font-semibold text-muted-foreground flex items-center gap-2">
                       <Percent className="h-4 w-4 text-primary" />
                       Kar Marjı
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-primary">{reportData.profitMargin.toFixed(1)}%</p>
-                    <p className="text-xs text-muted-foreground mt-1">Karlılık oranı</p>
+                    <p className="text-[11px] sm:text-xs font-bold text-primary">{reportData.profitMargin.toFixed(1)}%</p>
+                    <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">Karlılık oranı</p>
                   </CardContent>
                 </Card>
               </div>

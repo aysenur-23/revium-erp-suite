@@ -135,10 +135,10 @@ const Reports = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
         <div>
-            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Raporlar</h1>
-          <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">İş analizleri ve raporlama</p>
+            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground leading-tight">Raporlar</h1>
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1 leading-snug">İş analizleri ve raporlama</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
@@ -149,11 +149,11 @@ const Reports = () => {
                   <div className="p-2 sm:p-2.5 rounded-lg bg-primary/10 flex-shrink-0">
                     <report.icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <CardTitle className="text-[14px] sm:text-[15px]">{report.title}</CardTitle>
+                  <CardTitle className="text-[14px] sm:text-[15px] leading-tight">{report.title}</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="p-2 pt-0">
-                <p className="text-muted-foreground mb-2 sm:mb-3 text-xs sm:text-sm">{report.description}</p>
+                <p className="text-[11px] sm:text-xs text-muted-foreground mb-2 sm:mb-3">{report.description}</p>
                 <Button
                   className="w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs"
                   variant="outline"
@@ -197,7 +197,7 @@ const Reports = () => {
         )}
 
         {reportsIndexLink && (
-          <div className="rounded-lg border border-amber-500 bg-amber-50 p-4 text-sm text-amber-900 space-y-2">
+          <div className="rounded-lg border border-amber-500 bg-amber-50 p-4 text-[11px] sm:text-xs text-amber-900 space-y-2">
             <div className="font-semibold">Firestore index gerekli</div>
             <p>
               Kayıtlı raporları görebilmek için Firestore’da aşağıdaki linkteki index’i oluşturup “Active”
@@ -212,7 +212,7 @@ const Reports = () => {
               Index’i aç
               <Download className="h-4 w-4" />
             </a>
-            <p className="text-xs text-amber-800">
+            <p className="text-[11px] sm:text-xs text-amber-800">
               Index “building” durumundan “active” olana kadar birkaç dakika sürebilir. Tamamlandıktan sonra liste
               otomatik olarak çalışacaktır.
             </p>
@@ -221,11 +221,11 @@ const Reports = () => {
 
         <Card>
           <CardHeader className="p-2">
-            <CardTitle className="text-[14px] sm:text-[15px]">Son Oluşturulan Raporlar</CardTitle>
+            <CardTitle className="text-[14px] sm:text-[15px] leading-tight">Son Oluşturulan Raporlar</CardTitle>
           </CardHeader>
           <CardContent className="p-2">
             {savedReports.length === 0 ? (
-              <p className="text-muted-foreground text-center py-6 sm:py-8 text-xs sm:text-sm md:text-base">Henüz rapor oluşturulmamış</p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground text-center py-6 sm:py-8">Henüz rapor oluşturulmamış</p>
             ) : (
               <div className="space-y-2 sm:space-y-3 max-h-[60vh] overflow-y-auto pr-2">
                 {savedReports.map((report) => (
@@ -236,8 +236,8 @@ const Reports = () => {
                     <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                       <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-xs sm:text-sm md:text-base truncate">{report.title}</p>
-                        <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">
+                        <p className="font-medium text-[11px] sm:text-xs truncate">{report.title}</p>
+                        <p className="text-[11px] sm:text-xs text-muted-foreground">
                           {getReportTypeLabel(report.reportType)} • {report.createdAt 
                             ? (report.createdAt instanceof Date 
                                 ? report.createdAt 
@@ -252,7 +252,7 @@ const Reports = () => {
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      className="h-8 sm:h-9 text-xs sm:text-sm w-full sm:w-auto"
+                      className="h-8 sm:h-9 text-[11px] sm:text-xs w-full sm:w-auto"
                       onClick={() => downloadReport(report)}
                       disabled={downloading === report.id}
                     >

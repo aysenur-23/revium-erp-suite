@@ -466,14 +466,28 @@ export const RecentActivitiesTable = () => {
           return newData.name || oldData.name ? `"${newData.name || oldData.name}"` : null;
 
         case "user_logins":
-          // Metadata'dan giriş yöntemini al
-          if (log.metadata && typeof log.metadata === 'object' && 'method' in log.metadata) {
-            const methodLabels: Record<string, string> = {
-              EMAIL: "E-posta ile giriş",
-              GOOGLE: "Google ile giriş",
-            };
-            const method = (log.metadata as { method?: string }).method;
-            return method ? (methodLabels[method] || `Giriş (${method})`) : "Sistem girişi";
+          // Metadata'dan giriş/çıkış bilgisini al
+          if (log.metadata && typeof log.metadata === 'object') {
+            const metadata = log.metadata as { action?: string; method?: string };
+            const action = metadata.action;
+            const method = metadata.method;
+            
+            if (action === "LOGOUT") {
+              return "Sistemden çıkış";
+            } else if (action === "LOGIN") {
+              const methodLabels: Record<string, string> = {
+                EMAIL: "E-posta ile giriş",
+                GOOGLE: "Google ile giriş",
+              };
+              return method ? (methodLabels[method] || `Giriş (${method})`) : "Sistem girişi";
+            } else if (method) {
+              // Eski format için geriye dönük uyumluluk
+              const methodLabels: Record<string, string> = {
+                EMAIL: "E-posta ile giriş",
+                GOOGLE: "Google ile giriş",
+              };
+              return methodLabels[method] || `Giriş (${method})`;
+            }
           }
           return "Sistem girişi";
 

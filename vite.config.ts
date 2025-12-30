@@ -11,6 +11,10 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 5173,
+    // Development performans optimizasyonları
+    hmr: {
+      overlay: false, // HMR overlay'i kapat (daha hızlı)
+    },
   },
   plugins: [
     react(), 
@@ -18,6 +22,8 @@ export default defineConfig(({ mode }) => ({
     // Favicon plugin - rev-favicon.png'yi favicon.ico olarak kopyala
     {
       name: 'copy-favicon',
+
+      
       closeBundle() {
         const src = path.resolve(__dirname, 'public/rev-favicon.png');
         const dest = path.resolve(__dirname, 'dist/favicon.ico');
@@ -42,7 +48,34 @@ export default defineConfig(({ mode }) => ({
     dedupe: ["react", "react-dom"], // React'in birden fazla kopyasını önle
   },
   optimizeDeps: {
-    include: ["react", "react-dom", "react-router-dom", "lucide-react"], // React ve lucide-react'ı önceden yükle
+    include: [
+      "react", 
+      "react-dom", 
+      "react-router-dom", 
+      "lucide-react", 
+      "@radix-ui/react-dialog", 
+      "@radix-ui/react-select",
+      "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-tooltip",
+      "@radix-ui/react-accordion",
+      "@radix-ui/react-alert-dialog",
+      "@radix-ui/react-avatar",
+      "@radix-ui/react-checkbox",
+      "@radix-ui/react-collapsible",
+      "@radix-ui/react-context-menu",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-tabs",
+      "@tanstack/react-query",
+      "sonner",
+      "class-variance-authority",
+      "clsx",
+      "tailwind-merge",
+      "firebase/app",
+      "firebase/auth",
+      "firebase/firestore",
+      "firebase/storage"
+    ], // React ve önemli kütüphaneleri önceden yükle
+    exclude: ["pdfGenerator", "jspdf", "html2canvas"], // PDF generator'ı exclude et (sadece gerektiğinde yüklensin)
   },
   build: {
     outDir: "dist",
@@ -53,23 +86,66 @@ export default defineConfig(({ mode }) => ({
     target: ['es2015', 'edge88', 'firefox78', 'chrome87', 'safari14'],
     // CSS code splitting
     cssCodeSplit: true,
+    // Chunk size optimization
+    reportCompressedSize: false, // Build hızını artırır
+    // Chunk size limit'i artır (daha az chunk = daha az HTTP request)
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
+      // Tree shaking için
+      treeshake: {
+        moduleSideEffects: 'no-external',
+        propertyReadSideEffects: false,
+        tryCatchDeoptimization: false,
+      },
       output: {
         // Vendor chunk'ları - Performans için chunk'ları ayır
         manualChunks: (id) => {
-          // lucide-react'ı ayrı chunk'a ayır
-          if (id.includes('lucide-react')) {
-            return 'lucide-react';
-          }
-          
-          // React vendor chunk'ları
+          // React vendor chunk'ları - ÖNCE kontrol et
           if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
             return 'vendor-react';
           }
           
-          // React Router
+          // Radix UI - React'e bağımlı, React ile aynı chunk'ta olmalı
+          if (id.includes('@radix-ui')) {
+            return 'vendor-react';
+          }
+          
+          // React Router - React'e bağımlı
           if (id.includes('node_modules/react-router')) {
-            return 'vendor-router';
+            return 'vendor-react';
+          }
+          
+          // TanStack Query - React'e bağımlı
+          if (id.includes('@tanstack')) {
+            return 'vendor-react';
+          }
+          
+          // React'e bağımlı TÜM kütüphaneler - React ile aynı chunk'ta
+          // Güvenli tarafta olmak için tüm "react" içeren kütüphaneleri React chunk'ına al
+          if (id.includes('node_modules/next-themes') ||
+              id.includes('node_modules/react-hook-form') ||
+              id.includes('node_modules/sonner') ||
+              id.includes('node_modules/vaul') ||
+              id.includes('node_modules/cmdk') ||
+              id.includes('node_modules/react-day-picker') ||
+              id.includes('node_modules/react-resizable-panels') ||
+              id.includes('node_modules/@hello-pangea/dnd') ||
+              id.includes('node_modules/embla-carousel-react') ||
+              id.includes('node_modules/input-otp') ||
+              id.includes('node_modules/recharts') ||
+              id.includes('node_modules/@hookform') ||
+              id.includes('node_modules/class-variance-authority') ||
+              id.includes('node_modules/clsx') ||
+              id.includes('node_modules/tailwind-merge') ||
+              id.includes('node_modules/tailwindcss-animate') ||
+              id.includes('node_modules/zod') ||
+              id.includes('node_modules/date-fns')) {
+            return 'vendor-react';
+          }
+          
+          // lucide-react'ı ayrı chunk'a ayır
+          if (id.includes('lucide-react')) {
+            return 'lucide-react';
           }
           
           // Firebase - tüm Firebase modüllerini bir chunk'a topla
@@ -87,18 +163,10 @@ export default defineConfig(({ mode }) => ({
             return 'chunk-admin';
           }
           
-          // Diğer vendor kütüphaneleri
+          // Diğer vendor kütüphaneleri - Sadece gerçekten React'e bağımlı olmayanlar
           if (id.includes('node_modules')) {
-            // TanStack Query
-            if (id.includes('@tanstack')) {
-              return 'vendor-query';
-            }
-            // Radix UI
-            if (id.includes('@radix-ui')) {
-              return 'vendor-radix';
-            }
-            // Diğer vendor'lar
-            return 'vendor-other';
+            // Kalan tüm node_modules kütüphanelerini de React chunk'ına al (güvenli tarafta ol)
+            return 'vendor-react';
           }
           
           return undefined;

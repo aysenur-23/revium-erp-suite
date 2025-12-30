@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Package, Image as ImageIcon, Edit, Save, X, Loader2, Plus, Trash2, List } from "lucide-react";
 import { toast } from "sonner";
-import { updateProduct, addProductComment, getProductComments, getProductActivities } from "@/services/firebase/productService";
+import { updateProduct, addProductComment, getProductComments, getProductActivities, Product } from "@/services/firebase/productService";
 import {
   getProductRecipes,
   addRecipeItem,
@@ -26,7 +26,8 @@ import {
 } from "@/services/firebase/recipeService";
 import { getRawMaterials, RawMaterial } from "@/services/firebase/materialService";
 import { useAuth } from "@/contexts/AuthContext";
-import { canUpdateResource, UserProfile } from "@/utils/permissions";
+import { canUpdateResource } from "@/utils/permissions";
+import { UserProfile } from "@/services/firebase/authService";
 import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
 import {
   Table,
@@ -50,6 +51,7 @@ interface ProductDetailModalProps {
   onOpenChange: (open: boolean) => void;
   product: Product;
   onUpdate?: () => void;
+  onDelete?: () => void;
 }
 
 export const ProductDetailModal = ({
@@ -57,10 +59,13 @@ export const ProductDetailModal = ({
   onOpenChange,
   product,
   onUpdate,
+  onDelete,
 }: ProductDetailModalProps) => {
-  const { user } = useAuth();
+  const { user, isAdmin, isTeamLeader } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [canUpdate, setCanUpdate] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
   const [recipes, setRecipes] = useState<RecipeWithMaterial[]>([]);
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
@@ -92,13 +97,50 @@ export const ProductDetailModal = ({
         unit: product.unit || "Adet",
         price: product.price?.toString() || "",
         cost: product.cost?.toString() || "",
-        min_stock: product.min_stock?.toString() || "0",
-        max_stock: product.max_stock?.toString() || "",
+        min_stock: product.minStock?.toString() || "0",
+        max_stock: product.maxStock?.toString() || "",
         location: product.location || "",
       });
       setIsEditing(false);
     }
   }, [product, open]);
+
+  // Yetki kontrolü
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!user || !open) return;
+      
+      try {
+        const { getDepartments } = await import("@/services/firebase/departmentService");
+        const departments = await getDepartments();
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        const { canDeleteResource } = await import("@/utils/permissions");
+        const canUpdateProduct = await canUpdateResource(userProfile, "products");
+        const canDeleteProduct = await canDeleteResource(userProfile, "products");
+        setCanUpdate(canUpdateProduct || isAdmin || isTeamLeader || false);
+        setCanDelete(canDeleteProduct || isAdmin || isTeamLeader || false);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Error checking product permissions:", error);
+        }
+        setCanUpdate(isAdmin || isTeamLeader || false);
+        setCanDelete(isAdmin || isTeamLeader || false);
+      }
+    };
+    
+    checkPermissions();
+  }, [user, open, isAdmin]);
 
   useEffect(() => {
     if (open && product?.id && activeTab === "recipe") {
@@ -206,8 +248,35 @@ export const ProductDetailModal = ({
     e.preventDefault();
     if (!product?.id || !user?.id) return;
 
-    // Yetki kontrolü
-    if (!canUpdate && product.createdBy !== user.id) {
+    // Yetki kontrolü - canUpdate state'i henüz yüklenmemiş olabilir, bu yüzden tekrar kontrol et
+    const isCreator = product.createdBy === user.id;
+    let hasUpdatePermission = canUpdate;
+    
+    // Eğer canUpdate henüz yüklenmemişse, tekrar kontrol et
+    if (!hasUpdatePermission && !isCreator && !isAdmin && !isTeamLeader) {
+      try {
+        const { getDepartments } = await import("@/services/firebase/departmentService");
+        const departments = await getDepartments();
+        const userProfile: UserProfile = {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          fullName: user.fullName,
+          displayName: user.fullName,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
+          role: user.roles || [],
+          createdAt: null,
+          updatedAt: null,
+        };
+        hasUpdatePermission = await canUpdateResource(userProfile, "products");
+      } catch (error) {
+        // Hata durumunda devam et
+      }
+    }
+    
+    // Yetki kontrolü - canUpdate state'i veya isCreator veya isAdmin veya isTeamLeader kontrolü
+    if (!hasUpdatePermission && !isCreator && !isAdmin && !isTeamLeader) {
       toast.error("Ürün düzenleme yetkiniz yok.");
       setIsEditing(false);
       return;
@@ -260,7 +329,15 @@ export const ProductDetailModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+        <DialogTitle className="sr-only">
+          {product.name} - Ürün Detayı
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          Ürün detayları ve bilgileri
+        </DialogDescription>
+        
         <div className="flex flex-col h-full min-h-0">
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
             <div className="flex items-center justify-between gap-3">
@@ -268,27 +345,39 @@ export const ProductDetailModal = ({
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
+                <h2 className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                   {product.name}
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Ürün detayları ve bilgileri
-                </DialogDescription>
+                </h2>
               </div>
               <div className="flex flex-wrap items-center gap-2 flex-shrink-0 relative z-10 pr-10 sm:pr-12">
-                <Badge variant={getStatusVariant(product.stock, product.min_stock)} className="text-xs px-2 sm:px-3 py-1 relative z-10">
-                  {getStatusLabel(product.stock, product.min_stock)}
+                <Badge variant={getStatusVariant(product.stock, product.minStock)} className="text-xs px-2 sm:px-3 py-1 relative z-10">
+                  {getStatusLabel(product.stock, product.minStock)}
                 </Badge>
                 {!isEditing ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditing(true)}
-                    className="min-h-[44px] sm:min-h-0"
-                  >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Düzenle
-                  </Button>
+                  <>
+                    {(canUpdate || product.createdBy === user?.id) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditing(true)}
+                        className="min-h-[44px] sm:min-h-0"
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Düzenle
+                      </Button>
+                    )}
+                    {canDelete && onDelete && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onDelete}
+                        className="min-h-[44px] sm:min-h-0 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Sil
+                      </Button>
+                    )}
+                  </>
                 ) : (
                   <div className="flex gap-2">
                     <Button
@@ -307,8 +396,8 @@ export const ProductDetailModal = ({
                             unit: product.unit || "Adet",
                             price: product.price?.toString() || "",
                             cost: product.cost?.toString() || "",
-                            min_stock: product.min_stock?.toString() || "0",
-                            max_stock: product.max_stock?.toString() || "",
+                            min_stock: product.minStock?.toString() || "0",
+                            max_stock: product.maxStock?.toString() || "",
                             location: product.location || "",
                           });
                         }
@@ -560,8 +649,8 @@ export const ProductDetailModal = ({
                         </div>
                         <div className="rounded-lg border bg-muted/30 px-3 py-2">
                           <p className="text-xs sm:text-sm text-muted-foreground mb-1">Durum</p>
-                          <Badge variant={getStatusVariant(product.stock || 0, product.min_stock || 0)}>
-                            {getStatusLabel(product.stock || 0, product.min_stock || 0)}
+                          <Badge variant={getStatusVariant(product.stock || 0, product.minStock || 0)}>
+                            {getStatusLabel(product.stock || 0, product.minStock || 0)}
                           </Badge>
                         </div>
                         {product.price && (
@@ -589,14 +678,14 @@ export const ProductDetailModal = ({
                         <div className="rounded-lg border bg-muted/30 px-3 py-2">
                           <p className="text-xs sm:text-sm text-muted-foreground mb-1">Minimum Stok</p>
                           <p className="font-medium text-sm sm:text-base">
-                            {product.min_stock || 0} {product.unit || "Adet"}
+                            {product.minStock || 0} {product.unit || "Adet"}
                           </p>
                         </div>
-                        {product.max_stock && (
+                        {product.maxStock && (
                           <div className="rounded-lg border bg-muted/30 px-3 py-2">
                             <p className="text-xs sm:text-sm text-muted-foreground mb-1">Maksimum Stok</p>
                             <p className="font-medium text-sm sm:text-base">
-                              {product.max_stock} {product.unit || "Adet"}
+                              {product.maxStock} {product.unit || "Adet"}
                             </p>
                           </div>
                         )}
@@ -791,7 +880,7 @@ export const ProductDetailModal = ({
                 product.id,
                 user.id,
                 content,
-                user.fullName || user.displayName,
+                user.fullName,
                 user.email
               );
             }}
@@ -802,7 +891,7 @@ export const ProductDetailModal = ({
               return await getProductActivities(product.id);
             }}
             currentUserId={user.id}
-            currentUserName={user.fullName || user.displayName}
+            currentUserName={user.fullName}
             currentUserEmail={user.email}
           />
         )}

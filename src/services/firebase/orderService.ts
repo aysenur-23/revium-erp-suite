@@ -35,6 +35,7 @@ export interface OrderItem {
   unitPrice: number;
   unit_price?: number; // Alias
   discount?: number;
+  discountType?: "amount" | "percentage"; // İndirim tipi: tutar veya yüzde
   total: number;
   category?: string | null;
 }
@@ -102,6 +103,7 @@ export interface Order {
   deliveryNotes?: string | null;
   delivery_notes?: string | null; // Alias
   priority?: number | null;
+  deductMaterials?: boolean; // Hammadde düşürme (varsayılan: true)
 }
 
 /**
@@ -236,10 +238,29 @@ export const getOrderItems = async (orderId: string): Promise<OrderItem[]> => {
 export const updateOrderItem = async (
   orderId: string,
   itemId: string,
-  updates: Partial<Omit<OrderItem, "id">>
+  updates: Partial<Omit<OrderItem, "id">>,
+  userId?: string
 ): Promise<void> => {
   try {
+    // Eski veriyi al
+    const itemDoc = await getDoc(doc(firestore, "orders", orderId, "items", itemId));
+    const oldItem = itemDoc.data() as OrderItem | undefined;
+    
     await updateDoc(doc(firestore, "orders", orderId, "items", itemId), updates);
+    
+    // Audit log
+    if (userId) {
+      const newItem = { ...oldItem, ...updates } as OrderItem;
+      await logAudit(
+        "UPDATE",
+        "order_items",
+        itemId,
+        userId,
+        oldItem || null,
+        newItem,
+        { orderId }
+      );
+    }
   } catch (error) {
     if (import.meta.env.DEV) {
       console.error("Update order item error:", error);
@@ -266,7 +287,19 @@ export const createOrder = async (
     if (items && items.length > 0) {
       const itemsCollection = collection(firestore, "orders", docRef.id, "items");
       for (const item of items) {
-        await addDoc(itemsCollection, item);
+        const itemDocRef = await addDoc(itemsCollection, item);
+        // Her item için ayrı audit log
+        if (orderData.createdBy) {
+          await logAudit(
+            "CREATE",
+            "order_items",
+            itemDocRef.id,
+            orderData.createdBy,
+            null,
+            item,
+            { orderId: docRef.id }
+          );
+        }
       }
     }
 
@@ -571,12 +604,29 @@ export const requestOrderCompletion = async (
   userId: string
 ): Promise<void> => {
   try {
+    // Eski veriyi al
+    const oldOrder = await getOrderById(orderId);
+    
     await updateDoc(doc(firestore, "orders", orderId), {
       approvalStatus: "pending",
       approvalRequestedBy: userId,
       approvalRequestedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    
+    // Audit log
+    if (userId) {
+      const newOrder = await getOrderById(orderId);
+      await logAudit(
+        "UPDATE",
+        "orders",
+        orderId,
+        userId,
+        oldOrder,
+        newOrder,
+        { action: "request_completion", approvalStatus: "pending" }
+      );
+    }
     
     // Opsiyonel: Bildirim gönderilebilir
   } catch (error) {
@@ -593,6 +643,9 @@ export const approveOrderCompletion = async (
   userId: string
 ): Promise<void> => {
   try {
+    // Eski veriyi al
+    const oldOrder = await getOrderById(orderId);
+    
     await updateDoc(doc(firestore, "orders", orderId), {
       status: "completed",
       approvalStatus: "approved",
@@ -600,6 +653,20 @@ export const approveOrderCompletion = async (
       approvedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    
+    // Audit log
+    if (userId) {
+      const newOrder = await getOrderById(orderId);
+      await logAudit(
+        "UPDATE",
+        "orders",
+        orderId,
+        userId,
+        oldOrder,
+        newOrder,
+        { action: "approve_completion", approvalStatus: "approved" }
+      );
+    }
     
     // Opsiyonel: Bildirim
   } catch (error) {
@@ -617,6 +684,9 @@ export const rejectOrderCompletion = async (
   reason?: string
 ): Promise<void> => {
   try {
+    // Eski veriyi al
+    const oldOrder = await getOrderById(orderId);
+    
     await updateDoc(doc(firestore, "orders", orderId), {
       status: "in_production", // Geri döndür
       approvalStatus: "rejected",
@@ -625,6 +695,20 @@ export const rejectOrderCompletion = async (
       rejectionReason: reason || null,
       updatedAt: serverTimestamp(),
     });
+    
+    // Audit log
+    if (userId) {
+      const newOrder = await getOrderById(orderId);
+      await logAudit(
+        "UPDATE",
+        "orders",
+        orderId,
+        userId,
+        oldOrder,
+        newOrder,
+        { action: "reject_completion", approvalStatus: "rejected", reason: reason || null }
+      );
+    }
     
     // Opsiyonel: Bildirim
   } catch (error) {

@@ -146,7 +146,15 @@ export const DepartmentDetailModal = ({ open, onOpenChange, departmentId }: Depa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
+        <DialogTitle className="sr-only">
+          {loading ? "Yükleniyor..." : department?.name ? `${department.name} - Departman Detayları` : "Departman Detayları"}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          {department?.description || "Departman detayları ve bilgileri"}
+        </DialogDescription>
+        
         <div className="flex flex-col h-full min-h-0">
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -154,17 +162,13 @@ export const DepartmentDetailModal = ({ open, onOpenChange, departmentId }: Depa
                 <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
+                <h2 className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                   {loading ? "Yükleniyor..." : department?.name || "Departman Detayları"}
-                </DialogTitle>
-                {department?.description ? (
-                  <DialogDescription className="text-xs text-muted-foreground truncate mt-0.5">
+                </h2>
+                {department?.description && (
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">
                     {department.description}
-                  </DialogDescription>
-                ) : (
-                  <DialogDescription className="sr-only">
-                    Departman detayları ve bilgileri
-                  </DialogDescription>
+                  </p>
                 )}
               </div>
             </div>
@@ -173,7 +177,7 @@ export const DepartmentDetailModal = ({ open, onOpenChange, departmentId }: Depa
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
             <div className="max-w-full mx-auto h-full overflow-y-auto">
               {loading ? (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <Skeleton className="h-32 w-full" />
             <Skeleton className="h-64 w-full" />
             <Skeleton className="h-64 w-full" />
@@ -266,8 +270,8 @@ export const DepartmentDetailModal = ({ open, onOpenChange, departmentId }: Depa
               <CardHeader>
                 <CardTitle className="text-lg">Görev Tamamlanma Durumu</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
+              <CardContent className="space-y-3 sm:space-y-4">
+                <div className="space-y-1.5 sm:space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">Genel İlerleme</span>
                     <span className="text-muted-foreground">{stats.completionRate.toFixed(1)}%</span>

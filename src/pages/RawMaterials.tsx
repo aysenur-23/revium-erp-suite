@@ -23,16 +23,9 @@ import { EditRawMaterialDialog } from "@/components/RawMaterials/EditRawMaterial
 import { RawMaterialDetailModal } from "@/components/RawMaterials/RawMaterialDetailModal";
 import { DetailedValueReportModal } from "@/components/Statistics/DetailedValueReportModal";
 import { LoadingState } from "@/components/ui/loading-state";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ResponsiveTable, ResponsiveTableColumn } from "@/components/shared/ResponsiveTable";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -375,14 +368,12 @@ const RawMaterials = () => {
     const checkOverflow = () => {
       if (!tableRef.current || typeof window === "undefined") return;
       
-      const tableElement = tableRef.current.querySelector('table');
-      if (!tableElement) return;
-      
-      const tableWidth = tableElement.scrollWidth;
+      // ResponsiveTable kullanıldığı için container genişliğini kontrol et
       const containerWidth = tableRef.current.clientWidth;
+      const scrollWidth = tableRef.current.scrollWidth;
       
-      // Eğer tablo genişliği container genişliğinden büyükse sidebar'ı kapat
-      if (tableWidth > containerWidth + 10) { // 10px tolerans
+      // Eğer içerik genişliği container genişliğinden büyükse sidebar'ı kapat
+      if (scrollWidth > containerWidth + 10) { // 10px tolerans
         sidebarContext.closeSidebar();
       }
     };
@@ -437,13 +428,13 @@ const RawMaterials = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-[90%] max-w-[90%] mx-auto">
+      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground break-words">Hammadde Yönetimi</h1>
-                <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Hammadde stoklarını yönetin ve takip edin</p>
+                <h1 className="text-lg sm:text-xl font-semibold text-foreground break-words">Hammadde Yönetimi</h1>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">Hammadde stoklarını yönetin ve takip edin</p>
               </div>
               {/* İstatistikler Açılma Butonu */}
               {!statsExpanded ? (
@@ -451,7 +442,7 @@ const RawMaterials = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => setStatsExpanded(true)}
-                  className="h-7 px-2 gap-1 text-xs"
+                  className="h-7 px-2 gap-1 text-xs sm:text-sm"
                   aria-label="İstatistikleri göster"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
@@ -461,7 +452,7 @@ const RawMaterials = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => setStatsExpanded(false)}
-                  className="h-7 px-2 gap-1 text-xs"
+                  className="h-7 px-2 gap-1 text-xs sm:text-sm"
                   aria-label="İstatistikleri gizle"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
@@ -471,7 +462,7 @@ const RawMaterials = () => {
           </div>
           {canCreate && (
             <Button 
-              className="gap-1 w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs" 
+              className="gap-1 w-full sm:w-auto min-h-[36px] sm:min-h-8 text-xs sm:text-sm" 
               onClick={() => {
                 setCreateDialogOpen(true);
               }}
@@ -513,9 +504,9 @@ const RawMaterials = () => {
                           <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[10px] sm:text-xs uppercase tracking-wide text-muted-foreground truncate">{item.label}</p>
-                          <p className="text-lg font-semibold text-foreground mt-0.5 sm:mt-1 truncate">{item.value}</p>
-                          <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 hidden sm:block">{item.description}</p>
+                          <p className="text-xs sm:text-sm uppercase tracking-wide text-muted-foreground truncate">{item.label}</p>
+                          <p className="text-lg sm:text-xl font-semibold text-foreground mt-0.5 sm:mt-1 truncate">{item.value}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 hidden sm:block">{item.description}</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -571,12 +562,12 @@ const RawMaterials = () => {
                   <div className="rounded-full bg-muted p-4">
                     <Package className="h-12 w-12 text-muted-foreground/50" />
                   </div>
-                  <p className="text-muted-foreground font-medium text-base">
+                  <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                     {searchQuery || stockView !== "all"
                       ? "Arama sonucu bulunamadı"
                       : "Henüz hammadde bulunmuyor"}
                   </p>
-                  <p className="text-sm text-muted-foreground/70 max-w-md">
+                  <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-md">
                     {searchQuery || stockView !== "all"
                       ? "Filtreleri değiştirerek tekrar deneyin"
                       : "Yeni hammadde eklemek için yukarıdaki butona tıklayın"}
@@ -585,44 +576,20 @@ const RawMaterials = () => {
               </div>
             ) : (
               <>
-                {/* Responsive Table View - Kaydırma yok, her zaman tek ekranda */}
-                <div ref={tableRef} className="w-full overflow-hidden">
-                  <Table className="w-full table-fixed border-collapse">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[30%] sm:w-[35%] text-[11px] font-semibold px-1.5 py-1">Malzeme Adı</TableHead>
-                          <TableHead className="w-[25%] sm:w-[30%] text-[11px] font-semibold px-1.5 py-1">Açıklamalar</TableHead>
-                          <TableHead className="w-[15%] sm:w-[10%] text-right whitespace-nowrap text-[11px] font-semibold px-1.5 py-1">Mevcut</TableHead>
-                          <TableHead className="w-[15%] sm:w-[15%] text-[11px] font-semibold px-1.5 py-1">Oluşturan</TableHead>
-                          <TableHead className="w-[15%] sm:w-[10%] text-right whitespace-nowrap text-[11px] font-semibold px-1.5 py-1">İşlemler</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                    <TableBody>
-                      {paginatedMaterials.map((material) => {
-                        const currentStock = Number(material.currentStock !== undefined ? material.currentStock : material.stock) || 0;
-                        const minStock = Number(material.minStock !== undefined ? material.minStock : material.min_stock) || 0;
-                        const maxStock = material.maxStock !== undefined ? material.maxStock : material.max_stock;
-                        const stockStatus = getStockStatus(currentStock, minStock);
-                        const stockPercentage = getStockPercentage(currentStock, minStock, maxStock);
-                        return (
-                          <TableRow
-                            key={material.id}
-                            className={cn(
-                              "cursor-pointer hover:bg-muted/50 transition-colors",
-                              stockStatus.bgColor
-                            )}
-                            onClick={() => {
-                              setSelectedMaterial(material);
-                              setDetailModalOpen(true);
-                            }}
-                          >
-                            <TableCell className="font-medium px-1.5 py-1.5">
-                              <div className="flex items-center gap-1.5 min-w-0">
+                <div ref={tableRef} className="w-full">
+                  <ResponsiveTable
+                    data={paginatedMaterials}
+                    columns={[
+                      {
+                        key: "name",
+                        header: "Malzeme Adı",
+                        accessor: (material) => (
+                              <div className="flex items-center justify-start gap-1.5 min-w-0">
                                 <Package className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className="truncate text-[11px] font-semibold" title={material.name}>
+                                      <span className="truncate text-xs font-semibold" title={material.name}>
                                         {material.name}
                                       </span>
                                     </TooltipTrigger>
@@ -632,12 +599,21 @@ const RawMaterials = () => {
                                   </Tooltip>
                                 </TooltipProvider>
                               </div>
-                            </TableCell>
-                            <TableCell className="px-1.5 py-1.5">
+                        ),
+                        priority: "high",
+                        sticky: true,
+                        minWidth: 180,
+                        headerClassName: "text-left",
+                        cellClassName: "text-left",
+                      },
+                      {
+                        key: "description",
+                        header: "Açıklamalar",
+                        accessor: (material) => (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <p className="text-[11px] text-muted-foreground line-clamp-2 truncate" title={material.description || material.notes || "-"}>
+                                    <p className="text-xs text-muted-foreground line-clamp-2 truncate text-left" title={material.description || material.notes || "-"}>
                                       {material.description || material.notes || "-"}
                                     </p>
                                   </TooltipTrigger>
@@ -648,16 +624,28 @@ const RawMaterials = () => {
                                   )}
                                 </Tooltip>
                               </TooltipProvider>
-                            </TableCell>
-                            <TableCell className="text-right font-semibold whitespace-nowrap px-1.5 py-1.5">
-                              <div className="flex flex-col items-end gap-0.5">
-                                <span className={cn(stockStatus.color, "text-[11px]")}>
+                        ),
+                        priority: "medium",
+                        minWidth: 180,
+                        headerClassName: "text-left",
+                        cellClassName: "text-left",
+                      },
+                      {
+                        key: "stock",
+                        header: "Mevcut",
+                        accessor: (material) => {
+                          const currentStock = Number(material.currentStock !== undefined ? material.currentStock : material.stock) || 0;
+                          const minStock = Number(material.minStock !== undefined ? material.minStock : material.min_stock) || 0;
+                          const stockStatus = getStockStatus(currentStock, minStock);
+                          return (
+                              <div className="flex items-center justify-start gap-1.5">
+                              <span className={cn(stockStatus.color, "text-xs font-semibold whitespace-nowrap")}>
                                   {currentStock} {material.unit}
                                 </span>
                                 <Badge
                                   variant={stockStatus.variant}
                                   className={cn(
-                                    "font-medium text-[10px] px-1.5 py-0.5",
+                                    "font-medium text-xs px-1.5 py-0.5",
                                     stockStatus.variant === "destructive" && "bg-red-500 hover:bg-red-600 text-white",
                                     stockStatus.variant === "secondary" && "bg-yellow-500 hover:bg-yellow-600 text-white",
                                     stockStatus.variant === "default" && "bg-green-500 hover:bg-green-600 text-white"
@@ -666,12 +654,21 @@ const RawMaterials = () => {
                                   {stockStatus.label}
                                 </Badge>
                               </div>
-                            </TableCell>
-                            <TableCell className="px-1.5 py-1.5">
-                              {material.createdBy ? (
-                                <div className="flex items-center gap-1">
+                          );
+                        },
+                        priority: "high",
+                        minWidth: 180,
+                        headerClassName: "text-left",
+                        cellClassName: "text-left",
+                      },
+                      {
+                        key: "createdBy",
+                        header: "Oluşturan",
+                        accessor: (material) => (
+                          material.createdBy ? (
+                                <div className="flex items-center justify-start gap-1">
                                   <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                  <span className="text-[11px] text-muted-foreground truncate">
+                                  <span className="text-xs text-muted-foreground truncate">
                                     {users.find(u => u.id === material.createdBy)?.fullName || 
                                      users.find(u => u.id === material.createdBy)?.displayName || 
                                      users.find(u => u.id === material.createdBy)?.email || 
@@ -679,11 +676,21 @@ const RawMaterials = () => {
                                   </span>
                                 </div>
                               ) : (
-                                <span className="text-[11px] text-muted-foreground">-</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right whitespace-nowrap px-1.5 py-1.5" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-xs text-muted-foreground">-</span>
+                          )
+                        ),
+                        priority: "low",
+                        minWidth: 180,
+                        headerClassName: "text-left",
+                        cellClassName: "text-left",
+                      },
+                      {
+                        key: "actions",
+                        header: "İşlemler",
+                        headerClassName: "text-left",
+                        cellClassName: "text-left",
+                        accessor: (material) => (
+                          <div className="flex items-center justify-start gap-1" onClick={(e) => e.stopPropagation()}>
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -705,10 +712,10 @@ const RawMaterials = () => {
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
+                            {canDelete && (
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      {canDelete && (
                                         <Button
                                           variant="outline"
                                           size="sm"
@@ -720,24 +727,119 @@ const RawMaterials = () => {
                                         >
                                           <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
-                                      )}
                                     </TooltipTrigger>
                                     <TooltipContent>
                                       <p>Sil</p>
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
+                            )}
                               </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                        ),
+                        priority: "high",
+                        minWidth: 180,
+                      },
+                    ]}
+                    emptyMessage="Kayıt bulunamadı"
+                    onRowClick={(material) => {
+                      setSelectedMaterial(material);
+                      setDetailModalOpen(true);
+                    }}
+                    renderCard={(material) => {
+                      const currentStock = Number(material.currentStock !== undefined ? material.currentStock : material.stock) || 0;
+                      const minStock = Number(material.minStock !== undefined ? material.minStock : material.min_stock) || 0;
+                      const stockStatus = getStockStatus(currentStock, minStock);
+                      return (
+                        <Card 
+                          className={cn(
+                            "cursor-pointer hover:shadow-lg transition-all",
+                            stockStatus.bgColor
+                          )}
+                          onClick={() => {
+                            setSelectedMaterial(material);
+                            setDetailModalOpen(true);
+                          }}
+                        >
+                          <CardContent className="p-3 sm:p-4 space-y-2">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <Package className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                  <h3 className="font-semibold text-xs sm:text-sm truncate">{material.name}</h3>
+                                </div>
+                                {(material.description || material.notes) && (
+                                  <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
+                                    {material.description || material.notes}
+                                  </p>
+                                )}
+                              </div>
+                              <Badge
+                                variant={stockStatus.variant}
+                                className={cn(
+                                  "font-medium text-xs px-1.5 py-0.5 flex-shrink-0",
+                                  stockStatus.variant === "destructive" && "bg-red-500 hover:bg-red-600 text-white",
+                                  stockStatus.variant === "secondary" && "bg-yellow-500 hover:bg-yellow-600 text-white",
+                                  stockStatus.variant === "default" && "bg-green-500 hover:bg-green-600 text-white"
+                                )}
+                              >
+                                {stockStatus.label}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-col gap-1.5 pt-2 border-t">
+                              <div className="flex items-center justify-between text-xs sm:text-sm">
+                                <span className="text-muted-foreground">Mevcut Stok:</span>
+                                <span className={cn("font-semibold", stockStatus.color)}>
+                                  {currentStock} {material.unit}
+                                </span>
+                              </div>
+                              {material.createdBy && (
+                                <div className="flex items-center justify-between text-xs sm:text-sm">
+                                  <span className="text-muted-foreground">Oluşturan:</span>
+                                  <span className="truncate ml-2">
+                                    {users.find(u => u.id === material.createdBy)?.fullName || 
+                                     users.find(u => u.id === material.createdBy)?.displayName || 
+                                     users.find(u => u.id === material.createdBy)?.email || 
+                                     "Bilinmeyen"}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex justify-end gap-1 pt-2" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedMaterial(material);
+                                    setEditDialogOpen(true);
+                                  }}
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </Button>
+                                {canDelete && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteClick(material);
+                                    }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    }}
+                  />
                 </div>
                 
                 {totalPages > 1 && (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t">
                     <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
                       Toplam {filteredMaterials.length} hammadde gösteriliyor
                     </div>
@@ -747,10 +849,11 @@ const RawMaterials = () => {
                         size="sm"
                         onClick={() => setPage((prev) => Math.max(1, prev - 1))}
                         disabled={page === 1}
+                        className="text-xs sm:text-sm"
                       >
                         Önceki
                       </Button>
-                      <span className="text-sm text-muted-foreground px-3">
+                      <span className="text-xs sm:text-sm text-muted-foreground px-3">
                         Sayfa {page} / {totalPages}
                       </span>
                       <Button
@@ -758,6 +861,7 @@ const RawMaterials = () => {
                         size="sm"
                         onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
                         disabled={page === totalPages}
+                        className="text-xs sm:text-sm"
                       >
                         Sonraki
                       </Button>
@@ -805,16 +909,16 @@ const RawMaterials = () => {
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Hammadde Sil</AlertDialogTitle>
-              <AlertDialogDescription>
+              <AlertDialogTitle className="text-[16px] sm:text-[18px]">Hammadde Sil</AlertDialogTitle>
+              <AlertDialogDescription className="text-xs sm:text-sm">
                 "{materialToDelete?.name}" hammaddesini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>İptal</AlertDialogCancel>
+              <AlertDialogCancel className="text-xs sm:text-sm">İptal</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleDelete}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                className="text-xs sm:text-sm bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 Sil
               </AlertDialogAction>
