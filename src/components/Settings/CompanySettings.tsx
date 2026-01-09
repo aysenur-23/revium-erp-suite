@@ -23,15 +23,22 @@ const defaultForm = {
 export const CompanySettings = () => {
   const { user } = useAuth();
   const [formData, setFormData] = useState(defaultForm);
+<<<<<<< HEAD
   const [loading, setLoading] = useState(false); // Başlangıçta false - placeholder data ile hızlı render
+=======
+  const [loading, setLoading] = useState(true);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const fetchSettings = async () => {
+<<<<<<< HEAD
       // Defer settings loading: İlk render'dan 100ms sonra yükle (non-blocking)
       setLoading(true);
       await new Promise(resolve => setTimeout(resolve, 100));
       
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       try {
         const settings = await getCompanySettings();
         if (settings) {

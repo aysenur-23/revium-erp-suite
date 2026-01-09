@@ -5,6 +5,10 @@ import { Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+<<<<<<< HEAD
+=======
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -27,6 +31,7 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
   return (
     <Dialog {...props}>
       <DialogContent className="overflow-hidden p-0 shadow-lg">
+<<<<<<< HEAD
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">
           Komut Paleti
@@ -34,6 +39,16 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
         <DialogDescription className="sr-only">
           Komutları arayın ve seçin
         </DialogDescription>
+=======
+        <VisuallyHidden>
+          <DialogHeader>
+            <DialogTitle>Komut Paleti</DialogTitle>
+            <DialogDescription>
+              Komutları arayın ve seçin
+            </DialogDescription>
+          </DialogHeader>
+        </VisuallyHidden>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
           {children}
         </Command>

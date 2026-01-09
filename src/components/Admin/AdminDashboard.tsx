@@ -202,7 +202,11 @@ export const AdminDashboard = () => {
 
       {/* Ana İstatistik Kartları - Yan yana */}
       {statsExpanded && (
+<<<<<<< HEAD
         <div className="grid gap-2 sm:gap-3 md:gap-4 lg:gap-6 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
+=======
+        <div className="grid gap-2 sm:gap-3 md:gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         <StatCard
           title="Toplam Görevler"
           value={stats.tasks.total}

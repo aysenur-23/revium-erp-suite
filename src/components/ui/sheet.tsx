@@ -55,6 +55,7 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Content>, SheetContentProps>(
   ({ side = "right", className, children, ...props }, ref) => {
     const sidebarContext = useSidebarContext();
+<<<<<<< HEAD
     const contentRef = React.useRef<HTMLDivElement>(null);
     const combinedRef = React.useCallback((node: HTMLDivElement | null) => {
       if (typeof ref === 'function') {
@@ -68,24 +69,46 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
     // Props'tan data-sidebar attribute'unu oku (daha güvenilir)
     const propsObj = props as Record<string, unknown>;
     const isSidebar = 'data-sidebar' in propsObj && propsObj['data-sidebar'] === 'true';
+=======
+    const propsObj = props as Record<string, unknown>;
+    
+    // Sheet açıldığında mobilde menüyü kapat (sadece sidebar değilse)
+    // SheetContent mount olduğunda menüyü kapat (Sheet açıldığında)
+    React.useEffect(() => {
+      // Sidebar Sheet'i değilse (yani data-sidebar attribute'u yoksa) menüyü kapat
+      if (sidebarContext && !('data-sidebar' in propsObj && propsObj['data-sidebar'])) {
+        sidebarContext.closeSidebar();
+      }
+    }, [sidebarContext, propsObj]);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     
     return (
       <SheetPortal>
         <SheetOverlay 
+<<<<<<< HEAD
           onClick={isSidebar ? undefined : () => {
             // Overlay'e tıklandığında mobilde menüyü kapat (sadece sidebar değilse)
             // Sidebar için overlay tıklaması Sheet'in kendi onOpenChange'i ile handle edilir
             if (sidebarContext) {
+=======
+          onClick={() => {
+            // Overlay'e tıklandığında mobilde menüyü kapat (sadece sidebar değilse)
+            if (sidebarContext && !('data-sidebar' in propsObj && propsObj['data-sidebar'])) {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               sidebarContext.closeSidebar();
             }
           }}
         />
+<<<<<<< HEAD
         <SheetPrimitive.Content 
           ref={combinedRef} 
           className={cn(sheetVariants({ side }), className)} 
           data-sidebar={isSidebar ? "true" : undefined}
           {...props}
         >
+=======
+        <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           {children}
           <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-secondary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center">
             <X className="h-5 w-5 sm:h-4 sm:w-4" />

@@ -14,6 +14,10 @@ import {
   User as FirebaseUser,
   GoogleAuthProvider,
   signInWithPopup,
+<<<<<<< HEAD
+=======
+  deleteUser as firebaseDeleteUser,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 } from "firebase/auth";
 import {
   collection,
@@ -30,6 +34,7 @@ import {
   writeBatch,
   where,
   Timestamp,
+<<<<<<< HEAD
   DocumentData,
 } from "firebase/firestore";
 import { auth, firestore } from "@/lib/firebase";
@@ -40,6 +45,12 @@ import {
   AUTO_SEND_VERIFICATION_EMAIL,
   RESEND_VERIFICATION_ON_LOGIN
 } from "@/config/auth";
+=======
+} from "firebase/firestore";
+import { auth, firestore } from "@/lib/firebase";
+import { logAudit } from "@/utils/auditLogger";
+// firebase-auth.ts removed, functions are now directly in this file
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
 export interface UserProfile {
   id: string;
@@ -59,11 +70,14 @@ export interface UserProfile {
   lastLoginAt?: Timestamp | Date | null; // Son giriş zamanı
 }
 
+<<<<<<< HEAD
 export interface FirebaseAuthError extends Error {
   code?: string;
   message: string;
 }
 
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 /**
  * Kullanıcı kaydı
  */
@@ -76,6 +90,7 @@ export const register = async (
   selectedTeamId?: string
 ): Promise<{ success: boolean; message?: string; user?: UserProfile | null }> => {
   try {
+<<<<<<< HEAD
     if (!auth || !firestore) {
       throw new Error('Firebase is not initialized');
     }
@@ -231,12 +246,59 @@ export const register = async (
 
     // Firestore'da kullanıcı profili oluştur (sadece yeni kullanıcı için)
     const userProfileData: Record<string, unknown> = {
+=======
+    if (!auth) {
+      throw new Error('Firebase Auth is not initialized');
+    }
+    // Firebase Auth ile kullanıcı oluştur
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const firebaseUser = userCredential.user;
+    
+    // Silinmiş kullanıcı kontrolü - email ile kontrol et (artık authenticated olduğumuz için)
+    if (firestore) {
+      try {
+        const usersRef = collection(firestore, "users");
+        const emailQuery = query(usersRef, where("email", "==", email));
+        const emailSnapshot = await getDocs(emailQuery);
+        
+        if (!emailSnapshot.empty) {
+          const existingUser = emailSnapshot.docs[0].data();
+          if (existingUser.deleted === true) {
+            // Firebase Auth kullanıcısını sil
+            try {
+              await firebaseDeleteUser(firebaseUser);
+            } catch (deleteError) {
+              if (import.meta.env.DEV) {
+                console.error("Kullanıcı silinirken hata:", deleteError);
+              }
+            }
+            throw new Error("Bu e-posta adresi ile kayıtlı bir hesap silinmiş. Yeni bir hesap oluşturamazsınız.");
+          }
+        }
+      } catch (checkError: unknown) {
+        // İzin hatası olsa bile devam et (kullanıcı zaten oluşturuldu)
+        if (import.meta.env.DEV) {
+          console.warn("Silinmiş kullanıcı kontrolü yapılamadı:", checkError instanceof Error ? checkError.message : String(checkError));
+        }
+      }
+    }
+    
+    const userId = firebaseUser.uid;
+    
+    // Firestore'da kullanıcı profili oluştur
+    // Firestore undefined değerleri kabul etmez, bu yüzden sadece tanımlı alanları ekle
+    const userProfileData: Omit<UserProfile, "id"> = {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       email: email,
       displayName: fullName,
       fullName: fullName,
       role: ["viewer"], // Varsayılan rol
+<<<<<<< HEAD
       emailVerified: false, // Email doğrulama zorunlu, başlangıçta false
       needsEmailVerification: true, // Yeni kayıt olan kullanıcılar için email doğrulaması zorunlu
+=======
+      emailVerified: firebaseUser.emailVerified,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       pendingTeams: selectedTeamId ? [selectedTeamId] : [],
@@ -244,6 +306,10 @@ export const register = async (
     };
 
     // Opsiyonel alanları sadece tanımlıysa ve boş değilse ekle
+<<<<<<< HEAD
+=======
+    // Firestore undefined ve boş string değerlerini kabul etmez
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (phone && phone.trim() !== '') {
       userProfileData.phone = phone.trim();
     }
@@ -251,6 +317,7 @@ export const register = async (
       userProfileData.dateOfBirth = dateOfBirth.trim();
     }
 
+<<<<<<< HEAD
     const userDocRef = doc(firestore, "users", userId);
 
     // Firestore yazma, display name güncelleme ve email doğrulama gönderme işlemlerini paralel yap
@@ -545,6 +612,95 @@ export const register = async (
     return {
       success: true,
       message: successMessage,
+=======
+    if (!firestore) {
+      throw new Error('Firestore is not initialized');
+    }
+    
+    // KRİTİK: createUserWithEmailAndPassword sonrası auth.currentUser otomatik set edilir
+    // Ama bazen bir tick gecikme olabilir, bu yüzden onAuthStateChanged ile bekliyoruz
+    // ÖNEMLİ: updateProfile çağrısını Firestore yazma işleminden SONRA yapmalıyız
+    // Çünkü updateProfile auth.currentUser'ı güncelleyebilir ve Firestore yazma işlemini etkileyebilir
+    
+    // createUserWithEmailAndPassword sonrası auth.currentUser otomatik set edilir
+    // Ama Firestore SDK auth.currentUser'dan token alıyor
+    // Eğer auth.currentUser henüz set edilmemişse, onAuthStateChanged ile bekleyelim
+    // ÖNEMLİ: onAuthStateChanged callback'i hemen tetiklenir ve mevcut state'i döndürür
+    // Eğer auth.currentUser zaten set edilmişse, callback hemen resolve eder
+    // Eğer set edilmemişse, bir sonraki state değişikliğinde resolve eder
+    
+    if (!auth.currentUser || auth.currentUser.uid !== userId) {
+      // auth.currentUser henüz set edilmemiş, onAuthStateChanged ile bekleyelim
+      await new Promise<void>((resolve, reject) => {
+        let unsubscribe: (() => void) | null = null;
+        let timeoutId: NodeJS.Timeout | null = null;
+        let isResolved = false;
+        let hasReceivedInitialState = false;
+        
+        // Cleanup fonksiyonu
+        const cleanup = () => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+          if (unsubscribe) {
+            unsubscribe();
+            unsubscribe = null;
+          }
+        };
+        
+        // 3 saniye timeout
+        timeoutId = setTimeout(() => {
+          if (!isResolved) {
+            cleanup();
+            reject(new Error("Auth state güncellenmesi için timeout (3 saniye)"));
+          }
+        }, 3000);
+        
+        // onAuthStateChanged ile auth state değişikliklerini dinle
+        unsubscribe = onAuthStateChanged(auth, (user) => {
+          // İlk callback mevcut state'i döndürür
+          if (!hasReceivedInitialState) {
+            hasReceivedInitialState = true;
+            // Eğer ilk callback'te user zaten set edilmişse, resolve et
+            if (user && user.uid === userId) {
+              isResolved = true;
+              cleanup();
+              resolve();
+              return;
+            }
+            // Eğer null ise, bir sonraki state değişikliğini bekleyelim
+            return;
+          }
+          
+          if (isResolved) return;
+          
+          // Kullanıcı doğru userId ile authenticated olduğunda
+          if (user && user.uid === userId) {
+              isResolved = true;
+              cleanup();
+              resolve();
+          }
+        });
+      });
+    }
+    
+    // Artık auth.currentUser set edilmiş, Firestore'a yazabiliriz
+    await setDoc(doc(firestore, "users", userId), userProfileData);
+    
+    // Display name ayarla (Firestore yazma işleminden SONRA)
+    // updateProfile auth.currentUser'ı güncelleyebilir ama Firestore yazma işlemi tamamlandı
+    if (fullName) {
+      await updateProfile(firebaseUser, { displayName: fullName });
+    }
+
+    // Email doğrulama gönder (Firebase Console'daki şablon kullanılır)
+    await sendEmailVerification(firebaseUser);
+
+    return {
+      success: true,
+      message: "Kayıt başarılı! Lütfen e-posta adresinize gönderilen doğrulama bağlantısına tıklayarak hesabınızı aktifleştirin.",
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       user: {
         id: userId,
         email: email,
@@ -555,7 +711,11 @@ export const register = async (
         role: ["viewer"],
         pendingTeams: selectedTeamId ? [selectedTeamId] : [],
         approvedTeams: [],
+<<<<<<< HEAD
         emailVerified: firebaseUser.emailVerified || false,
+=======
+        emailVerified: false,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         createdAt: new Date(),
         updatedAt: new Date(),
       },
@@ -565,12 +725,17 @@ export const register = async (
     let errorMessage = "Kayıt başarısız";
     const errorCode = (error as { code?: string })?.code;
     const errorMsg = error instanceof Error ? error.message : String(error);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Beklenen hatalar için sessizce devam et, sadece beklenmeyen hatalar için log göster
     const isExpectedError = [
       'auth/email-already-in-use',
       'auth/invalid-email',
       'auth/weak-password',
+<<<<<<< HEAD
       'auth/operation-not-allowed',
       'auth/invalid-credential',
       'auth/user-disabled',
@@ -889,6 +1054,19 @@ export const register = async (
       errorMessage = "Ağ hatası. İnternet bağlantınızı kontrol edin.";
     } else if (errorCode === 'auth/internal-error') {
       errorMessage = "Sunucu hatası. Lütfen daha sonra tekrar deneyin.";
+=======
+      'auth/operation-not-allowed'
+    ].includes(errorCode || '');
+    
+    if (errorCode === 'auth/email-already-in-use') {
+      errorMessage = "Bu e-posta adresi zaten kayıtlı. Lütfen giriş yapmayı deneyin. Eğer şifrenizi unuttuysanız, şifre sıfırlama özelliğini kullanabilirsiniz.";
+    } else if (errorCode === 'auth/invalid-email') {
+      errorMessage = "Geçersiz e-posta adresi. Lütfen geçerli bir e-posta adresi girin.";
+    } else if (errorCode === 'auth/weak-password') {
+      errorMessage = "Şifre çok zayıf. Şifre en az 6 karakter olmalıdır.";
+    } else if (errorCode === 'auth/operation-not-allowed') {
+      errorMessage = "E-posta/şifre ile kayıt şu anda devre dışı. Lütfen yöneticiye başvurun.";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     } else if (errorCode === 'permission-denied' || errorMsg.includes('permissions')) {
       errorMessage = "Firestore izin hatası. Lütfen Firebase Console'da Security Rules'u kontrol edin. Detaylar: " + (errorMsg || "İzin reddedildi");
     } else if (errorMsg.includes('Unsupported field value: undefined')) {
@@ -898,6 +1076,7 @@ export const register = async (
     } else if (errorMsg) {
       errorMessage = errorMsg;
     }
+<<<<<<< HEAD
 
     // Sadece beklenmeyen hatalar için console.error göster
     // auth/email-already-in-use beklenen bir durum ve handle ediliyor, console'da gösterme
@@ -908,6 +1087,14 @@ export const register = async (
       console.debug("Email zaten kayıtlı, giriş yapmayı deniyoruz...");
     }
 
+=======
+    
+    // Sadece beklenmeyen hatalar için console.error göster
+    if (!isExpectedError && import.meta.env.DEV) {
+      console.error("Register error:", error);
+    }
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return {
       success: false,
       message: errorMessage,
@@ -929,6 +1116,7 @@ export const login = async (
     }
     // Firebase Auth ile giriş yap
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
+<<<<<<< HEAD
     let firebaseUser = userCredential.user;
 
     // Firebase Auth'daki user objesini reload et (emailVerified değerinin güncel olması için)
@@ -953,6 +1141,10 @@ export const login = async (
       // Reload hatası olsa bile devam et
     }
 
+=======
+    const firebaseUser = userCredential.user;
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Önce direkt Firestore'dan silinmiş kullanıcı kontrolü yap
     try {
       const userDoc = await getDoc(doc(firestore, "users", firebaseUser.uid));
@@ -964,7 +1156,13 @@ export const login = async (
             await firebaseSignOut(auth);
           } catch (signOutError) {
             if (import.meta.env.DEV) {
+<<<<<<< HEAD
               console.error("Çıkış yapılırken hata:", signOutError);
+=======
+              if (import.meta.env.DEV) {
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             }
           }
           return {
@@ -978,6 +1176,7 @@ export const login = async (
       console.error("Kullanıcı kontrolü hatası:", checkError);
       // Kontrol hatası olsa bile devam et, getUserProfile kontrol edecek
     }
+<<<<<<< HEAD
 
     try {
       let userProfile: UserProfile | null = null;
@@ -1002,6 +1201,14 @@ export const login = async (
 
       // Eğer silinmiş hesap ise, uyarı ver ve çıkış yap
       if (isDeletedAccount) {
+=======
+    
+    try {
+      let userProfile = await getUserProfile(firebaseUser.uid);
+      
+      // Eğer userProfile null ise veya silinmişse
+      if (!userProfile) {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         try {
           await firebaseSignOut(auth);
         } catch (signOutError) {
@@ -1016,6 +1223,7 @@ export const login = async (
         };
       }
 
+<<<<<<< HEAD
       // Eğer userProfile null ise, Firestore'dan direkt kontrol et
       // Çünkü null dönmesi sadece silinmiş hesap anlamına gelmez
       // (doküman yoksa, permission hatası varsa da null dönebilir)
@@ -1351,6 +1559,8 @@ export const login = async (
         }
       }
 
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Son giriş zamanını güncelle - serverTimestamp() kullanarak sunucu zamanını kaydet
       try {
         const oldLastLoginAt = userProfile.lastLoginAt;
@@ -1358,27 +1568,44 @@ export const login = async (
         await updateDoc(doc(firestore, "users", firebaseUser.uid), {
           lastLoginAt: serverTimestamp(),
         });
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Profili yeniden yükle (güncellenmiş lastLoginAt ile)
         // Not: serverTimestamp() async olduğu için hemen okumak doğru zamanı vermeyebilir
         // Bu yüzden bir miktar bekleyip tekrar yükleyelim veya client-side timestamp ile güncelleyelim
         await new Promise(resolve => setTimeout(resolve, 100)); // 100ms bekle
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         const updatedProfile = await getUserProfile(firebaseUser.uid);
         if (updatedProfile) {
           userProfile = updatedProfile;
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Giriş logunu kaydet (retry mekanizması ile)
         try {
           const loginTime = new Date().toISOString();
           const oldLastLoginAtValue = oldLastLoginAt ? (oldLastLoginAt instanceof Timestamp ? oldLastLoginAt.toDate().toISOString() : String(oldLastLoginAt)) : null;
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           let retryCount = 0;
           const maxRetries = 2;
           while (retryCount <= maxRetries) {
             try {
               await logAudit(
+<<<<<<< HEAD
                 "UPDATE",
                 "user_logins",
                 firebaseUser.uid,
@@ -1390,6 +1617,19 @@ export const login = async (
                   method: "EMAIL",
                   email: email,
                   timestamp: loginTime
+=======
+                "UPDATE", 
+                "user_logins", 
+                firebaseUser.uid, 
+                firebaseUser.uid,
+                oldLastLoginAtValue ? { lastLoginAt: oldLastLoginAtValue } : null,
+                null,
+                { 
+                  action: "LOGIN", 
+                  method: "EMAIL", 
+                  email: email, 
+                  timestamp: loginTime 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 }
               );
               break; // Başarılı oldu, döngüden çık
@@ -1445,7 +1685,11 @@ export const login = async (
     if (import.meta.env.DEV) {
       console.error("Login error:", error);
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const errorMsg = error instanceof Error ? error.message : String(error);
     // Eğer zaten çıkış yapıldıysa (silinmiş kullanıcı), hata mesajını döndür
     if (errorMsg.includes("silinmiş")) {
@@ -1455,6 +1699,7 @@ export const login = async (
         user: null,
       };
     }
+<<<<<<< HEAD
 
     // Firebase hata kodlarını Türkçe'ye çevir
     let errorMessage = "Giriş başarısız";
@@ -1476,6 +1721,28 @@ export const login = async (
       errorMessage = errorObj.message;
     }
 
+=======
+    
+    // Firebase hata kodlarını Türkçe'ye çevir
+    let errorMessage = "Giriş başarısız";
+    
+    if (error.code === 'auth/user-not-found') {
+      errorMessage = "Bu e-posta adresi kayıtlı değil. Lütfen kayıt olun.";
+    } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+      errorMessage = "E-posta adresi veya şifre hatalı. Lütfen bilgilerinizi kontrol edip tekrar deneyin.";
+    } else if (error.code === 'auth/invalid-email') {
+      errorMessage = "Geçersiz e-posta adresi. Lütfen geçerli bir e-posta adresi girin.";
+    } else if (error.code === 'auth/user-disabled') {
+      errorMessage = "Bu hesap devre dışı bırakılmış. Lütfen yöneticiye başvurun.";
+    } else if (error.code === 'auth/too-many-requests') {
+      errorMessage = "Çok fazla başarısız giriş denemesi. Lütfen birkaç dakika sonra tekrar deneyin.";
+    } else if (error.code === 'auth/network-request-failed') {
+      errorMessage = "İnternet bağlantınızı kontrol edin ve tekrar deneyin.";
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return {
       success: false,
       message: errorMessage,
@@ -1492,6 +1759,7 @@ export const logout = async (): Promise<{ success: boolean; message?: string }> 
     if (!auth) {
       return { success: false, message: 'Firebase Auth is not initialized' };
     }
+<<<<<<< HEAD
 
     // Çıkış yapmadan önce kullanıcı ID'sini al
     const userId = auth.currentUser?.uid;
@@ -1502,11 +1770,24 @@ export const logout = async (): Promise<{ success: boolean; message?: string }> 
       try {
         const logoutTime = new Date().toISOString();
 
+=======
+    
+    // Çıkış yapmadan önce kullanıcı ID'sini al
+    const userId = auth.currentUser?.uid;
+    const userEmail = auth.currentUser?.email;
+    
+    // Çıkış logunu kaydet (çıkış yapmadan önce, retry mekanizması ile)
+    if (userId) {
+      try {
+        const logoutTime = new Date().toISOString();
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         let retryCount = 0;
         const maxRetries = 2;
         while (retryCount <= maxRetries) {
           try {
             await logAudit(
+<<<<<<< HEAD
               "UPDATE",
               "user_logins",
               userId,
@@ -1517,6 +1798,18 @@ export const logout = async (): Promise<{ success: boolean; message?: string }> 
                 action: "LOGOUT",
                 timestamp: logoutTime,
                 email: userEmail || null
+=======
+              "UPDATE", 
+              "user_logins", 
+              userId, 
+              userId,
+              null,
+              null,
+              { 
+                action: "LOGOUT", 
+                timestamp: logoutTime, 
+                email: userEmail || null 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               }
             );
             break; // Başarılı oldu, döngüden çık
@@ -1539,14 +1832,22 @@ export const logout = async (): Promise<{ success: boolean; message?: string }> 
         // Log hatası çıkışı engellememeli
       }
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await firebaseSignOut(auth);
     return { success: true };
   } catch (error: unknown) {
     console.error("Logout error:", error);
     return {
       success: false,
+<<<<<<< HEAD
       message: (error && typeof error === 'object' && 'message' in error ? (error as { message?: string }).message : undefined) || "Çıkış başarısız",
+=======
+      message: error.message || "Çıkış başarısız",
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     };
   }
 };
@@ -1556,6 +1857,7 @@ export const logout = async (): Promise<{ success: boolean; message?: string }> 
  */
 export const resetPassword = async (email: string): Promise<{ success: boolean; message?: string }> => {
   try {
+<<<<<<< HEAD
     if (!auth || !firestore) {
       throw new Error('Firebase is not initialized');
     }
@@ -1598,6 +1900,14 @@ export const resetPassword = async (email: string): Promise<{ success: boolean; 
       success: true,
       message: "Şifre sıfırlama e-postası gönderildi. Lütfen e-postanızı ve spam kutusunu kontrol edin."
     };
+=======
+    if (!auth) {
+      throw new Error('Firebase Auth is not initialized');
+    }
+    // Firebase'in şifre sıfırlama e-postasını gönder
+    await sendPasswordResetEmail(auth, email);
+    return { success: true, message: "Şifre sıfırlama e-postası gönderildi" };
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   } catch (error: unknown) {
     if (import.meta.env.DEV) {
       console.error("Reset password error:", error);
@@ -1606,6 +1916,7 @@ export const resetPassword = async (email: string): Promise<{ success: boolean; 
     let errorMessage = "Şifre sıfırlama başarısız";
     const errorObj = error && typeof error === 'object' && 'code' in error ? error as { code?: string; message?: string } : null;
     if (errorObj?.code === 'auth/user-not-found') {
+<<<<<<< HEAD
       errorMessage = "Bu e-posta adresi kayıtlı değil. Lütfen kayıt olun.";
     } else if (errorObj?.code === 'auth/invalid-email') {
       errorMessage = "Geçersiz e-posta adresi. Lütfen geçerli bir e-posta adresi girin.";
@@ -1613,6 +1924,13 @@ export const resetPassword = async (email: string): Promise<{ success: boolean; 
       errorMessage = "Çok fazla istek yapıldı. Lütfen bir süre sonra tekrar deneyin.";
     } else if (errorObj?.message) {
       errorMessage = errorObj.message;
+=======
+      errorMessage = "Bu e-posta adresi kayıtlı değil";
+    } else if (errorObj?.code === 'auth/invalid-email') {
+      errorMessage = "Geçersiz e-posta adresi";
+    } else if (error.message) {
+      errorMessage = error.message;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     }
     return {
       success: false,
@@ -1631,7 +1949,11 @@ export const getUserProfile = async (userId: string, allowDeleted: boolean = fal
       return null;
     }
     const userDoc = await getDoc(doc(firestore, "users", userId));
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (!userDoc.exists()) {
       return null;
     }
@@ -1679,7 +2001,11 @@ export const getUserProfile = async (userId: string, allowDeleted: boolean = fal
     const userRoles = (data.role || []) as string[];
     const validRoles = userRoles.filter(role => definedRoleKeys.has(role));
     const finalRoles = validRoles.length > 0 ? validRoles : ["personnel"];
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Eğer roller değiştiyse, veritabanını güncelle
     if (JSON.stringify(userRoles) !== JSON.stringify(finalRoles)) {
       await updateDoc(userDoc.ref, { role: finalRoles });
@@ -1694,12 +2020,17 @@ export const getUserProfile = async (userId: string, allowDeleted: boolean = fal
       dateOfBirth: data.dateOfBirth,
       role: finalRoles,
       departmentId: data.departmentId,
+<<<<<<< HEAD
       emailVerified: firebaseUser?.emailVerified || data.emailVerified || false,
+=======
+      emailVerified: data.emailVerified || firebaseUser?.emailVerified || false,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       lastLoginAt: data.lastLoginAt,
     };
   } catch (error: unknown) {
+<<<<<<< HEAD
     // Permission hatalarını sessizce handle et (giriş yapmadan normal)
     const errorObj = error && typeof error === 'object' ? error as { code?: string; message?: string } : null;
 
@@ -1712,6 +2043,18 @@ export const getUserProfile = async (userId: string, allowDeleted: boolean = fal
       console.error("Get user profile error:", error);
     }
 
+=======
+    console.error("Get user profile error:", error);
+    
+    // Permissions hatası için özel mesaj
+    if (error.code === 'permission-denied' || error.message?.includes('permissions')) {
+      console.warn("⚠️ Firestore permissions hatası! Firebase Console'da Security Rules'u kontrol edin:");
+      console.warn("   https://console.firebase.google.com/project/revpad-15232/firestore/rules");
+      console.warn("   Geçici çözüm için test mode kuralları kullanın:");
+      console.warn("   match /{document=**} { allow read, write: if request.auth != null; }");
+    }
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return null;
   }
 };
@@ -1728,22 +2071,37 @@ export const updateUserProfile = async (
     if (!firestore) {
       throw new Error('Firestore is not initialized');
     }
+<<<<<<< HEAD
 
     // Eski veriyi al (audit log için)
     const oldProfile = await getUserProfile(userId);
 
+=======
+    
+    // Eski veriyi al (audit log için)
+    const oldProfile = await getUserProfile(userId);
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Firestore undefined değerleri kabul etmez, bu yüzden undefined alanları temizle
     const cleanUpdates: Record<string, unknown> = {
       updatedAt: serverTimestamp(),
     };
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     Object.keys(updates).forEach((key) => {
       const value = (updates as Record<string, unknown>)[key];
       if (value !== undefined) {
         cleanUpdates[key] = value;
       }
     });
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await updateDoc(doc(firestore, "users", userId), cleanUpdates);
 
     // Firebase Auth'ta displayName güncelle
@@ -1759,7 +2117,11 @@ export const updateUserProfile = async (
       // Rol değişikliği kontrolü - eğer sadece rol değiştiyse log ekleme
       const hasRoleChange = updates.role && JSON.stringify(updates.role) !== JSON.stringify(oldProfile.role);
       const hasOtherChanges = Object.keys(updates).some(key => key !== "role");
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Eğer rol değişikliği varsa ve başka değişiklik yoksa log ekleme (rol değişiklikleri UserManagement'da loglanıyor)
       if (!hasRoleChange || hasOtherChanges) {
         const newProfile = await getUserProfile(userId);
@@ -1780,7 +2142,11 @@ export const updateUserProfile = async (
     console.error("Update user profile error:", error);
     return {
       success: false,
+<<<<<<< HEAD
       message: (error && typeof error === 'object' && 'message' in error ? (error as { message?: string }).message : undefined) || "Profil güncellenemedi",
+=======
+      message: error.message || "Profil güncellenemedi",
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     };
   }
 };
@@ -1794,7 +2160,11 @@ export const updateFirebaseUserProfile = updateUserProfile;
  * Auth state değişikliklerini dinle
  */
 // Son giriş zamanını güncellemek için kullanılan flag (duplicate güncellemeleri önlemek için)
+<<<<<<< HEAD
 const lastLoginUpdateTime: Map<string, number> = new Map();
+=======
+let lastLoginUpdateTime: Map<string, number> = new Map();
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
 export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
   if (!auth) {
@@ -1805,9 +2175,15 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
     // Hemen callback çağır (loading state'i false yapmak için)
     // Firebase başlatılamazsa kullanıcı auth sayfasına yönlendirilecek
     setTimeout(() => callback(null), 0);
+<<<<<<< HEAD
     return () => { }; // Return empty unsubscribe function
   }
 
+=======
+    return () => {}; // Return empty unsubscribe function
+  }
+  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   // Firestore kontrolü - opsiyonel ama önerilir
   if (!firestore) {
     if (import.meta.env.DEV) {
@@ -1815,7 +2191,11 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
     }
     // Firestore olmadan da devam edebiliriz, sadece user profile alınamaz
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   // Timeout: Eğer 3 saniye içinde auth state gelmezse callback(null) çağır
   let timeoutFired = false;
   const timeout = setTimeout(() => {
@@ -1825,7 +2205,11 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
       callback(null);
     }
   }, 3000);
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
     // Async callback'i promise olarak wrap et ve unhandled rejection'ları yakala
     (async () => {
@@ -1835,7 +2219,11 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
           clearTimeout(timeout);
           timeoutFired = true;
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         if (firebaseUser) {
           // Önce direkt Firestore'dan silinmiş kullanıcı kontrolü yap
           if (firestore) {
@@ -1850,8 +2238,13 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
                   } catch (signOutError) {
                     if (import.meta.env.DEV) {
                       if (import.meta.env.DEV) {
+<<<<<<< HEAD
                         console.error("Çıkış yapılırken hata:", signOutError);
                       }
+=======
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     }
                   }
                   callback(null);
@@ -1865,7 +2258,11 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
               // Kontrol hatası olsa bile devam et, getUserProfile kontrol edecek
             }
           }
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           try {
             let userProfile = await getUserProfile(firebaseUser.uid);
             // Eğer userProfile null ise (silinmiş kullanıcı), çıkış yap
@@ -1875,13 +2272,19 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
               } catch (signOutError) {
                 if (import.meta.env.DEV) {
                   if (import.meta.env.DEV) {
+<<<<<<< HEAD
                     console.error("Çıkış yapılırken hata:", signOutError);
                   }
+=======
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 }
               }
               callback(null);
               return;
             }
+<<<<<<< HEAD
 
             // Email doğrulandıysa needsEmailVerification flag'ini kaldır ve emailVerified'i güncelle
             if (firestore && firebaseUser.emailVerified) {
@@ -1920,13 +2323,20 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
               }
             }
 
+=======
+            
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             // Son giriş zamanını güncelle (sadece gerektiğinde, duplicate güncellemeleri önlemek için)
             // Not: login() ve signInWithGoogle() fonksiyonlarında zaten güncelleniyor,
             // burada sadece sayfa yenilendiğinde veya başka bir cihazdan giriş yapıldığında güncellenmeli
             const now = Date.now();
             const lastUpdate = lastLoginUpdateTime.get(firebaseUser.uid) || 0;
             const timeSinceLastUpdate = now - lastUpdate;
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             // Eğer son güncellemeden 1 dakikadan fazla zaman geçtiyse veya hiç güncellenmemişse
             // (1 dakika yeterli, çünkü login() ve signInWithGoogle() zaten güncelliyor)
             if (timeSinceLastUpdate > 1 * 60 * 1000 || lastUpdate === 0) {
@@ -1934,7 +2344,11 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
                 // Mevcut lastLoginAt değerini kontrol et
                 const currentLastLogin = userProfile.lastLoginAt;
                 let shouldUpdate = false;
+<<<<<<< HEAD
 
+=======
+                
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 // Eğer lastLoginAt yoksa veya geçersizse mutlaka güncelle
                 if (!currentLastLogin) {
                   shouldUpdate = true;
@@ -1953,7 +2367,11 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
                     } else {
                       shouldUpdate = true; // Geçersiz format, güncelle
                     }
+<<<<<<< HEAD
 
+=======
+                    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     if (!shouldUpdate && loginDate) {
                       const diffInMinutes = Math.floor((now - loginDate.getTime()) / (1000 * 60));
                       // Eğer son giriş 30 dakikadan fazla önceyse güncelle
@@ -1966,14 +2384,22 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
                     shouldUpdate = true;
                   }
                 }
+<<<<<<< HEAD
 
+=======
+                
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 if (shouldUpdate) {
                   // serverTimestamp() kullanarak sunucu zamanını kaydet
                   await updateDoc(doc(firestore, "users", firebaseUser.uid), {
                     lastLoginAt: serverTimestamp(),
                   });
                   lastLoginUpdateTime.set(firebaseUser.uid, now);
+<<<<<<< HEAD
 
+=======
+                  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   // Profili yeniden yükle (güncellenmiş lastLoginAt ile)
                   await new Promise(resolve => setTimeout(resolve, 200)); // 200ms bekle (serverTimestamp işlemesi için)
                   const updatedProfile = await getUserProfile(firebaseUser.uid);
@@ -1988,19 +2414,32 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
                 // Hata olsa bile devam et
               }
             }
+<<<<<<< HEAD
 
             callback(userProfile);
           } catch (error: unknown) {
             // Silinmiş kullanıcı ise çıkış yap
             const errorObj = error && typeof error === 'object' ? error as { message?: string } : null;
             if (errorObj?.message?.includes("silinmiş")) {
+=======
+            
+            callback(userProfile);
+          } catch (error: unknown) {
+            // Silinmiş kullanıcı ise çıkış yap
+            if (error.message?.includes("silinmiş")) {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               try {
                 await firebaseSignOut(auth);
               } catch (signOutError) {
                 if (import.meta.env.DEV) {
                   if (import.meta.env.DEV) {
+<<<<<<< HEAD
                     console.error("Çıkış yapılırken hata:", signOutError);
                   }
+=======
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 }
               }
               callback(null);
@@ -2044,7 +2483,11 @@ export const onAuthChange = (callback: (user: UserProfile | null) => void) => {
       }
     });
   });
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   // Return unsubscribe function that also clears timeout
   return () => {
     if (!timeoutFired) {
@@ -2069,6 +2512,7 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
     if (!firestore) {
       throw new Error('Firestore is not initialized');
     }
+<<<<<<< HEAD
 
     // Sadece authenticated kullanıcılar için çalış
     const { getAuth } = await import("firebase/auth");
@@ -2080,17 +2524,28 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
       return [];
     }
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Önce roles collection'ından tanımlı rolleri al
     const { getRoles } = await import("./rolePermissionsService");
     const definedRoles = await getRoles();
     const definedRoleKeys = new Set(definedRoles.map(r => r.key));
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Önce orderBy ile deneyelim (index varsa hızlı olur)
     // Performans için limit ekle (500 kayıt)
     try {
       const q = query(collection(firestore, "users"), orderBy("displayName", "asc"), limit(500));
       const snapshot = await getDocs(q);
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const users = snapshot.docs
         .map((doc) => {
           const data = doc.data();
@@ -2098,19 +2553,31 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
           if (data.deleted === true) {
             return null;
           }
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // Kullanıcının rolleri sadece tanımlı rollerden olsun
           const userRoles = (data.role || []) as string[];
           const validRoles = userRoles.filter(role => definedRoleKeys.has(role));
           const finalRoles = validRoles.length > 0 ? validRoles : ["personnel"];
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // Eğer roller değiştiyse, veritabanını güncelle (async, await etmeden)
           if (JSON.stringify(userRoles) !== JSON.stringify(finalRoles)) {
             updateDoc(doc.ref, { role: finalRoles }).catch(err => {
               console.error(`Error syncing roles for user ${doc.id}:`, err);
             });
           }
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           return {
             id: doc.id,
             email: data.email || "",
@@ -2130,6 +2597,7 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
           } as UserProfile;
         })
         .filter((user): user is UserProfile => user !== null && !!user.id && !!(user.displayName || user.fullName || user.email)); // Geçerli kullanıcıları filtrele (email varsa da kabul et)
+<<<<<<< HEAD
 
       return users;
     } catch (orderByError: unknown) {
@@ -2140,11 +2608,22 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
           console.warn("OrderBy failed, fetching without order:", errorObj?.message || orderByError);
         }
       }
+=======
+      
+      return users;
+    } catch (orderByError: unknown) {
+      // Index hatası varsa orderBy olmadan al
+      console.warn("OrderBy failed, fetching without order:", orderByError?.message || orderByError);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Önce roles collection'ından tanımlı rolleri al
       const { getRoles } = await import("./rolePermissionsService");
       const definedRoles = await getRoles();
       const definedRoleKeys = new Set(definedRoles.map(r => r.key));
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Performans için limit ekle (500 kayıt)
       const q = query(collection(firestore, "users"), limit(500));
       const snapshot = await getDocs(q);
@@ -2155,6 +2634,7 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
           if (data.deleted === true) {
             return null;
           }
+<<<<<<< HEAD
 
           // Kullanıcının rolleri sadece tanımlı rollerden olsun
           const userRoles = (data.role || []) as string[];
@@ -2163,6 +2643,16 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
           // Eğer hiç geçerli rol yoksa, varsayılan rol ekle
           const finalRoles = validRoles.length > 0 ? validRoles : ["personnel"];
 
+=======
+          
+          // Kullanıcının rolleri sadece tanımlı rollerden olsun
+          const userRoles = (data.role || []) as string[];
+          const validRoles = userRoles.filter(role => definedRoleKeys.has(role));
+          
+          // Eğer hiç geçerli rol yoksa, varsayılan rol ekle
+          const finalRoles = validRoles.length > 0 ? validRoles : ["personnel"];
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // Eğer roller değiştiyse, veritabanını güncelle
           if (JSON.stringify(userRoles) !== JSON.stringify(finalRoles)) {
             // Async olarak güncelle (await etmeden)
@@ -2170,7 +2660,11 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
               console.error(`Error syncing roles for user ${doc.id}:`, err);
             });
           }
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           return {
             id: doc.id,
             email: data.email || "",
@@ -2190,7 +2684,11 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
           } as UserProfile;
         })
         .filter((user): user is UserProfile => user !== null && !!user.id && !!(user.displayName || user.fullName || user.email)); // Geçerli kullanıcıları filtrele (email varsa da kabul et)
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Client-side sorting
       return users.sort((a, b) => {
         const nameA = (a.displayName || a.fullName || "").toLowerCase();
@@ -2199,6 +2697,7 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
       });
     }
   } catch (error: unknown) {
+<<<<<<< HEAD
     // Permission hatalarını sessizce handle et (giriş yapmadan normal)
     const errorObj = error && typeof error === 'object' ? error as { code?: string; message?: string } : null;
 
@@ -2217,6 +2716,22 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
       }
     }
 
+=======
+    console.error("Get all users error:", error);
+    
+    // Permissions hatası için özel mesaj
+    if (error.code === 'permission-denied' || error.message?.includes('permissions')) {
+      console.error("⚠️ Firestore permissions hatası! Kullanıcı listesi alınamıyor.");
+      console.error("📝 Firebase Console'da Security Rules'u kontrol edin:");
+      console.error("   https://console.firebase.google.com/project/revpad-15232/firestore/rules");
+      console.error("   Users collection için read izni olmalı: allow read: if request.auth != null;");
+    } else if (error.code === 'unavailable' || error.message?.includes('network')) {
+      console.error("⚠️ Firestore bağlantı hatası! İnternet bağlantınızı kontrol edin.");
+    } else {
+      console.error("⚠️ Kullanıcı listesi alınamadı:", error.message || error);
+    }
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Hata durumunda boş array döndür, uygulama çökmesin
     return [];
   }
@@ -2234,7 +2749,11 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
     provider.addScope("https://www.googleapis.com/auth/drive.file"); // Drive scope added
     const result = await signInWithPopup(auth, provider);
     const firebaseUser = result.user;
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Önce direkt Firestore'dan silinmiş kullanıcı kontrolü yap
     try {
       const userDoc = await getDoc(doc(firestore, "users", firebaseUser.uid));
@@ -2247,8 +2766,13 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
           } catch (signOutError) {
             if (import.meta.env.DEV) {
               if (import.meta.env.DEV) {
+<<<<<<< HEAD
                 console.error("Çıkış yapılırken hata:", signOutError);
               }
+=======
+            console.error("Çıkış yapılırken hata:", signOutError);
+          }
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             }
           }
           return {
@@ -2262,11 +2786,19 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
       console.error("Kullanıcı kontrolü hatası:", checkError);
       // Kontrol hatası olsa bile devam et, getUserProfile kontrol edecek
     }
+<<<<<<< HEAD
 
     // Check if user profile exists, create if not
     try {
       let userProfile = await getUserProfile(firebaseUser.uid);
 
+=======
+    
+    // Check if user profile exists, create if not
+    try {
+      let userProfile = await getUserProfile(firebaseUser.uid);
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Eğer kullanıcı silinmişse
       if (!userProfile) {
         try {
@@ -2282,7 +2814,11 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
           user: null,
         };
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Kullanıcı profilini güncelle - serverTimestamp() kullanarak sunucu zamanını kaydet
       const oldLastLoginAt = userProfile.lastLoginAt;
       // serverTimestamp() kullanarak Firebase sunucusunun zamanını kaydet (daha doğru)
@@ -2298,7 +2834,11 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
       // Not: serverTimestamp() async olduğu için hemen okumak doğru zamanı vermeyebilir
       // Bu yüzden bir miktar bekleyip tekrar yükleyelim
       await new Promise(resolve => setTimeout(resolve, 100)); // 100ms bekle
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const updatedProfile = await getUserProfile(firebaseUser.uid);
       if (updatedProfile) {
         userProfile = updatedProfile;
@@ -2308,12 +2848,17 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
       try {
         const loginTime = new Date().toISOString();
         const oldLastLoginAtValue = oldLastLoginAt ? (oldLastLoginAt instanceof Timestamp ? oldLastLoginAt.toDate().toISOString() : String(oldLastLoginAt)) : null;
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         let retryCount = 0;
         const maxRetries = 2;
         while (retryCount <= maxRetries) {
           try {
             await logAudit(
+<<<<<<< HEAD
               "UPDATE",
               "user_logins",
               firebaseUser.uid,
@@ -2325,6 +2870,19 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
                 method: "GOOGLE",
                 email: firebaseUser.email || null,
                 timestamp: loginTime
+=======
+              "UPDATE", 
+              "user_logins", 
+              firebaseUser.uid, 
+              firebaseUser.uid,
+              oldLastLoginAtValue ? { lastLoginAt: oldLastLoginAtValue } : null,
+              null,
+              { 
+                action: "LOGIN", 
+                method: "GOOGLE", 
+                email: firebaseUser.email || null, 
+                timestamp: loginTime 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               }
             );
             break; // Başarılı oldu, döngüden çık
@@ -2381,7 +2939,11 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
         approvedTeams: [],
       };
       await setDoc(doc(firestore, "users", firebaseUser.uid), newUserProfile);
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       return {
         success: true,
         user: newUserProfile as UserProfile,
@@ -2390,11 +2952,18 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; message?: 
   } catch (error: unknown) {
     console.error("Google Sign-In error:", error);
     let errorMessage = "Google ile giriş başarısız";
+<<<<<<< HEAD
     const errorObj = error && typeof error === 'object' ? error as { code?: string; message?: string } : null;
     if (errorObj?.code === 'auth/popup-closed-by-user') {
       errorMessage = "Google giriş penceresi kapatıldı.";
     } else if (errorObj?.message) {
       errorMessage = errorObj.message;
+=======
+    if (error.code === 'auth/popup-closed-by-user') {
+      errorMessage = "Google giriş penceresi kapatıldı.";
+    } else if (error.message) {
+      errorMessage = error.message;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     }
     return {
       success: false,
@@ -2416,6 +2985,7 @@ export const sendVerificationEmail = async (): Promise<{ success: boolean; messa
     if (!user) {
       return { success: false, message: "Kullanıcı oturum açmamış" };
     }
+<<<<<<< HEAD
 
     // Email zaten doğrulanmışsa gönderme
     if (user.emailVerified) {
@@ -2447,18 +3017,36 @@ export const sendVerificationEmail = async (): Promise<{ success: boolean; messa
     return {
       success: false,
       message: (error && typeof error === 'object' && 'message' in error ? (error as { message?: string }).message : undefined) || "Doğrulama e-postası gönderilemedi",
+=======
+    await sendEmailVerification(user);
+    return { success: true, message: "Doğrulama e-postası gönderildi" };
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Send verification email error:", error);
+    }
+    return {
+      success: false,
+      message: error.message || "Doğrulama e-postası gönderilemedi",
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     };
   }
 };
 
 /**
  * Kullanıcıyı tamamen sil (sadece super_admin)
+<<<<<<< HEAD
  * - Firebase Auth'dan siler (Cloud Function gerekir)
  * - Firestore users collection'ında soft delete yapar
  * - Tüm logları siler
  * - Görevlerden kullanıcıyı çıkarır
  * - Bildirimlerini siler
  * - Ekip ilişkilerini temizler
+=======
+ * - Firebase Auth'dan siler
+ * - Firestore users collection'ından siler
+ * - Tüm logları siler
+ * - Görevlerden kullanıcıyı çıkarır
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
  * - Eğer göreve kimse kalmamışsa havuza alır
  */
 export const deleteUser = async (userId: string, deletedBy: string): Promise<void> => {
@@ -2467,18 +3055,26 @@ export const deleteUser = async (userId: string, deletedBy: string): Promise<voi
       throw new Error("Firebase is not initialized");
     }
 
+<<<<<<< HEAD
     // Kullanıcı profilini al (silinmiş bile olsa bilgileri görmek için allowDeleted: true)
     const userProfile = await getUserProfile(userId, true);
+=======
+    // Kullanıcı profilini al
+    const userProfile = await getUserProfile(userId);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (!userProfile) {
       throw new Error("Kullanıcı bulunamadı");
     }
 
+<<<<<<< HEAD
     // Zaten silinmişse hata ver
     const userDoc = await getDoc(doc(firestore, "users", userId));
     if (userDoc.exists() && userDoc.data()?.deleted === true) {
       throw new Error("Bu kullanıcı zaten silinmiş.");
     }
 
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Silen kişinin yetkisini kontrol et (super_admin olmalı)
     const deleterProfile = await getUserProfile(deletedBy);
     if (!deleterProfile || (!deleterProfile.role?.includes("super_admin") && !deleterProfile.role?.includes("main_admin"))) {
@@ -2490,6 +3086,7 @@ export const deleteUser = async (userId: string, deletedBy: string): Promise<voi
       throw new Error("Kendi hesabınızı silemezsiniz.");
     }
 
+<<<<<<< HEAD
     // Orijinal verileri sakla (audit log için)
     const originalData = {
       email: userProfile.email,
@@ -2561,21 +3158,46 @@ export const deleteUser = async (userId: string, deletedBy: string): Promise<voi
     // Böylece kullanıcı giriş yapamaz ama veriler korunur (GDPR uyumluluğu için)
     const userRef = doc(firestore, "users", userId);
 
+=======
+    // 1. Tüm görevlerden kullanıcıyı çıkar ve gerekirse havuza al
+    const { removeUserFromAllTasks } = await import("./taskService");
+    await removeUserFromAllTasks(userId);
+
+    // 2. Tüm logları sil
+    const { deleteUserLogs } = await import("./auditLogsService");
+    await deleteUserLogs(userId);
+
+    // 3. Firebase Auth'dan kullanıcıyı sil (admin SDK gerekir, client-side'da yapılamaz)
+    // Bu işlem için Cloud Function veya Admin SDK gerekir
+    // Şimdilik sadece Firestore'dan silelim ve kullanıcıyı devre dışı bırakalım
+    const userRef = doc(firestore, "users", userId);
+    
+    // Kullanıcıyı silmek yerine "deleted" flag'i ekleyelim
+    // Böylece kullanıcı giriş yapamaz ama veriler korunur (GDPR uyumluluğu için)
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await updateDoc(userRef, {
       deleted: true,
       deletedAt: serverTimestamp(),
       deletedBy: deletedBy,
+<<<<<<< HEAD
       // Orijinal email'i koruyoruz (yeniden kayıt kontrolü için gerekli)
       // email: userProfile.email, // DEĞİŞTİRME
       displayName: "Silinmiş Kullanıcı",
       fullName: "Silinmiş Kullanıcı",
       phone: null,
       dateOfBirth: null,
+=======
+      email: `deleted_${Date.now()}_${userProfile.email}`, // Email'i değiştir ki tekrar kayıt olamasın
+      displayName: "Silinmiş Kullanıcı",
+      fullName: "Silinmiş Kullanıcı",
+      phone: null,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       role: [],
       departmentId: null,
       pendingTeams: [],
       approvedTeams: [],
       teamLeaderIds: [],
+<<<<<<< HEAD
       // Orijinal verileri metadata olarak sakla (gerekirse geri yüklemek için)
       _originalData: originalData,
     });
@@ -2603,6 +3225,20 @@ export const deleteUser = async (userId: string, deletedBy: string): Promise<voi
     if (import.meta.env.DEV) {
       console.log(`Kullanıcı ${userId} başarıyla silindi (soft delete)`);
     }
+=======
+    });
+
+    // 4. Audit log oluştur
+    const { createAuditLog } = await import("./auditLogsService");
+    await createAuditLog(
+      "DELETE",
+      "users",
+      userId,
+      userProfile,
+      { deleted: true, deletedAt: new Date(), deletedBy },
+      deletedBy
+    );
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   } catch (error: unknown) {
     console.error("Delete user error:", error);
@@ -2610,6 +3246,7 @@ export const deleteUser = async (userId: string, deletedBy: string): Promise<voi
   }
 };
 
+<<<<<<< HEAD
 /**
  * Silinmiş kullanıcıyı geri yükle (sadece super_admin)
  * Soft delete ile silinmiş kullanıcıları geri yükler
@@ -2724,3 +3361,6 @@ export const getDeletedUsers = async (): Promise<UserProfile[]> => {
     return [];
   }
 };
+=======
+
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1

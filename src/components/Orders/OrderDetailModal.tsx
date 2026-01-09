@@ -388,7 +388,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
       return 1;
     }
     return index;
+<<<<<<< HEAD
   }, [currentStatus]);
+=======
+  }, [currentStatus, statusWorkflow]);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   const nextStatus = useMemo(() => {
     const currentIndex = getCurrentStatusIndex();
@@ -397,7 +401,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
       return null;
     }
     return statusWorkflow[currentIndex + 1];
+<<<<<<< HEAD
   }, [getCurrentStatusIndex]);
+=======
+  }, [getCurrentStatusIndex, statusWorkflow]);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   const handleStatusChange = async (nextStatus: string) => {
     if (!order?.id || !user?.id) {
@@ -513,7 +521,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+<<<<<<< HEAD
       <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] md:!max-w-[85vw] !w-[100vw] sm:!w-[95vw] md:!w-[85vw] !h-[100vh] sm:!h-[90vh] md:!h-[85vh] !max-h-[100vh] sm:!max-h-[90vh] md:!max-h-[85vh] !left-0 sm:!left-[2.5vw] md:!left-[7.5vw] !top-0 sm:!top-[5vh] md:!top-[7.5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+=======
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">
           Sipariş Detayı - {orderNumber}
@@ -523,6 +535,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
         </DialogDescription>
         
         <div className="flex flex-col h-full min-h-0">
+<<<<<<< HEAD
           <DialogHeader className="p-2 sm:p-3 md:p-4 border-b bg-white flex-shrink-0 relative pr-10 sm:pr-12">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
               <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 w-full sm:w-auto">
@@ -534,6 +547,19 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                 </h2>
               </div>
               <div className="flex flex-wrap gap-2 flex-shrink-0 relative z-10 w-full sm:w-auto justify-start sm:justify-end">
+=======
+          <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
+                  <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                </div>
+                <h2 className="text-xl sm:text-2xl font-semibold text-foreground truncate">
+                  Sipariş Detayı - {orderNumber}
+                </h2>
+              </div>
+              <div className="flex flex-wrap gap-2 flex-shrink-0 relative z-10 pr-10 sm:pr-12">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 {approvalStatus === "pending" && (
                   <Badge variant="outline" className="border-yellow-500 text-yellow-600 bg-yellow-50 text-xs px-2 sm:px-3 py-1 relative z-10">
                     Onay Bekliyor
@@ -546,11 +572,19 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
             </div>
           </DialogHeader>
           {quickMetaChips.length > 0 && (
+<<<<<<< HEAD
             <div className="px-2 sm:px-3 md:px-4 py-2 border-b bg-gray-50/50 flex flex-wrap items-center gap-1.5 sm:gap-2 flex-shrink-0 overflow-x-auto scrollbar-hide">
               {quickMetaChips.map((chip) => (
                 <div
                   key={`${chip.label}-${chip.value}`}
                   className="flex items-center gap-1 rounded-full border bg-muted/40 px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium text-muted-foreground whitespace-nowrap"
+=======
+            <div className="px-3 sm:px-4 py-2 border-b bg-gray-50/50 flex flex-wrap items-center gap-2 flex-shrink-0">
+              {quickMetaChips.map((chip) => (
+                <div
+                  key={`${chip.label}-${chip.value}`}
+                  className="flex items-center gap-1 rounded-full border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 >
                   <span className="text-muted-foreground/70">{chip.label}:</span>
                   <span className="text-foreground">{chip.value}</span>
@@ -559,8 +593,13 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
             </div>
           )}
 
+<<<<<<< HEAD
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-2 sm:p-3 md:p-4 min-h-0">
             <div className="max-w-full mx-auto h-full overflow-y-auto overflow-x-hidden" style={{ WebkitOverflowScrolling: 'touch' }}>
+=======
+          <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
+            <div className="max-w-full mx-auto h-full overflow-y-auto">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               {loading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -568,11 +607,19 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
               ) : (
                 <div className="space-y-6">
             {approvalStatus === "pending" && (
+<<<<<<< HEAD
               <div className="p-3 sm:p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                   <div className="flex-1 min-w-0">
                     <h4 className="text-[13px] sm:text-sm font-semibold text-yellow-900">Sipariş Tamamlanma Onayı Bekliyor</h4>
                     <p className="text-[11px] sm:text-sm text-yellow-700 mt-1">
+=======
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-yellow-900">Sipariş Tamamlanma Onayı Bekliyor</h4>
+                    <p className="text-sm text-yellow-700">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       Bu sipariş tamamlandı olarak işaretlendi ve onayınızı bekliyor.
                     </p>
                   </div>
@@ -581,7 +628,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                       <Button
                         size="sm"
                         variant="outline"
+<<<<<<< HEAD
                         className="flex-1 sm:flex-none border-yellow-300 text-yellow-900 hover:bg-yellow-100 h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
+=======
+                        className="flex-1 sm:flex-none border-yellow-300 text-yellow-900 hover:bg-yellow-100"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         onClick={handleReject}
                       >
                         <X className="h-4 w-4 mr-1" />
@@ -589,7 +640,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                       </Button>
                       <Button
                         size="sm"
+<<<<<<< HEAD
                         className="flex-1 sm:flex-none bg-yellow-600 hover:bg-yellow-700 text-white border-none h-9 sm:h-10 min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
+=======
+                        className="flex-1 sm:flex-none bg-yellow-600 hover:bg-yellow-700 text-white border-none"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         onClick={handleApprove}
                       >
                         <Check className="h-4 w-4 mr-1" />
@@ -601,7 +656,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
               </div>
             )}
 
+<<<<<<< HEAD
             <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3 md:gap-4 auto-rows-fr">
+=======
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 auto-rows-fr">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               {highlightCards.map((card) => {
                 const Icon = card.icon;
                 return (
@@ -720,7 +779,10 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete }
                     if (!shouldShowButton) {
                       // Debug için konsola yaz (sadece dev modda)
                       if (import.meta.env.DEV && nextStatus) {
+<<<<<<< HEAD
                         // Debug log could go here if needed
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       }
                       return null;
                     }

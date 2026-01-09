@@ -787,6 +787,7 @@ export const PendingTaskApprovals = () => {
               </div>
               
               {/* Badges */}
+<<<<<<< HEAD
               <div className="flex flex-wrap gap-1 mb-1.5">
                 <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal border-0 leading-tight py-0">{getStatusLabel(task.status)}</Badge>
                 <Badge variant="outline" className="h-4 px-1.5 text-[10px] font-normal border leading-tight py-0">Öncelik {task.priority}</Badge>
@@ -800,6 +801,21 @@ export const PendingTaskApprovals = () => {
                 )}
                 {task.approvalStatus === "rejected" && (
                   <Badge className="h-4 px-1.5 text-[10px] font-normal border-0 leading-tight py-0 bg-red-100 text-red-900 border-red-300">Reddedildi</Badge>
+=======
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                <Badge variant="secondary" className="text-xs">{getStatusLabel(task.status)}</Badge>
+                <Badge variant="outline" className="text-xs">Öncelik {task.priority}</Badge>
+                {dueSoon && <Badge className="bg-amber-100 text-amber-900 border-amber-200 text-xs">Yaklaşan</Badge>}
+                {overdue && <Badge variant="destructive" className="text-xs">Gecikti</Badge>}
+                {task.approvalStatus === "pending" && (
+                  <Badge className="bg-yellow-100 text-yellow-900 border-yellow-300 text-xs">Onay Bekliyor</Badge>
+                )}
+                {task.approvalStatus === "approved" && (
+                  <Badge className="bg-green-100 text-green-900 border-green-300 text-xs">Onaylandı</Badge>
+                )}
+                {task.approvalStatus === "rejected" && (
+                  <Badge className="bg-red-100 text-red-900 border-red-300 text-xs">Reddedildi</Badge>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 )}
               </div>
               
@@ -1154,6 +1170,7 @@ export const PendingTaskApprovals = () => {
       </Dialog>
 
       <Dialog open={taskDetailModalOpen} onOpenChange={setTaskDetailModalOpen}>
+<<<<<<< HEAD
         <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] md:!max-w-[90vw] lg:!max-w-4xl !w-[100vw] sm:!w-[95vw] md:!w-[90vw] lg:!w-[80vw] !h-[100vh] sm:!h-[90vh] md:!h-[85vh] !max-h-[100vh] sm:!max-h-[90vh] md:!max-h-[85vh] !left-0 sm:!left-[2.5vw] md:!left-[5vw] lg:!left-1/2 !top-0 sm:!top-[5vh] md:!top-[7.5vh] lg:!top-1/2 !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 sm:!translate-x-0 md:!translate-x-0 lg:!-translate-x-1/2 !translate-y-0 sm:!translate-y-0 md:!translate-y-0 lg:!-translate-y-1/2 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
           <DialogTitle className="sr-only">Görev Detayları</DialogTitle>
           <DialogDescription className="sr-only">
@@ -1190,6 +1207,40 @@ export const PendingTaskApprovals = () => {
               )}
             </div>
           </div>
+=======
+        <DialogContent className="max-w-4xl w-[80vw] overflow-y-auto max-h-[90vh]">
+          <DialogTitle className="sr-only">Görev Detayları</DialogTitle>
+          <DialogDescription className="sr-only">
+              Görev detaylarını, ekibi ve checklist'i görüntüleyin.
+            </DialogDescription>
+          <DialogHeader>
+            <h2 className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görev Detayları</h2>
+            <p className="text-sm text-muted-foreground">
+              Görev detaylarını, ekibi ve checklist'i görüntüleyin.
+            </p>
+          </DialogHeader>
+          {selectedTaskId && (
+            <TaskInlineForm
+              key={`${inlineFormMode}-${selectedTaskId}`}
+              mode={inlineFormMode}
+              projectId={null}
+              taskId={selectedTaskId}
+              defaultStatus={selectedTaskStatus}
+              onCancel={() => {
+                setTaskDetailModalOpen(false);
+                setSelectedTaskId(null);
+                setSelectedTaskStatus("pending");
+              }}
+              onSuccess={() => {
+                handleTaskDetailUpdate();
+                setTaskDetailModalOpen(false);
+                setSelectedTaskId(null);
+                setSelectedTaskStatus("pending");
+              }}
+              className="border-0 shadow-none p-0"
+            />
+          )}
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         </DialogContent>
       </Dialog>
     </div>

@@ -41,6 +41,47 @@ export const CreateRawMaterialDialog = ({
   const [newCategoryDialogOpen, setNewCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryLoading, setNewCategoryLoading] = useState(false);
+<<<<<<< HEAD
+=======
+  const STORAGE_KEY = "rawMaterialFormDraft";
+
+  // localStorage'dan draft verileri yükle
+  const loadDraft = () => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("Error loading draft:", error);
+      }
+    }
+    return null;
+  };
+
+  // Draft verileri localStorage'a kaydet
+  const saveDraft = (data: typeof defaultFormData) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("Error saving draft:", error);
+      }
+    }
+  };
+
+  // Draft verileri temizle
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("Error clearing draft:", error);
+      }
+    }
+  };
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   const defaultFormData = {
     name: "",
@@ -61,7 +102,14 @@ export const CreateRawMaterialDialog = ({
     description: "",
   };
 
+<<<<<<< HEAD
   const [formData, setFormData] = useState(defaultFormData);
+=======
+  const [formData, setFormData] = useState(() => {
+    const draft = loadDraft();
+    return draft || defaultFormData;
+  });
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   // KDV ve birim fiyat değiştiğinde nihai fiyatı otomatik hesapla
   useEffect(() => {
@@ -83,11 +131,16 @@ export const CreateRawMaterialDialog = ({
     }
   }, [formData.unitPrice, formData.vatRate]);
 
+<<<<<<< HEAD
   // Form açıldığında kullanıcıları yükle ve formu temizle
+=======
+  // Form açıldığında kullanıcıları yükle ve draft verileri yükle
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   useEffect(() => {
     if (open) {
       fetchUsers();
       fetchCategories();
+<<<<<<< HEAD
       // Form açıldığında her zaman default değerleri kullan (boş form)
       setFormData(defaultFormData);
     }
@@ -96,6 +149,44 @@ export const CreateRawMaterialDialog = ({
   // Form başarıyla kaydedildikten sonra state'i sıfırla
   const resetForm = () => {
     setFormData(defaultFormData);
+=======
+      // Form açıldığında draft varsa yükle, yoksa default değerleri kullan
+      const draft = loadDraft();
+      if (draft) {
+        setFormData(draft);
+      } else {
+        // Draft yoksa formu temizle
+        setFormData(defaultFormData);
+      }
+    }
+  }, [open]);
+
+  // Form verileri değiştiğinde draft olarak kaydet (debounce ile)
+  useEffect(() => {
+    if (open) {
+      // Sadece form açıkken ve veri varsa kaydet
+      const hasData = formData.name || formData.sku || formData.supplier || formData.brand || formData.description || formData.purchasedBy || formData.location || formData.link || formData.unitPrice || formData.vatRate;
+      if (hasData) {
+        const timeoutId = setTimeout(() => {
+          saveDraft(formData);
+        }, 500); // 500ms debounce
+        return () => clearTimeout(timeoutId);
+      } else {
+        // Veri yoksa draft'ı temizle
+        clearDraft();
+      }
+    }
+  }, [formData, open]);
+
+  // Form başarıyla kaydedildikten sonra state'i ve draft'ı sıfırla
+  const resetForm = () => {
+    const resetData = {
+      ...defaultFormData,
+      vatRate: "0",
+    };
+    setFormData(resetData);
+    clearDraft();
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   };
 
   const fetchUsers = async () => {
@@ -199,7 +290,11 @@ export const CreateRawMaterialDialog = ({
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
+<<<<<<< HEAD
       <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] md:!max-w-[85vw] !w-[100vw] sm:!w-[95vw] md:!w-[85vw] !h-[100vh] sm:!h-[90vh] md:!h-[80vh] !max-h-[100vh] sm:!max-h-[90vh] md:!max-h-[80vh] !left-0 sm:!left-[2.5vw] md:!left-[7.5vw] !top-0 sm:!top-[5vh] md:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+=======
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">
           Yeni Hammadde Ekle

@@ -89,7 +89,11 @@ export const UserManagement = () => {
                 phone: u.phone || null,
                 department_id: u.departmentId || null,
                 created_at: u.createdAt instanceof Timestamp ? u.createdAt : (u.createdAt instanceof Date ? Timestamp.fromDate(u.createdAt) : Timestamp.now()),
+<<<<<<< HEAD
                 roles: u.role || [], // UserProfile'da role (tekil), User interface'inde roles (çoğul)
+=======
+                roles: u.role || [],
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 last_login_at: u.lastLoginAt instanceof Timestamp ? u.lastLoginAt : (u.lastLoginAt instanceof Date ? Timestamp.fromDate(u.lastLoginAt) : null),
               }))
               .sort((a, b) => {
@@ -98,6 +102,7 @@ export const UserManagement = () => {
                 const bTime = b.created_at instanceof Timestamp ? b.created_at.toMillis() : (b.created_at instanceof Date ? b.created_at.getTime() : 0);
                 return aTime - bTime;
               });
+<<<<<<< HEAD
             
             if (import.meta.env.DEV) {
               console.log("Real-time listener: Kullanıcı listesi güncellendi", {
@@ -110,6 +115,8 @@ export const UserManagement = () => {
               });
             }
             
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             setUsers(fetchedUsers);
             setLoading(false);
           } catch (error) {
@@ -376,11 +383,16 @@ export const UserManagement = () => {
         return;
       }
 
+<<<<<<< HEAD
       // Kullanıcının mevcut rolleri (User interface'inde roles çoğul, Firestore'da role tekil)
+=======
+      // Kullanıcının mevcut rolleri
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const currentRoles = targetUser.roles || [];
       
       // Eğer kullanıcı team_leader değilse, ekle
       if (!currentRoles.includes("team_leader")) {
+<<<<<<< HEAD
         const newRoles = [...currentRoles, "team_leader"];
         const updateResult = await updateFirebaseUserProfile(userId, {
           role: newRoles, // Firestore'a role (tekil) olarak yazılıyor
@@ -405,6 +417,11 @@ export const UserManagement = () => {
             ? { ...u, roles: newRoles }
             : u
         ));
+=======
+        await updateFirebaseUserProfile(userId, {
+          role: [...currentRoles, "team_leader"],
+        }, user?.id || null);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       }
 
       // Seçilen departmanın mevcut manager'ını kontrol et
@@ -425,13 +442,21 @@ export const UserManagement = () => {
           
           // Eğer başka departmanda manager değilse, team_leader rolünü kaldır
           if (!otherDeptAsManager) {
+<<<<<<< HEAD
             const oldManagerRoles = oldManager.roles || []; // User interface'inde roles çoğul
+=======
+            const oldManagerRoles = oldManager.roles || [];
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             const updatedOldManagerRoles = oldManagerRoles.filter((r: string) => r !== "team_leader");
             if (updatedOldManagerRoles.length === 0) {
               updatedOldManagerRoles.push("viewer"); // En azından viewer rolü olsun
             }
             await updateFirebaseUserProfile(oldManager.id, {
+<<<<<<< HEAD
               role: updatedOldManagerRoles, // Firestore'a role (tekil) olarak yazılıyor
+=======
+              role: updatedOldManagerRoles,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             }, user?.id || null);
           }
         }
@@ -454,6 +479,7 @@ export const UserManagement = () => {
 
       toast.success(`${targetUser.full_name || targetUser.email} kullanıcısı "${targetDepartment.name}" departmanının lideri olarak atandı`);
       
+<<<<<<< HEAD
       // Kullanıcı listesini yenile (await ile bekle)
       // Real-time listener otomatik güncelleyecek ama manuel yenileme de yapalım
       try {
@@ -469,6 +495,10 @@ export const UserManagement = () => {
         }
         // Hata olsa bile real-time listener güncelleyecek
       }
+=======
+      // Kullanıcı listesini yenile
+      fetchData();
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     } catch (error: unknown) {
       toast.error("Ekip lideri atanırken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     }
@@ -560,9 +590,15 @@ export const UserManagement = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
+<<<<<<< HEAD
           <div className="overflow-x-auto -mx-4 sm:mx-0 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
             <div className="inline-block min-w-full align-middle px-4 sm:px-0">
               <Table className="min-w-[800px] sm:min-w-0 w-full">
+=======
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle px-4 sm:px-0">
+              <Table className="min-w-[800px] sm:min-w-0">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               <TableHeader>
               <TableRow>
                 <TableHead className="min-w-[150px]">Kullanıcı</TableHead>
@@ -739,7 +775,11 @@ export const UserManagement = () => {
           </AlertDialogHeader>
           <div className="py-4">
             <Select value={newRole} onValueChange={setNewRole}>
+<<<<<<< HEAD
               <SelectTrigger className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm">
+=======
+              <SelectTrigger>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 <SelectValue placeholder="Rol seçin" />
               </SelectTrigger>
               <SelectContent>
@@ -751,9 +791,15 @@ export const UserManagement = () => {
               </SelectContent>
             </Select>
           </div>
+<<<<<<< HEAD
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialogCancel className="w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs">İptal</AlertDialogCancel>
             <AlertDialogAction onClick={handleRoleChange} className="w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs">
+=======
+          <AlertDialogFooter>
+            <AlertDialogCancel>İptal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRoleChange}>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               Kaydet
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -792,8 +838,13 @@ export const UserManagement = () => {
               </ul>
             </div>
           </div>
+<<<<<<< HEAD
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialogCancel className="w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs">İptal</AlertDialogCancel>
+=======
+          <AlertDialogFooter>
+            <AlertDialogCancel>İptal</AlertDialogCancel>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             <AlertDialogAction
               onClick={() => {
                 // Son bir kez kontrol et - kendi hesabını silmeye çalışıyorsa engelle
@@ -806,7 +857,11 @@ export const UserManagement = () => {
                 setShowDeleteDialog(false);
                 setShowDeleteConfirmDialog(true);
               }}
+<<<<<<< HEAD
               className="bg-destructive hover:bg-destructive/90 w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
+=======
+              className="bg-destructive hover:bg-destructive/90"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             >
               Devam Et
             </AlertDialogAction>
@@ -840,12 +895,21 @@ export const UserManagement = () => {
               </p>
             </div>
           </div>
+<<<<<<< HEAD
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialogCancel disabled={deleting} className="w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs">İptal</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteUser}
               disabled={deleting}
               className="bg-destructive hover:bg-destructive/90 w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
+=======
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>İptal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteUser}
+              disabled={deleting}
+              className="bg-destructive hover:bg-destructive/90"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             >
               {deleting ? "Siliniyor..." : "Evet, Sil"}
             </AlertDialogAction>

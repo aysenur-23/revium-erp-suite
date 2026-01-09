@@ -81,7 +81,11 @@ const statusOptions: Array<{ value: ProductionOrder["status"]; label: string }> 
 const Production = () => {
   const { isAdmin, isTeamLeader, user } = useAuth();
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
+<<<<<<< HEAD
   const [loading, setLoading] = useState(false); // Başlangıçta false - placeholder data ile hızlı render
+=======
+  const [loading, setLoading] = useState(true);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -158,6 +162,7 @@ const Production = () => {
 
   // Gerçek zamanlı sipariş güncellemeleri için subscribe
   useEffect(() => {
+<<<<<<< HEAD
     // Defer subscription: İlk render'dan 100ms sonra başlat (non-blocking)
     const timer = setTimeout(() => {
       setLoading(true);
@@ -169,6 +174,17 @@ const Production = () => {
       
       // Gerçek zamanlı dinleme başlat
       const unsubscribe = subscribeToOrders(filters, async (firebaseOrders) => {
+=======
+    const filters: { status?: string } = {};
+    if (statusFilter !== 'all') {
+      filters.status = statusFilter;
+    }
+    
+    setLoading(true);
+    
+    // Gerçek zamanlı dinleme başlat
+    const unsubscribe = subscribeToOrders(filters, async (firebaseOrders) => {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       try {
         // Null/undefined kontrolü
         if (!Array.isArray(firebaseOrders)) {
@@ -226,6 +242,7 @@ const Production = () => {
         setOrders(paginatedOrders);
         setTotalPages(Math.ceil(filtered.length / 50));
         
+<<<<<<< HEAD
         // İlk render için: items olmadan göster
         setOrdersWithItems(new Map());
         setLoading(false);
@@ -254,6 +271,31 @@ const Production = () => {
           );
           setOrdersWithItems(itemsMap);
         }, 200);
+=======
+        // Her sipariş için items'ı yükle (sadece görünür olanlar için)
+        const itemsMap = new Map<string, { productName?: string; quantity?: number; unit?: string }>();
+        await Promise.all(
+          paginatedOrders.map(async (order: Order) => {
+            try {
+              const items = await getOrderItems(order.id);
+              if (items.length > 0) {
+                const firstItem = items[0];
+                itemsMap.set(order.id, {
+                  productName: firstItem.productName || firstItem.product_name || undefined,
+                  quantity: firstItem.quantity,
+                  unit: "Adet", // OrderItem'da unit yok, varsayılan olarak "Adet"
+                });
+              }
+            } catch (error: unknown) {
+              if (import.meta.env.DEV) {
+                console.error(`Error loading items for order ${order.id}:`, error);
+              }
+            }
+          })
+        );
+        setOrdersWithItems(itemsMap);
+        setLoading(false);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       } catch (error: unknown) {
         if (import.meta.env.DEV) {
           console.error("Real-time production orders update error:", error);
@@ -266,11 +308,14 @@ const Production = () => {
     return () => {
       unsubscribe();
     };
+<<<<<<< HEAD
     }, 100);
     
     return () => {
       clearTimeout(timer);
     };
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   }, [statusFilter, sortBy, sortOrder, searchQuery, page]);
 
   const getStatusVariant = (status: string) => {

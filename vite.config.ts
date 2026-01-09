@@ -98,6 +98,7 @@ export default defineConfig(({ mode }) => ({
         tryCatchDeoptimization: false,
       },
       output: {
+<<<<<<< HEAD
         // Chunk bağımlılıklarını ayarla - React core önce yüklenmeli
         // Bu, React'e bağımlı chunk'ların React yüklenmeden önce çalışmasını önler
         // Not: Bu özellik Vite/Rollup tarafından otomatik yönetilir, ama manuel kontrol için
@@ -125,6 +126,34 @@ export default defineConfig(({ mode }) => ({
               id.includes('node_modules/react-dom') ||
               id.includes('@radix-ui') ||
               id.includes('node_modules/next-themes') ||
+=======
+        // Vendor chunk'ları - Performans için chunk'ları ayır
+        manualChunks: (id) => {
+          // React vendor chunk'ları - ÖNCE kontrol et
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'vendor-react';
+          }
+          
+          // Radix UI - React'e bağımlı, React ile aynı chunk'ta olmalı
+          if (id.includes('@radix-ui')) {
+            return 'vendor-react';
+          }
+          
+          // React Router - React'e bağımlı
+          if (id.includes('node_modules/react-router')) {
+            return 'vendor-react';
+          }
+          
+          // TanStack Query - React'e bağımlı
+          if (id.includes('@tanstack')) {
+            return 'vendor-react';
+          }
+          
+          // React'e bağımlı TÜM kütüphaneler - React ile aynı chunk'ta
+          // Güvenli tarafta olmak için tüm "react" içeren kütüphaneleri React chunk'ına al
+          if (id.includes('node_modules/next-themes') ||
+              id.includes('node_modules/react-hook-form') ||
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               id.includes('node_modules/sonner') ||
               id.includes('node_modules/vaul') ||
               id.includes('node_modules/cmdk') ||
@@ -133,6 +162,7 @@ export default defineConfig(({ mode }) => ({
               id.includes('node_modules/@hello-pangea/dnd') ||
               id.includes('node_modules/embla-carousel-react') ||
               id.includes('node_modules/input-otp') ||
+<<<<<<< HEAD
               id.includes('node_modules/react-router') ||
               id.includes('node_modules/react-hook-form') ||
               id.includes('node_modules/@hookform') ||
@@ -142,11 +172,31 @@ export default defineConfig(({ mode }) => ({
           }
           
           // Firebase - tüm Firebase modüllerini bir chunk'a topla (büyük, ayrı tut)
+=======
+              id.includes('node_modules/recharts') ||
+              id.includes('node_modules/@hookform') ||
+              id.includes('node_modules/class-variance-authority') ||
+              id.includes('node_modules/clsx') ||
+              id.includes('node_modules/tailwind-merge') ||
+              id.includes('node_modules/tailwindcss-animate') ||
+              id.includes('node_modules/zod') ||
+              id.includes('node_modules/date-fns')) {
+            return 'vendor-react';
+          }
+          
+          // lucide-react'ı ayrı chunk'a ayır
+          if (id.includes('lucide-react')) {
+            return 'lucide-react';
+          }
+          
+          // Firebase - tüm Firebase modüllerini bir chunk'a topla
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           if (id.includes('node_modules/firebase') || id.includes('firebase')) {
             return 'vendor-firebase';
           }
           
           // PDF Generator - büyük chunk, ayrı tut
+<<<<<<< HEAD
           if (id.includes('pdfGenerator') || id.includes('jspdf') || id.includes('html2canvas') || id.includes('jspdf-autotable')) {
             return 'vendor-pdf';
           }
@@ -164,6 +214,21 @@ export default defineConfig(({ mode }) => ({
             }
             // React'e bağımlı olmayan kütüphaneler - undefined döndür (Vite otomatik chunk'a ekler)
             return undefined;
+=======
+          if (id.includes('pdfGenerator') || id.includes('jspdf') || id.includes('html2canvas')) {
+            return 'vendor-pdf';
+          }
+          
+          // Admin sayfası - büyük chunk, ayrı tut
+          if (id.includes('pages/Admin') || id.includes('components/Admin')) {
+            return 'chunk-admin';
+          }
+          
+          // Diğer vendor kütüphaneleri - Sadece gerçekten React'e bağımlı olmayanlar
+          if (id.includes('node_modules')) {
+            // Kalan tüm node_modules kütüphanelerini de React chunk'ına al (güvenli tarafta ol)
+            return 'vendor-react';
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           }
           
           return undefined;
@@ -182,5 +247,9 @@ export default defineConfig(({ mode }) => ({
         },
       },
     },
+<<<<<<< HEAD
+=======
+    chunkSizeWarningLimit: 1000,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   },
 }));

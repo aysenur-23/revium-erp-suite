@@ -8,7 +8,11 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+<<<<<<< HEAD
 import { Loader2, FileText, Download, ChevronDown, ChevronUp, Monitor, Globe, Shield } from "lucide-react";
+=======
+import { Loader2, FileText, Download, ChevronDown, ChevronUp } from "lucide-react";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
@@ -72,7 +76,10 @@ const TABLE_LABELS: Record<string, string> = {
   customerNotes: "Müşteri Notları",
   users: "Kullanıcılar",
   materials: "Malzemeler",
+<<<<<<< HEAD
   security_events: "Güvenlik Olayları",
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 };
 
 // Menü isimleri
@@ -92,7 +99,10 @@ const MENU_LABELS: Record<string, string> = {
   projects: "Projeler",
   reports: "Raporlar",
   warranty: "Satış Sonrası Takip",
+<<<<<<< HEAD
   security_events: "Sistem Güvenliği",
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 };
 
 // Alan isimlerini Türkçe'ye çevir
@@ -122,10 +132,13 @@ const FIELD_LABELS: Record<string, string> = {
   role: "Rol",
   fullName: "Ad Soyad",
   department: "Departman",
+<<<<<<< HEAD
   departmentId: "Departman",
   parentDepartmentId: "Üst Departman",
   managerId: "Yönetici",
   managerName: "Yönetici Adı",
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   isActive: "Aktif",
   isArchived: "Arşivlendi",
   approvalStatus: "Onay Durumu",
@@ -139,6 +152,7 @@ const FIELD_LABELS: Record<string, string> = {
   reportType: "Rapor Tipi",
   startDate: "Başlangıç Tarihi",
   endDate: "Bitiş Tarihi",
+<<<<<<< HEAD
   eventType: "Olay Tipi",
   targetUserId: "Hedef Kullanıcı",
   sessionId: "Oturum ID",
@@ -149,6 +163,8 @@ const FIELD_LABELS: Record<string, string> = {
   restoredAt: "Geri Yükleme Tarihi",
   deletedAt: "Silinme Tarihi",
   reason: "Sebep",
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 };
 
 // Durum değerlerini Türkçe'ye çevir
@@ -201,7 +217,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
   useEffect(() => {
     const loadDepartmentsAndMembers = async () => {
       if (!user?.id) return;
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       try {
         const [depts, users, customersData, productsData] = await Promise.all([
           getDepartments(),
@@ -209,16 +229,28 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           getCustomers(),
           getProducts(),
         ]);
+<<<<<<< HEAD
 
         setAllDepartments(depts);
         setCustomers(customersData);
         setProducts(productsData);
 
+=======
+        
+        setAllDepartments(depts);
+        setCustomers(customersData);
+        setProducts(productsData);
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Ekip lideri ise otomatik olarak kendi ekibini filtrele
         if (mode === "team" && userId && !isAdmin) {
           const managedDepts = depts.filter(d => d.managerId === userId);
           const managedDeptIds = managedDepts.map(d => d.id);
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           const memberIds = new Set(
             users
               .filter(u => {
@@ -229,7 +261,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
               })
               .map(u => u.id)
           );
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // Ekip liderinin kendisini de ekle
           memberIds.add(userId);
           setTeamMemberIds(memberIds);
@@ -265,7 +301,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
         }
       }
     };
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     loadDepartmentsAndMembers();
   }, [user, isAdmin, isTeamLeader, selectedTeamFilter, mode, userId]);
 
@@ -283,12 +323,20 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
         const result = await getTeamMemberLogs(userId);
         data = result.logs;
         teamData = result.teamInfo;
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Ekip üyelerinin ID'lerine göre ek filtreleme yap
         if (teamMemberIds.size > 0) {
           data = data.filter(log => teamMemberIds.has(log.userId));
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         setTeamInfo(teamData);
       } else if (mode === "personal" && userId) {
         data = await getAuditLogs({ userId });
@@ -300,17 +348,29 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           action: actionFilter !== "all" ? (actionFilter as AuditLog["action"]) : undefined,
           tableName: tableFilter !== "all" ? tableFilter : undefined,
         });
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Ekip filtresi varsa logları filtrele
         if (teamMemberIds.size > 0) {
           data = data.filter(log => teamMemberIds.has(log.userId));
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         setTeamInfo(null);
         // Eğer limit kadar log geldiyse, daha fazla olabilir
         setHasMore(data.length === limit);
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       setLogs(data);
 
       // Entity isimlerini topla ve çek
@@ -325,7 +385,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
         departments: new Set(),
       };
       const userIds = new Set<string>(); // Atanan kullanıcılar için
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       data.forEach(log => {
         if (log.recordId && entityMap[log.tableName]) {
           entityMap[log.tableName].add(log.recordId);
@@ -349,7 +413,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
         Object.entries(allData || {}).forEach(([key, value]) => {
           if (typeof value === "string" && value.length > 15 && value.length < 30) {
             // Muhtemelen bir ID
+<<<<<<< HEAD
             if (key === "assignedTo" || key === "assignedBy" || key === "userId" || key === "createdBy" || key === "updatedBy" || key === "managerId" || key === "manager_id" || key === "approvedBy" || key === "rejectedBy") {
+=======
+            if (key === "assignedTo" || key === "assignedBy" || key === "userId" || key === "createdBy" || key === "updatedBy") {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               userIds.add(value);
             } else if (key === "taskId" || key === "task_id") {
               entityMap.tasks.add(value);
@@ -367,10 +435,17 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           }
         });
       });
+<<<<<<< HEAD
 
       // Entity adlarını çek
       const names: Record<string, string> = {};
 
+=======
+      
+      // Entity adlarını çek
+      const names: Record<string, string> = {};
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Görevler - proje bilgisi ile birlikte
       if (entityMap.tasks.size > 0) {
         const projectIds = new Set<string>();
@@ -407,7 +482,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           );
         }
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Projeler
       if (entityMap.projects.size > 0) {
         await Promise.all(
@@ -423,7 +502,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           })
         );
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Müşteriler
       if (entityMap.customers.size > 0) {
         await Promise.all(
@@ -439,7 +522,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           })
         );
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Siparişler
       if (entityMap.orders.size > 0) {
         await Promise.all(
@@ -457,7 +544,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           })
         );
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Ürünler
       if (entityMap.products.size > 0) {
         await Promise.all(
@@ -473,7 +564,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           })
         );
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Garanti kayıtları
       if (entityMap.warranty.size > 0) {
         await Promise.all(
@@ -512,7 +607,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           })
         );
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Departmanlar
       if (entityMap.departments.size > 0) {
         await Promise.all(
@@ -528,7 +627,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           })
         );
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Kullanıcı adlarını çek (task_assignments için)
       if (userIds.size > 0) {
         try {
@@ -542,7 +645,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           // Sessizce devam et
         }
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       setEntityNames(names);
     } catch (error) {
       if (import.meta.env.DEV) {
@@ -553,7 +660,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
       const message = error instanceof Error ? error.message : "Bilinmeyen hata";
       // Sadece kritik hatalarda toast göster, entity yükleme hatalarında sessizce devam et
       if (error instanceof Error && (
+<<<<<<< HEAD
         error.message.includes("permission") ||
+=======
+        error.message.includes("permission") || 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         error.message.includes("network") ||
         error.message.includes("Failed to fetch")
       )) {
@@ -569,8 +680,13 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
     } finally {
       setLoading(false);
     }
+<<<<<<< HEAD
   }, [mode, userId, actionFilter, tableFilter, limit, teamMemberIds]);
 
+=======
+  }, [mode, userId, actionFilter, tableFilter, limit, teamMemberIds.size]);
+  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const loadMore = useCallback(() => {
     setLimit(prev => prev + 100);
   }, []);
@@ -654,13 +770,21 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
       }
       return JSON.stringify(value);
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // ID kontrolü - eğer değer uzun bir string ise ve entityNames'de varsa isim göster
     const stringValue = String(value);
     if (stringValue.length > 15 && stringValue.length < 30) {
       // Muhtemelen bir ID
       // Kullanıcı ID'leri
+<<<<<<< HEAD
       if (fieldName === "assignedTo" || fieldName === "assignedBy" || fieldName === "userId" || fieldName === "createdBy" || fieldName === "updatedBy" || fieldName === "managerId" || fieldName === "manager_id" || fieldName === "approvedBy" || fieldName === "rejectedBy") {
+=======
+      if (fieldName === "assignedTo" || fieldName === "assignedBy" || fieldName === "userId" || fieldName === "createdBy" || fieldName === "updatedBy") {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         if (entityNames[`users_${stringValue}`]) {
           return entityNames[`users_${stringValue}`];
         }
@@ -708,7 +832,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
         }
       }
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Durum değerlerini kontrol et
     if (fieldName === "status" && STATUS_LABELS[String(value)]) {
       return STATUS_LABELS[String(value)];
@@ -721,12 +849,20 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
 
   const getRecordDisplayName = (data: unknown, tableName: string, recordId?: string | null): string | null => {
     if (!data && !recordId) return null;
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Önce entityNames'den kontrol et
     if (recordId && entityNames[`${tableName}_${recordId}`]) {
       return entityNames[`${tableName}_${recordId}`];
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Sonra data'dan kontrol et
     if (data && typeof data === 'object') {
       const dataObj = data as Record<string, unknown>;
@@ -783,7 +919,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
     const fieldLabel = FIELD_LABELS[field] || field;
     const formattedOldValue = formatValue(oldValue, field, tableName);
     const formattedNewValue = formatValue(newValue, field, tableName);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Özel durumlar için daha açıklayıcı mesajlar
     if (field === "status") {
       if (tableName === "tasks") {
@@ -793,6 +933,7 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
       }
       return `${fieldLabel} değerini "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
     }
+<<<<<<< HEAD
 
     if (field === "priority") {
       return `öncelik seviyesini "${formattedOldValue}"'den "${formattedNewValue}"'e güncelledi`;
@@ -806,6 +947,21 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
       return `bitiş tarihini "${formattedOldValue}"'den "${formattedNewValue}"'e güncelledi`;
     }
 
+=======
+    
+    if (field === "priority") {
+      return `öncelik seviyesini "${formattedOldValue}"'den "${formattedNewValue}"'e güncelledi`;
+    }
+    
+    if (field === "assignedTo" || field === "assignedUsers") {
+      return `atanan kişiyi "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
+    }
+    
+    if (field === "dueDate") {
+      return `bitiş tarihini "${formattedOldValue}"'den "${formattedNewValue}"'e güncelledi`;
+    }
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (field === "approvalStatus") {
       if (formattedNewValue === "Onaylandı") {
         return `onay durumunu "Beklemede"den "Onaylandı"ya güncelledi`;
@@ -814,6 +970,7 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
       }
       return `onay durumunu "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
     }
+<<<<<<< HEAD
 
     if (field === "title" || field === "name") {
       return `${fieldLabel} değerini "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
@@ -831,6 +988,25 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
       return `${fieldLabel} tutarını "${formattedOldValue}"'den "${formattedNewValue}"'e güncelledi`;
     }
 
+=======
+    
+    if (field === "title" || field === "name") {
+      return `${fieldLabel} değerini "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
+    }
+    
+    if (field === "description") {
+      return `${fieldLabel} içeriğini güncelledi`;
+    }
+    
+    if (field === "role") {
+      return `kullanıcı rolünü "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
+    }
+    
+    if (field === "totalAmount" || field === "grandTotal" || field === "subtotal") {
+      return `${fieldLabel} tutarını "${formattedOldValue}"'den "${formattedNewValue}"'e güncelledi`;
+    }
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Genel format
     return `${fieldLabel} değerini "${formattedOldValue}"'den "${formattedNewValue}"'e değiştirdi`;
   };
@@ -840,6 +1016,7 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
     const userName = log.userName || (log.userEmail ? log.userEmail.split("@")[0] : null) || "Sistem";
     const actionMeta = ACTION_META[log.action];
     const actionVerb = actionMeta?.verb || "yaptı";
+<<<<<<< HEAD
 
     let description = "";
 
@@ -869,6 +1046,17 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
       const action = 'action' in metadata && typeof metadata.action === 'string' ? metadata.action : null;
       const method = 'method' in metadata && typeof metadata.method === 'string' ? metadata.method : null;
 
+=======
+    
+    let description = "";
+    
+    // Giriş logları
+    if (log.tableName === "user_logins") {
+      const metadata = log.metadata && typeof log.metadata === 'object' ? log.metadata as Record<string, unknown> : {};
+      const action = 'action' in metadata && typeof metadata.action === 'string' ? metadata.action : null;
+      const method = 'method' in metadata && typeof metadata.method === 'string' ? metadata.method : null;
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (action === "LOGOUT") {
         description = `${userName} sistemden çıkış yaptı`;
       } else if (action === "LOGIN") {
@@ -895,13 +1083,22 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
       const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
       const taskId = 'taskId' in newDataObj && typeof newDataObj.taskId === 'string' ? newDataObj.taskId : null;
       const assignedToId = 'assignedTo' in newDataObj && typeof newDataObj.assignedTo === 'string' ? newDataObj.assignedTo : null;
+<<<<<<< HEAD
       const taskName = taskId && entityNames[`tasks_${taskId}`]
         ? entityNames[`tasks_${taskId}`]
+=======
+      const taskName = taskId && entityNames[`tasks_${taskId}`] 
+        ? entityNames[`tasks_${taskId}`] 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         : ('taskTitle' in newDataObj && typeof newDataObj.taskTitle === 'string' ? newDataObj.taskTitle : "görev");
       const assignedUserName = assignedToId && entityNames[`users_${assignedToId}`]
         ? entityNames[`users_${assignedToId}`]
         : "bir kişiyi";
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Proje bilgisini kontrol et - taskId'den projectId'yi bul
       if (taskId && entityNames[`task_project_${taskId}`]) {
         const projectId = entityNames[`task_project_${taskId}`];
@@ -919,6 +1116,7 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
     else if (log.tableName === "tasks" && log.recordId) {
       const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
       const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
+<<<<<<< HEAD
       const taskName = entityNames[`tasks_${log.recordId}`] ||
         ('title' in newDataObj && typeof newDataObj.title === 'string' ? newDataObj.title : null) ||
         ('title' in oldDataObj && typeof oldDataObj.title === 'string' ? oldDataObj.title : null) ||
@@ -931,6 +1129,20 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
         ? `"${entityNames[`projects_${projectId}`]}" projesindeki `
         : "";
 
+=======
+      const taskName = entityNames[`tasks_${log.recordId}`] || 
+                      ('title' in newDataObj && typeof newDataObj.title === 'string' ? newDataObj.title : null) ||
+                      ('title' in oldDataObj && typeof oldDataObj.title === 'string' ? oldDataObj.title : null) ||
+                      "görev";
+      
+      // Proje bilgisini kontrol et
+      const projectId = ('projectId' in newDataObj && typeof newDataObj.projectId === 'string' ? newDataObj.projectId : null) || 
+                        ('projectId' in oldDataObj && typeof oldDataObj.projectId === 'string' ? oldDataObj.projectId : null);
+      const projectPrefix = projectId && entityNames[`projects_${projectId}`] 
+        ? `"${entityNames[`projects_${projectId}`]}" projesindeki `
+        : "";
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (log.action === "CREATE") {
         description = `${userName} ${projectPrefix}"${taskName}" görevini oluşturdu`;
       } else if (log.action === "DELETE") {
@@ -941,7 +1153,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           // Önemli alanlar için detaylı açıklama
           const importantFields = ["status", "priority", "assignedTo", "assignedUsers", "dueDate", "approvalStatus"];
           const hasImportantField = changedFields.some(f => importantFields.includes(f));
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           if (hasImportantField && changedFields.length === 1) {
             // Tek önemli alan değiştiyse detaylı açıklama
             const field = changedFields[0];
@@ -959,12 +1175,21 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
             description = `${userName} ${projectPrefix}"${taskName}" görevinin "${fieldLabel}" alanını güncelledi`;
           } else {
             // Birden fazla alan değiştiyse
+<<<<<<< HEAD
             const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
             const fieldsText = fieldLabels.length === 1
               ? `"${fieldLabels[0]}" alanını`
               : fieldLabels.length === 2
                 ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
                 : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+=======
+          const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
+          const fieldsText = fieldLabels.length === 1 
+              ? `"${fieldLabels[0]}" alanını`
+            : fieldLabels.length === 2
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             description = `${userName} ${projectPrefix}"${taskName}" görevinin ${fieldsText} güncelledi`;
           }
         } else {
@@ -978,10 +1203,17 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
     else if (log.tableName === "customers" && log.recordId) {
       const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
       const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
+<<<<<<< HEAD
       const customerName = entityNames[`customers_${log.recordId}`] ||
         ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
         ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
         "müşteri";
+=======
+      const customerName = entityNames[`customers_${log.recordId}`] || 
+                          ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
+                          ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
+                          "müşteri";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (log.action === "CREATE") {
         description = `${userName} "${customerName}" adlı müşteriyi oluşturdu`;
       } else if (log.action === "DELETE") {
@@ -994,12 +1226,21 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
             const changeDesc = getDetailedChangeDescription(field, log.oldData[field], log.newData[field], log.tableName);
             description = `${userName} "${customerName}" müşterisinin ${changeDesc}`;
           } else {
+<<<<<<< HEAD
             const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
             const fieldsText = fieldLabels.length === 1
               ? `"${fieldLabels[0]}" alanını`
               : fieldLabels.length === 2
                 ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
                 : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+=======
+          const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
+          const fieldsText = fieldLabels.length === 1 
+              ? `"${fieldLabels[0]}" alanını`
+            : fieldLabels.length === 2
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             description = `${userName} "${customerName}" müşterisinin ${fieldsText} güncelledi`;
           }
         } else {
@@ -1013,10 +1254,17 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
     else if (log.tableName === "orders" && log.recordId) {
       const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
       const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
+<<<<<<< HEAD
       const orderName = entityNames[`orders_${log.recordId}`] ||
         ('orderNumber' in newDataObj && typeof newDataObj.orderNumber === 'string' ? `Sipariş #${newDataObj.orderNumber}` : null) ||
         ('orderNumber' in oldDataObj && typeof oldDataObj.orderNumber === 'string' ? `Sipariş #${oldDataObj.orderNumber}` : null) ||
         "sipariş";
+=======
+      const orderName = entityNames[`orders_${log.recordId}`] || 
+                       ('orderNumber' in newDataObj && typeof newDataObj.orderNumber === 'string' ? `Sipariş #${newDataObj.orderNumber}` : null) ||
+                       ('orderNumber' in oldDataObj && typeof oldDataObj.orderNumber === 'string' ? `Sipariş #${oldDataObj.orderNumber}` : null) ||
+                       "sipariş";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (log.action === "CREATE") {
         description = `${userName} ${orderName} siparişini oluşturdu`;
       } else if (log.action === "DELETE") {
@@ -1026,7 +1274,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
         if (changedFields.length > 0) {
           const importantFields = ["status", "totalAmount", "grandTotal", "subtotal", "deliveryDate"];
           const hasImportantField = changedFields.some(f => importantFields.includes(f));
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           if (hasImportantField && changedFields.length === 1) {
             const field = changedFields[0];
             const changeDesc = getDetailedChangeDescription(field, log.oldData[field], log.newData[field], log.tableName);
@@ -1036,12 +1288,21 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
             const fieldLabel = FIELD_LABELS[field] || field;
             description = `${userName} ${orderName} siparişinin "${fieldLabel}" alanını güncelledi`;
           } else {
+<<<<<<< HEAD
             const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
             const fieldsText = fieldLabels.length === 1
               ? `"${fieldLabels[0]}" alanını`
               : fieldLabels.length === 2
                 ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
                 : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+=======
+          const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
+          const fieldsText = fieldLabels.length === 1 
+              ? `"${fieldLabels[0]}" alanını`
+            : fieldLabels.length === 2
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             description = `${userName} ${orderName} siparişinin ${fieldsText} güncelledi`;
           }
         } else {
@@ -1055,10 +1316,17 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
     else if (log.tableName === "products" && log.recordId) {
       const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
       const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
+<<<<<<< HEAD
       const productName = entityNames[`products_${log.recordId}`] ||
         ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
         ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
         "ürün";
+=======
+      const productName = entityNames[`products_${log.recordId}`] || 
+                         ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
+                         ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
+                         "ürün";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (log.action === "CREATE") {
         description = `${userName} "${productName}" adlı ürünü oluşturdu`;
       } else if (log.action === "DELETE") {
@@ -1071,12 +1339,21 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
             const changeDesc = getDetailedChangeDescription(field, log.oldData[field], log.newData[field], log.tableName);
             description = `${userName} "${productName}" ürününün ${changeDesc}`;
           } else {
+<<<<<<< HEAD
             const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
             const fieldsText = fieldLabels.length === 1
               ? `"${fieldLabels[0]}" alanını`
               : fieldLabels.length === 2
                 ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
                 : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+=======
+          const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
+          const fieldsText = fieldLabels.length === 1 
+              ? `"${fieldLabels[0]}" alanını`
+            : fieldLabels.length === 2
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             description = `${userName} "${productName}" ürününün ${fieldsText} güncelledi`;
           }
         } else {
@@ -1090,10 +1367,17 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
     else if (log.tableName === "projects" && log.recordId) {
       const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
       const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
+<<<<<<< HEAD
       const projectName = entityNames[`projects_${log.recordId}`] ||
         ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
         ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
         "proje";
+=======
+      const projectName = entityNames[`projects_${log.recordId}`] || 
+                         ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
+                         ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
+                         "proje";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (log.action === "CREATE") {
         description = `${userName} "${projectName}" adlı projeyi oluşturdu`;
       } else if (log.action === "DELETE") {
@@ -1106,12 +1390,21 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
             const changeDesc = getDetailedChangeDescription(field, log.oldData[field], log.newData[field], log.tableName);
             description = `${userName} "${projectName}" projesinin ${changeDesc}`;
           } else {
+<<<<<<< HEAD
             const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
             const fieldsText = fieldLabels.length === 1
               ? `"${fieldLabels[0]}" alanını`
               : fieldLabels.length === 2
                 ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
                 : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+=======
+          const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
+          const fieldsText = fieldLabels.length === 1 
+              ? `"${fieldLabels[0]}" alanını`
+            : fieldLabels.length === 2
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             description = `${userName} "${projectName}" projesinin ${fieldsText} güncelledi`;
           }
         } else {
@@ -1126,12 +1419,21 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
       const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
       const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
       const userName_entity = ('fullName' in newDataObj && typeof newDataObj.fullName === 'string' ? newDataObj.fullName : null) ||
+<<<<<<< HEAD
         ('fullName' in oldDataObj && typeof oldDataObj.fullName === 'string' ? oldDataObj.fullName : null) ||
         ('email' in newDataObj && typeof newDataObj.email === 'string' ? newDataObj.email.split("@")[0] : null) ||
         ('email' in oldDataObj && typeof oldDataObj.email === 'string' ? oldDataObj.email.split("@")[0] : null) ||
         (log.recordId && entityNames[`users_${log.recordId}`]) ||
         "kullanıcı";
 
+=======
+                              ('fullName' in oldDataObj && typeof oldDataObj.fullName === 'string' ? oldDataObj.fullName : null) ||
+                              ('email' in newDataObj && typeof newDataObj.email === 'string' ? newDataObj.email.split("@")[0] : null) ||
+                              ('email' in oldDataObj && typeof oldDataObj.email === 'string' ? oldDataObj.email.split("@")[0] : null) ||
+                              (log.recordId && entityNames[`users_${log.recordId}`]) ||
+                              "kullanıcı";
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (log.action === "CREATE") {
         description = `${userName} "${userName_entity}" adlı kullanıcıyı oluşturdu`;
       } else if (log.action === "DELETE") {
@@ -1144,11 +1446,19 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           description = `${userName} "${userName_entity}" kullanıcısının rolünü "${oldRole}"'den "${newRole}"'e değiştirdi`;
         } else if (changedFields.length > 0) {
           const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
+<<<<<<< HEAD
           const fieldsText = fieldLabels.length === 1
             ? `"${fieldLabels[0]}" alanını`
             : fieldLabels.length === 2
               ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
               : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+=======
+          const fieldsText = fieldLabels.length === 1 
+            ? `"${fieldLabels[0]}" alanını`
+            : fieldLabels.length === 2
+            ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+            : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           description = `${userName} "${userName_entity}" kullanıcısının ${fieldsText} güncelledi`;
         } else {
           description = `${userName} "${userName_entity}" kullanıcısını güncelledi`;
@@ -1161,10 +1471,17 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
     else if (log.tableName === "departments" && log.recordId) {
       const newDataObj = log.newData && typeof log.newData === 'object' ? log.newData as Record<string, unknown> : {};
       const oldDataObj = log.oldData && typeof log.oldData === 'object' ? log.oldData as Record<string, unknown> : {};
+<<<<<<< HEAD
       const deptName = entityNames[`departments_${log.recordId}`] ||
         ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
         ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
         "departman";
+=======
+      const deptName = entityNames[`departments_${log.recordId}`] || 
+                      ('name' in newDataObj && typeof newDataObj.name === 'string' ? newDataObj.name : null) ||
+                      ('name' in oldDataObj && typeof oldDataObj.name === 'string' ? oldDataObj.name : null) ||
+                      "departman";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (log.action === "CREATE") {
         description = `${userName} "${deptName}" adlı departmanı oluşturdu`;
       } else if (log.action === "DELETE") {
@@ -1178,11 +1495,19 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
             description = `${userName} "${deptName}" departmanının "${fieldLabel}" alanını güncelledi`;
           } else {
             const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
+<<<<<<< HEAD
             const fieldsText = fieldLabels.length === 1
               ? `"${fieldLabels[0]}" alanını`
               : fieldLabels.length === 2
                 ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
                 : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+=======
+            const fieldsText = fieldLabels.length === 1 
+              ? `"${fieldLabels[0]}" alanını`
+              : fieldLabels.length === 2
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             description = `${userName} "${deptName}" departmanının ${fieldsText} güncelledi`;
           }
         } else {
@@ -1208,12 +1533,21 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
             const fieldLabel = FIELD_LABELS[field] || field;
             description = `${userName} "${entityName}" ${tableLabel.toLowerCase()} kaydının "${fieldLabel}" alanını güncelledi`;
           } else {
+<<<<<<< HEAD
             const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
             const fieldsText = fieldLabels.length === 1
               ? `"${fieldLabels[0]}" alanını`
               : fieldLabels.length === 2
                 ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
                 : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+=======
+          const fieldLabels = changedFields.map(field => FIELD_LABELS[field] || field).slice(0, 3);
+          const fieldsText = fieldLabels.length === 1 
+              ? `"${fieldLabels[0]}" alanını`
+            : fieldLabels.length === 2
+              ? `"${fieldLabels[0]}" ve "${fieldLabels[1]}" alanlarını`
+              : `"${fieldLabels.join('", "')}"${changedFields.length > 3 ? ` ve ${changedFields.length - 3} alan daha` : ''} alanlarını`;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             description = `${userName} "${entityName}" ${tableLabel.toLowerCase()} kaydının ${fieldsText} güncelledi`;
           }
         } else {
@@ -1257,9 +1591,15 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
       if (tableName === "projects") return `"${entityName}" projesini`;
       return `"${entityName}" kaydını`;
     }
+<<<<<<< HEAD
 
     if (!data) return "kayıt";
 
+=======
+    
+    if (!data) return "kayıt";
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Tablo bazlı özel isimlendirme
     if (data && typeof data === 'object') {
       const dataObj = data as Record<string, unknown>;
@@ -1294,12 +1634,20 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
           return `"${note}${content.length > 30 ? '...' : ''}" notunu`;
         }
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Genel fallback
       if (typeof dataObj.name === 'string') return `"${dataObj.name}" kaydını`;
       if (typeof dataObj.title === 'string') return `"${dataObj.title}" kaydını`;
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // ID gösterme - sadece tableName göster
     const tableLabel = TABLE_LABELS[tableName] || tableName;
     return `${tableLabel} kaydını`;
@@ -1313,7 +1661,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
     recordName?: string | null
   ): string[] => {
     if (!oldData || !newData) return [];
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const changes: string[] = [];
     const oldDataObj = oldData && typeof oldData === 'object' ? oldData as Record<string, unknown> : {};
     const newDataObj = newData && typeof newData === 'object' ? newData as Record<string, unknown> : {};
@@ -1401,7 +1753,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
       // In admin mode, basic filters are applied in fetch, but we re-apply here for consistency if fetched all
       const matchesAction = actionFilter === "all" || log.action === actionFilter;
       const matchesTable = tableFilter === "all" || log.tableName === tableFilter;
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       return matchesSearch && matchesAction && matchesTable;
     });
   }, [logs, searchTerm, actionFilter, tableFilter]);
@@ -1417,6 +1773,7 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
   return (
     <div className="space-y-1 h-full flex flex-col">
       <div className="space-y-1">
+<<<<<<< HEAD
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 mb-1">
           <div className="text-xs sm:text-sm text-muted-foreground">
             {filteredLogs.length} kayıt bulundu
@@ -1476,6 +1833,67 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                   <Card key={log.id} className="hover:shadow-md transition-shadow">
                     <CardContent className="p-3 sm:p-4">
                       <div
+=======
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 mb-1">
+            <div className="text-xs sm:text-sm text-muted-foreground">
+              {filteredLogs.length} kayıt bulundu
+            </div>
+            <Button onClick={exportToCSV} variant="outline" size="sm" className="w-full sm:w-auto min-h-[44px] sm:min-h-0">
+              <Download className="h-4 w-4 sm:mr-2" />
+              <span className="text-xs sm:text-sm">CSV İndir</span>
+            </Button>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-1.5">
+            <SearchInput
+              placeholder="İçerikte ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              containerClassName="flex-1"
+            />
+            <Select value={actionFilter} onValueChange={setActionFilter}>
+              <SelectTrigger className="w-full sm:w-[180px] min-h-[44px] sm:min-h-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tüm İşlemler</SelectItem>
+                <SelectItem value="CREATE">Oluşturma</SelectItem>
+                <SelectItem value="UPDATE">Güncelleme</SelectItem>
+                <SelectItem value="DELETE">Silme</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={tableFilter} onValueChange={setTableFilter}>
+              <SelectTrigger className="w-full sm:w-[180px] min-h-[44px] sm:min-h-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tüm Tablolar</SelectItem>
+                {Object.entries(TABLE_LABELS).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {filteredLogs.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="h-8 w-8 mx-auto mb-2 opacity-20" />
+              <p className="text-sm">Hiç log bulunamadı</p>
+            </div>
+                ) : (
+            <div className="max-h-[500px] overflow-y-auto overscroll-contain pr-2 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+              <div className="space-y-1">
+                {/* Tüm loglar - Scroll edilebilir */}
+                {filteredLogs.map((log) => {
+                const isExpanded = expandedLogs.has(log.id);
+                    const changedFields = log.action === "UPDATE" && log.oldData && typeof log.oldData === 'object' && log.newData && typeof log.newData === 'object' 
+                      ? getChangedFields(log.oldData as Record<string, unknown>, log.newData as Record<string, unknown>) 
+                      : [];
+                    
+                    return (
+                  <Card key={log.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-3 sm:p-4">
+                      <div 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         className="cursor-pointer select-none"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1508,7 +1926,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                                   <span className="text-xs text-muted-foreground whitespace-nowrap">
                                     {summary.timestamp}
                                   </span>
+<<<<<<< HEAD
                                 </div>
+=======
+                            </div>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                 <p className="text-xs sm:text-sm text-foreground leading-relaxed font-medium">
                                   {summary.description}
                                 </p>
@@ -1530,7 +1952,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                         })()}
                       </div>
 
+<<<<<<< HEAD
                       {isExpanded && (
+=======
+                        {isExpanded && (
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         <div className="mt-4 pt-4 border-t space-y-4">
                           {/* Genel Bilgiler */}
                           <div className="bg-gradient-to-r from-blue-50/50 to-purple-50/50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg p-4 border border-blue-200/50 dark:border-blue-800/50">
@@ -1559,7 +1985,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                                   <span className="text-xs text-muted-foreground">{MENU_LABELS[log.tableName] || TABLE_LABELS[log.tableName] || log.tableName}</span>
                                   {(() => {
                                     const recordName = getRecordDisplayName(log.newData || log.oldData, log.tableName, log.recordId) ||
+<<<<<<< HEAD
                                       getRecordDisplayName(log.oldData, log.tableName, log.recordId);
+=======
+                                                      getRecordDisplayName(log.oldData, log.tableName, log.recordId);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                     if (recordName) {
                                       return <span className="font-semibold text-sm mt-1">{recordName}</span>;
                                     }
@@ -1571,7 +2001,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                               </div>
                               <div className="space-y-1">
                                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">İşlem Tipi</span>
+<<<<<<< HEAD
                                 <div>
+=======
+                                    <div>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                   <Badge className={ACTION_META[log.action].color}>
                                     {ACTION_META[log.action].label}
                                   </Badge>
@@ -1585,7 +2019,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                                 </div>
                               </div>
                             </div>
+<<<<<<< HEAD
                           </div>
+=======
+                                          </div>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
                           {log.action === "UPDATE" && log.oldData && log.newData && changedFields.length > 0 && (
                             <div className="space-y-3">
@@ -1601,7 +2039,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                                   const fieldLabel = FIELD_LABELS[field] || field;
                                   const oldValue = formatValue(log.oldData[field], field, log.tableName);
                                   const newValue = formatValue(log.newData[field], field, log.tableName);
+<<<<<<< HEAD
 
+=======
+                                  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                   return (
                                     <div key={field} className="bg-gradient-to-r from-red-50/50 to-green-50/50 dark:from-red-950/20 dark:to-green-950/20 rounded-lg p-4 border border-red-200/50 dark:border-red-800/50 hover:shadow-md transition-shadow">
                                       <div className="font-semibold text-sm mb-2 flex items-center gap-2">
@@ -1612,21 +2054,37 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                                         <div className="flex-1 bg-white dark:bg-gray-900 rounded-md p-2 border border-red-200 dark:border-red-800">
                                           <div className="text-xs text-muted-foreground mb-1">Eski Değer</div>
                                           <span className="text-red-600 dark:text-red-400 line-through font-medium">{oldValue}</span>
+<<<<<<< HEAD
                                         </div>
+=======
+                                    </div>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                         <div className="text-muted-foreground text-lg">→</div>
                                         <div className="flex-1 bg-white dark:bg-gray-900 rounded-md p-2 border border-green-200 dark:border-green-800">
                                           <div className="text-xs text-muted-foreground mb-1">Yeni Değer</div>
                                           <span className="text-green-600 dark:text-green-400 font-semibold">{newValue}</span>
+<<<<<<< HEAD
                                         </div>
+=======
+                                          </div>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                       </div>
                                     </div>
                                   );
                                 })}
+<<<<<<< HEAD
                               </div>
                             </div>
                           )}
 
                           {log.action === "CREATE" && log.newData && (
+=======
+                                    </div>
+                                  </div>
+                                )}
+
+                                {log.action === "CREATE" && log.newData && (
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             <div className="space-y-3">
                               <h4 className="font-semibold text-sm flex items-center gap-2">
                                 <div className="h-1.5 w-1.5 rounded-full bg-green-500"></div>
@@ -1657,7 +2115,11 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                             </div>
                           )}
 
+<<<<<<< HEAD
                           {log.action === "DELETE" && log.oldData && (
+=======
+                                {log.action === "DELETE" && log.oldData && (
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             <div className="space-y-3">
                               <h4 className="font-semibold text-sm flex items-center gap-2">
                                 <div className="h-1.5 w-1.5 rounded-full bg-red-500"></div>
@@ -1687,6 +2149,7 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
                               </div>
                             </div>
                           )}
+<<<<<<< HEAD
 
                           {/* Teknik Detaylar */}
                           {log.metadata && Object.keys(log.metadata).length > 0 && (
@@ -1747,6 +2210,31 @@ export const AuditLogs = ({ mode = "admin", userId, selectedTeamFilter }: AuditL
             )}
           </div>
         )}
+=======
+                        </div>
+                        )}
+                    </CardContent>
+                  </Card>
+                    );
+                  })}
+              </div>
+              
+              {/* Daha fazla yükle butonu */}
+              {hasMore && mode === "admin" && !loading && (
+                <div className="flex justify-center mt-2">
+                  <Button
+                    onClick={loadMore}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Loader2 className="h-4 w-4" />
+                    Daha Fazla Yükle ({limit} / {filteredLogs.length})
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       </div>
     </div>
   );

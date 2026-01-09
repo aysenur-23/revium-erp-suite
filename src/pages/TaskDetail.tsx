@@ -159,7 +159,11 @@ const TaskDetail = () => {
                     <div className="flex-shrink-0">{getStatusIcon(task.status)}</div>
                     <CardTitle className="text-[14px] sm:text-[15px] truncate">{task.title}</CardTitle>
                   </div>
+<<<<<<< HEAD
                   <Badge variant={task.priority >= 3 ? "destructive" : "secondary"} className="h-5 px-2 py-0 text-[11px] font-normal leading-tight flex-shrink-0">
+=======
+                  <Badge variant={task.priority >= 3 ? "destructive" : "secondary"} className="text-xs sm:text-sm flex-shrink-0">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     Öncelik {task.priority}
                   </Badge>
                 </div>
@@ -167,7 +171,11 @@ const TaskDetail = () => {
               <CardContent className="p-2 space-y-2">
                 <div>
                   <h3 className="font-semibold mb-1.5 sm:mb-2 text-sm sm:text-base">Durum</h3>
+<<<<<<< HEAD
                   <Badge variant="outline" className="h-5 px-2 py-0 text-[11px] font-normal leading-tight">{getStatusLabel(task.status)}</Badge>
+=======
+                  <Badge variant="outline" className="text-xs sm:text-sm">{getStatusLabel(task.status)}</Badge>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 </div>
 
                 {task.description && (

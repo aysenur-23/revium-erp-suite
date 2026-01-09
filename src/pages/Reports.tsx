@@ -3,7 +3,11 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, TrendingUp, Package, Users, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+<<<<<<< HEAD
 // Lazy load dialog components to optimize performance
+=======
+// Lazy load dialog components to avoid loading pdfGenerator.ts on initial page load
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 const SalesReportDialog = lazy(() => import("@/components/Reports/SalesReportDialog").then(module => ({ default: module.SalesReportDialog })));
 const ProductionReportDialog = lazy(() => import("@/components/Reports/ProductionReportDialog").then(module => ({ default: module.ProductionReportDialog })));
 const CustomerReportDialog = lazy(() => import("@/components/Reports/CustomerReportDialog").then(module => ({ default: module.CustomerReportDialog })));
@@ -21,7 +25,11 @@ const Reports = () => {
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
   const [financialDialogOpen, setFinancialDialogOpen] = useState(false);
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
+<<<<<<< HEAD
   const [savedReports, setSavedReports] = useState<Array<{ id: string; title: string; reportType: string; createdAt?: unknown; fileUrl?: string; fileName?: string;[key: string]: unknown }>>([]);
+=======
+  const [savedReports, setSavedReports] = useState<Array<{ id: string; title: string; reportType: string; createdAt?: unknown; fileUrl?: string; fileName?: string; [key: string]: unknown }>>([]);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [reportsIndexLink, setReportsIndexLink] = useState<string | null>(null);
   const [auditIndexLink, setAuditIndexLink] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -42,7 +50,11 @@ const Reports = () => {
     try {
       const { getSavedReports } = await import("@/services/firebase/reportService");
       const reports = await getSavedReports({ createdBy: user?.id });
+<<<<<<< HEAD
       setSavedReports(reports as unknown as Array<{ id: string; title: string; reportType: string; createdAt?: unknown; fileUrl?: string; fileName?: string;[key: string]: unknown }>);
+=======
+      setSavedReports(reports as unknown as Array<{ id: string; title: string; reportType: string; createdAt?: unknown; fileUrl?: string; fileName?: string; [key: string]: unknown }>);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       setReportsIndexLink(null);
     } catch (error: unknown) {
       if (import.meta.env.DEV) {
@@ -58,7 +70,11 @@ const Reports = () => {
     }
   };
 
+<<<<<<< HEAD
   const downloadReport = async (report: { id: string; title: string; createdAt?: unknown; fileUrl?: string; fileName?: string;[key: string]: unknown }) => {
+=======
+  const downloadReport = async (report: { id: string; title: string; createdAt?: unknown; fileUrl?: string; fileName?: string; [key: string]: unknown }) => {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     setDownloading(report.id);
     try {
       const fileUrl = typeof report.fileUrl === 'string' ? report.fileUrl : undefined;
@@ -137,7 +153,11 @@ const Reports = () => {
     <MainLayout>
       <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
         <div>
+<<<<<<< HEAD
           <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground leading-tight">Raporlar</h1>
+=======
+            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground leading-tight">Raporlar</h1>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1 leading-snug">İş analizleri ve raporlama</p>
         </div>
 
@@ -172,27 +192,47 @@ const Reports = () => {
         {/* Lazy load dialogs only when they are opened */}
         {salesDialogOpen && (
           <Suspense fallback={null}>
+<<<<<<< HEAD
             <SalesReportDialog open={salesDialogOpen} onOpenChange={(open) => { setSalesDialogOpen(open); if (!open) fetchSavedReports(); }} />
+=======
+        <SalesReportDialog open={salesDialogOpen} onOpenChange={(open) => { setSalesDialogOpen(open); if (!open) fetchSavedReports(); }} />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           </Suspense>
         )}
         {productionDialogOpen && (
           <Suspense fallback={null}>
+<<<<<<< HEAD
             <ProductionReportDialog open={productionDialogOpen} onOpenChange={(open) => { setProductionDialogOpen(open); if (!open) fetchSavedReports(); }} />
+=======
+        <ProductionReportDialog open={productionDialogOpen} onOpenChange={(open) => { setProductionDialogOpen(open); if (!open) fetchSavedReports(); }} />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           </Suspense>
         )}
         {customerDialogOpen && (
           <Suspense fallback={null}>
+<<<<<<< HEAD
             <CustomerReportDialog open={customerDialogOpen} onOpenChange={(open) => { setCustomerDialogOpen(open); if (!open) fetchSavedReports(); }} />
+=======
+        <CustomerReportDialog open={customerDialogOpen} onOpenChange={(open) => { setCustomerDialogOpen(open); if (!open) fetchSavedReports(); }} />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           </Suspense>
         )}
         {financialDialogOpen && (
           <Suspense fallback={null}>
+<<<<<<< HEAD
             <FinancialReportDialog open={financialDialogOpen} onOpenChange={(open) => { setFinancialDialogOpen(open); if (!open) fetchSavedReports(); }} />
+=======
+        <FinancialReportDialog open={financialDialogOpen} onOpenChange={(open) => { setFinancialDialogOpen(open); if (!open) fetchSavedReports(); }} />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           </Suspense>
         )}
         {quoteDialogOpen && (
           <Suspense fallback={null}>
+<<<<<<< HEAD
             <SalesQuoteForm open={quoteDialogOpen} onOpenChange={setQuoteDialogOpen} />
+=======
+        <SalesQuoteForm open={quoteDialogOpen} onOpenChange={setQuoteDialogOpen} />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           </Suspense>
         )}
 
@@ -238,6 +278,7 @@ const Reports = () => {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-[11px] sm:text-xs truncate">{report.title}</p>
                         <p className="text-[11px] sm:text-xs text-muted-foreground">
+<<<<<<< HEAD
                           {getReportTypeLabel(report.reportType)} • {report.createdAt
                             ? (report.createdAt instanceof Date
                               ? report.createdAt
@@ -245,12 +286,26 @@ const Reports = () => {
                                 ? (report.createdAt as { toDate: () => Date }).toDate()
                                 : new Date()
                             ).toLocaleDateString('tr-TR')
+=======
+                          {getReportTypeLabel(report.reportType)} • {report.createdAt 
+                            ? (report.createdAt instanceof Date 
+                                ? report.createdAt 
+                                : (report.createdAt && typeof report.createdAt === 'object' && 'toDate' in report.createdAt && typeof (report.createdAt as { toDate: () => Date }).toDate === 'function') 
+                                  ? (report.createdAt as { toDate: () => Date }).toDate() 
+                                  : new Date()
+                              ).toLocaleDateString('tr-TR')
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             : '-'}
                         </p>
                       </div>
                     </div>
+<<<<<<< HEAD
                     <Button
                       variant="ghost"
+=======
+                    <Button 
+                      variant="ghost" 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       size="sm"
                       className="h-8 sm:h-9 text-[11px] sm:text-xs w-full sm:w-auto"
                       onClick={() => downloadReport(report)}

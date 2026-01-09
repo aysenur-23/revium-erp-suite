@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { lazy, Suspense } from "react";
 import { User, Building2 } from "lucide-react";
 import { MainLayout } from "@/components/Layout/MainLayout";
@@ -11,6 +12,42 @@ const CompanySettings = lazy(() => import("@/components/Settings/CompanySettings
 
 const Settings = () => {
   const { user, isSuperAdmin } = useAuth();
+=======
+import { useEffect, useState } from "react";
+import { Loader2, User, Building2, AlertCircle } from "lucide-react";
+import { MainLayout } from "@/components/Layout/MainLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+// apiClient moved to legacy_before_firebase_migration
+// Settings page uses Firebase services via child components
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { ProfileSettings } from "@/components/Settings/ProfileSettings";
+import { CompanySettings } from "@/components/Settings/CompanySettings";
+import { LoadingState } from "@/components/ui/loading-state";
+
+const Settings = () => {
+  const { user, isSuperAdmin } = useAuth();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <LoadingState message="Ayarlar yükleniyor..." />
+      </MainLayout>
+    );
+  }
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   return (
     <MainLayout>
@@ -36,6 +73,7 @@ const Settings = () => {
               </TabsTrigger>
             </TabsList>
             <TabsContent value="company" className="w-full">
+<<<<<<< HEAD
               <Suspense fallback={<div className="flex items-center justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
                 <CompanySettings />
               </Suspense>
@@ -44,13 +82,23 @@ const Settings = () => {
               <Suspense fallback={<div className="flex items-center justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
                 <ProfileSettings />
               </Suspense>
+=======
+              <CompanySettings />
+            </TabsContent>
+            <TabsContent value="profile" className="w-full">
+              <ProfileSettings />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             </TabsContent>
           </Tabs>
         ) : (
           <div className="w-full space-y-6">
+<<<<<<< HEAD
             <Suspense fallback={<div className="flex items-center justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
               <ProfileSettings />
             </Suspense>
+=======
+            <ProfileSettings />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           </div>
         )}
       </div>

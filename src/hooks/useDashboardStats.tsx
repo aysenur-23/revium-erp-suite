@@ -125,6 +125,7 @@ export const useDashboardStats = () => {
   return useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: async () => {
+<<<<<<< HEAD
       // Progressive loading: Önce kritik verileri yükle, sonra diğerlerini
       // İlk önce customers, orders, products yükle (kritik istatistikler için)
       // Daha agresif limit'ler: 50 → 30, 100 → 50
@@ -158,6 +159,28 @@ export const useDashboardStats = () => {
         }
       }
 
+=======
+      // Firebase'den tüm verileri paralel olarak al
+      // getSavedReports hata verirse boş array kullan
+      let salesQuotes: SavedReport[] = [];
+      try {
+        salesQuotes = await getSavedReports({ reportType: "sales_quote" });
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn("Sales quotes yüklenemedi, devam ediliyor:", error);
+        }
+        salesQuotes = [];
+      }
+
+      // Performans için: Sadece gerekli verileri al (limit ile)
+      const [customers, orders, products, tasks] = await Promise.all([
+        getCustomers().then(c => c.slice(0, 100)), // Son 100 müşteri
+        getOrders().then(o => o.slice(0, 200)), // Son 200 sipariş
+        getProducts().then(p => p.slice(0, 100)), // Son 100 ürün
+        getTasks().then(t => t.slice(0, 50)), // Son 50 görev
+      ]);
+
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // İstatistikleri hesapla
       const currentMonth = new Date().getMonth();
       const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
@@ -301,6 +324,7 @@ export const useDashboardStats = () => {
     retry: 1, // Retry sayısını azalt (performans için)
     retryDelay: 2000, // Retry delay'i azalt (performans için - 2 saniye)
     staleTime: 120000, // 2 dakika stale time (performans için)
+<<<<<<< HEAD
     // Placeholder data ekle - hızlı render için
     placeholderData: () => ({
       customers: { total: 0, trend: 0 },
@@ -312,5 +336,9 @@ export const useDashboardStats = () => {
       quotes: { total_amount: 0, count: 0 },
       quote_conversion_rate: 0,
     }),
+=======
+    // Placeholder data kaldırıldı - loading state gösterilecek
+    // placeholderData kaldırıldı çünkü 0 değerleri gösteriyordu
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   });
 };

@@ -8,7 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { getAllUsers, UserProfile } from "@/services/firebase/authService";
+<<<<<<< HEAD
 import { getTasks, getTaskAssignments, getAllTaskAssignments, TaskAssignment, Task as FirebaseTask } from "@/services/firebase/taskService";
+=======
+import { getTasks, getTaskAssignments, TaskAssignment, Task as FirebaseTask } from "@/services/firebase/taskService";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { getAuditLogs, getTeamMemberLogs, AuditLog } from "@/services/firebase/auditLogsService";
 import { Timestamp } from "firebase/firestore";
 import { formatDistanceToNow, format } from "date-fns";
@@ -16,11 +20,16 @@ import { tr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Loader2, UserCheck, ClipboardList, Download, Users, CheckCircle2, XCircle, FileText, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
+<<<<<<< HEAD
 
+=======
+// pdfGenerator will be dynamically imported when needed
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { useAuth } from "@/contexts/AuthContext";
 import { isAdmin, isMainAdmin } from "@/utils/permissions";
 import { getDepartments } from "@/services/firebase/departmentService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+<<<<<<< HEAD
 import {
   Pagination,
   PaginationContent,
@@ -30,6 +39,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
 interface AssignmentWithTask extends TaskAssignment {
   taskId: string;
@@ -139,14 +150,21 @@ export const UserInsights = () => {
   } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
+<<<<<<< HEAD
   const [assignmentsPage, setAssignmentsPage] = useState(1);
   const [logsPage, setLogsPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   useEffect(() => {
     const fetchData = async () => {
       if (!user) return;
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       setLoading(true);
       try {
         // İlk olarak departments ve users'ı al (yetki kontrolü için)
@@ -154,7 +172,11 @@ export const UserInsights = () => {
           getDepartments(),
           getAllUsers(),
         ]);
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Kullanıcı yetkilerini kontrol et
         const userProfile: UserProfile = {
           id: user.id,
@@ -168,6 +190,7 @@ export const UserInsights = () => {
           createdAt: null,
           updatedAt: null,
         };
+<<<<<<< HEAD
 
         const admin = await isAdmin(userProfile);
         const mainAdmin = await isMainAdmin(userProfile);
@@ -177,6 +200,17 @@ export const UserInsights = () => {
         setIsUserMainAdmin(mainAdmin);
         setIsTeamLeader(teamLeader);
 
+=======
+        
+        const admin = await isAdmin(userProfile);
+        const mainAdmin = await isMainAdmin(userProfile);
+        const teamLeader = departments.some((dept) => dept.managerId === user.id);
+        
+        setIsUserAdmin(admin);
+        setIsUserMainAdmin(mainAdmin);
+        setIsTeamLeader(teamLeader);
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Ekip liderleri için sadece ekip üyelerini göster
         let filteredUsers = usersData;
         if (teamLeader && !admin && !mainAdmin) {
@@ -194,6 +228,7 @@ export const UserInsights = () => {
           filteredUsers = usersData.filter((u) => teamMemberIds.has(u.id) || u.id === user.id);
         }
         setUsers(filteredUsers);
+<<<<<<< HEAD
 
         // Paralel olarak tasks, assignments ve logs'u al
         // Fetch promises setup
@@ -280,6 +315,80 @@ export const UserInsights = () => {
         });
 
         setAssignments(processedAssignments);
+=======
+        
+        // Paralel olarak tasks, assignments ve logs'u al
+        // Tasks için limit ekle (performans için)
+        const tasksData = await getTasks();
+        // onlyInMyTasks görevlerini de dahil et (adminler görebilir)
+        const limitedTasks = tasksData.slice(0, 500); // Max 500 task
+        setTasks(limitedTasks);
+        
+        // Logları yetkiye göre getir (limit ile)
+        let logsData: AuditLog[] = [];
+        if (mainAdmin || admin) {
+          logsData = await getAuditLogs({ limit: 200 }).catch(() => []);
+        } else if (teamLeader) {
+          const teamLogsResult = await getTeamMemberLogs(user.id).catch(() => ({ logs: [], teamInfo: { managedTeams: [], teamMembers: [] } }));
+          logsData = (teamLogsResult.logs || []).slice(0, 200); // Limit
+        } else {
+          logsData = await getAuditLogs({ userId: user.id, limit: 200 }).catch(() => []);
+        }
+        setLogs(logsData);
+        
+        // Assignments'ları paralel olarak al (batch processing ile)
+        // Her 10 task için bir batch
+        const batchSize = 10;
+        const assignmentArrays: AssignmentWithTask[] = [];
+        
+        for (let i = 0; i < limitedTasks.length; i += batchSize) {
+          const batch = limitedTasks.slice(i, i + batchSize);
+          const batchResults = await Promise.all(
+            batch.map(async (task) => {
+              try {
+                // onlyInMyTasks görevleri için özel assignment oluştur
+                if (task.onlyInMyTasks && task.createdBy) {
+                  return [{
+                    id: `only-my-tasks-${task.id}`,
+                    taskId: task.id,
+                    assignedTo: task.createdBy,
+                    assignedBy: task.createdBy,
+                    status: "accepted" as const,
+                    rejectionReason: null,
+                    rejectionApprovedBy: null,
+                    rejectionApprovedAt: null,
+                    rejectionRejectedBy: null,
+                    rejectionRejectedAt: null,
+                    rejectionRejectionReason: null,
+                    notes: null,
+                    assignedAt: task.createdAt,
+                    acceptedAt: task.createdAt,
+                    completedAt: task.status === "completed" ? task.updatedAt : null,
+                    taskTitle: task.title,
+                    taskStatus: task.status,
+                  }];
+                }
+                
+                const taskAssignments = await getTaskAssignments(task.id);
+                return taskAssignments.map((assignment) => ({
+                  ...assignment,
+                  taskId: task.id,
+                  taskTitle: task.title,
+                  taskStatus: task.status,
+                }));
+              } catch (error: unknown) {
+                if (import.meta.env.DEV) {
+                  console.error(`Error fetching assignments for task ${task.id}:`, error);
+                }
+                return [];
+              }
+          })
+        );
+          assignmentArrays.push(...batchResults.flat());
+        }
+
+        setAssignments(assignmentArrays);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       } catch (error: unknown) {
         if (import.meta.env.DEV) {
           console.error("User insights fetch error:", error);
@@ -294,12 +403,15 @@ export const UserInsights = () => {
     fetchData();
   }, [user]);
 
+<<<<<<< HEAD
   // Filtreler değiştiğinde sayfayı sıfırla
   useEffect(() => {
     setAssignmentsPage(1);
     setLogsPage(1);
   }, [selectedUser, statusFilter, taskSearch, logActionFilter, logSearch]);
 
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const analyticsByUser = useMemo(() => {
     const map: Record<string, UserStats> = {};
     assignments.forEach((assignment) => {
@@ -358,12 +470,19 @@ export const UserInsights = () => {
       .filter((log) => (logActionFilter === "all" ? true : log.action === logActionFilter))
       .filter((log) => {
         if (!logSearch.trim()) return true;
+<<<<<<< HEAD
         const haystack = `${log.tableName} ${log.action} ${log.userName ?? ""} ${log.recordId ?? ""
           }`.toLowerCase();
+=======
+        const haystack = `${log.tableName} ${log.action} ${log.userName ?? ""} ${
+          log.recordId ?? ""
+        }`.toLowerCase();
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         return haystack.includes(logSearch.trim().toLowerCase());
       });
   }, [logs, selectedUser, logActionFilter, logSearch]);
 
+<<<<<<< HEAD
   const paginatedAssignments = useMemo(() => {
     const startIndex = (assignmentsPage - 1) * ITEMS_PER_PAGE;
     return filteredAssignments.slice(startIndex, startIndex + ITEMS_PER_PAGE);
@@ -374,6 +493,8 @@ export const UserInsights = () => {
     return filteredLogs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredLogs, logsPage]);
 
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const userRows = useMemo(() => {
     return users
       .map((user) => {
@@ -388,12 +509,17 @@ export const UserInsights = () => {
       })
       .sort((a, b) => b.stats.total - a.stats.total);
   }, [users, analyticsByUser]);
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const prepareUserStats = (userId: string) => {
     const user = users.find((u) => u.id === userId);
     if (!user) {
       return null;
     }
+<<<<<<< HEAD
 
     const userAssignments = assignments.filter((a) => a.assignedTo === userId);
     const userStats = analyticsByUser[userId] || defaultStats;
@@ -407,6 +533,21 @@ export const UserInsights = () => {
       t.status !== "cancelled"
     ).length;
 
+=======
+    
+    const userAssignments = assignments.filter((a) => a.assignedTo === userId);
+    const userStats = analyticsByUser[userId] || defaultStats;
+    
+    // onlyInMyTasks görevlerini de dahil et
+    const onlyMyTasksCount = tasks.filter(t => t.onlyInMyTasks && t.createdBy === userId).length;
+    const onlyMyTasksActive = tasks.filter(t => 
+      t.onlyInMyTasks && 
+      t.createdBy === userId && 
+      t.status !== "completed" && 
+      t.status !== "cancelled"
+    ).length;
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return {
       userName: user.fullName || user.displayName || user.email,
       userEmail: user.email,
@@ -451,8 +592,13 @@ export const UserInsights = () => {
         toast.error("Kullanıcı bulunamadı");
         return;
       }
+<<<<<<< HEAD
 
       const { generateUserStatsPDF } = await import("@/services/pdf");
+=======
+      
+      const { generateUserStatsPDF } = await import("@/services/pdfGenerator");
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const pdfBlob = await generateUserStatsPDF(stats);
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
@@ -478,7 +624,11 @@ export const UserInsights = () => {
     if (!previewData) return;
     setGeneratingPdfId("preview");
     try {
+<<<<<<< HEAD
       const { generateUserStatsPDF } = await import("@/services/pdf");
+=======
+      const { generateUserStatsPDF } = await import("@/services/pdfGenerator");
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const pdfBlob = await generateUserStatsPDF(previewData);
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
@@ -499,7 +649,11 @@ export const UserInsights = () => {
       setGeneratingPdfId(null);
     }
   };
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   // Görüntülenebilir kullanıcılar (yetkiye göre)
   const viewableUsers = useMemo(() => {
     if (isUserMainAdmin || isUserAdmin) {
@@ -529,9 +683,15 @@ export const UserInsights = () => {
         <CardContent className="pt-3">
           <div className="grid gap-2 sm:gap-3 md:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1.5 sm:space-y-2">
+<<<<<<< HEAD
               <Label className="text-[11px] sm:text-xs">Kullanıcı</Label>
               <Select value={selectedUser} onValueChange={setSelectedUser}>
                 <SelectTrigger className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm">
+=======
+              <Label>Kullanıcı</Label>
+              <Select value={selectedUser} onValueChange={setSelectedUser}>
+                <SelectTrigger>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   <SelectValue placeholder="Kullanıcı seçin" />
                 </SelectTrigger>
                 <SelectContent>
@@ -547,9 +707,15 @@ export const UserInsights = () => {
               </Select>
             </div>
             <div className="space-y-1.5 sm:space-y-2">
+<<<<<<< HEAD
               <Label className="text-[11px] sm:text-xs">Görev Durumu</Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm">
+=======
+              <Label>Görev Durumu</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   <SelectValue placeholder="Durum seçin" />
                 </SelectTrigger>
                 <SelectContent>
@@ -562,21 +728,35 @@ export const UserInsights = () => {
               </Select>
             </div>
             <div className="space-y-1.5 sm:space-y-2">
+<<<<<<< HEAD
               <Label className="text-[11px] sm:text-xs">Görev Araması</Label>
+=======
+              <Label>Görev Araması</Label>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               <Input
                 placeholder="Görev veya proje adı"
                 value={taskSearch}
                 onChange={(e) => setTaskSearch(e.target.value)}
+<<<<<<< HEAD
                 className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
               />
             </div>
             <div className="space-y-1.5 sm:space-y-2">
               <Label className="text-[11px] sm:text-xs">Log Araması</Label>
+=======
+              />
+            </div>
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label>Log Araması</Label>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               <Input
                 placeholder="Log içeriğinde ara"
                 value={logSearch}
                 onChange={(e) => setLogSearch(e.target.value)}
+<<<<<<< HEAD
                 className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               />
             </div>
           </div>
@@ -586,37 +766,62 @@ export const UserInsights = () => {
       {selectedUser !== "all" ? (
         <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {[
+<<<<<<< HEAD
             {
               label: "Toplam Görev",
+=======
+            { 
+              label: "Toplam Görev", 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               value: selectedUserStats?.total ?? 0,
               sub: "Tüm görevler",
               icon: FileText,
               variant: "primary" as const
             },
+<<<<<<< HEAD
             {
               label: "Aktif Görev",
+=======
+            { 
+              label: "Aktif Görev", 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               value: selectedUserStats?.active ?? 0,
               sub: "Devam eden görevler",
               icon: CheckCircle2,
               variant: "success" as const
             },
+<<<<<<< HEAD
             {
               label: "Reddedilen Görev",
+=======
+            { 
+              label: "Reddedilen Görev", 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               value: selectedUserStats?.rejected ?? 0,
               sub: "Reddedilen görevler",
               icon: XCircle,
               variant: "warning" as const
             },
+<<<<<<< HEAD
             {
               label: "Kendine Özel Görev",
+=======
+            { 
+              label: "Kendine Özel Görev", 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               value: tasks.filter(t => t.onlyInMyTasks && t.createdBy === selectedUser).length,
               sub: "Kişisel görevler",
               icon: UserCheck,
               variant: "info" as const
             },
           ].map((item) => (
+<<<<<<< HEAD
             <Card
               key={item.label}
+=======
+            <Card 
+              key={item.label} 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:border-primary/50 border-2"
             >
               <CardContent className="pt-4 pb-4 px-4 sm:pt-6 sm:pb-6 sm:px-6">
@@ -626,11 +831,20 @@ export const UserInsights = () => {
                     <div className="text-lg sm:text-xl font-bold mb-1 sm:mb-2">{item.value}</div>
                     <p className="text-[11px] sm:text-xs font-medium text-muted-foreground line-clamp-2">{item.sub}</p>
                   </div>
+<<<<<<< HEAD
                   <div className={`p-2.5 rounded-lg ${item.variant === "primary" ? "bg-blue-100 text-blue-600" :
                     item.variant === "success" ? "bg-emerald-100 text-emerald-600" :
                       item.variant === "warning" ? "bg-amber-100 text-amber-600" :
                         "bg-cyan-100 text-cyan-600"
                     }`}>
+=======
+                  <div className={`p-2.5 rounded-lg ${
+                    item.variant === "primary" ? "bg-blue-100 text-blue-600" :
+                    item.variant === "success" ? "bg-emerald-100 text-emerald-600" :
+                    item.variant === "warning" ? "bg-amber-100 text-amber-600" :
+                    "bg-cyan-100 text-cyan-600"
+                  }`}>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     <item.icon className="h-5 w-5" />
                   </div>
                 </div>
@@ -711,6 +925,7 @@ export const UserInsights = () => {
               Kullanıcı Görev Özeti
             </div>
             {selectedUser !== "all" && (
+<<<<<<< HEAD
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button
                   size="sm"
@@ -738,6 +953,32 @@ export const UserInsights = () => {
                     <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
                   ) : (
                     <Download className="h-4 w-4 sm:mr-2" />
+=======
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => handlePreviewPDF(selectedUser)}
+                  disabled={loadingPreview}
+                >
+                  {loadingPreview ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Eye className="h-4 w-4 mr-2" />
+                  )}
+                  Ön İzleme
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => handleExportPDF(selectedUser)}
+                  disabled={generatingPdfId === selectedUser}
+                >
+                  {generatingPdfId === selectedUser ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   )}
                   PDF İndir
                 </Button>
@@ -746,9 +987,15 @@ export const UserInsights = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 sm:space-y-4">
+<<<<<<< HEAD
           <div className="overflow-x-auto -mx-4 sm:mx-0 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
             <div className="inline-block min-w-full align-middle px-4 sm:px-0">
               <Table className="min-w-[600px] sm:min-w-0 w-full">
+=======
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle px-4 sm:px-0">
+              <Table>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 <TableHeader>
                   <TableRow>
                     <TableHead className="min-w-[150px]">Kullanıcı</TableHead>
@@ -801,6 +1048,7 @@ export const UserInsights = () => {
               Filtrelere uygun görev bulunamadı.
             </div>
           ) : (
+<<<<<<< HEAD
             <div className="space-y-4">
               <div className="overflow-x-auto -mx-4 sm:mx-0 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
                 <div className="inline-block min-w-full align-middle px-4 sm:px-0">
@@ -910,6 +1158,63 @@ export const UserInsights = () => {
                   </PaginationContent>
                 </Pagination>
               )}
+=======
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <div className="inline-block min-w-full align-middle px-4 sm:px-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[200px]">Görev</TableHead>
+                      <TableHead className="min-w-[120px] whitespace-nowrap">Kullanıcı</TableHead>
+                      <TableHead className="whitespace-nowrap">Durum</TableHead>
+                      <TableHead className="whitespace-nowrap">Atanma</TableHead>
+                      <TableHead className="whitespace-nowrap">Kabul</TableHead>
+                      <TableHead className="whitespace-nowrap">Tamamlanma</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAssignments.map((assignment) => {
+                      const user = users.find((u) => u.id === assignment.assignedTo);
+                      const userName = user?.fullName || user?.displayName || user?.email || "Bilinmeyen";
+                      return (
+                        <TableRow key={`${assignment.taskId}-${assignment.id}`}>
+                          <TableCell className="font-medium min-w-[200px]">
+                            <div className="truncate max-w-[200px]">{assignment.taskTitle}</div>
+                          </TableCell>
+                          <TableCell className="min-w-[120px]">
+                            <div className="truncate max-w-[120px]">{userName}</div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <Badge
+                              variant={
+                                assignment.status === "rejected"
+                                  ? "destructive"
+                                  : assignment.status === "accepted"
+                                  ? "default"
+                                  : assignment.status === "completed"
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                            >
+                              {statusLabels[assignment.status] || assignment.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-[11px] sm:text-xs">
+                            {formatDate(assignment.assignedAt?.toDate?.())}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-[11px] sm:text-xs">
+                            {assignment.acceptedAt ? formatDate(assignment.acceptedAt.toDate()) : "-"}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-[11px] sm:text-xs">
+                            {assignment.completedAt ? formatDate(assignment.completedAt.toDate()) : "-"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             </div>
           )}
         </CardContent>
@@ -937,9 +1242,15 @@ export const UserInsights = () => {
               Reddetme notu bulunamadı.
             </div>
           ) : (
+<<<<<<< HEAD
             <div className="overflow-x-auto -mx-4 sm:mx-0 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
               <div className="inline-block min-w-full align-middle px-4 sm:px-0">
                 <Table className="min-w-[700px] sm:min-w-0 w-full">
+=======
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <div className="inline-block min-w-full align-middle px-4 sm:px-0">
+                <Table>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   <TableHeader>
                     <TableRow>
                       <TableHead className="min-w-[120px] whitespace-nowrap">Kullanıcı</TableHead>
@@ -966,9 +1277,15 @@ export const UserInsights = () => {
                           <TableCell className="whitespace-nowrap text-[11px] sm:text-xs">
                             {entry.assignedAt
                               ? formatDistanceToNow(entry.assignedAt.toDate(), {
+<<<<<<< HEAD
                                 addSuffix: true,
                                 locale: tr,
                               })
+=======
+                                  addSuffix: true,
+                                  locale: tr,
+                                })
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               : "-"}
                           </TableCell>
                         </TableRow>
@@ -986,10 +1303,17 @@ export const UserInsights = () => {
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle className="text-[13px] sm:text-[14px]">
+<<<<<<< HEAD
               {isUserMainAdmin || isUserAdmin
                 ? "Kullanıcı Logları"
                 : isTeamLeader
                   ? "Ekip Üyeleri Logları"
+=======
+              {isUserMainAdmin || isUserAdmin 
+                ? "Kullanıcı Logları" 
+                : isTeamLeader 
+                  ? "Ekip Üyeleri Logları" 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   : "Loglarım"}
             </CardTitle>
             <p className="text-sm text-muted-foreground">
@@ -1020,6 +1344,7 @@ export const UserInsights = () => {
               Log bulunamadı.
             </div>
           ) : (
+<<<<<<< HEAD
             <div className="space-y-4">
               <div className="overflow-x-auto">
                 <Table>
@@ -1135,6 +1460,69 @@ export const UserInsights = () => {
                   </PaginationContent>
                 </Pagination>
               )}
+=======
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Kullanıcı</TableHead>
+                    <TableHead>İşlem</TableHead>
+                    <TableHead>Kayıt</TableHead>
+                    <TableHead>Tarih</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{log.userName || "Bilinmeyen"}</span>
+                          <span className="text-xs text-muted-foreground">{log.userEmail}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            log.action === "DELETE"
+                              ? "destructive"
+                              : log.action === "UPDATE"
+                              ? "secondary"
+                              : "default"
+                          }
+                        >
+                          {log.action}
+                        </Badge>
+                        <div className="text-xs text-muted-foreground">
+                          {log.tableName}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const recordName = getRecordDisplayName(log.newData || log.oldData, log.tableName) ||
+                                            getRecordDisplayName(log.oldData, log.tableName);
+                          if (recordName) {
+                            return <span className="text-sm font-medium">{recordName}</span>;
+                          }
+                          return (
+                            <span className="text-xs text-muted-foreground">
+                              {TABLE_LABELS[log.tableName] || log.tableName}
+                            </span>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        {log.createdAt
+                          ? formatDistanceToNow(log.createdAt.toDate(), {
+                              addSuffix: true,
+                              locale: tr,
+                            })
+                          : "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             </div>
           )}
         </CardContent>
@@ -1178,7 +1566,11 @@ export const UserInsights = () => {
                         <p className="text-sm font-medium text-green-700">Tamamlanan</p>
                         <p className="text-2xl font-bold text-green-900 mt-1">{previewData.completed}</p>
                         <p className="text-xs text-green-600 mt-1">
+<<<<<<< HEAD
                           {previewData.total > 0
+=======
+                          {previewData.total > 0 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             ? `%${Math.round((previewData.completed / previewData.total) * 100)}`
                             : "%0"}
                         </p>
@@ -1225,7 +1617,11 @@ export const UserInsights = () => {
                         <TableCell className="font-medium">Tamamlanan</TableCell>
                         <TableCell className="text-center">{previewData.completed}</TableCell>
                         <TableCell className="text-center">
+<<<<<<< HEAD
                           {previewData.total > 0
+=======
+                          {previewData.total > 0 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             ? `%${Math.round((previewData.completed / previewData.total) * 100)}`
                             : "%0"}
                         </TableCell>
@@ -1234,7 +1630,11 @@ export const UserInsights = () => {
                         <TableCell className="font-medium">Kabul Edilen</TableCell>
                         <TableCell className="text-center">{previewData.accepted}</TableCell>
                         <TableCell className="text-center">
+<<<<<<< HEAD
                           {previewData.total > 0
+=======
+                          {previewData.total > 0 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             ? `%${Math.round((previewData.accepted / previewData.total) * 100)}`
                             : "%0"}
                         </TableCell>
@@ -1243,7 +1643,11 @@ export const UserInsights = () => {
                         <TableCell className="font-medium">Beklemede</TableCell>
                         <TableCell className="text-center">{previewData.pending}</TableCell>
                         <TableCell className="text-center">
+<<<<<<< HEAD
                           {previewData.total > 0
+=======
+                          {previewData.total > 0 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             ? `%${Math.round((previewData.pending / previewData.total) * 100)}`
                             : "%0"}
                         </TableCell>
@@ -1252,7 +1656,11 @@ export const UserInsights = () => {
                         <TableCell className="font-medium">Reddedilen</TableCell>
                         <TableCell className="text-center">{previewData.rejected}</TableCell>
                         <TableCell className="text-center">
+<<<<<<< HEAD
                           {previewData.total > 0
+=======
+                          {previewData.total > 0 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             ? `%${Math.round((previewData.rejected / previewData.total) * 100)}`
                             : "%0"}
                         </TableCell>
@@ -1261,7 +1669,11 @@ export const UserInsights = () => {
                         <TableCell className="font-medium">Aktif Görevler</TableCell>
                         <TableCell className="text-center">{previewData.active}</TableCell>
                         <TableCell className="text-center">
+<<<<<<< HEAD
                           {previewData.total > 0
+=======
+                          {previewData.total > 0 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             ? `%${Math.round((previewData.active / previewData.total) * 100)}`
                             : "%0"}
                         </TableCell>
@@ -1311,11 +1723,19 @@ export const UserInsights = () => {
                               <TableRow key={index}>
                                 <TableCell className="font-medium">{assignment.taskTitle}</TableCell>
                                 <TableCell className="text-center">
+<<<<<<< HEAD
                                   <Badge
                                     variant={
                                       assignment.status === "completed" ? "default" :
                                         assignment.status === "accepted" || assignment.status === "in_progress" ? "secondary" :
                                           assignment.status === "rejected" ? "destructive" : "outline"
+=======
+                                  <Badge 
+                                    variant={
+                                      assignment.status === "completed" ? "default" :
+                                      assignment.status === "accepted" || assignment.status === "in_progress" ? "secondary" :
+                                      assignment.status === "rejected" ? "destructive" : "outline"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                     }
                                   >
                                     {statusLabels[assignment.status] || assignment.status}
@@ -1346,7 +1766,11 @@ export const UserInsights = () => {
                     <strong>{previewData.completed}</strong> görevi tamamlamıştır.{" "}
                     Tamamlanma oranı:{" "}
                     <strong>
+<<<<<<< HEAD
                       %{previewData.total > 0
+=======
+                      %{previewData.total > 0 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         ? Math.round((previewData.completed / previewData.total) * 100)
                         : 0}
                     </strong>
@@ -1360,7 +1784,11 @@ export const UserInsights = () => {
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>
               Kapat
             </Button>
+<<<<<<< HEAD
             <Button
+=======
+            <Button 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               onClick={handleDownloadFromPreview}
               disabled={!previewData || generatingPdfId === "preview"}
             >

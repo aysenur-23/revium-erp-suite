@@ -38,7 +38,11 @@ export const setUserAsTeamLeader = async (
     }
 
     // If departmentId is provided, use it; otherwise use first available department
+<<<<<<< HEAD
     const targetDepartment = departmentId
+=======
+    let targetDepartment = departmentId
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       ? departments.find((d) => d.id === departmentId)
       : departments[0];
 
@@ -58,12 +62,20 @@ export const setUserAsTeamLeader = async (
       success: true,
       message: `${user.fullName || user.email} kullanıcısı "${targetDepartment.name}" ekibinin lideri olarak atandı.`,
     };
+<<<<<<< HEAD
   } catch (error: unknown) {
     console.error("Set team leader error:", error);
     const errorMessage = error instanceof Error ? error.message : "Ekip lideri atanırken hata oluştu";
     return {
       success: false,
       message: errorMessage,
+=======
+  } catch (error: any) {
+    console.error("Set team leader error:", error);
+    return {
+      success: false,
+      message: error.message || "Ekip lideri atanırken hata oluştu",
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     };
   }
 };

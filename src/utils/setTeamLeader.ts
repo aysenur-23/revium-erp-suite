@@ -37,7 +37,11 @@ export const setUserAsTeamLeader = async (
     }
 
     // If departmentId is provided, use it; otherwise use first available department
+<<<<<<< HEAD
     const targetDepartment = departmentId
+=======
+    let targetDepartment = departmentId
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       ? departments.find((d) => d.id === departmentId)
       : departments[0];
 
@@ -56,6 +60,7 @@ export const setUserAsTeamLeader = async (
     // Also ensure the user has the team_leader role
     const currentRoles = user.role || [];
     if (!currentRoles.includes("team_leader") && !currentRoles.includes("super_admin")) {
+<<<<<<< HEAD
       const { updateDoc, doc } = await import("firebase/firestore");
       const { firestore } = await import("@/lib/firebase");
       if (firestore) {
@@ -64,6 +69,14 @@ export const setUserAsTeamLeader = async (
           role: [...currentRoles, "team_leader"]
         });
       }
+=======
+       const { updateDoc, doc } = await import("firebase/firestore");
+       const { db } = await import("@/lib/firebase");
+       const userRef = doc(db, "users", user.id);
+       await updateDoc(userRef, {
+         role: [...currentRoles, "team_leader"]
+       });
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     }
 
     return {

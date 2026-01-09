@@ -11,7 +11,11 @@ import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Download, CheckCircle2, Clock, XCircle, ListTodo, TrendingUp, ArrowRight } from "lucide-react";
+<<<<<<< HEAD
 
+=======
+// pdfGenerator will be dynamically imported when needed
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { useNavigate } from "react-router-dom";
 
 interface AssignmentWithTask extends TaskAssignment {
@@ -50,11 +54,19 @@ export const UserPersonalInsights = () => {
         // Tasks için limit ekle (performans için)
         const tasksData = await getTasks();
         const limitedTasks = tasksData.slice(0, 500); // Max 500 task
+<<<<<<< HEAD
 
         // Assignments'ları batch processing ile al
         const batchSize = 10;
         const assignmentArrays: AssignmentWithTask[] = [];
 
+=======
+        
+        // Assignments'ları batch processing ile al
+        const batchSize = 10;
+        const assignmentArrays: AssignmentWithTask[] = [];
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         for (let i = 0; i < limitedTasks.length; i += batchSize) {
           const batch = limitedTasks.slice(i, i + batchSize);
           const batchResults = await Promise.all(
@@ -119,7 +131,11 @@ export const UserPersonalInsights = () => {
   const handleExportPDF = async () => {
     if (!user) return;
     try {
+<<<<<<< HEAD
       const { generateUserStatsPDF } = await import("@/services/pdf");
+=======
+      const { generateUserStatsPDF } = await import("@/services/pdfGenerator");
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const pdfBlob = await generateUserStatsPDF({
         userName: user.fullName || user.email,
         userEmail: user.email,
@@ -171,46 +187,81 @@ export const UserPersonalInsights = () => {
   };
 
   const statCards = [
+<<<<<<< HEAD
     {
       label: "Toplam Görev",
       value: stats.total,
       icon: ListTodo,
+=======
+    { 
+      label: "Toplam Görev", 
+      value: stats.total, 
+      icon: ListTodo, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       color: "primary",
       gradient: "from-primary/10 via-primary/5 to-white",
       borderColor: "border-primary/20",
       onClick: () => handleStatClick()
     },
+<<<<<<< HEAD
     {
       label: "Aktif Görev",
       value: stats.active,
       icon: TrendingUp,
+=======
+    { 
+      label: "Aktif Görev", 
+      value: stats.active, 
+      icon: TrendingUp, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       color: "blue",
       gradient: "from-blue-50 via-blue-10 to-white",
       borderColor: "border-blue-200",
       onClick: () => handleStatClick("active")
     },
+<<<<<<< HEAD
     {
       label: "Tamamlanan",
       value: stats.completed,
       icon: CheckCircle2,
+=======
+    { 
+      label: "Tamamlanan", 
+      value: stats.completed, 
+      icon: CheckCircle2, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       color: "emerald",
       gradient: "from-emerald-50 via-emerald-10 to-white",
       borderColor: "border-emerald-200",
       onClick: () => handleStatClick("completed")
     },
+<<<<<<< HEAD
     {
       label: "Bekleyen",
       value: stats.pending,
       icon: Clock,
+=======
+    { 
+      label: "Bekleyen", 
+      value: stats.pending, 
+      icon: Clock, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       color: "amber",
       gradient: "from-amber-50 via-amber-10 to-white",
       borderColor: "border-amber-200",
       onClick: () => handleStatClick("pending")
     },
+<<<<<<< HEAD
     {
       label: "Reddedilen",
       value: stats.rejected,
       icon: XCircle,
+=======
+    { 
+      label: "Reddedilen", 
+      value: stats.rejected, 
+      icon: XCircle, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       color: "red",
       gradient: "from-red-50 via-red-10 to-white",
       borderColor: "border-red-200",
@@ -229,9 +280,15 @@ export const UserPersonalInsights = () => {
               </div>
               Görev İstatistiklerim
             </CardTitle>
+<<<<<<< HEAD
             <Button
               size="sm"
               variant="outline"
+=======
+            <Button 
+              size="sm" 
+              variant="outline" 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               onClick={handleExportPDF}
               className="gap-2"
             >
@@ -245,7 +302,11 @@ export const UserPersonalInsights = () => {
             {statCards.map((stat) => {
               const Icon = stat.icon;
               const getIconBgClass = () => {
+<<<<<<< HEAD
                 switch (stat.color) {
+=======
+                switch(stat.color) {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   case "primary": return "bg-primary/10";
                   case "blue": return "bg-blue-500/10";
                   case "emerald": return "bg-emerald-500/10";
@@ -255,7 +316,11 @@ export const UserPersonalInsights = () => {
                 }
               };
               const getIconColorClass = () => {
+<<<<<<< HEAD
                 switch (stat.color) {
+=======
+                switch(stat.color) {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   case "primary": return "text-primary";
                   case "blue": return "text-blue-600";
                   case "emerald": return "text-emerald-600";
@@ -265,8 +330,13 @@ export const UserPersonalInsights = () => {
                 }
               };
               return (
+<<<<<<< HEAD
                 <Card
                   key={stat.label}
+=======
+                <Card 
+                  key={stat.label} 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   className={`bg-gradient-to-br ${stat.gradient} border-2 ${stat.borderColor} hover:shadow-xl transition-all duration-300 cursor-pointer group hover:-translate-y-1`}
                   onClick={stat.onClick}
                 >
@@ -318,7 +388,11 @@ export const UserPersonalInsights = () => {
                 </TableHeader>
                 <TableBody>
                   {assignments.map((assignment) => (
+<<<<<<< HEAD
                     <TableRow
+=======
+                    <TableRow 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       key={`${assignment.taskId}-${assignment.id}`}
                       className="cursor-pointer hover:bg-muted/50 transition-colors"
                       onClick={() => navigate(`/tasks?taskId=${assignment.taskId}`)}
@@ -330,10 +404,17 @@ export const UserPersonalInsights = () => {
                             assignment.status === "rejected"
                               ? "destructive"
                               : assignment.status === "accepted"
+<<<<<<< HEAD
                                 ? "default"
                                 : assignment.status === "completed"
                                   ? "secondary"
                                   : "outline"
+=======
+                              ? "default"
+                              : assignment.status === "completed"
+                              ? "secondary"
+                              : "outline"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           }
                         >
                           {statusLabels[assignment.status] || assignment.status}
@@ -377,9 +458,15 @@ export const UserPersonalInsights = () => {
                   <span className="text-xs text-muted-foreground">
                     {entry.assignedAt
                       ? formatDistanceToNow(entry.assignedAt.toDate(), {
+<<<<<<< HEAD
                         addSuffix: true,
                         locale: tr,
                       })
+=======
+                          addSuffix: true,
+                          locale: tr,
+                        })
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       : "-"}
                   </span>
                 </div>
@@ -466,10 +553,17 @@ export const UserPersonalInsights = () => {
                                 log.action === "DELETE"
                                   ? "destructive"
                                   : log.action === "UPDATE"
+<<<<<<< HEAD
                                     ? "secondary"
                                     : log.tableName === "user_logins"
                                       ? "default"
                                       : "default"
+=======
+                                  ? "secondary"
+                                  : log.tableName === "user_logins"
+                                  ? "default"
+                                  : "default"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               }
                             >
                               {log.tableName === "user_logins" ? "Giriş Yapıldı" : actionLabel}
@@ -480,9 +574,15 @@ export const UserPersonalInsights = () => {
                         <TableCell className="text-sm text-muted-foreground">
                           {log.createdAt
                             ? formatDistanceToNow(log.createdAt.toDate(), {
+<<<<<<< HEAD
                               addSuffix: true,
                               locale: tr,
                             })
+=======
+                                addSuffix: true,
+                                locale: tr,
+                              })
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             : "-"}
                         </TableCell>
                       </TableRow>

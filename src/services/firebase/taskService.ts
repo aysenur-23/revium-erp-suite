@@ -22,7 +22,10 @@ import {
   Unsubscribe,
   QueryConstraint,
   FieldValue,
+<<<<<<< HEAD
   collectionGroup,
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 } from "firebase/firestore";
 import { firestore, auth } from "@/lib/firebase";
 import { logAudit } from "@/utils/auditLogger";
@@ -133,7 +136,10 @@ export const getTasks = async (filters?: {
   projectId?: string;
   productionOrderId?: string;
   approvalStatus?: "pending" | "approved" | "rejected";
+<<<<<<< HEAD
   limit?: number; // Pagination için limit desteği
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 }): Promise<Task[]> => {
   try {
     const tasksRef = collection(firestore, "tasks");
@@ -157,10 +163,16 @@ export const getTasks = async (filters?: {
       if (filters?.approvalStatus) {
         constraints.push(where("approvalStatus", "==", filters.approvalStatus));
       }
+<<<<<<< HEAD
       // Performans için limit ekle (varsayılan 100, maksimum 500)
       const taskLimit = filters?.limit ? Math.min(filters.limit, 500) : 100;
       constraints.push(limit(taskLimit));
       return constraints.length ? query(tasksRef, ...constraints) : query(tasksRef, limit(taskLimit));
+=======
+      // Performans için limit ekle (500 kayıt)
+      constraints.push(limit(500));
+      return constraints.length ? query(tasksRef, ...constraints) : query(tasksRef, limit(500));
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     };
 
     let snapshot;
@@ -211,7 +223,11 @@ export const getTasks = async (filters?: {
           if (task.isPrivate) {
             // Eğer task oluşturan kişiyse görebilir
             if (task.createdBy === filters.assignedTo) return task;
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             // Eğer atanan kişiyse görebilir
             const assignments = await getTaskAssignments(task.id);
             const hasAssignment = assignments.some(
@@ -219,7 +235,11 @@ export const getTasks = async (filters?: {
             );
             return hasAssignment ? task : null;
           }
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // Normal görevler için assignment kontrolü
           const assignments = await getTaskAssignments(task.id);
           const hasAssignment = assignments.some(
@@ -235,6 +255,7 @@ export const getTasks = async (filters?: {
       // Güvenlik kuralları zaten Firestore tarafında olmalı ama client-side filtreleme de yapalım
       const currentUserId = auth?.currentUser?.uid;
       if (currentUserId) {
+<<<<<<< HEAD
         // Personnel kullanıcıları için özel kontrol
         let isPersonnel = false;
         try {
@@ -295,6 +316,68 @@ export const getTasks = async (filters?: {
 
           return task;
         })).then(results => results.filter(t => t !== null) as Task[]);
+=======
+         // Personnel kullanıcıları için özel kontrol
+         let isPersonnel = false;
+         try {
+           const userProfile = await getUserProfile(currentUserId);
+           if (userProfile?.role) {
+             isPersonnel = userProfile.role.includes("personnel") && 
+                          !userProfile.role.includes("super_admin") && 
+                          !userProfile.role.includes("main_admin") &&
+                          !userProfile.role.includes("team_leader");
+           }
+         } catch (error: unknown) {
+           if (import.meta.env.DEV) {
+             console.error("Error checking user role:", error);
+           }
+         }
+
+         tasks = await Promise.all(tasks.map(async (task) => {
+           // Personnel kullanıcıları sadece atanan görevleri görebilir
+           if (isPersonnel) {
+             // Gizli olmayan görevleri görebilir (ama sadece atananlar)
+             if (!task.isPrivate) {
+               // Gizli olmayan görevler için assignment kontrolü yap
+               const assignments = await getTaskAssignments(task.id);
+               const isAssigned = assignments.some(a => a.assignedTo === currentUserId && a.status !== "rejected");
+               // assignedUsers array'inde de kontrol et
+               const isInAssignedUsers = Array.isArray(task.assignedUsers) && task.assignedUsers.includes(currentUserId);
+               return (isAssigned || isInAssignedUsers) ? task : null;
+             } else {
+               // Gizli görevler için: sadece atananlar görebilir
+               const assignments = await getTaskAssignments(task.id);
+               const isAssigned = assignments.some(a => a.assignedTo === currentUserId && a.status !== "rejected");
+               const isInAssignedUsers = Array.isArray(task.assignedUsers) && task.assignedUsers.includes(currentUserId);
+               return (isAssigned || isInAssignedUsers) ? task : null;
+             }
+           }
+
+           // Diğer kullanıcılar için normal filtreleme
+           // onlyInMyTasks görevleri sadece oluşturan görebilir, diğer listelerde görünmez
+           if (task.onlyInMyTasks) {
+             return task.createdBy === currentUserId ? task : null;
+           }
+           
+           // Gizli görevler için canViewPrivateTask kontrolü
+           if (task.isPrivate) {
+             const { getUserProfile } = await import("./authService");
+             const userProfile = await getUserProfile(currentUserId);
+             if (userProfile) {
+               const { canViewPrivateTask } = await import("@/utils/permissions");
+               const assignments = await getTaskAssignments(task.id);
+               const assignedUserIds = assignments
+                 .filter((a) => a.status === "accepted" || a.status === "pending")
+                 .map((a) => a.assignedTo);
+               const canView = await canViewPrivateTask(task, userProfile, assignedUserIds);
+               return canView ? task : null;
+             }
+             return null;
+           }
+           
+           return task;
+         })).then(results => results.filter(t => t !== null) as Task[]);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       } else {
         // Kullanıcı yoksa onlyInMyTasks görevlerini filtrele
         tasks = tasks.filter(task => !task.onlyInMyTasks);
@@ -331,7 +414,10 @@ export const subscribeToTasks = (
     projectId?: string;
     productionOrderId?: string;
     approvalStatus?: "pending" | "approved" | "rejected";
+<<<<<<< HEAD
     limit?: number;
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   } = {},
   callback: (tasks: Task[]) => void
 ): Unsubscribe => {
@@ -357,6 +443,7 @@ export const subscribeToTasks = (
       if (filters?.approvalStatus) {
         constraints.push(where("approvalStatus", "==", filters.approvalStatus));
       }
+<<<<<<< HEAD
       // Performans için limit ekle (varsayılan 100, maksimum 500)
       const taskLimit = filters?.limit ? Math.min(filters.limit, 500) : 100;
       constraints.push(limit(taskLimit));
@@ -365,6 +452,15 @@ export const subscribeToTasks = (
 
     let q = buildQuery();
 
+=======
+      // Performans için limit ekle (500 kayıt)
+      constraints.push(limit(500));
+      return constraints.length ? query(tasksRef, ...constraints) : query(tasksRef, limit(500));
+    };
+
+    let q = buildQuery();
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // onSnapshot ile gerçek zamanlı dinleme
     const unsubscribe = onSnapshot(
       q,
@@ -384,14 +480,22 @@ export const subscribeToTasks = (
                 // Gizli görev kontrolü
                 if (task.isPrivate) {
                   if (task.createdBy === filters.assignedTo) return task;
+<<<<<<< HEAD
 
+=======
+                  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   const assignments = await getTaskAssignments(task.id);
                   const hasAssignment = assignments.some(
                     (a) => a.assignedTo === filters.assignedTo && a.status !== "rejected"
                   );
                   return hasAssignment ? task : null;
                 }
+<<<<<<< HEAD
 
+=======
+                
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 // Normal görevler için assignment kontrolü
                 const assignments = await getTaskAssignments(task.id);
                 const hasAssignment = assignments.some(
@@ -410,6 +514,7 @@ export const subscribeToTasks = (
                 if (task.onlyInMyTasks) {
                   return task.createdBy === currentUserId ? task : null;
                 }
+<<<<<<< HEAD
 
                 if (!task.isPrivate) return task;
 
@@ -418,6 +523,16 @@ export const subscribeToTasks = (
                 const assignments = await getTaskAssignments(task.id);
                 const isAssigned = assignments.some(a => a.assignedTo === currentUserId);
 
+=======
+                
+                if (!task.isPrivate) return task;
+                
+                if (task.createdBy === currentUserId) return task;
+                
+                const assignments = await getTaskAssignments(task.id);
+                const isAssigned = assignments.some(a => a.assignedTo === currentUserId);
+                
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 return isAssigned ? task : null;
               })).then(results => results.filter(t => t !== null) as Task[]);
             } else {
@@ -438,17 +553,29 @@ export const subscribeToTasks = (
       (error) => {
         // 404 ve network hatalarını sessizce handle et (Firestore otomatik yeniden bağlanacak)
         // Production'da da sessizce handle et - bu normal Firestore long-polling davranışı
+<<<<<<< HEAD
         if (error?.code === 'unavailable' ||
           error?.code === 'not-found' ||
           error?.message?.includes('404') ||
           error?.message?.includes('network') ||
           error?.message?.includes('transport errored')) {
+=======
+        if (error?.code === 'unavailable' || 
+            error?.code === 'not-found' ||
+            error?.message?.includes('404') || 
+            error?.message?.includes('network') ||
+            error?.message?.includes('transport errored')) {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // Sessizce handle et - Firestore otomatik olarak yeniden bağlanacak
           // Production'da console'a yazma (performans ve gürültü azaltma)
           callback([]);
           return;
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Sadece gerçek hataları logla
         if (import.meta.env.DEV) {
           console.error("Tasks snapshot error:", error);
@@ -464,7 +591,11 @@ export const subscribeToTasks = (
       console.error("Subscribe to tasks setup error:", error);
     }
     // Hata durumunda boş unsubscribe fonksiyonu döndür
+<<<<<<< HEAD
     return () => { };
+=======
+    return () => {};
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   }
 };
 
@@ -474,7 +605,11 @@ export const subscribeToTasks = (
 export const getTaskById = async (taskId: string): Promise<Task | null> => {
   try {
     const taskDoc = await getDoc(doc(firestore, "tasks", taskId));
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (!taskDoc.exists()) {
       return null;
     }
@@ -509,7 +644,11 @@ export const createTask = async (taskData: Omit<Task, "id" | "createdAt" | "upda
       const { getProjectById } = await import("@/services/firebase/projectService");
       const { getUserProfile } = await import("@/services/firebase/authService");
       const { canCreateTask, canEditProject } = await import("@/utils/permissions");
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const project = await getProjectById(taskData.projectId);
       if (project) {
         const userProfile = await getUserProfile(taskData.createdBy);
@@ -519,7 +658,11 @@ export const createTask = async (taskData: Omit<Task, "id" | "createdAt" | "upda
           if (!canCreate) {
             throw new Error("Görev oluşturma yetkiniz yok. Sadece yöneticiler ve ekip liderleri görev oluşturabilir.");
           }
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // Proje sahibi kontrolü - ekip lideri veya admin değilse, sadece proje sahibi görev ekleyebilir
           const canEdit = await canEditProject(project, userProfile);
           if (!canEdit && project.createdBy !== taskData.createdBy) {
@@ -528,13 +671,21 @@ export const createTask = async (taskData: Omit<Task, "id" | "createdAt" | "upda
         }
       }
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const taskDoc: Partial<Task> & { createdAt: FieldValue | Timestamp; updatedAt: FieldValue | Timestamp } = {
       ...taskData,
       createdAt: serverTimestamp() as any,
       updatedAt: serverTimestamp() as any,
     };
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // dueDate'i Timestamp'e çevir
     if (taskData.dueDate !== undefined && taskData.dueDate !== null) {
       if (taskData.dueDate instanceof Date) {
@@ -545,7 +696,11 @@ export const createTask = async (taskData: Omit<Task, "id" | "createdAt" | "upda
     } else {
       taskDoc.dueDate = null;
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const docRef = await addDoc(collection(firestore, "tasks"), taskDoc);
 
     const createdTask = await getTaskById(docRef.id);
@@ -563,7 +718,11 @@ export const createTask = async (taskData: Omit<Task, "id" | "createdAt" | "upda
         const userProfile = await getUserProfile(taskData.createdBy);
         const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
         const userEmail = userProfile?.email;
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         await addTaskActivity(
           docRef.id,
           taskData.createdBy,
@@ -587,13 +746,21 @@ export const createTask = async (taskData: Omit<Task, "id" | "createdAt" | "upda
       const { getUserProfile } = await import("@/services/firebase/authService");
       const creatorProfile = await getUserProfile(taskData.createdBy);
       const creatorName = creatorProfile?.fullName || creatorProfile?.displayName || creatorProfile?.email || "Bir kullanıcı";
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       await Promise.all(
         teamLeaders.map(async (leaderId) => {
           try {
             // Görevi oluşturan kişi ekip lideri ise bildirim gönderme
             if (leaderId === taskData.createdBy) return;
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             await createNotification({
               userId: leaderId,
               type: "task_created",
@@ -639,11 +806,19 @@ export const createTask = async (taskData: Omit<Task, "id" | "createdAt" | "upda
  */
 const getTaskTeamLeaders = async (task: Task | null): Promise<string[]> => {
   if (!task) return [];
+<<<<<<< HEAD
 
   try {
     const departments = await getDepartments();
     const teamLeaderIds: string[] = [];
 
+=======
+  
+  try {
+    const departments = await getDepartments();
+    const teamLeaderIds: string[] = [];
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Görevi oluşturan kişinin ekibini bul
     if (task.createdBy) {
       const creatorProfile = await getUserProfile(task.createdBy);
@@ -656,7 +831,11 @@ const getTaskTeamLeaders = async (task: Task | null): Promise<string[]> => {
         }
       }
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Proje varsa projenin ekibini kontrol et
     if (task.projectId) {
       try {
@@ -668,7 +847,11 @@ const getTaskTeamLeaders = async (task: Task | null): Promise<string[]> => {
         }
       }
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return teamLeaderIds;
   } catch (error: unknown) {
     if (import.meta.env.DEV) {
@@ -692,6 +875,7 @@ export const updateTask = async (
     if (!oldTask) {
       throw new Error("Görev bulunamadı");
     }
+<<<<<<< HEAD
 
     // Yetki kontrolü - sadece içerik güncellemeleri için (status, approvalStatus gibi alanlar için değil)
     const isContentUpdate = updates.title !== undefined ||
@@ -702,33 +886,67 @@ export const updateTask = async (
       updates.projectId !== undefined ||
       updates.isPrivate !== undefined;
 
+=======
+    
+    // Yetki kontrolü - sadece içerik güncellemeleri için (status, approvalStatus gibi alanlar için değil)
+    const isContentUpdate = updates.title !== undefined || 
+                            updates.description !== undefined || 
+                            updates.priority !== undefined || 
+                            updates.dueDate !== undefined || 
+                            updates.labels !== undefined ||
+                            updates.projectId !== undefined ||
+                            updates.isPrivate !== undefined;
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (isContentUpdate && userId) {
       const { getUserProfile } = await import("@/services/firebase/authService");
       const { canEditTask } = await import("@/utils/permissions");
       const userProfile = await getUserProfile(userId);
+<<<<<<< HEAD
 
       if (!userProfile) {
         throw new Error("Kullanıcı profili bulunamadı");
       }
 
+=======
+      
+      if (!userProfile) {
+        throw new Error("Kullanıcı profili bulunamadı");
+      }
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const canEdit = await canEditTask(oldTask, userProfile);
       if (!canEdit) {
         throw new Error("Bu görevi düzenlemek için yetkiniz yok. Sadece yöneticiler, ekip liderleri veya görevi oluşturan kişi düzenleyebilir.");
       }
     }
+<<<<<<< HEAD
 
     const currentUserId = userId || auth?.currentUser?.uid;
 
+=======
+    
+    const currentUserId = userId || auth?.currentUser?.uid;
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const updateData: Partial<Task> & { updatedAt: FieldValue | Timestamp } = {
       ...updates,
       updatedAt: serverTimestamp() as any,
     };
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Son güncelleyen kullanıcıyı güncelle
     if (currentUserId) {
       (updateData as Partial<Task>).updatedBy = currentUserId;
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // dueDate'i Timestamp'e çevir
     if (updates.dueDate !== undefined) {
       if (updates.dueDate === null) {
@@ -737,12 +955,21 @@ export const updateTask = async (
         updateData.dueDate = Timestamp.fromDate(updates.dueDate);
       }
     }
+<<<<<<< HEAD
 
     await updateDoc(doc(firestore, "tasks", taskId), updateData);
 
     // Yeni veriyi al
     const newTask = await getTaskById(taskId);
 
+=======
+    
+    await updateDoc(doc(firestore, "tasks", taskId), updateData);
+    
+    // Yeni veriyi al
+    const newTask = await getTaskById(taskId);
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Audit log
     if (userId) {
       await logAudit("UPDATE", "tasks", taskId, userId, oldTask, newTask);
@@ -761,7 +988,11 @@ export const updateTask = async (
           const newValue = (updates as Record<string, unknown>)[key];
           return oldValue !== newValue;
         });
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         if (changedFields.length > 0) {
           await addTaskActivity(
             taskId,
@@ -786,13 +1017,21 @@ export const updateTask = async (
         const assignments = await getTaskAssignments(taskId);
         const allUsers = await getAllUsers();
         const updaterUser = allUsers.find(u => u.id === userId);
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Atanan kullanıcılara bildirim gönder (güncelleyen kişi hariç)
         const assignedUserIds = assignments
           .filter(a => a.status === "accepted" || a.status === "pending")
           .map(a => a.assignedTo)
           .filter(id => id !== userId);
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         await Promise.all(
           assignedUserIds.map(async (assignedUserId) => {
             try {
@@ -853,12 +1092,17 @@ export const updateTaskStatus = async (
 
     const oldStatus = task.status;
     const currentUserId = auth?.currentUser?.uid;
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Yetki kontrolü: SADECE görev üyesi (rejected hariç) veya oluşturan durum değiştirebilir
     // Yöneticiler için özel durum YOK
     if (!currentUserId) {
       throw new Error("Kullanıcı bilgisi bulunamadı");
     }
+<<<<<<< HEAD
 
     const isCreator = task.createdBy === currentUserId;
 
@@ -875,12 +1119,34 @@ export const updateTaskStatus = async (
       throw new Error("Bu görevin durumunu değiştirme yetkiniz yok. Sadece görev üyesi olduğunuz görevlerin durumunu değiştirebilirsiniz.");
     }
 
+=======
+    
+    const isCreator = task.createdBy === currentUserId;
+    
+    // Görev üyesi kontrolü (rejected hariç)
+    const assignments = await getTaskAssignments(taskId);
+    const isAssigned = assignments.some(a => a.assignedTo === currentUserId && a.status !== "rejected");
+    
+    // Fallback: task.assignedUsers array'inden kontrol
+    const isInTaskAssignedUsers = Array.isArray(task.assignedUsers) && task.assignedUsers.includes(currentUserId);
+    
+    const hasPermission = isCreator || isAssigned || isInTaskAssignedUsers;
+    
+    if (!hasPermission) {
+      throw new Error("Bu görevin durumunu değiştirme yetkiniz yok. Sadece görev üyesi olduğunuz görevlerin durumunu değiştirebilirsiniz.");
+    }
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // ÖNEMLİ: Eğer kullanıcı assignments'da varsa ama task.assignedUsers array'inde yoksa,
     // ÖNCE array'i güncelle (Firestore kuralları mevcut veri üzerinde çalıştığı için)
     // Sonra durum güncellemesini yap
     const currentAssignedUsers = Array.isArray(task.assignedUsers) ? task.assignedUsers : [];
     const shouldUpdateAssignedUsers = isAssigned && !currentAssignedUsers.includes(currentUserId);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (shouldUpdateAssignedUsers) {
       const taskRef = doc(firestore, "tasks", taskId);
       await updateDoc(taskRef, {
@@ -892,23 +1158,39 @@ export const updateTaskStatus = async (
       // Array güncellendikten sonra task'ı tekrar al (Firestore kuralları için)
       // Ama aslında gerek yok çünkü bir sonraki update'te zaten güncel olacak
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Durumu güncelle
     const updateData: Partial<Task> & { status: Task["status"]; updatedAt: FieldValue | Timestamp } = {
       status,
       updatedAt: serverTimestamp() as any,
     };
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Son güncelleyen kullanıcıyı güncelle
     if (currentUserId) {
       (updateData as Partial<Task>).updatedBy = currentUserId;
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Status değişikliği varsa statusUpdatedBy ve statusUpdatedAt ekle
     if (oldStatus !== status && currentUserId) {
       (updateData as Partial<Task>).statusUpdatedBy = currentUserId;
       (updateData as Partial<Task>).statusUpdatedAt = serverTimestamp() as any;
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Aşama geçmişine yeni kayıt ekle
       const statusHistory: StatusHistoryEntry[] = task.statusHistory || [];
       statusHistory.push({
@@ -918,7 +1200,11 @@ export const updateTaskStatus = async (
       });
       updateData.statusHistory = statusHistory;
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await updateDoc(doc(firestore, "tasks", taskId), updateData);
 
     // Audit log
@@ -931,17 +1217,28 @@ export const updateTaskStatus = async (
         const userProfile = await getUserProfile(currentUserId);
         const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
         const userEmail = userProfile?.email;
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         const statusNames: Record<string, string> = {
           pending: "Beklemede",
           in_progress: "Devam Ediyor",
           completed: "Tamamlandı",
           cancelled: "İptal Edildi"
         };
+<<<<<<< HEAD
 
         const oldStatusName = statusNames[oldStatus] || oldStatus;
         const newStatusName = statusNames[status] || status;
 
+=======
+        
+        const oldStatusName = statusNames[oldStatus] || oldStatus;
+        const newStatusName = statusNames[status] || status;
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         await addTaskActivity(
           taskId,
           currentUserId,
@@ -965,7 +1262,11 @@ export const updateTaskStatus = async (
         const allUsers = await getAllUsers();
         const currentUser = auth?.currentUser;
         const changerUser = allUsers.find(u => u.id === currentUser?.uid);
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Durum isimlerini Türkçe'ye çevir
         const statusNames: Record<string, string> = {
           pending: "Beklemede",
@@ -988,8 +1289,13 @@ export const updateTaskStatus = async (
               message: `${changerUser?.fullName || changerUser?.email || "Bir kullanıcı"} kullanıcısı tarafından "${task.title}" görevinin durumu "${oldStatusName}" durumundan "${statusName}" durumuna güncellendi.\n\nİşlem Zamanı: ${changeTime}`,
               read: false,
               relatedId: taskId,
+<<<<<<< HEAD
               metadata: {
                 oldStatus,
+=======
+              metadata: { 
+                oldStatus, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 newStatus: status,
                 updatedAt: new Date(),
                 priority: task.priority,
@@ -1017,8 +1323,13 @@ export const updateTaskStatus = async (
                 message: `${changerUser?.fullName || changerUser?.email || "Bir kullanıcı"} tarafından "${task.title}" görevinin durumu "${oldStatusName}" durumundan "${statusName}" durumuna güncellendi.\n\nİşlem Zamanı: ${changeTime}`,
                 read: false,
                 relatedId: taskId,
+<<<<<<< HEAD
                 metadata: {
                   oldStatus,
+=======
+                metadata: { 
+                  oldStatus, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   newStatus: status,
                   updatedAt: new Date(),
                   priority: task.priority,
@@ -1039,7 +1350,11 @@ export const updateTaskStatus = async (
     if (import.meta.env.DEV) {
       console.error("Update task status error:", error);
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Firestore izin hatasını daha anlaşılır hale getir
     const errorMsg = error instanceof Error ? error.message : String(error);
     if (errorMsg.includes("Missing or insufficient permissions") || errorMsg.includes("permission-denied")) {
@@ -1047,7 +1362,11 @@ export const updateTaskStatus = async (
       // Bu durumda kullanıcıya açıklayıcı bir mesaj göster
       throw new Error("Firestore güvenlik kuralları görev durumunu değiştirmenize izin vermiyor. Lütfen yöneticinizle iletişime geçin.");
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     throw error;
   }
 };
@@ -1062,23 +1381,39 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
     if (!oldTask) {
       throw new Error("Görev bulunamadı");
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Yetki kontrolü
     if (userId) {
       const { getUserProfile } = await import("@/services/firebase/authService");
       const { canDeleteTask } = await import("@/utils/permissions");
       const userProfile = await getUserProfile(userId);
+<<<<<<< HEAD
 
       if (!userProfile) {
         throw new Error("Kullanıcı profili bulunamadı");
       }
 
+=======
+      
+      if (!userProfile) {
+        throw new Error("Kullanıcı profili bulunamadı");
+      }
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const canDelete = await canDeleteTask(oldTask, userProfile);
       if (!canDelete) {
         throw new Error("Bu görevi silmek için yetkiniz yok. Sadece yöneticiler, ekip liderleri veya görevi oluşturan kişi silebilir.");
       }
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Aktivite log ekle (silmeden önce)
     if (userId && oldTask) {
       try {
@@ -1086,7 +1421,11 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
         const userProfile = await getUserProfile(userId);
         const userName = userProfile?.fullName || userProfile?.displayName || userProfile?.email;
         const userEmail = userProfile?.email;
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         await addTaskActivity(
           taskId,
           userId,
@@ -1107,7 +1446,11 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
     let assignments: TaskAssignment[] = [];
     let allUsers: UserProfile[] = [];
     let deleterUser: UserProfile | undefined;
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     try {
       assignments = await getTaskAssignments(taskId);
       allUsers = await getAllUsers();
@@ -1116,19 +1459,31 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
       console.error("Error fetching data for notifications:", notifError);
       // Bildirim hatası görev silinmesini engellemez
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Önce subcollection'ları sil (assignments, checklists, attachments)
     try {
       // Assignments'ları sil
       const assignmentsSnapshot = await getDocs(collection(firestore, "tasks", taskId, "assignments"));
       const deleteAssignmentsPromises = assignmentsSnapshot.docs.map((doc) => deleteDoc(doc.ref));
       await Promise.all(deleteAssignmentsPromises);
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Checklists'leri sil
       const checklistsSnapshot = await getDocs(collection(firestore, "tasks", taskId, "checklists"));
       const deleteChecklistsPromises = checklistsSnapshot.docs.map((doc) => deleteDoc(doc.ref));
       await Promise.all(deleteChecklistsPromises);
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Attachments'ları sil (eğer varsa)
       try {
         const attachmentsSnapshot = await getDocs(collection(firestore, "tasks", taskId, "attachments"));
@@ -1144,19 +1499,34 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
       console.error("Error deleting subcollections:", subcollectionError);
       // Subcollection silme hatası görev silinmesini engellemez, devam et
     }
+<<<<<<< HEAD
 
     // Ana görev document'ini sil
     await deleteDoc(doc(firestore, "tasks", taskId));
 
+=======
+    
+    // Ana görev document'ini sil
+    await deleteDoc(doc(firestore, "tasks", taskId));
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Audit log
     if (userId) {
       await logAudit("DELETE", "tasks", taskId, userId, oldTask, null);
     }
+<<<<<<< HEAD
 
     // Bildirim gönder (görev silindikten sonra)
     try {
       const currentUser = auth?.currentUser;
 
+=======
+    
+    // Bildirim gönder (görev silindikten sonra)
+    try {
+      const currentUser = auth?.currentUser;
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Görevi oluşturan kişiye bildirim gönder (silen kişi hariç)
       if (oldTask.createdBy && oldTask.createdBy !== currentUser?.uid) {
         try {
@@ -1168,7 +1538,11 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
             message: `${deleterUser?.fullName || deleterUser?.email || "Bir kullanıcı"} kullanıcısı tarafından "${oldTask.title}" görevi silindi.\n\nGörev sistemden kalıcı olarak kaldırıldı. Bu işlem geri alınamaz.\n\nSilme Zamanı: ${deleteTime}`,
             read: false,
             relatedId: taskId,
+<<<<<<< HEAD
             metadata: {
+=======
+            metadata: { 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               taskTitle: oldTask.title,
               updatedAt: new Date(),
             },
@@ -1177,12 +1551,20 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
           console.error("Error sending notification to task creator:", notifError);
         }
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Atanan kullanıcılara bildirim gönder (silen kişi hariç)
       const assignedUserIds = assignments
         .filter(a => (a.status === "accepted" || a.status === "pending") && a.assignedTo !== currentUser?.uid)
         .map(a => a.assignedTo);
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       await Promise.all(
         assignedUserIds.map(async (assignedUserId) => {
           try {
@@ -1194,7 +1576,11 @@ export const deleteTask = async (taskId: string, userId?: string): Promise<void>
               message: `${deleterUser?.fullName || deleterUser?.email || "Bir kullanıcı"} kullanıcısı tarafından "${oldTask.title}" görevi silindi.\n\nGörev sistemden kalıcı olarak kaldırıldı. Bu işlem geri alınamaz.\n\nSilme Zamanı: ${deleteTime}`,
               read: false,
               relatedId: taskId,
+<<<<<<< HEAD
               metadata: {
+=======
+              metadata: { 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 taskTitle: oldTask.title,
                 updatedAt: new Date(),
               },
@@ -1230,7 +1616,11 @@ export const assignTask = async (
       taskId,
       assignedTo: userId,
       assignedBy,
+<<<<<<< HEAD
       status: "accepted", // Otomatik kabul edildi - görevi oluşturan kişi kendisini atamışsa zaten kabul etmiş sayılır
+=======
+      status: "accepted", // Otomatik kabul edildi - kabul/red mekanizması kaldırıldı
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       notes: notes || null,
       assignedAt: Timestamp.now(),
       acceptedAt: Timestamp.now(), // Otomatik kabul edildiği için assignedAt ile aynı
@@ -1284,9 +1674,15 @@ export const assignTask = async (
             // Tarih formatı hatası durumunda sessizce devam et
           }
         }
+<<<<<<< HEAD
 
         const detailsText = taskDetails.length > 0 ? `\n\nGörev Detayları:\n${taskDetails.join('\n')}` : '';
 
+=======
+        
+        const detailsText = taskDetails.length > 0 ? `\n\nGörev Detayları:\n${taskDetails.join('\n')}` : '';
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Metadata için Timestamp'leri Date'e çevir
         let dueDateForMetadata: Date | null = null;
         if (task.dueDate) {
@@ -1306,7 +1702,11 @@ export const assignTask = async (
             dueDateForMetadata = null;
           }
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         await createNotification({
           userId,
           type: "task_assigned",
@@ -1314,7 +1714,11 @@ export const assignTask = async (
           message: `${assignerProfile?.fullName || assignerProfile?.email || "Bir yönetici"} kullanıcısı tarafından size "${task.title}" başlıklı yeni bir görev atandı.${detailsText}\n\nGörev detaylarını görüntülemek için bildirime tıklayabilirsiniz.`,
           read: false,
           relatedId: taskId,
+<<<<<<< HEAD
           metadata: {
+=======
+          metadata: { 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             assignment_id: docRef.id,
             priority: task.priority,
             dueDate: dueDateForMetadata, // Date objesi olarak gönder
@@ -1353,7 +1757,11 @@ export const acceptTaskAssignment = async (taskId: string, assignmentId: string)
       status: "accepted",
       acceptedAt: serverTimestamp(),
     });
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Audit log
     const userId = auth?.currentUser?.uid;
     if (userId) {
@@ -1370,17 +1778,29 @@ export const acceptTaskAssignment = async (taskId: string, assignmentId: string)
         { action: "accept", taskId }
       );
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Atanan kullanıcının bildirimini güncelle
     try {
       const assignment = await getDoc(doc(firestore, "tasks", taskId, "assignments", assignmentId));
       const assignmentData = assignment.data() as TaskAssignment;
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (assignmentData) {
         // Atanan kullanıcının bildirimlerini bul ve güncelle
         const { getNotifications } = await import("./notificationService");
         const userNotifications = await getNotifications(assignmentData.assignedTo, { limit: 100 });
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // İlgili bildirimi bul: task_assigned tipinde, assignment_id metadata'sı eşleşen
         const relatedNotification = userNotifications.find((notif) => {
           if (notif.type !== "task_assigned" || notif.relatedId !== taskId) return false;
@@ -1390,12 +1810,21 @@ export const acceptTaskAssignment = async (taskId: string, assignmentId: string)
           }
           return false;
         });
+<<<<<<< HEAD
 
         if (relatedNotification) {
           // Bildirimi güncelle: action metadata ekle ve okundu işaretle
           const updatedMetadata = {
             ...relatedNotification.metadata,
             action: "accepted"
+=======
+        
+        if (relatedNotification) {
+          // Bildirimi güncelle: action metadata ekle ve okundu işaretle
+          const updatedMetadata = { 
+            ...relatedNotification.metadata, 
+            action: "accepted" 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           };
           await updateNotification(relatedNotification.id, {
             metadata: updatedMetadata,
@@ -1407,18 +1836,30 @@ export const acceptTaskAssignment = async (taskId: string, assignmentId: string)
       console.error("Error updating assignment notification:", notifUpdateError);
       // Bildirim güncelleme hatası kabul işlemini engellemez
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Ekip liderlerine bildirim gönder
     try {
       const task = await getTaskById(taskId);
       const assignment = await getDoc(doc(firestore, "tasks", taskId, "assignments", assignmentId));
       const assignmentData = assignment.data() as TaskAssignment;
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (task && assignmentData) {
         const teamLeaders = await getTaskTeamLeaders(task);
         const allUsers = await getAllUsers();
         const assignedUser = allUsers.find(u => u.id === assignmentData.assignedTo);
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         await Promise.all(
           teamLeaders.map(async (leaderId) => {
             try {
@@ -1430,8 +1871,13 @@ export const acceptTaskAssignment = async (taskId: string, assignmentId: string)
                 message: `${assignedUser?.fullName || assignedUser?.email || "Bir kullanıcı"} kullanıcısı "${task.title}" görevini kabul etti.\n\nGörev artık bu kullanıcının görev listesinde görünecek ve üzerinde çalışmaya başlayabilir.\n\nKabul Zamanı: ${acceptTime}`,
                 read: false,
                 relatedId: taskId,
+<<<<<<< HEAD
                 metadata: {
                   assignment_id: assignmentId,
+=======
+                metadata: { 
+                  assignment_id: assignmentId, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   action: "accepted",
                   updatedAt: new Date(),
                   priority: task.priority,
@@ -1469,12 +1915,20 @@ export const rejectTaskAssignment = async (
     if (reason.trim().length < 20) {
       throw new Error("Red sebebi en az 20 karakter olmalıdır");
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await updateDoc(doc(firestore, "tasks", taskId, "assignments", assignmentId), {
       status: "rejected",
       rejectionReason: reason.trim(),
     });
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Audit log
     const userId = auth?.currentUser?.uid;
     if (userId) {
@@ -1491,17 +1945,29 @@ export const rejectTaskAssignment = async (
         { action: "reject", taskId, reason: reason.trim() }
       );
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Atanan kullanıcının bildirimini güncelle
     try {
       const assignment = await getDoc(doc(firestore, "tasks", taskId, "assignments", assignmentId));
       const assignmentData = assignment.data() as TaskAssignment;
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (assignmentData) {
         // Atanan kullanıcının bildirimlerini bul ve güncelle
         const { getNotifications } = await import("./notificationService");
         const userNotifications = await getNotifications(assignmentData.assignedTo, { limit: 100 });
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // İlgili bildirimi bul: task_assigned tipinde, assignment_id metadata'sı eşleşen
         const relatedNotification = userNotifications.find((notif) => {
           if (notif.type !== "task_assigned" || notif.relatedId !== taskId) return false;
@@ -1511,12 +1977,21 @@ export const rejectTaskAssignment = async (
           }
           return false;
         });
+<<<<<<< HEAD
 
         if (relatedNotification) {
           // Bildirimi güncelle: action metadata ekle ve okundu işaretle
           const updatedMetadata = {
             ...relatedNotification.metadata,
             action: "rejected"
+=======
+        
+        if (relatedNotification) {
+          // Bildirimi güncelle: action metadata ekle ve okundu işaretle
+          const updatedMetadata = { 
+            ...relatedNotification.metadata, 
+            action: "rejected" 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           };
           await updateNotification(relatedNotification.id, {
             metadata: updatedMetadata,
@@ -1528,19 +2003,31 @@ export const rejectTaskAssignment = async (
       console.error("Error updating assignment notification:", notifUpdateError);
       // Bildirim güncelleme hatası red işlemini engellemez
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Bildirimler gönder
     try {
       const task = await getTaskById(taskId);
       const assignment = await getDoc(doc(firestore, "tasks", taskId, "assignments", assignmentId));
       const assignmentData = assignment.data() as TaskAssignment;
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (task && assignmentData) {
         const allUsers = await getAllUsers();
         const assignedUser = allUsers.find(u => u.id === assignmentData.assignedTo);
         const taskCreator = allUsers.find(u => u.id === task.createdBy);
         const assignerUser = allUsers.find(u => u.id === assignmentData.assignedBy);
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // 1. Görevi veren kişiye bildirim gönder (assignedBy) - ÖNEMLİ: Görevi veren kişi reddi bilmeli
         if (assignmentData.assignedBy && assignmentData.assignedBy !== auth?.currentUser?.uid) {
           try {
@@ -1552,9 +2039,15 @@ export const rejectTaskAssignment = async (
               message: `${assignedUser?.fullName || assignedUser?.email || "Bir kullanıcı"} kullanıcısı "${task.title}" görevini reddetti.\n\nReddetme Sebebi: ${reason.trim().substring(0, 200)}${reason.trim().length > 200 ? "..." : ""}\n\nReddetme Zamanı: ${rejectTime}`,
               read: false,
               relatedId: taskId,
+<<<<<<< HEAD
               metadata: {
                 assignment_id: assignmentId,
                 action: "rejected",
+=======
+              metadata: { 
+                assignment_id: assignmentId, 
+                action: "rejected", 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 reason: reason.trim(),
                 assigned_user_id: assignmentData.assignedTo,
                 updatedAt: new Date(),
@@ -1566,7 +2059,11 @@ export const rejectTaskAssignment = async (
             console.error("Error sending notification to task assigner:", notifError);
           }
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // 2. Görevi tanımlayan kişiye bildirim gönder (createdBy) - Eğer görevi veren kişi değilse
         if (task.createdBy && task.createdBy !== auth?.currentUser?.uid && task.createdBy !== assignmentData.assignedBy) {
           try {
@@ -1578,9 +2075,15 @@ export const rejectTaskAssignment = async (
               message: `${assignedUser?.fullName || assignedUser?.email || "Bir kullanıcı"} kullanıcısı "${task.title}" görevini reddetti.\n\nReddetme Sebebi: ${reason.trim().substring(0, 200)}${reason.trim().length > 200 ? "..." : ""}\n\nReddetme Zamanı: ${rejectTime2}\n\nLütfen bu reddi onaylayın veya reddedin. Reddin onaylanması durumunda görev başka birine atanabilir.`,
               read: false,
               relatedId: taskId,
+<<<<<<< HEAD
               metadata: {
                 assignment_id: assignmentId,
                 action: "rejection_pending_approval",
+=======
+              metadata: { 
+                assignment_id: assignmentId, 
+                action: "rejection_pending_approval", 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 reason: reason.trim(),
                 assigned_user_id: assignmentData.assignedTo,
                 updatedAt: new Date(),
@@ -1592,7 +2095,11 @@ export const rejectTaskAssignment = async (
             console.error("Error sending notification to task creator:", notifError);
           }
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // 3. Ekip liderlerine bildirim gönder
         const teamLeaders = await getTaskTeamLeaders(task);
         await Promise.all(
@@ -1646,6 +2153,7 @@ export const getTaskAssignments = async (taskId: string): Promise<TaskAssignment
 };
 
 /**
+<<<<<<< HEAD
  * Tüm görev atamalarını al (Task Independent)
  * Performance optimization: Collection Group Query kullanarak
  * tek seferde tüm atamaları çeker.
@@ -1710,6 +2218,8 @@ export const getAllTaskAssignments = async (options?: {
 };
 
 /**
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
  * Görev atamasını sil
  */
 export const deleteTaskAssignment = async (taskId: string, assignmentId: string, deletedBy?: string): Promise<void> => {
@@ -1717,19 +2227,32 @@ export const deleteTaskAssignment = async (taskId: string, assignmentId: string,
     // Önce assignment bilgilerini al (bildirim için) - SİLME İŞLEMİNDEN ÖNCE
     const assignmentRef = doc(firestore, "tasks", taskId, "assignments", assignmentId);
     const assignmentSnap = await getDoc(assignmentRef);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (!assignmentSnap.exists()) {
       if (import.meta.env.DEV) {
         console.warn("⚠️ Assignment bulunamadı, silme işlemi atlanıyor:", assignmentId);
       }
       return;
     }
+<<<<<<< HEAD
 
     const assignmentData = assignmentSnap.data() as TaskAssignment | undefined;
 
     // Assignment'ı sil
     await deleteDoc(assignmentRef);
 
+=======
+    
+    const assignmentData = assignmentSnap.data() as TaskAssignment | undefined;
+    
+    // Assignment'ı sil
+    await deleteDoc(assignmentRef);
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Task document'inde assignedUsers array'ini güncelle
     if (assignmentData) {
       const taskRef = doc(firestore, "tasks", taskId);
@@ -1743,7 +2266,11 @@ export const deleteTaskAssignment = async (taskId: string, assignmentId: string,
           });
         }
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Bildirim gönder - kaldırılan kullanıcıya
       if (assignmentData) {
         try {
@@ -1752,7 +2279,11 @@ export const deleteTaskAssignment = async (taskId: string, assignmentId: string,
             deletedBy ? getUserProfile(deletedBy) : Promise.resolve(null),
             getUserProfile(assignmentData.assignedTo),
           ]);
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           if (task && removedUser) {
             // Kaldırılan kullanıcıya bildirim
             const removeTime = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -1763,19 +2294,32 @@ export const deleteTaskAssignment = async (taskId: string, assignmentId: string,
               message: `${deleterProfile?.fullName || deleterProfile?.email || "Bir yönetici"} kullanıcısı tarafından siz "${task.title}" görevinden kaldırıldınız.\n\nArtık bu görevle ilgili bildirimler almayacaksınız ve görev üzerinde işlem yapamayacaksınız.\n\nKaldırılma Zamanı: ${removeTime}`,
               read: false,
               relatedId: taskId,
+<<<<<<< HEAD
               metadata: {
                 assignment_id: assignmentId,
+=======
+              metadata: { 
+                assignment_id: assignmentId, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 action: "removed",
                 updatedAt: new Date(),
                 priority: task.priority,
                 dueDate: task.dueDate,
               },
             });
+<<<<<<< HEAD
 
             if (import.meta.env.DEV) {
               console.log("✅ Kaldırılan kullanıcıya bildirim gönderildi:", removedUserNotification.id);
             }
 
+=======
+            
+            if (import.meta.env.DEV) {
+              console.log("✅ Kaldırılan kullanıcıya bildirim gönderildi:", removedUserNotification.id);
+            }
+            
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             // Görevi oluşturan kişiye bildirim (eğer kaldıran kişi değilse)
             if (task.createdBy && task.createdBy !== deletedBy && task.createdBy !== assignmentData.assignedTo) {
               const removeTime2 = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -1786,16 +2330,26 @@ export const deleteTaskAssignment = async (taskId: string, assignmentId: string,
                 message: `${deleterProfile?.fullName || deleterProfile?.email || "Bir yönetici"} kullanıcısı tarafından "${removedUser?.fullName || removedUser?.email || "bir kullanıcı"}" kullanıcısı "${task.title}" görevinden kaldırıldı.\n\nBu kullanıcı artık görevle ilgili bildirimler almayacak ve görev üzerinde işlem yapamayacak.\n\nKaldırılma Zamanı: ${removeTime2}`,
                 read: false,
                 relatedId: taskId,
+<<<<<<< HEAD
                 metadata: {
                   assignment_id: assignmentId,
                   action: "removed",
+=======
+                metadata: { 
+                  assignment_id: assignmentId, 
+                  action: "removed", 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   removed_user_id: assignmentData.assignedTo,
                   updatedAt: new Date(),
                   priority: task.priority,
                   dueDate: task.dueDate,
                 },
               });
+<<<<<<< HEAD
 
+=======
+              
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               if (import.meta.env.DEV) {
                 console.log("✅ Görev oluşturucuya bildirim gönderildi:", creatorNotification.id);
               }
@@ -1884,14 +2438,22 @@ export const updateChecklistItem = async (
       // Yetki kontrolü: Firestore'dan kontrol et
       const { getUserProfile } = await import("./authService");
       const userProfile = await getUserProfile(userId);
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (userProfile) {
         const { canAddChecklist } = await import("@/utils/permissions");
         const assignments = await getTaskAssignments(taskId);
         const assignedUserIds = assignments
           .filter((a) => a.status === "accepted" || a.status === "pending")
           .map((a) => a.assignedTo);
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         const canAdd = await canAddChecklist(task, userProfile, assignedUserIds);
         if (!canAdd) {
           throw new Error("Checklist işaretleme yetkiniz yok. Sadece size atanan görevlerin checklist'lerini işaretleyebilirsiniz.");
@@ -1901,7 +2463,11 @@ export const updateChecklistItem = async (
 
     const checklistRef = doc(firestore, "tasks", taskId, "checklists", checklistId);
     const checklistDoc = await getDoc(checklistRef);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (!checklistDoc.exists()) {
       throw new Error("Checklist bulunamadı");
     }
@@ -1910,10 +2476,17 @@ export const updateChecklistItem = async (
     const updatedItems = checklist.items.map((item) =>
       item.id === itemId
         ? {
+<<<<<<< HEAD
           ...item,
           completed,
           completedAt: completed ? Timestamp.now() : null,
         }
+=======
+            ...item,
+            completed,
+            completedAt: completed ? Timestamp.now() : null,
+          }
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         : item
     );
 
@@ -1968,7 +2541,11 @@ export const addChecklistItem = async (
   try {
     const checklistRef = doc(firestore, "tasks", taskId, "checklists", checklistId);
     const checklistDoc = await getDoc(checklistRef);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (!checklistDoc.exists()) {
       throw new Error("Checklist bulunamadı");
     }
@@ -2005,24 +2582,39 @@ export const deleteChecklist = async (taskId: string, checklistId: string, userI
       if (!task) {
         throw new Error("Görev bulunamadı");
       }
+<<<<<<< HEAD
 
       const { getUserProfile } = await import("./authService");
       const userProfile = await getUserProfile(userId);
 
+=======
+      
+      const { getUserProfile } = await import("./authService");
+      const userProfile = await getUserProfile(userId);
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (userProfile) {
         const { canEditChecklist } = await import("@/utils/permissions");
         const assignments = await getTaskAssignments(taskId);
         const assignedUserIds = assignments
           .filter((a) => a.status === "accepted" || a.status === "pending")
           .map((a) => a.assignedTo);
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         const canEdit = await canEditChecklist(task, userProfile, assignedUserIds);
         if (!canEdit) {
           throw new Error("Checklist silme yetkiniz yok. Sadece göreve atanan kullanıcılar veya yöneticiler silebilir.");
         }
       }
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await deleteDoc(doc(firestore, "tasks", taskId, "checklists", checklistId));
   } catch (error: unknown) {
     if (import.meta.env.DEV) {
@@ -2043,7 +2635,11 @@ export const deleteChecklistItem = async (
   try {
     const checklistRef = doc(firestore, "tasks", taskId, "checklists", checklistId);
     const checklistDoc = await getDoc(checklistRef);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (!checklistDoc.exists()) {
       throw new Error("Checklist bulunamadı");
     }
@@ -2127,10 +2723,17 @@ export const addTaskComment = async (
           message: `${userName || userEmail || "Bir kullanıcı"} kullanıcısı "${task.title || "Görev"}" görevinize yorum ekledi.\n\nYorum: ${content.substring(0, 200)}${content.length > 200 ? "..." : ""}\n\nYorumu görüntülemek ve yanıtlamak için bildirime tıklayabilirsiniz.\n\nYorum Zamanı: ${new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
           read: false,
           relatedId: taskId,
+<<<<<<< HEAD
           metadata: {
             commentId: docRef.id,
             commenterId: userId,
             commenterName: userName,
+=======
+          metadata: { 
+            commentId: docRef.id, 
+            commenterId: userId, 
+            commenterName: userName, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             commenterEmail: userEmail,
             updatedAt: new Date(),
           },
@@ -2279,16 +2882,26 @@ export const addTaskAttachment = async (
     // Eğer admin değilse, göreve atanmış olup olmadığını veya görevi oluşturmuş olup olmadığını kontrol et
     if (!isAdmin) {
       const isCreator = task.createdBy === currentUserId;
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (!isCreator) {
         // Göreve atanmış olup olmadığını kontrol et
         const assignments = await getTaskAssignments(taskId);
         const assignedUserIds = assignments
           .filter(a => a.status === "accepted") // Sadece kabul edilen atamalar
           .map(a => a.assignedTo);
+<<<<<<< HEAD
 
         const isAssigned = assignedUserIds.includes(currentUserId);
 
+=======
+        
+        const isAssigned = assignedUserIds.includes(currentUserId);
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         if (!isAssigned) {
           throw new Error("Bu göreve dosya eklemek için yetkiniz yok. Sadece size atanan görevlere veya oluşturduğunuz görevlere dosya ekleyebilirsiniz.");
         }
@@ -2373,16 +2986,26 @@ export const deleteTaskAttachment = async (taskId: string, attachmentId: string)
     // Eğer admin değilse, göreve atanmış olup olmadığını veya görevi oluşturmuş olup olmadığını kontrol et
     if (!isAdmin) {
       const isCreator = task.createdBy === currentUserId;
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (!isCreator) {
         // Göreve atanmış olup olmadığını kontrol et
         const assignments = await getTaskAssignments(taskId);
         const assignedUserIds = assignments
           .filter(a => a.status === "accepted") // Sadece kabul edilen atamalar
           .map(a => a.assignedTo);
+<<<<<<< HEAD
 
         const isAssigned = assignedUserIds.includes(currentUserId);
 
+=======
+        
+        const isAssigned = assignedUserIds.includes(currentUserId);
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         if (!isAssigned) {
           throw new Error("Bu görevden dosya silmek için yetkiniz yok. Sadece size atanan görevlerden veya oluşturduğunuz görevlerden dosya silebilirsiniz.");
         }
@@ -2406,6 +3029,7 @@ export const addTaskToPool = async (taskId: string): Promise<void> => {
     // Önce görev bilgilerini al
     const taskRef = doc(firestore, "tasks", taskId);
     const taskSnap = await getDoc(taskRef);
+<<<<<<< HEAD
 
     if (!taskSnap.exists()) {
       throw new Error("Görev bulunamadı");
@@ -2413,6 +3037,15 @@ export const addTaskToPool = async (taskId: string): Promise<void> => {
 
     const taskData = taskSnap.data() as Task;
 
+=======
+    
+    if (!taskSnap.exists()) {
+      throw new Error("Görev bulunamadı");
+    }
+    
+    const taskData = taskSnap.data() as Task;
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Görevi havuza ekle
     await updateDoc(taskRef, {
       isInPool: true,
@@ -2429,11 +3062,19 @@ export const addTaskToPool = async (taskId: string): Promise<void> => {
       const currentUserId = auth?.currentUser?.uid;
       const currentUser = await getUserProfile(currentUserId || "");
       const currentUserName = currentUser?.fullName || currentUser?.displayName || currentUser?.email || "Bir kullanıcı";
+<<<<<<< HEAD
 
       // Görevi oluşturan hariç tüm kullanıcılara bildirim gönder
       const notificationPromises = allUsers
         .filter(user => user.id && user.id !== currentUserId && user.id !== taskData.createdBy)
         .map(user =>
+=======
+      
+      // Görevi oluşturan hariç tüm kullanıcılara bildirim gönder
+      const notificationPromises = allUsers
+        .filter(user => user.id && user.id !== currentUserId && user.id !== taskData.createdBy)
+        .map(user => 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           createNotification({
             userId: user.id,
             type: "task_pool_request",
@@ -2449,7 +3090,11 @@ export const addTaskToPool = async (taskId: string): Promise<void> => {
             },
           })
         );
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       await Promise.all(notificationPromises);
     } catch (notificationError) {
       if (import.meta.env.DEV) {
@@ -2490,6 +3135,7 @@ export const requestTaskFromPool = async (taskId: string, userId: string): Promi
   try {
     const taskRef = doc(firestore, "tasks", taskId);
     const taskSnap = await getDoc(taskRef);
+<<<<<<< HEAD
 
     if (!taskSnap.exists()) {
       throw new Error("Görev bulunamadı");
@@ -2502,6 +3148,20 @@ export const requestTaskFromPool = async (taskId: string, userId: string): Promi
       throw new Error("Bu görev için zaten talep yaptınız");
     }
 
+=======
+    
+    if (!taskSnap.exists()) {
+      throw new Error("Görev bulunamadı");
+    }
+    
+    const taskData = taskSnap.data();
+    const poolRequests = taskData.poolRequests || [];
+    
+    if (poolRequests.includes(userId)) {
+      throw new Error("Bu görev için zaten talep yaptınız");
+    }
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await updateDoc(taskRef, {
       poolRequests: [...poolRequests, userId],
       updatedAt: serverTimestamp(),
@@ -2517,7 +3177,11 @@ export const requestTaskFromPool = async (taskId: string, userId: string): Promi
       try {
         const requestingUser = await getUserProfile(userId);
         const requestingUserName = requestingUser?.fullName || requestingUser?.displayName || requestingUser?.email || "Bir kullanıcı";
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         await createNotification({
           userId: taskCreatorId,
           type: "task_pool_request",
@@ -2555,6 +3219,7 @@ export const approvePoolRequest = async (taskId: string, userId: string, approve
   try {
     const taskRef = doc(firestore, "tasks", taskId);
     const taskSnap = await getDoc(taskRef);
+<<<<<<< HEAD
 
     if (!taskSnap.exists()) {
       throw new Error("Görev bulunamadı");
@@ -2567,12 +3232,30 @@ export const approvePoolRequest = async (taskId: string, userId: string, approve
       throw new Error("Bu kullanıcı için talep bulunamadı");
     }
 
+=======
+    
+    if (!taskSnap.exists()) {
+      throw new Error("Görev bulunamadı");
+    }
+    
+    const taskData = taskSnap.data() as Task;
+    const poolRequests = taskData.poolRequests || [];
+    
+    if (!poolRequests.includes(userId)) {
+      throw new Error("Bu kullanıcı için talep bulunamadı");
+    }
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Görevi havuza ekleyen kişi kontrolü (genellikle görevi oluşturan kişi)
     // Not: Görev havuzuna ekleme işlemi genellikle görevi oluşturan kişi tarafından yapılır
     if (taskData.createdBy !== approvedBy) {
       throw new Error("Sadece görevi havuza ekleyen kişi talepleri onaylayabilir");
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Kullanıcıyı göreve ata
     const assignment = await assignTask(taskId, userId, approvedBy);
 
@@ -2609,9 +3292,15 @@ export const approvePoolRequest = async (taskId: string, userId: string, approve
       if (task) {
         // assignTask'ın gönderdiği bildirimi bul (assignment_id ve relatedId ile eşleşen)
         const assignmentNotification = notifications.find(
+<<<<<<< HEAD
           (n) =>
             n.type === "task_assigned" &&
             n.relatedId === taskId &&
+=======
+          (n) => 
+            n.type === "task_assigned" && 
+            n.relatedId === taskId && 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             n.metadata?.assignment_id === assignment.id &&
             !n.read
         );
@@ -2635,7 +3324,11 @@ export const approvePoolRequest = async (taskId: string, userId: string, approve
             message: `${approverProfile?.fullName || approverProfile?.email || "Bir yönetici"} kullanıcısı görev havuzu talebinizi onayladı. "${task.title}" görevine atandınız ve görev otomatik olarak kabul edildi.`,
             read: false,
             relatedId: taskId,
+<<<<<<< HEAD
             metadata: {
+=======
+            metadata: { 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               assignment_id: assignment.id,
               action: "pool_request_approved",
               priority: task.priority,
@@ -2670,6 +3363,7 @@ export const rejectPoolRequest = async (taskId: string, userId: string): Promise
   try {
     const taskRef = doc(firestore, "tasks", taskId);
     const taskSnap = await getDoc(taskRef);
+<<<<<<< HEAD
 
     if (!taskSnap.exists()) {
       throw new Error("Görev bulunamadı");
@@ -2682,6 +3376,20 @@ export const rejectPoolRequest = async (taskId: string, userId: string): Promise
       throw new Error("Bu kullanıcı için talep bulunamadı");
     }
 
+=======
+    
+    if (!taskSnap.exists()) {
+      throw new Error("Görev bulunamadı");
+    }
+    
+    const taskData = taskSnap.data();
+    const poolRequests = taskData.poolRequests || [];
+    
+    if (!poolRequests.includes(userId)) {
+      throw new Error("Bu kullanıcı için talep bulunamadı");
+    }
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await updateDoc(taskRef, {
       poolRequests: poolRequests.filter((id: string) => id !== userId),
       updatedAt: serverTimestamp(),
@@ -2729,16 +3437,26 @@ export const requestTaskApproval = async (taskId: string, requestedBy: string): 
     // Admin kontrolü - adminler her zaman onaya gönderebilir
     const { isAdmin: checkIsAdmin, isMainAdmin } = await import("@/utils/permissions");
     const isAdmin = await checkIsAdmin(requesterProfile) || await isMainAdmin(requesterProfile);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Eğer admin değilse, göreve atanmış olup olmadığını kontrol et
     if (!isAdmin) {
       const assignments = await getTaskAssignments(taskId);
       const assignedUserIds = assignments
         .filter(a => a.status === "accepted") // Sadece kabul edilen atamalar
         .map(a => a.assignedTo);
+<<<<<<< HEAD
 
       const isAssigned = assignedUserIds.includes(requestedBy);
 
+=======
+      
+      const isAssigned = assignedUserIds.includes(requestedBy);
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (!isAssigned) {
         throw new Error("Bu görevi onaya göndermek için yetkiniz yok. Sadece size atanan görevleri onaya gönderebilirsiniz.");
       }
@@ -2746,7 +3464,11 @@ export const requestTaskApproval = async (taskId: string, requestedBy: string): 
 
     // Görev oluşturan kişi direkt tamamlayabilir, onaya göndermesine gerek yok
     // Ama eğer zaten onaya gönderiyorsa, bu durumda izin ver (belki bir hata durumu)
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await updateDoc(doc(firestore, "tasks", taskId), {
       approvalStatus: "pending",
       approvalRequestedBy: requestedBy,
@@ -2765,9 +3487,15 @@ export const requestTaskApproval = async (taskId: string, requestedBy: string): 
           const { getNotifications } = await import("./notificationService");
           const existingNotifications = await getNotifications(task.createdBy, { unreadOnly: true });
           duplicateExists = existingNotifications.some(
+<<<<<<< HEAD
             n => n.type === "task_approval" &&
               n.relatedId === taskId &&
               n.metadata?.action === "approval_requested"
+=======
+            n => n.type === "task_approval" && 
+                 n.relatedId === taskId && 
+                 n.metadata?.action === "approval_requested"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           );
         } catch (getNotifError) {
           // Index hatası veya başka bir hata - duplicate kontrolünü atla ve bildirim oluşturmayı dene
@@ -2786,7 +3514,11 @@ export const requestTaskApproval = async (taskId: string, requestedBy: string): 
               message: `${requesterProfile?.fullName || requesterProfile?.email || "Bir kullanıcı"} kullanıcısı "${task.title}" görevini tamamladı ve onayınızı bekliyor.\n\n"${task.title}" başlıklı görev için onay talebi gönderildi. Lütfen görevi inceleyip onaylayın veya gerekirse geri gönderin.\n\nİşlem Zamanı: ${new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
               read: false,
               relatedId: taskId,
+<<<<<<< HEAD
               metadata: {
+=======
+              metadata: { 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 action: "approval_requested",
                 updatedAt: new Date(),
                 priority: task.priority,
@@ -2884,31 +3616,53 @@ export const approveTask = async (taskId: string, approvedBy: string): Promise<v
       const updatedTask = await getTaskById(taskId);
       const approverProfile = await getUserProfile(approvedBy);
       const approverName = approverProfile?.fullName || approverProfile?.email || "Yönetici";
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Atanan kişileri bul
       const assignments = await getTaskAssignments(taskId);
       const assignedUserIds = assignments
         .filter(a => a.status === "accepted") // Sadece kabul edilen atamalar
         .map(a => a.assignedTo);
+<<<<<<< HEAD
 
       // Bildirim gönderilecek kullanıcıları topla
       const notificationUserIds = new Set<string>();
 
+=======
+      
+      // Bildirim gönderilecek kullanıcıları topla
+      const notificationUserIds = new Set<string>();
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Onay isteyen kişiye bildirim gönder
       if (updatedTask && updatedTask.approvalRequestedBy) {
         notificationUserIds.add(updatedTask.approvalRequestedBy);
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Atanan kişilere bildirim gönder
       assignedUserIds.forEach(userId => {
         if (userId !== updatedTask?.approvalRequestedBy) {
           notificationUserIds.add(userId);
         }
       });
+<<<<<<< HEAD
 
       // Her kullanıcıya bildirim gönder
       const { getNotifications } = await import("./notificationService");
 
+=======
+      
+      // Her kullanıcıya bildirim gönder
+      const { getNotifications } = await import("./notificationService");
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       for (const userId of notificationUserIds) {
         try {
           // Duplicate kontrolü - index hatası durumunda sessizce devam et
@@ -2920,7 +3674,11 @@ export const approveTask = async (taskId: string, approvedBy: string): Promise<v
             // getNotifications zaten boş array döndürüyor, burada da sessizce handle et
             if (import.meta.env.DEV) {
               // Sadece gerçek hataları logla (index hatası değilse)
+<<<<<<< HEAD
               const isIndexError =
+=======
+              const isIndexError = 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 typeof notifError === "object" &&
                 notifError !== null &&
                 "code" in notifError &&
@@ -2930,11 +3688,19 @@ export const approveTask = async (taskId: string, approvedBy: string): Promise<v
               }
             }
           }
+<<<<<<< HEAD
 
           const duplicateExists = existingNotifications.some(
             n => n.type === "task_approval" &&
               n.relatedId === taskId &&
               n.metadata?.action === "approved"
+=======
+          
+          const duplicateExists = existingNotifications.some(
+            n => n.type === "task_approval" && 
+                 n.relatedId === taskId && 
+                 n.metadata?.action === "approved"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           );
 
           if (!duplicateExists) {
@@ -2946,7 +3712,11 @@ export const approveTask = async (taskId: string, approvedBy: string): Promise<v
               message: `${approverName} kullanıcısı tarafından "${updatedTask?.title || "görev"}" görevi onaylandı ve "Onaylandı" durumuna geçirildi.\n\nGörev başarıyla onaylanmış olarak işaretlendi. Tüm görev üyeleri bu durumu görebilir.\n\nOnay Zamanı: ${approvalTime}`,
               read: false,
               relatedId: taskId,
+<<<<<<< HEAD
               metadata: {
+=======
+              metadata: { 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 action: "approved",
                 updatedAt: new Date(),
                 priority: updatedTask?.priority,
@@ -3006,13 +3776,18 @@ export const rejectTaskApproval = async (taskId: string, rejectedBy: string, rej
     try {
       const task = await getTaskById(taskId);
       const rejecterProfile = await getUserProfile(rejectedBy);
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (task) {
         const assignments = await getTaskAssignments(taskId);
         // Statusu rejected olmayan tüm atanmış kullanıcıları al
         const assignedUserIds = assignments
           .filter(a => a.status !== "rejected")
           .map(a => a.assignedTo);
+<<<<<<< HEAD
 
         // Görevdeki tüm kişileri topla (atananlar + görev oluşturan + onay isteyen)
         const allTaskUserIds = new Set<string>();
@@ -3020,26 +3795,51 @@ export const rejectTaskApproval = async (taskId: string, rejectedBy: string, rej
         // Atanan kullanıcıları ekle
         assignedUserIds.forEach(id => allTaskUserIds.add(id));
 
+=======
+        
+        // Görevdeki tüm kişileri topla (atananlar + görev oluşturan + onay isteyen)
+        const allTaskUserIds = new Set<string>();
+        
+        // Atanan kullanıcıları ekle
+        assignedUserIds.forEach(id => allTaskUserIds.add(id));
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Görev oluşturan kişiyi ekle (eğer varsa ve listede yoksa)
         if (task.createdBy && !allTaskUserIds.has(task.createdBy)) {
           allTaskUserIds.add(task.createdBy);
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Onay isteyen kişiyi ekle (eğer varsa ve listede yoksa)
         if (task.approvalRequestedBy && !allTaskUserIds.has(task.approvalRequestedBy)) {
           allTaskUserIds.add(task.approvalRequestedBy);
         }
+<<<<<<< HEAD
 
         const rejectionMessage = rejectionReason
           ? `${rejecterProfile?.fullName || rejecterProfile?.email || "Yönetici"} "${task.title}" görevi için tamamlanma onayını reddetti. Not: ${rejectionReason}`
           : `${rejecterProfile?.fullName || rejecterProfile?.email || "Yönetici"} "${task.title}" görevi için tamamlanma onayını reddetti.`;
 
+=======
+        
+        const rejectionMessage = rejectionReason 
+          ? `${rejecterProfile?.fullName || rejecterProfile?.email || "Yönetici"} "${task.title}" görevi için tamamlanma onayını reddetti. Not: ${rejectionReason}`
+          : `${rejecterProfile?.fullName || rejecterProfile?.email || "Yönetici"} "${task.title}" görevi için tamamlanma onayını reddetti.`;
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Görevdeki tüm kişilere bildirim gönder (her biri mail alacak - createNotification otomatik mail gönderir)
         await Promise.all(
           Array.from(allTaskUserIds).map(async (userId) => {
             try {
               const rejectTime3 = new Date().toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+<<<<<<< HEAD
               const detailedRejectionMessage = rejectionReason
+=======
+              const detailedRejectionMessage = rejectionReason 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 ? `${rejecterProfile?.fullName || rejecterProfile?.email || "Yönetici"} kullanıcısı tarafından "${task.title}" görevi için tamamlanma onayı reddedildi.\n\nReddetme Notu: ${rejectionReason}\n\nGörev tekrar "Devam Ediyor" durumuna alındı. Lütfen gerekli düzeltmeleri yapıp tekrar onay talebi gönderin.\n\nReddetme Zamanı: ${rejectTime3}`
                 : `${rejecterProfile?.fullName || rejecterProfile?.email || "Yönetici"} kullanıcısı tarafından "${task.title}" görevi için tamamlanma onayı reddedildi.\n\nGörev tekrar "Devam Ediyor" durumuna alındı. Lütfen gerekli düzeltmeleri yapıp tekrar onay talebi gönderin.\n\nReddetme Zamanı: ${rejectTime3}`;
               await createNotification({
@@ -3049,8 +3849,13 @@ export const rejectTaskApproval = async (taskId: string, rejectedBy: string, rej
                 message: detailedRejectionMessage,
                 read: false,
                 relatedId: taskId,
+<<<<<<< HEAD
                 metadata: {
                   action: "rejected",
+=======
+                metadata: { 
+                  action: "rejected", 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   rejectionReason,
                   updatedAt: new Date(),
                   priority: task.priority,
@@ -3093,13 +3898,21 @@ export const approveTaskRejection = async (
 
     const assignmentRef = doc(firestore, "tasks", taskId, "assignments", assignmentId);
     const assignmentDoc = await getDoc(assignmentRef);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (!assignmentDoc.exists()) {
       throw new Error("Görev ataması bulunamadı");
     }
 
     const assignmentData = assignmentDoc.data() as TaskAssignment;
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (assignmentData.status !== "rejected") {
       throw new Error("Görev reddedilmemiş");
     }
@@ -3136,8 +3949,13 @@ export const approveTaskRejection = async (
           message: `${approverUser?.fullName || approverUser?.email || "Yönetici"} kullanıcısı tarafından "${task?.title}" görevi için reddiniz onaylandı.\n\nGörev artık başka birine atanabilir veya iptal edilebilir. Bu görevle ilgili artık bildirim almayacaksınız.\n\nOnay Zamanı: ${approvalTime2}`,
           read: false,
           relatedId: taskId,
+<<<<<<< HEAD
           metadata: {
             assignment_id: assignmentId,
+=======
+          metadata: { 
+            assignment_id: assignmentId, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             action: "rejection_approved",
             updatedAt: new Date(),
             priority: task?.priority,
@@ -3177,13 +3995,21 @@ export const rejectTaskRejection = async (
 
     const assignmentRef = doc(firestore, "tasks", taskId, "assignments", assignmentId);
     const assignmentDoc = await getDoc(assignmentRef);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (!assignmentDoc.exists()) {
       throw new Error("Görev ataması bulunamadı");
     }
 
     const assignmentData = assignmentDoc.data() as TaskAssignment;
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (assignmentData.status !== "rejected") {
       throw new Error("Görev reddedilmemiş");
     }
@@ -3205,12 +4031,21 @@ export const rejectTaskRejection = async (
       assignmentId,
       userId,
       { status: "rejected" },
+<<<<<<< HEAD
       {
         status: "pending",
         rejectionRejectedBy: userId,
         rejectionRejectionReason: reason.trim(),
         taskId,
         taskTitle: task?.title
+=======
+      { 
+        status: "pending", 
+        rejectionRejectedBy: userId,
+        rejectionRejectionReason: reason.trim(),
+        taskId, 
+        taskTitle: task?.title 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       }
     );
 
@@ -3229,8 +4064,13 @@ export const rejectTaskRejection = async (
           message: `${rejecterUser?.fullName || rejecterUser?.email || "Yönetici"} kullanıcısı tarafından "${task?.title}" görevi için reddiniz reddedildi.\n\nGörev tekrar size atandı ve üzerinde çalışmaya devam etmeniz bekleniyor.\n\nYönetici Notu: ${reason.trim().substring(0, 200)}${reason.trim().length > 200 ? "..." : ""}\n\nReddetme Zamanı: ${rejectionTime}`,
           read: false,
           relatedId: taskId,
+<<<<<<< HEAD
           metadata: {
             assignment_id: assignmentId,
+=======
+          metadata: { 
+            assignment_id: assignmentId, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             action: "rejection_rejected",
             reason: reason.trim()
           },
@@ -3302,6 +4142,7 @@ export const removeUserFromAllTasks = async (userId: string): Promise<void> => {
     // Kullanıcının atandığı tüm görevleri bul
     const tasksRef = collection(firestore, "tasks");
     const allTasksSnapshot = await getDocs(tasksRef);
+<<<<<<< HEAD
 
     let batch = writeBatch(firestore);
     let batchCount = 0;
@@ -3311,10 +4152,22 @@ export const removeUserFromAllTasks = async (userId: string): Promise<void> => {
       const taskData = taskDoc.data();
       const taskId = taskDoc.id;
 
+=======
+    
+    let batch = writeBatch(firestore);
+    let batchCount = 0;
+    const maxBatchSize = 500;
+    
+    for (const taskDoc of allTasksSnapshot.docs) {
+      const taskData = taskDoc.data();
+      const taskId = taskDoc.id;
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // assignedUsers array'inden kullanıcıyı çıkar
       const assignedUsers = taskData.assignedUsers || [];
       if (assignedUsers.includes(userId)) {
         const updatedAssignedUsers = assignedUsers.filter((uid: string) => uid !== userId);
+<<<<<<< HEAD
 
         // Eğer göreve kimse kalmamışsa havuza al
         const shouldMoveToPool = updatedAssignedUsers.length === 0;
@@ -3323,14 +4176,31 @@ export const removeUserFromAllTasks = async (userId: string): Promise<void> => {
           assignedUsers: updatedAssignedUsers,
         };
 
+=======
+        
+        // Eğer göreve kimse kalmamışsa havuza al
+        const shouldMoveToPool = updatedAssignedUsers.length === 0;
+        
+        const updates: Partial<Task> & { assignedUsers?: string[]; isInPool?: boolean; poolRequests?: string[] } = {
+          assignedUsers: updatedAssignedUsers,
+        };
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         if (shouldMoveToPool) {
           updates.isInPool = true;
           updates.poolRequests = [];
         }
+<<<<<<< HEAD
 
         batch.update(taskDoc.ref, updates);
         batchCount++;
 
+=======
+        
+        batch.update(taskDoc.ref, updates);
+        batchCount++;
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Batch size limit
         if (batchCount >= maxBatchSize) {
           await batch.commit();
@@ -3339,17 +4209,29 @@ export const removeUserFromAllTasks = async (userId: string): Promise<void> => {
           batch = writeBatch(firestore);
         }
       }
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Task assignments collection'ından kullanıcının atamalarını sil
       const assignmentsRef = collection(firestore, `tasks/${taskId}/assignments`);
       const assignmentsSnapshot = await getDocs(
         query(assignmentsRef, where("assignedTo", "==", userId))
       );
+<<<<<<< HEAD
 
       for (const assignmentDoc of assignmentsSnapshot.docs) {
         batch.delete(assignmentDoc.ref);
         batchCount++;
 
+=======
+      
+      for (const assignmentDoc of assignmentsSnapshot.docs) {
+        batch.delete(assignmentDoc.ref);
+        batchCount++;
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         if (batchCount >= maxBatchSize) {
           await batch.commit();
           batchCount = 0;
@@ -3358,27 +4240,46 @@ export const removeUserFromAllTasks = async (userId: string): Promise<void> => {
         }
       }
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Kalan batch'i commit et
     if (batchCount > 0) {
       await batch.commit();
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Kullanıcının oluşturduğu görevlerin createdBy'sini "deleted_user" olarak güncelle
     const createdTasksSnapshot = await getDocs(
       query(tasksRef, where("createdBy", "==", userId))
     );
+<<<<<<< HEAD
 
     let updateBatch = writeBatch(firestore);
     let updateBatchCount = 0;
 
+=======
+    
+    let updateBatch = writeBatch(firestore);
+    let updateBatchCount = 0;
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     for (const taskDoc of createdTasksSnapshot.docs) {
       updateBatch.update(taskDoc.ref, {
         createdBy: "deleted_user",
         createdByName: "Silinmiş Kullanıcı",
       });
       updateBatchCount++;
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (updateBatchCount >= maxBatchSize) {
         await updateBatch.commit();
         updateBatchCount = 0;
@@ -3386,11 +4287,19 @@ export const removeUserFromAllTasks = async (userId: string): Promise<void> => {
         updateBatch = writeBatch(firestore);
       }
     }
+<<<<<<< HEAD
 
     if (updateBatchCount > 0) {
       await updateBatch.commit();
     }
 
+=======
+    
+    if (updateBatchCount > 0) {
+      await updateBatch.commit();
+    }
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   } catch (error: unknown) {
     if (import.meta.env.DEV) {
       console.error("Error removing user from tasks:", error);

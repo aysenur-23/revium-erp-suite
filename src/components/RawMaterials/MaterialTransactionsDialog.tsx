@@ -136,6 +136,7 @@ export const MaterialTransactionsDialog = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl w-[80vw] max-h-[80vh] overflow-y-auto">
+<<<<<<< HEAD
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">
           {materialName} - İşlem Geçmişi
@@ -149,6 +150,13 @@ export const MaterialTransactionsDialog = ({
           <p className="text-[11px] sm:text-xs text-muted-foreground">
             Bu hammadde için yapılan tüm stok hareketlerini görüntüleyin
           </p>
+=======
+        <DialogHeader>
+          <DialogTitle className="text-[16px] sm:text-[18px]">{materialName} - İşlem Geçmişi</DialogTitle>
+          <DialogDescription className="text-[11px] sm:text-xs">
+            Bu hammadde için yapılan tüm stok hareketlerini görüntüleyin
+          </DialogDescription>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         </DialogHeader>
 
         {loading ? (

@@ -250,6 +250,7 @@ try {
       }
     }
     
+<<<<<<< HEAD
     // Modulepreload sırasını düzelt - React core önce olmalı
     const modulepreloadPattern = /<link rel="modulepreload"[^>]*>/g;
     const modulepreloads = indexContent.match(modulepreloadPattern) || [];
@@ -292,6 +293,10 @@ try {
     
     fs.writeFileSync(indexPath, indexContent);
     logStep('index.html Düzenleme', 'success', `${changesMade} değişiklik yapıldı (CSP güncelleme, modulepreload sıralama, temizlik)`);
+=======
+    fs.writeFileSync(indexPath, indexContent);
+    logStep('index.html Düzenleme', 'success', `${changesMade} değişiklik yapıldı (CSP güncelleme, temizlik)`);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   }
 } catch (error) {
   logStep('index.html Düzenleme', 'error', error.message);

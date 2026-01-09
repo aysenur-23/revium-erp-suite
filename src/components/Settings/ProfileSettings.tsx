@@ -6,15 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+<<<<<<< HEAD
 import { lazy, Suspense } from "react";
+=======
+import { TaskHistory } from "@/components/Settings/TaskHistory";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { getUserProfile, updateFirebaseUserProfile } from "@/services/firebase/authService";
 import { normalizePhone, formatPhoneForDisplay, formatPhoneInput } from "@/utils/phoneNormalizer";
 import { getDepartments, DepartmentWithStats } from "@/services/firebase/departmentService";
 import { Loader2, Users } from "lucide-react";
 
+<<<<<<< HEAD
 // Lazy load TaskHistory component (non-critical, heavy component)
 const TaskHistory = lazy(() => import("@/components/Settings/TaskHistory").then(m => ({ default: m.TaskHistory })));
 
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 export const ProfileSettings = () => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
@@ -23,7 +30,11 @@ export const ProfileSettings = () => {
     phone: "",
     dateOfBirth: "",
   });
+<<<<<<< HEAD
   const [loading, setLoading] = useState(false); // Başlangıçta false - placeholder data ile hızlı render
+=======
+  const [loading, setLoading] = useState(true);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [saving, setSaving] = useState(false);
   
   // Ekip yönetimi state'leri
@@ -40,6 +51,7 @@ export const ProfileSettings = () => {
         return;
       }
 
+<<<<<<< HEAD
       // Defer data loading: İlk render'dan 100ms sonra yükle (non-blocking)
       setLoading(true);
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -52,6 +64,24 @@ export const ProfileSettings = () => {
           }
           return null;
         });
+=======
+      try {
+        // Profil ve departmanları paralel çek
+        const [profile, depts] = await Promise.all([
+          getUserProfile(user.id).catch((err) => {
+            if (import.meta.env.DEV) {
+              console.error("Profil yüklenirken hata:", err);
+            }
+            return null;
+          }),
+          getDepartments().catch((err) => {
+            if (import.meta.env.DEV) {
+              console.error("Departmanlar yüklenirken hata:", err);
+            }
+            return [];
+          })
+        ]);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
         if (profile) {
           setFormData({
@@ -63,6 +93,7 @@ export const ProfileSettings = () => {
           setUserDepartmentId(profile.departmentId || null);
           setPendingTeams(profile.pendingTeams || []);
         }
+<<<<<<< HEAD
         
         // Departmanları defer et (non-critical, 200ms sonra yükle)
         setTimeout(async () => {
@@ -79,6 +110,9 @@ export const ProfileSettings = () => {
           }
         }, 200);
 
+=======
+        setDepartments(depts || []);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       } catch (error: unknown) {
         if (import.meta.env.DEV) {
           console.error("Veriler yüklenirken hata:", error);
@@ -140,6 +174,7 @@ export const ProfileSettings = () => {
       setPendingTeams(newPendingTeams);
       setSelectedTeamId("");
       
+<<<<<<< HEAD
       // Ekip liderine ve yöneticilere bildirim gönder
       try {
         const { getDepartmentById } = await import("@/services/firebase/departmentService");
@@ -218,6 +253,37 @@ export const ProfileSettings = () => {
       } catch (notifError) {
         if (import.meta.env.DEV) {
           console.error("Error sending notifications:", notifError);
+=======
+      // Ekip liderine bildirim ve mail gönder
+      try {
+        const { getDepartmentById } = await import("@/services/firebase/departmentService");
+        const { createNotification } = await import("@/services/firebase/notificationService");
+        const department = await getDepartmentById(selectedTeamId);
+        
+        if (department && department.managerId) {
+          const requesterName = user.fullName || user.displayName || user.email || "Bir kullanıcı";
+          const teamName = department.name || "ekip";
+          
+          // Bildirim oluştur
+          await createNotification({
+            userId: department.managerId,
+            type: "system",
+            title: "Yeni katılım isteği",
+            message: `${requesterName} "${teamName}" ekibine katılmak için istek gönderdi. İsteği onaylamak veya reddetmek için Ekip Üyeleri sayfasını ziyaret edin.`,
+            read: false,
+            metadata: {
+              teamId: selectedTeamId,
+              teamName: teamName,
+              requesterId: user.id,
+              requesterName: requesterName,
+              requesterEmail: user.email,
+            },
+          });
+        }
+      } catch (notifError) {
+        if (import.meta.env.DEV) {
+          console.error("Error sending notification to team leader:", notifError);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         }
         // Bildirim hatası başvuruyu engellemez
       }
@@ -425,9 +491,13 @@ export const ProfileSettings = () => {
         </CardContent>
       </Card>
 
+<<<<<<< HEAD
       <Suspense fallback={<div className="flex items-center justify-center p-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}>
         <TaskHistory />
       </Suspense>
+=======
+      <TaskHistory />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     </div>
   );
 };

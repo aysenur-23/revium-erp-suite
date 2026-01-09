@@ -27,10 +27,14 @@ service cloud.firestore {
     // Users collection - Herkes tüm kullanıcıları görebilir, yazma yetkileri sınırlı
     match /users/{userId} {
       // Tüm authenticated kullanıcılar tüm kullanıcıları görebilir
+<<<<<<< HEAD
       // Ayrıca kayıt öncesi email kontrolü için de izin ver
       // Not: Email kontrolü için query yapılırken henüz authenticate olmamış olabilir
       // Güvenlik: Tüm kullanıcılar okunabilir (kayıt sayfası için gerekli)
       allow read: if true;
+=======
+      allow read: if request.auth != null;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Kullanıcı kendi profilini oluşturabilir (kayıt sırasında)
       // onAuthStateChanged kullanarak auth state'in güncellenmesini beklediğimiz için
       // request.auth artık null olmamalı

@@ -40,7 +40,11 @@ const Orders = () => {
   const isMobile = useIsMobile();
   const { user, isTeamLeader } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
+<<<<<<< HEAD
   const [loading, setLoading] = useState(false); // Başlangıçta false - placeholder data ile hızlı render
+=======
+  const [loading, setLoading] = useState(true);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("order_date");
@@ -65,12 +69,17 @@ const Orders = () => {
       filters.status = statusFilter;
     }
     
+<<<<<<< HEAD
     // Defer subscription: İlk render'dan 100ms sonra başlat (non-blocking)
     const timer = setTimeout(() => {
       setLoading(true);
       
       // Gerçek zamanlı dinleme başlat
       const unsubscribe = subscribeToOrders(filters, async (firebaseOrders) => {
+=======
+    // Gerçek zamanlı dinleme başlat
+    const unsubscribe = subscribeToOrders(filters, async (firebaseOrders) => {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       try {
         // Null/undefined kontrolü
         if (!Array.isArray(firebaseOrders)) {
@@ -97,6 +106,45 @@ const Orders = () => {
         const startIndex = (page - 1) * 50;
         const endIndex = startIndex + 50;
         const visibleOrdersWithoutTotal = ordersWithoutTotal.slice(startIndex, endIndex);
+<<<<<<< HEAD
+=======
+        const ordersWithCalculatedTotals = await Promise.allSettled(
+          visibleOrdersWithoutTotal.map(async (order) => {
+            if (!order?.id) return null;
+            try {
+              const items = await getOrderItems(order.id);
+              const calculatedTotal = (Array.isArray(items) ? items : []).reduce((sum, item) => {
+                if (!item) return sum;
+                const itemTotal = item.total || ((item.unitPrice || item.unit_price || 0) * (item.quantity || 0)) - (item.discount || 0);
+                return sum + itemTotal;
+              }, 0);
+              
+              const calculatedQuantity = (Array.isArray(items) ? items : []).reduce((sum, item) => sum + (item?.quantity || 0), 0);
+              
+              const taxRate = order.taxRate || order.tax_rate || 0;
+              const subtotal = calculatedTotal;
+              const taxAmount = subtotal * (taxRate / 100);
+              const grandTotal = subtotal + taxAmount;
+              
+              return {
+                ...order,
+                totalAmount: grandTotal,
+                total_amount: grandTotal,
+                totalQuantity: calculatedQuantity,
+                total_quantity: calculatedQuantity,
+                subtotal: subtotal,
+              } as Order;
+            } catch (error: unknown) {
+              // Sessizce handle et - performans için
+              return {
+                ...order,
+                totalAmount: 0,
+                total_amount: 0,
+              } as Order;
+            }
+          })
+        );
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         
         // Görünmeyen siparişleri totalAmount=0 ile ekle
         const beforeVisible = ordersWithoutTotal.slice(0, startIndex).map(order => ({
@@ -110,6 +158,7 @@ const Orders = () => {
           total_amount: 0,
         })) as Order[];
         
+<<<<<<< HEAD
         // İlk render için: totalAmount=0 ile göster, sonra hesapla
         const validOrdersInitial = [...processedWithTotal, ...beforeVisible, ...visibleOrdersWithoutTotal.map(o => ({ ...o, totalAmount: 0, total_amount: 0 })), ...afterVisible];
         
@@ -217,6 +266,16 @@ const Orders = () => {
         const validOrders = validOrdersInitial;
         
         // İlk render için: Search ve sort işlemleri frontend'de yapılacak
+=======
+        const calculatedOrders: Order[] = ordersWithCalculatedTotals
+          .filter((result) => result.status === 'fulfilled' && result.value !== null)
+          .map(result => (result as PromiseFulfilledResult<Order>).value);
+        
+        // Tüm siparişleri birleştir (sıralama: processedWithTotal, beforeVisible, calculatedOrders, afterVisible)
+        const validOrders = [...processedWithTotal, ...beforeVisible, ...calculatedOrders, ...afterVisible];
+        
+        // Search ve sort işlemleri frontend'de yapılacak
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         let filtered = validOrders;
         
         if (searchQuery) {
@@ -228,7 +287,11 @@ const Orders = () => {
           );
         }
         
+<<<<<<< HEAD
         // Sort (totalAmount=0 olanlar için basit sort)
+=======
+        // Sort
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         filtered.sort((a, b) => {
           let aValue: unknown, bValue: unknown;
           if (sortBy === 'order_date') {
@@ -240,6 +303,10 @@ const Orders = () => {
           } else if (sortBy === 'delivery_date') {
             aValue = a.deliveryDate || null;
             bValue = b.deliveryDate || null;
+<<<<<<< HEAD
+=======
+            // Null değerleri en sona al
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             if (aValue === null && bValue === null) return 0;
             if (aValue === null) return 1;
             if (bValue === null) return -1;
@@ -264,7 +331,11 @@ const Orders = () => {
             : (aValue < bValue ? 1 : -1);
         });
         
+<<<<<<< HEAD
         // Pagination
+=======
+        // Pagination (startIndex ve endIndex zaten yukarıda hesaplandı)
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         setOrders(filtered.slice(startIndex, endIndex));
         setTotalPages(Math.ceil(filtered.length / 50));
         setLoading(false);
@@ -280,11 +351,14 @@ const Orders = () => {
     return () => {
       unsubscribe();
     };
+<<<<<<< HEAD
     }, 100);
     
     return () => {
       clearTimeout(timer);
     };
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   }, [statusFilter, sortBy, sortOrder, searchQuery, page]);
 
   const handleShowCustomer = async (customerId: string | null) => {
@@ -468,7 +542,11 @@ const Orders = () => {
 
   return (
     <MainLayout>
+<<<<<<< HEAD
       <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
+=======
+      <div className="space-y-2 xs:space-y-2.5 sm:space-y-3 w-full max-w-full mx-auto px-1 xs:px-2">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
           <div className="flex-1 min-w-0">
             <h1 className="text-lg sm:text-xl font-semibold text-foreground">Siparişler</h1>

@@ -158,7 +158,10 @@ export const SystemSettings = () => {
             <Input
               value={settings.companyName}
               onChange={(e) => setSettings((prev) => prev ? { ...prev, companyName: e.target.value } : null)}
+<<<<<<< HEAD
               className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             />
           </div>
           <div className="space-y-2">
@@ -167,7 +170,10 @@ export const SystemSettings = () => {
               type="email"
               value={settings.supportEmail}
               onChange={(e) => setSettings((prev) => prev ? { ...prev, supportEmail: e.target.value } : null)}
+<<<<<<< HEAD
               className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             />
           </div>
         </CardContent>
@@ -185,8 +191,13 @@ export const SystemSettings = () => {
         <CardContent className="space-y-3 sm:space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
             <div className="space-y-0.5 flex-1">
+<<<<<<< HEAD
               <Label className="text-[11px] sm:text-xs">Email Bildirimleri</Label>
               <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">Önemli olaylarda email gönder</p>
+=======
+              <Label className="text-sm sm:text-base">Email Bildirimleri</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">Önemli olaylarda email gönder</p>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             </div>
             <Switch
               checked={settings.emailNotifications}
@@ -196,8 +207,13 @@ export const SystemSettings = () => {
           <Separator />
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
             <div className="space-y-0.5 flex-1">
+<<<<<<< HEAD
               <Label className="text-[11px] sm:text-xs">Görev Bildirimleri</Label>
               <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">Yeni görev atandığında bildir</p>
+=======
+              <Label className="text-sm sm:text-base">Görev Bildirimleri</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">Yeni görev atandığında bildir</p>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             </div>
             <Switch
               checked={settings.notifyTasks}
@@ -207,8 +223,13 @@ export const SystemSettings = () => {
           <Separator />
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
             <div className="space-y-0.5 flex-1">
+<<<<<<< HEAD
               <Label className="text-[11px] sm:text-xs">Üretim Bildirimleri</Label>
               <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">Üretim durumu değişikliklerinde bildir</p>
+=======
+              <Label className="text-sm sm:text-base">Üretim Bildirimleri</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">Üretim durumu değişikliklerinde bildir</p>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             </div>
             <Switch
               checked={settings.notifyProduction}
@@ -221,17 +242,30 @@ export const SystemSettings = () => {
       {/* Güvenlik Ayarları */}
       <Card>
         <CardHeader>
+<<<<<<< HEAD
           <CardTitle className="flex items-center gap-2 text-[14px] sm:text-[15px] leading-tight">
             <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Güvenlik Ayarları
           </CardTitle>
           <CardDescription className="text-[11px] sm:text-xs leading-snug">Kimlik doğrulama ve güvenlik yapılandırması</CardDescription>
+=======
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Lock className="h-4 w-4 sm:h-5 sm:w-5" />
+            Güvenlik Ayarları
+          </CardTitle>
+          <CardDescription className="text-xs sm:text-sm">Kimlik doğrulama ve güvenlik yapılandırması</CardDescription>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         </CardHeader>
         <CardContent className="space-y-3 sm:space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
             <div className="space-y-0.5 flex-1">
+<<<<<<< HEAD
               <Label className="text-[11px] sm:text-xs">İki Faktörlü Doğrulama</Label>
               <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">Tüm kullanıcılar için zorunlu kıl</p>
+=======
+              <Label className="text-sm sm:text-base">İki Faktörlü Doğrulama</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">Tüm kullanıcılar için zorunlu kıl</p>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             </div>
             <Switch
               checked={settings.twoFactorRequired}
@@ -241,8 +275,13 @@ export const SystemSettings = () => {
           <Separator />
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
             <div className="space-y-0.5 flex-1">
+<<<<<<< HEAD
               <Label className="text-[11px] sm:text-xs">Şifre Yenileme</Label>
               <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">Şifrelerin düzenli olarak değiştirilmesini zorunlu kıl</p>
+=======
+              <Label className="text-sm sm:text-base">Şifre Yenileme</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">Şifrelerin düzenli olarak değiştirilmesini zorunlu kıl</p>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             </div>
             <Switch
               checked={settings.passwordRotationDays > 0}
@@ -253,7 +292,11 @@ export const SystemSettings = () => {
           </div>
           <Separator />
           <div className="space-y-2">
+<<<<<<< HEAD
             <Label className="text-[11px] sm:text-xs">Oturum Süresi (dakika)</Label>
+=======
+            <Label className="text-sm sm:text-base">Oturum Süresi (dakika)</Label>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             <Input
               type="number"
               min={60}
@@ -261,11 +304,19 @@ export const SystemSettings = () => {
               onChange={(e) =>
                 setSettings((prev) => prev ? { ...prev, sessionTimeoutMinutes: Number(e.target.value) || 0 } : null)
               }
+<<<<<<< HEAD
               className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
             />
           </div>
           <div className="space-y-2">
             <Label className="text-[11px] sm:text-xs">Minimum Şifre Uzunluğu</Label>
+=======
+              className="text-sm sm:text-base"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm sm:text-base">Minimum Şifre Uzunluğu</Label>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             <Input
               type="number"
               min={6}
@@ -273,7 +324,11 @@ export const SystemSettings = () => {
               onChange={(e) =>
                 setSettings((prev) => prev ? { ...prev, minPasswordLength: Number(e.target.value) || 0 } : null)
               }
+<<<<<<< HEAD
               className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
+=======
+              className="text-sm sm:text-base"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             />
           </div>
         </CardContent>
@@ -282,17 +337,30 @@ export const SystemSettings = () => {
       {/* Veritabanı Yönetimi */}
       <Card>
         <CardHeader>
+<<<<<<< HEAD
           <CardTitle className="flex items-center gap-2 text-[14px] sm:text-[15px] leading-tight">
             <Database className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Veritabanı Yönetimi
           </CardTitle>
           <CardDescription className="text-[11px] sm:text-xs leading-snug">Veri yedekleme ve bakım işlemleri</CardDescription>
+=======
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Database className="h-4 w-4 sm:h-5 sm:w-5" />
+            Veritabanı Yönetimi
+          </CardTitle>
+          <CardDescription className="text-xs sm:text-sm">Veri yedekleme ve bakım işlemleri</CardDescription>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         </CardHeader>
         <CardContent className="space-y-3 sm:space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
             <div className="space-y-0.5 flex-1">
+<<<<<<< HEAD
               <Label className="text-[11px] sm:text-xs">Otomatik Yedekleme</Label>
               <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">Günlük otomatik yedekleme yap</p>
+=======
+              <Label className="text-sm sm:text-base">Otomatik Yedekleme</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">Günlük otomatik yedekleme yap</p>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             </div>
             <Switch
               checked={settings.autoBackup}

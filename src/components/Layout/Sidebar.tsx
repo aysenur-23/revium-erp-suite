@@ -261,7 +261,11 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
           }}
           title="Ana sayfaya git"
         >
+<<<<<<< HEAD
           <img src={logo} alt="Revium ERP" className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 rounded-lg object-contain bg-white p-1 flex-shrink-0" width={32} height={32} loading="eager" />
+=======
+          <img src={logo} alt="Revium ERP" className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 rounded-lg object-contain bg-white p-1 flex-shrink-0" />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           <span className="text-base sm:text-lg md:text-xl font-bold text-sidebar-foreground">Revium ERP</span>
         </div>
       </div>
@@ -372,7 +376,10 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent 
           side="left" 
+<<<<<<< HEAD
           data-sidebar="true"
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           className="p-0 w-64 max-w-[85vw] touch-manipulation overflow-y-auto"
           style={{ 
             WebkitOverflowScrolling: 'touch',

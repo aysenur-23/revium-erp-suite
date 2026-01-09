@@ -88,9 +88,15 @@ if (getApps().length === 0) {
       
       // Initialize Analytics lazily (only when needed, not on initial load)
       // This improves initial page load performance
+<<<<<<< HEAD
       // Optimized: requestIdleCallback kullan veya 3 saniye sonra başlat
       if (typeof window !== 'undefined') {
         const initAnalytics = () => {
+=======
+      if (typeof window !== 'undefined') {
+        // Analytics'i asenkron olarak başlat (performans için)
+        setTimeout(() => {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           try {
             analytics = getAnalytics(app);
           } catch (error: unknown) {
@@ -99,6 +105,7 @@ if (getApps().length === 0) {
               console.warn('Firebase Analytics initialization failed:', error instanceof Error ? error.message : 'Unknown error');
             }
           }
+<<<<<<< HEAD
         };
         
         // requestIdleCallback kullan (tarayıcı müsait olduğunda)
@@ -114,6 +121,9 @@ if (getApps().length === 0) {
           // Fallback: setTimeout ile 3 saniye sonra başlat (non-blocking)
           setTimeout(initAnalytics, 3000);
         }
+=======
+        }, 1000); // 1 saniye sonra başlat (sayfa yüklenmesini engellemesin)
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       }
       
       // Initialize Auth

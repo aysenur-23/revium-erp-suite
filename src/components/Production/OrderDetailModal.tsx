@@ -145,6 +145,10 @@ interface OrderDetailModalProps {
 }
 
 export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, onUpdate }: OrderDetailModalProps) => {
+<<<<<<< HEAD
+=======
+  if (!order) return null;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const { user, isAdmin, isTeamLeader } = useAuth();
   const [tasks, setTasks] = useState<Awaited<ReturnType<typeof getTasks>>>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -160,8 +164,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [canUpdate, setCanUpdate] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
+<<<<<<< HEAD
   
   if (!order) return null;
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [formData, setFormData] = useState({
     order_number: "",
     product_name: "",
@@ -587,7 +594,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+<<<<<<< HEAD
       <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] md:!max-w-[85vw] !w-[100vw] sm:!w-[95vw] md:!w-[85vw] !h-[100vh] sm:!h-[90vh] md:!h-[85vh] !max-h-[100vh] sm:!max-h-[90vh] md:!max-h-[85vh] !left-0 sm:!left-[2.5vw] md:!left-[7.5vw] !top-0 sm:!top-[5vh] md:!top-[7.5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+=======
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">
           Üretim Siparişi - {orderNumber}
@@ -597,25 +608,44 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
         </DialogDescription>
         
         <div className="flex flex-col h-full min-h-0">
+<<<<<<< HEAD
           <DialogHeader className="p-2 sm:p-3 md:p-4 border-b bg-white flex-shrink-0 relative pr-10 sm:pr-12">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
               <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 w-full sm:w-auto">
+=======
+          <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
+<<<<<<< HEAD
                   <h2 className="text-[14px] sm:text-[16px] md:text-[18px] font-semibold text-foreground truncate">
                     Üretim Siparişi - {orderNumber}
                   </h2>
                   {firstItem?.productName && (
                     <p className="text-[10px] sm:text-[11px] md:text-xs text-muted-foreground truncate mt-0.5">
+=======
+                  <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground truncate">
+                    Üretim Siparişi - {orderNumber}
+                  </h2>
+                  {firstItem?.productName && (
+                    <p className="text-[11px] sm:text-xs text-muted-foreground truncate mt-0.5">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       {firstItem.productName}
                     </p>
                   )}
                 </div>
               </div>
+<<<<<<< HEAD
               <div className="flex flex-wrap items-center gap-2 flex-shrink-0 relative z-10 w-full sm:w-auto justify-start sm:justify-end">
                 <Badge variant={getStatusVariant(currentStatus)} className="text-[10px] sm:text-xs px-2 sm:px-3 py-1 relative z-10 w-full sm:w-auto justify-center sm:justify-start">
+=======
+              <div className="flex flex-wrap items-center gap-2 flex-shrink-0 relative z-10 pr-10 sm:pr-12">
+                <Badge variant={getStatusVariant(currentStatus)} className="text-xs px-2 sm:px-3 py-1 relative z-10">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   {getStatusLabel(currentStatus)}
                 </Badge>
                 {!isEditing ? (
@@ -625,7 +655,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                         variant="outline"
                         size="sm"
                         onClick={() => setIsEditing(true)}
+<<<<<<< HEAD
                         className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto"
+=======
+                        className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       >
                         <Edit className="h-4 w-4 mr-2" />
                         Düzenle
@@ -636,7 +670,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                         variant="outline"
                         size="sm"
                         onClick={onDelete}
+<<<<<<< HEAD
                         className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 text-destructive hover:text-destructive w-full sm:w-auto"
+=======
+                        className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0 text-destructive hover:text-destructive"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Sil
@@ -678,7 +716,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                         }
                       }}
                       disabled={saving}
+<<<<<<< HEAD
                       className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto"
+=======
+                      className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     >
                       <X className="h-4 w-4 mr-2" />
                       İptal
@@ -695,7 +737,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                         }
                       }}
                       disabled={saving}
+<<<<<<< HEAD
                       className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto"
+=======
+                      className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     >
                       {saving ? (
                         <>
@@ -715,8 +761,13 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
             </div>
           </DialogHeader>
 
+<<<<<<< HEAD
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-2 sm:p-3 md:p-4 min-h-0">
             <div className="max-w-full mx-auto h-full overflow-y-auto overflow-x-hidden" style={{ WebkitOverflowScrolling: 'touch' }}>
+=======
+          <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
+            <div className="max-w-full mx-auto h-full overflow-y-auto">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               {loading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -736,13 +787,21 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             value={formData.order_number}
                             onChange={(e) => setFormData({ ...formData, order_number: e.target.value })}
                             required
+<<<<<<< HEAD
                             className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
+=======
+                            className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           />
                         </div>
                         <div className="space-y-1.5 sm:space-y-2">
                           <Label htmlFor="status" className="text-[11px] sm:text-xs">Durum</Label>
                           <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+<<<<<<< HEAD
                             <SelectTrigger className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0">
+=======
+                            <SelectTrigger className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent className="text-[11px] sm:text-xs">
@@ -779,7 +838,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                           id="customer_name"
                           value={formData.customer_name}
                           onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
+<<<<<<< HEAD
                           className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
+=======
+                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         />
                       </div>
 
@@ -791,7 +854,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             onValueChange={handleProductSelect}
                             disabled={productsLoading}
                           >
+<<<<<<< HEAD
                             <SelectTrigger className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0">
+=======
+                            <SelectTrigger className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               <SelectValue placeholder={productsLoading ? "Ürünler yükleniyor..." : "Ürün seçin (Opsiyonel)"} />
                             </SelectTrigger>
                             <SelectContent className="text-[11px] sm:text-xs">
@@ -814,7 +881,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             value={formData.product_name}
                             onChange={(e) => handleProductNameChange(e.target.value)}
                             required
+<<<<<<< HEAD
                             className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
+=======
+                            className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           />
                           {formData.product_id && (
                             <p className="text-[11px] sm:text-xs text-muted-foreground flex items-center gap-1">
@@ -834,13 +905,21 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             value={formData.quantity}
                             onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                             required
+<<<<<<< HEAD
                             className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
+=======
+                            className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           />
                         </div>
                         <div className="space-y-1.5 sm:space-y-2">
                           <Label htmlFor="unit" className="text-[11px] sm:text-xs">Birim</Label>
                           <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
+<<<<<<< HEAD
                             <SelectTrigger className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0">
+=======
+                            <SelectTrigger className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent className="text-[11px] sm:text-xs">
@@ -863,7 +942,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             value={formData.due_date}
                             onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
                             required
+<<<<<<< HEAD
                             className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
+=======
+                            className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           />
                         </div>
                         <div className="space-y-1.5 sm:space-y-2">
@@ -872,7 +955,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             value={formData.priority?.toString() || "0"}
                             onValueChange={(value) => setFormData({ ...formData, priority: value })}
                           >
+<<<<<<< HEAD
                             <SelectTrigger className="h-10 sm:h-10 text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+=======
+                            <SelectTrigger className="h-10 text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -893,7 +980,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                           value={formData.notes}
                           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                           rows={3}
+<<<<<<< HEAD
                           className="text-[11px] sm:text-xs min-h-[80px] sm:min-h-0"
+=======
+                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           placeholder="Sipariş ile ilgili notlar..."
                         />
                       </div>
@@ -907,7 +998,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                               id="shipping_address"
                               value={formData.shipping_address}
                               onChange={(e) => setFormData({ ...formData, shipping_address: e.target.value })}
+<<<<<<< HEAD
                               className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
+=======
+                              className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               placeholder="Teslimat adresi..."
                             />
                           </div>
@@ -918,7 +1013,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                               value={formData.shipping_notes}
                               onChange={(e) => setFormData({ ...formData, shipping_notes: e.target.value })}
                               rows={2}
+<<<<<<< HEAD
                               className="text-[11px] sm:text-xs min-h-[60px] sm:min-h-0"
+=======
+                              className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               placeholder="Teslimat ile ilgili notlar..."
                             />
                           </div>
@@ -1080,7 +1179,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                           <Button
                             onClick={() => handleStatusChange(getNextStatus()!.value)}
                             disabled={updatingStatus || !canUpdateStatus}
+<<<<<<< HEAD
                             className="text-[11px] sm:text-xs gap-2 h-10 sm:h-10 min-h-[44px] sm:min-h-0 w-full sm:w-auto"
+=======
+                            className="text-[11px] sm:text-xs gap-2 min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           >
                             {updatingStatus ? (
                               <>
@@ -1141,7 +1244,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                       {(customer?.phone || customer?.email || order?.customerPhone || order?.customerEmail) && (
                         <div className="flex flex-wrap gap-3 pt-1">
                           {(customer?.phone || order?.customerPhone || order?.customer_phone) && (
+<<<<<<< HEAD
                             <Button variant="outline" size="sm" asChild className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto">
+=======
+                            <Button variant="outline" size="sm" asChild className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               <a href={`tel:${formatPhoneForTelLink(customer?.phone || order?.customerPhone || order?.customer_phone)}`}>
                                 Ara
                               </a>
@@ -1151,7 +1258,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             <Button 
                               variant="outline" 
                               size="sm" 
+<<<<<<< HEAD
                               className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto"
+=======
+                              className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               onClick={() => {
                                 const email = customer?.email || order?.customerEmail || order?.customer_email;
                                 if (email) {
@@ -1217,7 +1328,11 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                         <ListChecks className="h-4 w-4 sm:h-5 sm:w-5" />
                         Bağlı Görevler ({tasks.length})
                       </CardTitle>
+<<<<<<< HEAD
                       <Button variant="outline" size="sm" onClick={fetchOrderTasks} disabled={tasksLoading} className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto">
+=======
+                      <Button variant="outline" size="sm" onClick={fetchOrderTasks} disabled={tasksLoading} className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         Yenile
                       </Button>
                     </div>

@@ -26,7 +26,11 @@ interface CreateProductDialogProps {
 }
 
 export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreateProductDialogProps) => {
+<<<<<<< HEAD
   const { user, isAdmin, isTeamLeader } = useAuth();
+=======
+  const { user } = useAuth();
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -102,7 +106,11 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+<<<<<<< HEAD
       <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] md:!max-w-[85vw] !w-[100vw] sm:!w-[95vw] md:!w-[85vw] !h-[100vh] sm:!h-[90vh] md:!h-[80vh] !max-h-[100vh] sm:!max-h-[90vh] md:!max-h-[80vh] !left-0 sm:!left-[2.5vw] md:!left-[7.5vw] !top-0 sm:!top-[5vh] md:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+=======
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">
           Yeni Ürün
@@ -197,6 +205,7 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                       <div className="space-y-1.5 sm:space-y-2">
                         <Label htmlFor="category" className="text-[11px] sm:text-xs">Kategori</Label>
+<<<<<<< HEAD
                         {(isAdmin || isTeamLeader) ? (
                           <div className="space-y-2">
                             <Input
@@ -228,6 +237,21 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                             </SelectContent>
                           </Select>
                         )}
+=======
+                        <Select value={formData.category ? formData.category : "none"} onValueChange={(value) => setFormData({ ...formData, category: value === "none" ? "" : value })}>
+                          <SelectTrigger className="min-h-[44px] sm:min-h-0">
+                            <SelectValue placeholder="Kategori seçin" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Kategori Yok</SelectItem>
+                            {PRODUCT_CATEGORIES.map((cat) => (
+                              <SelectItem key={cat} value={cat}>
+                                {cat}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       </div>
                       <div className="space-y-1.5 sm:space-y-2">
                         <Label htmlFor="stock" className="text-[11px] sm:text-xs">Stok</Label>

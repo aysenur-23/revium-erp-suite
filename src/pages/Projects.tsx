@@ -455,8 +455,13 @@ const Projects = () => {
                 </div>
               ) : (
                 filteredProjects.map((project) => {
+<<<<<<< HEAD
                   // Silme yetkisi kontrolü: Sadece yöneticiler silebilir (projeyi oluşturan kişi bile silemez)
                   const canDelete = isSuperAdmin || canDeleteProjects;
+=======
+                  // Silme yetkisi kontrolü: Firestore'dan - state'ten al
+                  const canDelete = isSuperAdmin || canDeleteProjects || project.createdBy === user?.id;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   
                   return (
                   <div
@@ -551,6 +556,21 @@ const Projects = () => {
                             <Edit className="h-4 w-4" />
                           </Button>
                         )}
+<<<<<<< HEAD
+=======
+                        {canDelete && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDeleteDialog(project);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       </div>
                     </div>
                     {activeProjectForm === project.id && (

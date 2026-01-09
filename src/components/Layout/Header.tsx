@@ -26,6 +26,7 @@ export const Header = ({ onMenuClick, sidebarOpen = true }: HeaderProps) => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
+<<<<<<< HEAD
   // Mobilde sadece adı göster, desktop'ta tam adı göster
   const getDisplayName = () => {
     if (!user?.fullName) return user?.email || "Kullanıcı";
@@ -36,6 +37,8 @@ export const Header = ({ onMenuClick, sidebarOpen = true }: HeaderProps) => {
     return user.fullName;
   };
 
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   return (
     <header 
       className={cn(
@@ -112,7 +115,11 @@ export const Header = ({ onMenuClick, sidebarOpen = true }: HeaderProps) => {
                 )}
               >
                 <span className="font-medium text-[11px] sm:text-xs truncate" style={{ maxWidth: isMobile ? '80px' : '150px' }}>
+<<<<<<< HEAD
                   {getDisplayName()}
+=======
+                  {user?.fullName || user?.email || "Kullanıcı"}
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 </span>
               </Button>
             </DropdownMenuTrigger>

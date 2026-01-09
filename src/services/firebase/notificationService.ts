@@ -95,7 +95,11 @@ export const getNotifications = async (
       }
       return [];
     }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Diğer hatalar için de boş array döndür (sistemin çalışmaya devam etmesi için)
     // Sadece gerçek hataları logla (index hatası değilse)
     if (import.meta.env.DEV) {
@@ -147,7 +151,11 @@ export const createNotification = async (
 
     // Bildirim başarıyla oluşturuldu, hemen döndür
     // Email gönderimi arka planda yapılacak (hem Cloud Functions hem de manuel fallback)
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Email gönderimini arka planda başlat (await etme)
     // Önce Cloud Functions denenecek, eğer çalışmıyorsa manuel email gönderimi yapılacak
     Promise.resolve().then(async () => {
@@ -167,7 +175,11 @@ export const createNotification = async (
                 notificationData.relatedId || null,
                 notificationData.metadata || null
               );
+<<<<<<< HEAD
 
+=======
+              
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               // Email gönderim sonucunu logla (sadece başarılı olduğunda)
               if (import.meta.env.DEV && emailResult.success) {
                 console.log(`✅ Bildirim maili gönderildi: ${userData.email}`);
@@ -233,11 +245,19 @@ export const markAllNotificationsAsRead = async (userId: string): Promise<void> 
       where("read", "==", false)
     );
     const snapshot = await getDocs(q);
+<<<<<<< HEAD
 
     const batch = snapshot.docs.map((doc) =>
       updateDoc(doc.ref, { read: true })
     );
 
+=======
+    
+    const batch = snapshot.docs.map((doc) =>
+      updateDoc(doc.ref, { read: true })
+    );
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await Promise.all(batch);
   } catch (error: unknown) {
     if (import.meta.env.DEV) console.error("Mark all notifications as read error:", error);
@@ -258,6 +278,7 @@ export const deleteNotification = async (notificationId: string): Promise<void> 
 };
 
 /**
+<<<<<<< HEAD
  * Kullanıcının tüm bildirimlerini sil
  * Kullanıcı hesabı silindiğinde çağrılır
  */
@@ -293,6 +314,8 @@ export const deleteUserNotifications = async (userId: string): Promise<void> => 
 };
 
 /**
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
  * Bildirimleri gerçek zamanlı olarak dinle
  * @param userId Kullanıcı ID'si
  * @param options Bildirim seçenekleri
@@ -306,12 +329,17 @@ export const subscribeToNotifications = (
 ): Unsubscribe => {
   try {
     const notificationsRef = collection(firestore, "notifications");
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const buildQuery = () => {
       const constraints: QueryConstraint[] = [
         where("userId", "==", userId),
         orderBy("createdAt", "desc")
       ];
+<<<<<<< HEAD
 
       if (options?.unreadOnly) {
         constraints.push(where("read", "==", false));
@@ -326,6 +354,22 @@ export const subscribeToNotifications = (
 
     let q = buildQuery();
 
+=======
+      
+      if (options?.unreadOnly) {
+        constraints.push(where("read", "==", false));
+      }
+      
+      if (options?.limit) {
+        constraints.push(limit(options.limit));
+      }
+      
+      return query(notificationsRef, ...constraints);
+    };
+    
+    let q = buildQuery();
+    
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // onSnapshot ile gerçek zamanlı dinleme
     const unsubscribe = onSnapshot(
       q,
@@ -335,7 +379,11 @@ export const subscribeToNotifications = (
             id: doc.id,
             ...doc.data(),
           })) as Notification[];
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           callback(notifications);
         } catch (error: unknown) {
           if (import.meta.env.DEV) console.error("Subscribe to notifications error:", error);
@@ -345,17 +393,29 @@ export const subscribeToNotifications = (
       (error) => {
         // 404 ve network hatalarını sessizce handle et (Firestore otomatik yeniden bağlanacak)
         // Production'da da sessizce handle et - bu normal Firestore long-polling davranışı
+<<<<<<< HEAD
         if (error?.code === 'unavailable' ||
           error?.code === 'not-found' ||
           error?.message?.includes('404') ||
           error?.message?.includes('network') ||
           error?.message?.includes('transport errored')) {
+=======
+        if (error?.code === 'unavailable' || 
+            error?.code === 'not-found' ||
+            error?.message?.includes('404') || 
+            error?.message?.includes('network') ||
+            error?.message?.includes('transport errored')) {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // Sessizce handle et - Firestore otomatik olarak yeniden bağlanacak
           // Production'da console'a yazma (performans ve gürültü azaltma)
           callback([]);
           return;
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Sadece gerçek hataları logla
         if (import.meta.env.DEV) {
           console.error("Notifications snapshot error:", error);
@@ -376,7 +436,11 @@ export const subscribeToNotifications = (
                     id: doc.id,
                     ...doc.data(),
                   })) as Notification[];
+<<<<<<< HEAD
 
+=======
+                  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   // Client-side filtreleme
                   if (options?.unreadOnly) {
                     notifications = notifications.filter(n => !n.read);
@@ -384,7 +448,11 @@ export const subscribeToNotifications = (
                   if (options?.limit) {
                     notifications = notifications.slice(0, options.limit);
                   }
+<<<<<<< HEAD
 
+=======
+                  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   callback(notifications);
                 } catch (err: unknown) {
                   if (import.meta.env.DEV) console.error("Fallback subscribe to notifications error:", err);
@@ -406,11 +474,19 @@ export const subscribeToNotifications = (
         }
       }
     );
+<<<<<<< HEAD
 
     return unsubscribe;
   } catch (error: unknown) {
     if (import.meta.env.DEV) console.error("Subscribe to notifications setup error:", error);
     return () => { };
+=======
+    
+    return unsubscribe;
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) console.error("Subscribe to notifications setup error:", error);
+    return () => {};
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   }
 };
 

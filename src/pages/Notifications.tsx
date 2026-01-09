@@ -900,6 +900,7 @@ export default function Notifications() {
       {/* Reject Rejection Dialog */}
       <Dialog open={rejectRejectionDialogOpen} onOpenChange={setRejectRejectionDialogOpen}>
         <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+<<<<<<< HEAD
           {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
           <DialogTitle className="sr-only">Görev Reddi Reddet</DialogTitle>
           <DialogDescription className="sr-only">
@@ -911,6 +912,14 @@ export default function Notifications() {
               <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground">
                 Görev reddi reddedildiğinde görev tekrar atanan kişiye döner. Lütfen en az 20 karakterlik bir sebep belirtin.
               </p>
+=======
+          <div className="flex flex-col h-full min-h-0">
+            <DialogHeader className="p-2 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
+              <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görev Reddi Reddet</DialogTitle>
+              <DialogDescription className="mt-1 text-[11px] sm:text-xs text-muted-foreground">
+                Görev reddi reddedildiğinde görev tekrar atanan kişiye döner. Lütfen en az 20 karakterlik bir sebep belirtin.
+              </DialogDescription>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             </DialogHeader>
             <div className="flex-1 overflow-hidden bg-gray-50/50 p-2 min-h-0">
               <div className="max-w-full mx-auto h-full overflow-y-auto">
@@ -965,6 +974,7 @@ export default function Notifications() {
       {/* Reject Task Approval Dialog */}
       <Dialog open={rejectApprovalDialogOpen} onOpenChange={setRejectApprovalDialogOpen}>
         <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
+<<<<<<< HEAD
           {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
           <DialogTitle className="sr-only">Görev Onayını Reddet</DialogTitle>
           <DialogDescription className="sr-only">
@@ -976,6 +986,14 @@ export default function Notifications() {
               <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground">
                 Görev onayını reddetmek için lütfen bir not ekleyin. Görev tekrar panoya dönecektir.
               </p>
+=======
+          <div className="flex flex-col h-full min-h-0">
+            <DialogHeader className="p-2 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
+              <DialogTitle className="text-[14px] sm:text-[15px] font-semibold text-foreground">Görev Onayını Reddet</DialogTitle>
+              <DialogDescription className="mt-1 text-[11px] sm:text-xs text-muted-foreground">
+                Görev onayını reddetmek için lütfen bir not ekleyin. Görev tekrar panoya dönecektir.
+              </DialogDescription>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             </DialogHeader>
             <div className="flex-1 overflow-hidden bg-gray-50/50 p-2 min-h-0">
               <div className="max-w-full mx-auto h-full overflow-y-auto">

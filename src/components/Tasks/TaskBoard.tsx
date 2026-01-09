@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState, RefObject } from "react";
 // Drag and drop kaldırıldı - artık buton ile aşama geçişi yapılacak
 import { Button } from "@/components/ui/button";
+<<<<<<< HEAD
 import { useIsMobile } from "@/hooks/use-mobile";
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/ui/search-input";
 import { Label } from "@/components/ui/label";
@@ -33,7 +36,11 @@ import { getOrders, Order } from "@/services/firebase/orderService";
 import { getProjects, Project } from "@/services/firebase/projectService";
 import { getDepartments } from "@/services/firebase/departmentService";
 import { useAuth } from "@/contexts/AuthContext";
+<<<<<<< HEAD
 import { canCreateTask, canUpdateResource, canPerformSubPermission, isMainAdmin, canDeleteTask } from "@/utils/permissions";
+=======
+import { canCreateTask, canUpdateResource, canPerformSubPermission, isMainAdmin } from "@/utils/permissions";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { Timestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
@@ -251,13 +258,20 @@ const getErrorMessage = (error: unknown): string => {
 };
 
 export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilter = true, projectId: propProjectId, showArchived = false }: TaskBoardProps) => {
+<<<<<<< HEAD
   const { user, isTeamLeader, isSuperAdmin, isAdmin } = useAuth();
+=======
+  const { user, isTeamLeader, isSuperAdmin } = useAuth();
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [canCreate, setCanCreate] = useState(false);
   const [canEditTasks, setCanEditTasks] = useState(false);
   // Görev atamalarını saklamak için state (taskId -> assignments map)
   const [taskAssignmentsMap, setTaskAssignmentsMap] = useState<Record<string, Array<{ assignedTo: string; status: string }>>>({});
+<<<<<<< HEAD
   // Her task için silme yetkisini sakla (taskId -> canDelete boolean)
   const [taskDeletePermissions, setTaskDeletePermissions] = useState<Record<string, boolean>>({});
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   
   // Görev oluşturma yetkisi - Firestore'dan kontrol et
   useEffect(() => {
@@ -552,6 +566,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
     loadAssignments();
   }, [tasks, user]);
   
+<<<<<<< HEAD
   // Her task için silme yetkisini kontrol et
   useEffect(() => {
     const checkDeletePermissions = async () => {
@@ -615,6 +630,8 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
     checkDeletePermissions();
   }, [tasks, user]);
   
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   // Sync tasks from props to board state
   useEffect(() => {
     // tasks boş olsa bile boardState'i temizlemeliyiz
@@ -906,7 +923,11 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
       return;
     }
 
+<<<<<<< HEAD
     // Artık direkt görev oluşturmak yerine TaskInlineForm'u açıyoruz
+=======
+    // Artık direkt görev oluşturmak yerine TaskDetailModal'ı açıyoruz
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // initialStatus olarak columnId'yi kullanıyoruz
     onTaskClick("new", columnId);
     return;
@@ -1383,7 +1404,10 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
   };
 
   const openTaskModal = (task: Task) => {
+<<<<<<< HEAD
     // Parent component'e yönlendir (TaskInlineForm açılacak)
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     onTaskClick(task.id, task.status);
   };
 
@@ -1610,14 +1634,22 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
 
       {/* Board - Sabit kolonlar, drag & drop yok */}
       <div 
+<<<<<<< HEAD
         className="pb-8 px-2 sm:px-3 md:px-6 pt-3 sm:pt-4 md:pt-6"
+=======
+        className="pb-8 px-2 sm:px-3 md:px-6 pt-3 sm:pt-4 md:pt-6 -mx-2 sm:-mx-3 md:-mx-6"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         draggable={false}
         onDragStart={(e) => e.preventDefault()}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => e.preventDefault()}
       >
         <div 
+<<<<<<< HEAD
           className="flex flex-col md:flex-row gap-3 md:gap-4 pb-6 w-full"
+=======
+          className="flex gap-2 sm:gap-3 md:gap-4 pb-6 w-full lg:min-w-0"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           draggable={false}
           onDragStart={(e) => e.preventDefault()}
           onDragOver={(e) => e.preventDefault()}
@@ -1645,7 +1677,11 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                   onDragStart={(e) => e.preventDefault()}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => e.preventDefault()}
+<<<<<<< HEAD
                   className="flex-shrink-0 w-full md:flex-1 md:min-w-0 bg-[#EBECF0] rounded-lg p-2 sm:p-3 flex flex-col transition-all shadow-sm"
+=======
+                  className="flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] lg:flex-1 lg:min-w-0 bg-[#EBECF0] rounded-lg p-2 sm:p-3 flex flex-col transition-all shadow-sm"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   style={{ overflow: 'visible' }}
                 >
                       {/* Column Header - Sabit kolonlar, düzenleme yok */}
@@ -1763,6 +1799,7 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                                   <Archive className="h-4 w-4 mr-2.5 stroke-[2]" />
                                   {(task as BoardTaskInput).isArchived || (task as BoardTaskInput).is_archived ? "Arşivden Çıkar" : "Arşivle"}
                                 </DropdownMenuItem>
+<<<<<<< HEAD
                                 {taskDeletePermissions[task.id] && (
                                   <DropdownMenuItem
                                     onClick={(e) => {
@@ -1778,6 +1815,21 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                                     Sil
                                   </DropdownMenuItem>
                                 )}
+=======
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenDropdownMenuId(null);
+                                    if (confirm(`"${task.title}" görevini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
+                                      handleDeleteTask(task.id);
+                                    }
+                                  }}
+                                  className="cursor-pointer rounded-md px-3 py-2.5 text-[11px] sm:text-xs font-medium text-destructive focus:text-destructive hover:bg-destructive/10 focus:bg-destructive/10 transition-colors"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2.5 stroke-[2]" />
+                                  Sil
+                                </DropdownMenuItem>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -1943,7 +1995,11 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                                   setNewChecklistItemText("");
                                 } else if (e.key === "Enter" && !e.shiftKey && newTaskTitle.trim()) {
                                   e.preventDefault();
+<<<<<<< HEAD
                                   // Artık TaskInlineForm'u açıyoruz
+=======
+                                  // Artık TaskDetailModal'ı açıyoruz
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                   onTaskClick("new");
                                   setShowAddTask(null);
                                 }
@@ -2066,7 +2122,11 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
                             <Button
                               size="sm"
                               onClick={() => {
+<<<<<<< HEAD
                                 // Artık TaskInlineForm'u açıyoruz
+=======
+                                // Artık TaskDetailModal'ı açıyoruz
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                 onTaskClick("new");
                                 setShowAddTask(null);
                               }}
@@ -2113,7 +2173,349 @@ export const TaskBoard = ({ tasks, onTaskClick, onStatusChange, showProjectFilte
 
       {/* Liste ekleme özelliği kaldırıldı - sabit 4 kolon kullanılıyor */}
 
+<<<<<<< HEAD
       {/* Task Edit Modal kaldırıldı - TaskInlineForm kullanılıyor */}
+=======
+      {/* Task Edit Modal - Trello side panel style */}
+      {selectedTask && (
+        <Dialog open={showTaskModal} onOpenChange={setShowTaskModal}>
+          <DialogContent className="max-w-3xl w-[80vw] max-h-[90vh] sm:max-h-[90vh] overflow-hidden p-0" aria-describedby="task-edit-description">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Kart Düzenle</DialogTitle>
+              <DialogDescription id="task-edit-description">
+                Görev düzenleme
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col sm:flex-row h-full">
+              {/* Main Content */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                <div className="mb-4">
+                  <div className="flex items-start gap-3">
+                    <Input
+                      value={taskForm.title}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
+                      className="text-[16px] sm:text-[18px] font-semibold text-[#172B4D] border-none shadow-none p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0 leading-tight"
+                      placeholder="Kart başlığı"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowTaskModal(false)}
+                      className="text-[#5E6C84] hover:text-[#172B4D] hover:bg-gray-200"
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Labels Section */}
+                  <div>
+                    <Label className="text-sm font-semibold text-[#172B4D] mb-2 flex items-center gap-2">
+                      <Tag className="h-4 w-4" />
+                      Etiketler
+                    </Label>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {taskForm.labels.map((label, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold text-white cursor-pointer hover:opacity-90 transition-opacity"
+                          style={{ backgroundColor: label.color }}
+                          onClick={() => removeLabel(label.name)}
+                        >
+                          <span>{label.name}</span>
+                          <X className="h-3 w-3" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Input
+                          value={taskForm.labelInput}
+                          onChange={(e) => setTaskForm((prev) => ({ ...prev, labelInput: e.target.value }))}
+                          placeholder="Etiket adı girin..."
+                          className="flex-1 text-sm"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addLabel();
+                            }
+                          }}
+                        />
+                        <Button 
+                          type="button" 
+                          onClick={addLabel} 
+                          size="sm" 
+                          disabled={!taskForm.labelInput.trim()}
+                          className="bg-[#0079BF] hover:bg-[#005A8B] text-white"
+                        >
+                          Ekle
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {LABEL_COLORS.map((color) => (
+                          <button
+                            key={color.name}
+                            onClick={() => setTaskForm((prev) => ({ ...prev, labelColor: color.value }))}
+                            className={cn(
+                              "w-8 h-8 rounded border-2 transition-all hover:scale-110",
+                              color.class,
+                              taskForm.labelColor === color.value 
+                                ? "border-gray-800 scale-110 ring-2 ring-gray-400" 
+                                : "border-gray-300 hover:border-gray-500"
+                            )}
+                            title={color.name}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <Label className="text-sm font-semibold text-[#172B4D] mb-2">Açıklama</Label>
+                    <Textarea
+                      value={taskForm.description}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, description: e.target.value }))}
+                      placeholder="Daha fazla detay ekleyin..."
+                      rows={6}
+                      className="resize-none"
+                    />
+                  </div>
+
+                  {/* Due Date */}
+                  <div>
+                    <Label className="text-sm font-semibold text-[#172B4D] mb-2 flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Bitiş Tarihi
+                    </Label>
+                    <Input
+                      type="date"
+                      value={taskForm.dueDate}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+                      className="max-w-xs"
+                    />
+                  </div>
+
+                  {/* Member Assignment */}
+                  {showMemberAssignment && (
+                    <div>
+                      <Label className="text-sm font-semibold text-[#172B4D] mb-2 flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        Üyeler
+                      </Label>
+                      <UserMultiSelect
+                        selectedUsers={selectedMembers}
+                        onSelectionChange={setSelectedMembers}
+                      />
+                      <div className="flex gap-2 mt-3">
+                        <Button
+                          size="sm"
+                          onClick={handleAssignMembers}
+                          disabled={saving}
+                          className="bg-[#0079BF] hover:bg-[#005A8B] text-white font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Kaydet"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setShowMemberAssignment(false);
+                            setSelectedMembers(selectedTask.assignedUsers?.map(u => u.id) || []);
+                          }}
+                          className="border-[#DFE1E6] text-[#172B4D] hover:bg-[#F4F5F7] font-medium"
+                        >
+                          İptal
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sidebar Actions - Trello style */}
+              <div className="w-full sm:w-64 border-t sm:border-t-0 sm:border-l border-gray-200 bg-[#F4F5F7] p-4 flex flex-col gap-1 sm:gap-1">
+                <div className="text-xs font-semibold text-[#5E6C84] uppercase mb-1 px-2">Eylemler</div>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left text-[#172B4D] hover:bg-white/60"
+                  onClick={() => {
+                    setShowMemberAssignment(!showMemberAssignment);
+                  }}
+                >
+                  <User className="h-4 w-4 mr-2 text-[#5E6C84]" />
+                  Üye Ekle
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left text-[#172B4D] hover:bg-white/60"
+                  onClick={() => {
+                    setShowLabelPicker(!showLabelPicker);
+                  }}
+                >
+                  <Tag className="h-4 w-4 mr-2 text-[#5E6C84]" />
+                  Etiketler
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left text-[#172B4D] hover:bg-white/60"
+                  onClick={() => {
+                    toast.info("Checklist özelliği yakında eklenecek. Backend desteği eklendikten sonra aktif olacak.");
+                  }}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2 text-[#5E6C84]" />
+                  Checklist
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left text-[#172B4D] hover:bg-white/60"
+                  onClick={() => {
+                    // Due date already in form
+                    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
+                    if (dateInput) dateInput.focus();
+                  }}
+                >
+                  <Calendar className="h-4 w-4 mr-2 text-[#5E6C84]" />
+                  Tarih
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left text-[#172B4D] hover:bg-white/60"
+                  onClick={() => {
+                    toast.info("Dosya ekleme özelliği yakında eklenecek. Backend desteği eklendikten sonra aktif olacak.");
+                  }}
+                >
+                  <Paperclip className="h-4 w-4 mr-2 text-[#5E6C84]" />
+                  Ek
+                </Button>
+                <div className="text-xs font-semibold text-[#5E6C84] uppercase mt-4 px-2">İlişkiler</div>
+                <div className="space-y-2 px-2">
+                  <Select value={selectedOrderLink} onValueChange={setSelectedOrderLink}>
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Sipariş seç" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Bağlı sipariş yok</SelectItem>
+                      {Array.isArray(productionOrders) && productionOrders.map((order) => (
+                        <SelectItem key={order.id} value={order.id}>
+                          {order.order_number} • {order.customer_name || "-"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        handleLinkProductionOrder(selectedOrderLink === "none" ? null : selectedOrderLink)
+                      }
+                      disabled={saving}
+                      className="bg-[#0079BF] hover:bg-[#005A8B] text-white flex-1 font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Bağla"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={fetchProductionOrderList}
+                      disabled={ordersLoading}
+                      className="border-[#DFE1E6] text-[#172B4D] hover:bg-[#F4F5F7] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {ordersLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Yenile"}
+                    </Button>
+                  </div>
+                  {selectedTask.linkedProductionOrder && (
+                    <p className="text-[11px] text-[#5E6C84]">
+                      Bağlı: {selectedTask.linkedProductionOrder.orderNumber || selectedTask.linkedProductionOrder.id}
+                    </p>
+                  )}
+                </div>
+                <div className="border-t border-gray-200 my-2" />
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left text-[#172B4D] hover:bg-red-50 hover:text-red-600 font-medium"
+                  onClick={() => {
+                    if (confirm("Bu kartı silmek istediğinize emin misiniz?")) {
+                      handleDeleteTask(selectedTask.id);
+                      setShowTaskModal(false);
+                    }
+                  }}
+                >
+                  <Archive className="h-4 w-4 mr-2" />
+                  Arşivle
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left text-red-600 hover:bg-red-50 font-medium"
+                  onClick={() => {
+                    if (confirm("Bu kartı kalıcı olarak silmek istediğinize emin misiniz?")) {
+                      handleDeleteTask(selectedTask.id);
+                      setShowTaskModal(false);
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Sil
+                </Button>
+              </div>
+            </div>
+
+            <DialogFooter className="border-t border-gray-200 p-4 bg-white">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowTaskModal(false)}
+                className="border-[#DFE1E6] text-[#172B4D] hover:bg-[#F4F5F7] font-medium"
+              >
+                Kapat
+              </Button>
+              <Button 
+                onClick={handleEditTask} 
+                disabled={saving || !taskForm.title.trim()} 
+                className="bg-[#0079BF] hover:bg-[#005A8B] text-white font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Kaydet
+              </Button>
+            </DialogFooter>
+            
+            {/* Yorumlar ve Etkinlikler Bölümü */}
+            {selectedTask?.id && user && (
+              <div className="border-t border-gray-200 p-4 bg-white">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold text-[#172B4D] flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-[#5E6C84]" />
+                    Yorumlar ve Etkinlikler
+                  </h3>
+                </div>
+                <ActivityCommentsPanel
+                  entityId={selectedTask.id}
+                  entityType="task"
+                  onAddComment={async (content: string) => {
+                    await addTaskComment(
+                      selectedTask.id,
+                      user.id,
+                      content,
+                      user.fullName || user.email?.split("@")[0] || "Kullanıcı",
+                      user.email || ""
+                    );
+                  }}
+                  onGetComments={async () => {
+                    return await getTaskComments(selectedTask.id);
+                  }}
+                  onGetActivities={async () => {
+                    return await getTaskActivities(selectedTask.id);
+                  }}
+                  currentUserId={user.id}
+                  currentUserName={user.fullName || user.email?.split("@")[0] || "Kullanıcı"}
+                  currentUserEmail={user.email || ""}
+                />
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     </div>
   );
 };

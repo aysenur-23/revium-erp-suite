@@ -18,6 +18,7 @@ export const TaskHistory = () => {
     const fetchTasks = async () => {
       if (!user?.id) return;
 
+<<<<<<< HEAD
       // Defer task history loading: İlk render'dan 500ms sonra yükle (non-critical)
       await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -44,6 +45,19 @@ export const TaskHistory = () => {
           })
         );
         
+=======
+      try {
+        const allTasks = await getTasks();
+        // Filter tasks assigned to current user
+        const userTasks: FirebaseTask[] = [];
+        for (const task of allTasks) {
+          const assignments = await getTaskAssignments(task.id);
+          const isAssigned = assignments.some(a => a.assignedTo === user.id);
+          if (isAssigned) {
+            userTasks.push(task);
+          }
+        }
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         setTasks(userTasks);
       } catch (error: unknown) {
         if (import.meta.env.DEV) {

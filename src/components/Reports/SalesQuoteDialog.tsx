@@ -10,9 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+<<<<<<< HEAD
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Trash2, Download, X, Save } from "lucide-react";
 
+=======
+import { Card } from "@/components/ui/card";
+import { Plus, Trash2, Download, X, Save } from "lucide-react";
+// pdfGenerator will be dynamically imported when needed
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -97,8 +103,13 @@ export const SalesQuoteDialog = ({ open, onOpenChange }: SalesQuoteDialogProps) 
     }
 
     try {
+<<<<<<< HEAD
 
       const { generateSalesOfferPDF } = await import("@/services/pdf");
+=======
+      // Dynamically import pdfGenerator to avoid loading it on initial page load
+      const { generateSalesOfferPDF } = await import("@/services/pdfGenerator");
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const blob = await generateSalesOfferPDF({
         ...quote,
         totals,
@@ -138,7 +149,11 @@ export const SalesQuoteDialog = ({ open, onOpenChange }: SalesQuoteDialogProps) 
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">Satış Teklifi Oluştur</DialogTitle>
         <DialogDescription className="sr-only">Satış teklifi oluşturun</DialogDescription>
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         <div className="flex flex-col h-full min-h-0">
           {/* Header */}
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -173,13 +188,18 @@ export const SalesQuoteDialog = ({ open, onOpenChange }: SalesQuoteDialogProps) 
               </div>
             </div>
           </DialogHeader>
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           {/* Content */}
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
             <div className="max-w-full mx-auto h-full overflow-y-auto">
               <Card>
                 <CardContent className="pt-6">
                   <div className="grid gap-6 md:grid-cols-2">
+<<<<<<< HEAD
                     <div className="space-y-4">
                       <div>
                         <Label>Teklif No</Label>
@@ -376,6 +396,203 @@ export const SalesQuoteDialog = ({ open, onOpenChange }: SalesQuoteDialogProps) 
                         </div>
                       </div>
                     </div>
+=======
+          <div className="space-y-4">
+            <div>
+              <Label>Teklif No</Label>
+              <Input
+                value={quote.quoteNumber}
+                onChange={(e) => setQuote((prev) => ({ ...prev, quoteNumber: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Teklif Tarihi</Label>
+                <Input
+                  type="date"
+                  value={quote.quoteDate}
+                  onChange={(e) => setQuote((prev) => ({ ...prev, quoteDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Geçerlilik Tarihi</Label>
+                <Input
+                  type="date"
+                  value={quote.validUntil}
+                  onChange={(e) => setQuote((prev) => ({ ...prev, validUntil: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Müşteri / Firma</Label>
+              <Input
+                placeholder="Örn. Rumitech Enerji"
+                value={quote.customerCompany}
+                onChange={(e) => setQuote((prev) => ({ ...prev, customerCompany: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>İlgili Kişi / Proje Adı</Label>
+              <Input
+                placeholder="İlgili kişi"
+                value={quote.customerName}
+                onChange={(e) => setQuote((prev) => ({ ...prev, customerName: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Proje / Ürün Notları</Label>
+              <Textarea
+                rows={2}
+                value={quote.projectName}
+                onChange={(e) => setQuote((prev) => ({ ...prev, projectName: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Para Birimi</Label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={quote.currency}
+                  onChange={(e) => setQuote((prev) => ({ ...prev, currency: e.target.value }))}
+                >
+                  {currencySymbols.map((currency) => (
+                    <option key={currency} value={currency}>
+                      {currency}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>İskonto (%)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={quote.discountRate}
+                  onChange={(e) => setQuote((prev) => ({ ...prev, discountRate: Number(e.target.value) }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>KDV (%)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={quote.taxRate}
+                  onChange={(e) => setQuote((prev) => ({ ...prev, taxRate: Number(e.target.value) }))}
+                />
+              </div>
+              <div>
+                <Label>Teslimat / Termin</Label>
+                <Input
+                  value={quote.deliveryTerms}
+                  onChange={(e) => setQuote((prev) => ({ ...prev, deliveryTerms: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Ödeme Koşulları</Label>
+              <Input
+                value={quote.paymentTerms}
+                onChange={(e) => setQuote((prev) => ({ ...prev, paymentTerms: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Notlar</Label>
+              <Textarea
+                rows={3}
+                value={quote.notes}
+                onChange={(e) => setQuote((prev) => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label>Ürün Kalemleri</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addRow}>
+                <Plus className="h-4 w-4 mr-2" />
+                Satır Ekle
+              </Button>
+            </div>
+            <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+              {(Array.isArray(quote.items) ? quote.items : []).map((item, index) => (
+                <Card key={index} className="p-3">
+                  <div className="flex justify-between gap-2">
+                    <div className="flex-1">
+                      <Label className="text-xs">Ürün / Hizmet</Label>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => handleItemChange(index, "description", e.target.value)}
+                        placeholder="Ürün adı"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => removeRow(index)}
+                      disabled={quote.items.length === 1}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <Label className="text-xs">Adet</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Birim Fiyat</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={item.unitPrice}
+                        onChange={(e) => handleItemChange(index, "unitPrice", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+
+            <div className="rounded-lg border bg-gradient-to-br from-slate-50 to-white p-4 shadow-inner">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Ara Toplam</span>
+                <span>
+                  {quote.currency}
+                  {(totals.subtotal || 0).toFixed(2)}
+                </span>
+              </div>
+              {quote.discountRate > 0 && (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>İskonto ({quote.discountRate}%)</span>
+                  <span>-{quote.currency}
+                    {(totals.discount || 0).toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>KDV ({quote.taxRate}%)</span>
+                <span>
+                  {quote.currency}
+                  {(totals.tax || 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="mt-2 flex justify-between text-base font-semibold">
+                <span>Genel Toplam</span>
+                <span>
+                  {quote.currency}
+                  {(totals.grandTotal || 0).toFixed(2)}
+                </span>
+              </div>
+            </div>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   </div>
                 </CardContent>
               </Card>

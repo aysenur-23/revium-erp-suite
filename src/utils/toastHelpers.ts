@@ -10,7 +10,11 @@ import { isPermissionError } from "./errorLogger";
  * İşlem türü ve kaynak türüne göre detaylı permission hatası mesajı
  */
 export const getPermissionErrorMessage = (
+<<<<<<< HEAD
   operation: "create" | "update" | "delete" | "read" | "interact" | "assign" | "approve" | "view" | "general",
+=======
+  operation: "create" | "update" | "delete" | "read" | "interact" | "assign" | "approve" | "view",
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   resource: "task" | "project" | "user" | "department" | "checklist" | "attachment" | "log" | "general" = "general"
 ): { title: string; description: string } => {
   const operationNames: Record<string, string> = {
@@ -38,7 +42,11 @@ export const getPermissionErrorMessage = (
   const operationName = operationNames[operation] || operation;
   const resourceName = resourceNames[resource] || resource;
 
+<<<<<<< HEAD
   const title = "Yetkiniz Bulunmuyor";
+=======
+  let title = "Yetkiniz Bulunmuyor";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   let description = "";
 
   switch (operation) {
@@ -83,7 +91,11 @@ export const showPermissionErrorToast = (
   resource?: "task" | "project" | "user" | "department" | "checklist" | "attachment" | "log" | "general"
 ) => {
   const { title, description } = getPermissionErrorMessage(operation || "general", resource || "general");
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   toast.error(title, {
     description,
     duration: 7000,
@@ -94,13 +106,22 @@ export const showPermissionErrorToast = (
  * Hata mesajını kontrol et ve uygun toast göster
  */
 export const handleErrorToast = (
+<<<<<<< HEAD
   error: unknown,
+=======
+  error: unknown, 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   defaultMessage?: string,
   operation?: "create" | "update" | "delete" | "read" | "interact" | "assign" | "approve" | "view",
   resource?: "task" | "project" | "user" | "department" | "checklist" | "attachment" | "log" | "general"
 ) => {
+<<<<<<< HEAD
   const errorMessage = error instanceof Error ? error.message : (typeof error === 'string' ? error : (error as any)?.message || error?.toString() || defaultMessage || "Bilinmeyen hata");
 
+=======
+  const errorMessage = error?.message || error?.toString() || defaultMessage || "Bilinmeyen hata";
+  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   // Permission hatası kontrolü
   if (
     isPermissionError(error) ||
@@ -113,7 +134,11 @@ export const handleErrorToast = (
     showPermissionErrorToast(operation, resource);
     return;
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   // Diğer hatalar için normal toast
   toast.error(errorMessage);
 };

@@ -24,7 +24,12 @@ html, body {
   overflow-x: hidden;
   min-height: 100vh;
   position: relative;
+<<<<<<< HEAD
   /* Removed contain: layout style paint - it breaks grid/flex layouts in dialogs */
+=======
+  /* Prevent overflow issues */
+  contain: layout style paint;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 }
 
 /* Prevent text overflow and wrapping issues */
@@ -33,8 +38,14 @@ html, body {
   overflow-wrap: break-word;
 }
 
+<<<<<<< HEAD
 /* Box-sizing only - removed max-width: 100% as it breaks grid/flex layouts */
 * {
+=======
+/* Prevent all elements from causing horizontal overflow */
+* {
+  max-width: 100%;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   box-sizing: border-box;
 }
 
@@ -48,6 +59,7 @@ table,
   table-layout: auto;
 }
 
+<<<<<<< HEAD
 /* Overscroll behavior only - removed contain: layout style paint as it breaks layouts */
 /* If containment is needed, use .contain-safe class instead */
 [class*="overflow"],
@@ -284,6 +296,13 @@ input::-webkit-calendar-picker-indicator {
     z-index: 10010 !important;
     position: fixed !important;
   }
+=======
+/* Ensure all scrollable containers are properly contained */
+[class*="overflow"],
+[style*="overflow"] {
+  contain: layout style paint;
+  overscroll-behavior: contain;
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 }
 
 /* Responsive container max-width prevention - only for mobile */
@@ -1060,6 +1079,7 @@ div[data-task-modal],
     translate: none !important;
   }
 }
+<<<<<<< HEAD
 
 /* Removed aggressive global Radix Dialog overrides - dialogs should configure their own sizing */
 /* Only task modal override remains, strictly scoped */
@@ -1073,3 +1093,5 @@ div[data-task-modal],
   right: auto !important;
   margin: 0 !important;
 }
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1

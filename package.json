@@ -15,9 +15,13 @@
     "server": "cd server && node server.js",
     "server:start": "cd server && npm start",
     "server:dev": "cd server && npm run dev",
+<<<<<<< HEAD
     "backend": "cd server && node server.js",
     "deploy:firestore-rules": "node scripts/deploy-firestore-rules.js",
     "firebase:deploy-rules": "npm run deploy:firestore-rules"
+=======
+    "backend": "cd server && node server.js"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   },
   "dependencies": {
     "@fontsource/roboto": "^5.2.9",

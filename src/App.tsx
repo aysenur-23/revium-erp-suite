@@ -60,15 +60,21 @@ const lazyWithRetry = (componentImport: () => Promise<{ default: React.Component
 };
 
 // Preload critical pages on app start
+<<<<<<< HEAD
 // Optimized: requestIdleCallback kullan ve daha geç başlat (non-blocking)
 const preloadCriticalPages = () => {
   // Critical pages'i arka planda preload et (sadece gerçekten kritik olanlar)
+=======
+const preloadCriticalPages = () => {
+  // Critical pages'i arka planda preload et
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   import("./pages/Dashboard").catch(() => {});
   import("./pages/Tasks").catch(() => {});
 };
 
 // App başladığında critical sayfaları preload et
 if (typeof window !== 'undefined') {
+<<<<<<< HEAD
   // requestIdleCallback kullan (tarayıcı müsait olduğunda)
   // Fallback: setTimeout ile 2000ms sonra (100ms → 2000ms)
   if ('requestIdleCallback' in window) {
@@ -83,6 +89,10 @@ if (typeof window !== 'undefined') {
     // Fallback: setTimeout ile 2000ms sonra preload et (non-blocking)
     setTimeout(preloadCriticalPages, 2000);
   }
+=======
+  // Sayfa yüklendikten sonra preload et (non-blocking)
+  setTimeout(preloadCriticalPages, 100);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 }
 
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
@@ -127,8 +137,13 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false, // Window focus'ta otomatik refetch'i kapat (performans için)
       retry: 1, // Retry sayısını 1'e indir (hata durumunda 1 kez dene)
+<<<<<<< HEAD
       staleTime: 10 * 60 * 1000, // 10 dakika stale time (5 dakika → 10 dakika, daha agresif cache)
       gcTime: 15 * 60 * 1000, // 15 dakika cache time (10 dakika → 15 dakika, daha uzun cache)
+=======
+      staleTime: 5 * 60 * 1000, // 5 dakika stale time (daha agresif cache)
+      gcTime: 10 * 60 * 1000, // 10 dakika cache time (daha uzun cache)
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // İlk yüklemede daha hızlı render için
       refetchOnMount: false, // Mount'ta refetch yapma (cache'den göster - performans için)
       refetchOnReconnect: false, // Reconnect'te refetch yapma
@@ -154,9 +169,12 @@ const router = createBrowserRouter(
     {
       element: <AppProviders />,
       errorElement: <ErrorPage />,
+<<<<<<< HEAD
       future: {
         v7_startTransition: true, // React Router v7 uyumluluğu için
       },
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       children: [
         { path: "/verify-email", element: <VerifyEmail />, errorElement: <ErrorPage /> },
         { path: "/verify-email-prompt", element: <VerifyEmailPrompt />, errorElement: <ErrorPage /> },

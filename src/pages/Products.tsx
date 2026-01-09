@@ -3,7 +3,11 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SearchInput } from "@/components/ui/search-input";
+<<<<<<< HEAD
 import { Plus, Package, X, AlertTriangle, TrendingUp, Box, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Building2, DollarSign, Trash2 } from "lucide-react";
+=======
+import { Plus, Package, X, AlertTriangle, TrendingUp, Box, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Building2, DollarSign } from "lucide-react";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { getProducts, deleteProduct, Product } from "@/services/firebase/productService";
@@ -28,7 +32,10 @@ import { CURRENCY_OPTIONS, CURRENCY_SYMBOLS, DEFAULT_CURRENCY, type Currency } f
 import { convertFromTRY } from "@/services/exchangeRateService";
 import { canCreateResource, canDeleteResource } from "@/utils/permissions";
 import { UserProfile } from "@/services/firebase/authService";
+<<<<<<< HEAD
 import { StatCard } from "@/components/Dashboard/StatCard";
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
 const PRODUCT_CATEGORIES = [
   "Taşınabilir Güç Paketleri",
@@ -447,6 +454,7 @@ const Products = () => {
 
         {/* İstatistikler */}
         {statsExpanded && (
+<<<<<<< HEAD
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 xs:gap-2.5 sm:gap-3">
             {productStatCards.map((item) => {
               const variantMap: Record<string, "default" | "primary" | "success" | "warning" | "info"> = {
@@ -471,6 +479,47 @@ const Products = () => {
               );
             })}
           </div>
+=======
+          <Card>
+          <CardContent className="p-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-2">
+              {productStatCards.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Card
+                    key={item.key}
+                    className={cn(
+                      "border border-border/60 shadow-none cursor-pointer transition-all hover:shadow-md focus-within:ring-2 focus-within:ring-primary/40",
+                      item.isActive && "border-primary shadow-lg ring-2 ring-primary/20"
+                    )}
+                    role="button"
+                    tabIndex={0}
+                    onClick={item.onClick}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        item.onClick();
+                      }
+                    }}
+                    aria-label={`${item.label} kartı`}
+                  >
+                    <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+                      <div className={cn("h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0", item.accent)}>
+                        <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] sm:text-xs uppercase tracking-wide text-muted-foreground">{item.label}</p>
+                        <p className="text-lg sm:text-xl font-semibold text-foreground mt-0.5 sm:mt-1">{item.value}</p>
+                        <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 hidden sm:block">{item.description}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         )}
 
         {/* Filtreler */}
@@ -684,6 +733,7 @@ const Products = () => {
                         onMouseDown={(e) => handleResizeStart("createdBy", e)}
                       />
                     </div>
+<<<<<<< HEAD
                     {canDelete && (
                       <div 
                         className="table-cell px-0 sm:px-0.5 md:px-1 py-1.5 sm:py-2 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
@@ -692,6 +742,8 @@ const Products = () => {
                         İşlemler
                       </div>
                     )}
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   </div>
                 </div>
 
@@ -797,6 +849,7 @@ const Products = () => {
                             <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
                           )}
                         </div>
+<<<<<<< HEAD
                         {canDelete && (
                           <div className="table-cell px-0 sm:px-0.5 md:px-1 py-1 sm:py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                             <Button
@@ -813,6 +866,8 @@ const Products = () => {
                             </Button>
                           </div>
                         )}
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       </div>
                     );
                   })}
@@ -849,6 +904,7 @@ const Products = () => {
                             </p>
                           )}
                         </div>
+<<<<<<< HEAD
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <Badge 
                             variant={isOutOfStock ? "destructive" : isLowStock ? "secondary" : "default"}
@@ -875,6 +931,18 @@ const Products = () => {
                             </Button>
                           )}
                         </div>
+=======
+                        <Badge 
+                          variant={isOutOfStock ? "destructive" : isLowStock ? "secondary" : "default"}
+                          className={cn(
+                            isOutOfStock && "bg-destructive/10 text-destructive",
+                            isLowStock && !isOutOfStock && "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+                            !isOutOfStock && !isLowStock && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                          )}
+                        >
+                          {isOutOfStock ? "Tükendi" : isLowStock ? "Düşük" : "Var"}
+                        </Badge>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       </div>
                       {product.sku && (
                         <p className="text-[11px] sm:text-xs font-mono text-muted-foreground">SKU: {product.sku}</p>

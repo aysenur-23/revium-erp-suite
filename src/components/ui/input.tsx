@@ -12,11 +12,14 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           className,
         )}
         ref={ref}
+<<<<<<< HEAD
         style={{
           position: 'relative',
           zIndex: 1,
           ...props.style,
         }}
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         {...props}
       />
     );

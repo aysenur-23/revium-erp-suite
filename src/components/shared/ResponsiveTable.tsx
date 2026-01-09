@@ -132,7 +132,11 @@ export function ResponsiveTable<T = any>({
         "overscroll-behavior-contain"
       )}>
         <div className="min-w-full inline-block">
+<<<<<<< HEAD
           <Table className={cn("w-full table-auto", tableClassName)}>
+=======
+          <Table className={cn("w-full table-fixed", tableClassName)}>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             <TableHeader>
               <TableRow>
                 {visibleColumns.map((column) => (
@@ -145,10 +149,19 @@ export function ResponsiveTable<T = any>({
                       column.headerClassName,
                       !column.headerClassName?.includes("text-") && "text-left",
                       column.minWidth && `min-w-[${column.minWidth}px]`,
+<<<<<<< HEAD
                       "px-4"
                     )}
                     style={{
                       minWidth: column.minWidth ? `${column.minWidth}px` : undefined,
+=======
+                      "px-0"
+                    )}
+                    style={{
+                      width: column.minWidth ? `${column.minWidth}px` : undefined,
+                      minWidth: column.minWidth ? `${column.minWidth}px` : undefined,
+                      maxWidth: column.minWidth ? `${column.minWidth}px` : undefined,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       ...(column.sticky && {
                         position: "sticky",
                         left: 0,
@@ -184,10 +197,19 @@ export function ResponsiveTable<T = any>({
                           column.cellClassName,
                           column.className,
                           !column.cellClassName && !column.className?.includes("text-") && "text-left",
+<<<<<<< HEAD
                           "px-4 py-1.5 sm:py-2"
                         )}
                         style={{
                           minWidth: column.minWidth ? `${column.minWidth}px` : undefined,
+=======
+                          "px-0 py-1.5 sm:py-2"
+                        )}
+                        style={{
+                          width: column.minWidth ? `${column.minWidth}px` : undefined,
+                          minWidth: column.minWidth ? `${column.minWidth}px` : undefined,
+                          maxWidth: column.minWidth ? `${column.minWidth}px` : undefined,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           ...(column.sticky && {
                             position: "sticky",
                             left: 0,

@@ -89,8 +89,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Check roles based on role_permissions system - Firestore'dan kontrol et
   // useCallback ile memoize et (performans için)
+<<<<<<< HEAD
   // Optimized: İlk yüklemede sadece rol array'inden kontrol et, permission kontrollerini defer et
   const checkRoles = useCallback(async (userProfile: UserProfile | null, immediate: boolean = false) => {
+=======
+  const checkRoles = useCallback(async (userProfile: UserProfile | null) => {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const normalizedRoles = normalizeRoles(userProfile?.role);
 
     if (!userProfile || normalizedRoles.length === 0) {
@@ -112,6 +116,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const userRoles = normalizedRoles;
     
+<<<<<<< HEAD
     // İlk yüklemede hızlı kontrol: Sadece rol array'inden kontrol et
     // Permission kontrollerini defer et (non-blocking)
     const hasSuperAdminRole = userRoles.some(role => role === "super_admin" || role === "main_admin");
@@ -218,6 +223,72 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }, 100);
       }
     }
+=======
+    // Super Admin kontrolü - Firestore'dan
+    let hasSuperAdminPermission = false;
+    for (const role of userRoles) {
+      if (role === "super_admin" || role === "main_admin") {
+        try {
+          // Ensure permissions are initialized
+          const { getRolePermissions } = await import("@/services/firebase/rolePermissionsService");
+          await getRolePermissions();
+          
+          const permission = await getPermission(role, "role_permissions", true);
+          hasSuperAdminPermission = permission?.canRead === true;
+          if (hasSuperAdminPermission) break;
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Error checking super admin permission:", error);
+          }
+          // Fallback: rol array'inden kontrol - super_admin rolü varsa true
+          hasSuperAdminPermission = true;
+          break;
+        }
+      }
+    }
+    setIsSuperAdmin(hasSuperAdminPermission);
+    setIsAdmin(hasSuperAdminPermission);
+
+    // Team Leader kontrolü - Firestore'dan
+    let hasTeamLeaderPermission = false;
+    for (const role of userRoles) {
+      if (role === "team_leader") {
+        try {
+          // Ensure permissions are initialized
+          const { getRolePermissions } = await import("@/services/firebase/rolePermissionsService");
+          await getRolePermissions();
+          
+          // Team leader için departments kaynağında canUpdate yetkisi var mı?
+          const permission = await getPermission(role, "departments", true);
+          hasTeamLeaderPermission = permission?.canUpdate === true;
+          if (hasTeamLeaderPermission) break;
+        } catch (error: unknown) {
+          if (import.meta.env.DEV) {
+            console.error("Error checking team leader permission:", error);
+          }
+          // Fallback: manager kontrolü
+          try {
+            const departments = await getDepartmentsCached();
+            hasTeamLeaderPermission = departments.some((dept) => dept.managerId === userProfile.id);
+            if (hasTeamLeaderPermission) break;
+          } catch (deptError: unknown) {
+            if (import.meta.env.DEV) {
+              console.error("Error checking team leader from departments:", deptError);
+            }
+          }
+        }
+      }
+    }
+    setIsTeamLeader(hasTeamLeaderPermission);
+
+    // Cache'e kaydet (performans için)
+    lastCheckedUserIdRef.current = userProfile.id;
+    lastCheckedRolesRef.current = {
+      isSuperAdmin: hasSuperAdminPermission,
+      isAdmin: hasSuperAdminPermission,
+      isTeamLeader: hasTeamLeaderPermission,
+    };
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   }, []);
 
   const normalizeRoles = (roles?: string[] | null): string[] => {
@@ -275,6 +346,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUser(userData);
             setCurrentUserProfile(userProfile);
             // Check roles based on role_permissions system
+<<<<<<< HEAD
             // İlk yüklemede non-blocking (immediate=false)
             await checkRoles(userProfile, false);
             
@@ -292,11 +364,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               permissionUpdateTimeout = setTimeout(async () => {
                 if (!isMounted) return;
                 
+=======
+            await checkRoles(userProfile);
+            
+            // Listen to permission cache changes for real-time updates
+            const unsubscribePermissions = onPermissionCacheChange(async () => {
+              if (isMounted) {
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 // Departments cache'ini invalidate et (rol değişiklikleri departments'ı etkileyebilir)
                 departmentsCacheRef.current = null;
                 departmentsCacheTimeRef.current = 0;
                 
                 // Kullanıcı profilini yeniden yükle (rol değişikliklerini yakalamak için)
+<<<<<<< HEAD
                 // Non-blocking: requestIdleCallback veya setTimeout ile defer et
                 const updateProfile = async () => {
                   try {
@@ -343,6 +423,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   }, 100);
                 }
               }, 500); // 500ms debounce
+=======
+                try {
+                  const { getUserProfile } = await import("@/services/firebase/authService");
+                  const { auth } = await import("@/lib/firebase");
+                  if (auth?.currentUser) {
+                    const updatedProfile = await getUserProfile(auth.currentUser.uid);
+                    if (updatedProfile) {
+                      const updatedUserData = convertUserProfileToUser(updatedProfile);
+                      setUser(updatedUserData);
+                      setCurrentUserProfile(updatedProfile);
+                      await checkRoles(updatedProfile);
+                    } else {
+                      // Profil yüklenemezse mevcut userProfile ile devam et
+                      await checkRoles(userProfile);
+                    }
+                  } else {
+                    // Auth yoksa mevcut userProfile ile devam et
+                    await checkRoles(userProfile);
+                  }
+                } catch (error) {
+                  // Hata durumunda mevcut userProfile ile devam et
+                  if (import.meta.env.DEV) {
+                    if (import.meta.env.DEV) {
+                      console.error("Permission cache değişikliğinde profil yenileme hatası:", error);
+                    }
+                  }
+                  await checkRoles(userProfile);
+                }
+              }
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             });
             
             // Store unsubscribe function for cleanup
@@ -452,8 +562,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(userData);
         
         // Check roles based on role_permissions system
+<<<<<<< HEAD
         // Google sign in durumunda immediate=true (hızlı permission kontrolü)
         await checkRoles(result.user, true);
+=======
+        await checkRoles(result.user);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         
         window.location.href = "/";
         return { success: true };

@@ -1,6 +1,10 @@
 import * as React from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Input } from "./input";
+<<<<<<< HEAD
+=======
+import { Button } from "./button";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { cn } from "@/lib/utils";
 
 export interface PasswordInputProps
@@ -11,12 +15,17 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
     const [showPassword, setShowPassword] = React.useState(false);
 
     return (
+<<<<<<< HEAD
       <div className="relative" style={{ isolation: 'isolate' }}>
+=======
+      <div className="relative">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         <Input
           type={showPassword ? "text" : "password"}
           className={cn("pr-10", className)}
           ref={ref}
           {...props}
+<<<<<<< HEAD
           style={{ 
             position: 'relative',
             zIndex: 1,
@@ -51,11 +60,30 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
             <EyeOff className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           ) : (
             <Eye className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+=======
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+          onClick={() => setShowPassword(!showPassword)}
+          disabled={props.disabled}
+        >
+          {showPassword ? (
+            <EyeOff className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <Eye className="h-4 w-4 text-muted-foreground" />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           )}
           <span className="sr-only">
             {showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
           </span>
+<<<<<<< HEAD
         </button>
+=======
+        </Button>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       </div>
     );
   }

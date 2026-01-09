@@ -3,6 +3,7 @@
  * Merkezi auth ayarları - tüm auth ile ilgili flag'ler burada
  */
 
+<<<<<<< HEAD
 /**
  * Email verification flag - Email doğrulaması zorunlu mu?
  * true: Kullanıcılar email doğrulamadan giriş yapamaz
@@ -39,3 +40,9 @@ export const RESEND_VERIFICATION_ON_LOGIN = true;
  * Firebase varsayılanı: 1 saat
  */
 export const EMAIL_VERIFICATION_EXPIRY = 3600;
+=======
+// Email verification flag - Email doğrulaması zorunlu mu?
+// TODO: Email verification hazır olduğunda true yapılacak
+export const REQUIRE_EMAIL_VERIFICATION = false;
+
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1

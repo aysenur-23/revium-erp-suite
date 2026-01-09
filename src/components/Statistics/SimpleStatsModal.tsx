@@ -1,6 +1,10 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, DollarSign, Package, Users, BarChart3 } from "lucide-react";
+<<<<<<< HEAD
+=======
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
 interface SimpleStatsModalProps {
   open: boolean;
@@ -21,6 +25,7 @@ export const SimpleStatsModal = ({ open, onOpenChange, title, stats }: SimpleSta
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl w-[80vw] max-h-[85vh] overflow-y-auto">
+<<<<<<< HEAD
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">
           {title}
@@ -28,6 +33,14 @@ export const SimpleStatsModal = ({ open, onOpenChange, title, stats }: SimpleSta
         <DialogDescription className="sr-only">
           İstatistik detayları
         </DialogDescription>
+=======
+        <VisuallyHidden>
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>İstatistik detayları</DialogDescription>
+          </DialogHeader>
+        </VisuallyHidden>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         
         <div className="space-y-4">
           <div>

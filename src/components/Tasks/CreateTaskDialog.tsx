@@ -1,13 +1,22 @@
 /**
  * CreateTaskDialog - Wrapper component
+<<<<<<< HEAD
  * Artık tüm görev oluşturma işlemleri TaskInlineForm üzerinden yapılıyor
+=======
+ * Artık tüm görev oluşturma işlemleri TaskDetailModal üzerinden yapılıyor
+ * Bu component geriye dönük uyumluluk için TaskDetailModal'ı açıyor
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
  */
 
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+<<<<<<< HEAD
 import { TaskInlineForm } from "./TaskInlineForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+=======
+import { TaskDetailModal } from "./TaskDetailModal";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -76,7 +85,11 @@ export const CreateTaskDialog = ({ onTaskCreated, open, onOpenChange, hideTrigge
     );
   }
 
+<<<<<<< HEAD
   // Diğer sayfalarda TaskInlineForm'u Dialog içinde kullan
+=======
+  // Diğer sayfalarda TaskDetailModal'ı direkt kullan
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   return (
     <>
       {!hideTrigger && (
@@ -88,6 +101,7 @@ export const CreateTaskDialog = ({ onTaskCreated, open, onOpenChange, hideTrigge
           Yeni Görev
         </Button>
       )}
+<<<<<<< HEAD
       <Dialog open={taskModalOpen} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -104,6 +118,15 @@ export const CreateTaskDialog = ({ onTaskCreated, open, onOpenChange, hideTrigge
           />
         </DialogContent>
       </Dialog>
+=======
+      <TaskDetailModal
+        taskId={null}
+        open={taskModalOpen}
+        onOpenChange={handleOpenChange}
+        onUpdate={handleTaskCreated}
+        initialStatus="pending"
+      />
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     </>
   );
 };

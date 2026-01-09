@@ -36,7 +36,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Timestamp } from "firebase/firestore";
+<<<<<<< HEAD
 import { Loader2, Plus, Link as LinkIcon, ListChecks, X, Check, Paperclip, Lock, CircleDot, Clock, CheckCircle2 } from "lucide-react";
+=======
+import { Loader2, Plus, Link as LinkIcon, ListChecks, X, Check, Paperclip, Lock } from "lucide-react";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { PRIORITY_OPTIONS, PriorityLevel, convertOldPriorityToNew, convertNewPriorityToOld } from "@/utils/priority";
@@ -974,7 +978,11 @@ export const TaskInlineForm = ({
             title: title.trim(),
             description: description.trim() || null,
             dueDate: parsedDueDate,
+<<<<<<< HEAD
             priority: convertNewPriorityToOld(priority) as 1 | 2 | 3 | 4 | 5, // TaskService hala 1-5 kullanıyor
+=======
+            priority: convertNewPriorityToOld(priority), // TaskService hala 1-5 kullanıyor
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             projectId: finalProjectId || null,
             isPrivate: finalIsPrivate,
           },
@@ -1070,7 +1078,11 @@ export const TaskInlineForm = ({
         title: title.trim(),
         description: description.trim() || null,
         status: defaultStatus,
+<<<<<<< HEAD
         priority: convertNewPriorityToOld(priority) as 1 | 2 | 3 | 4 | 5, // TaskService hala 1-5 kullanıyor
+=======
+        priority: priority,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         dueDate: parsedDueDate,
         labels: null,
         projectId: onlyInMyTasks ? null : (finalProjectId || null),
@@ -1137,7 +1149,11 @@ export const TaskInlineForm = ({
   return (
     <Card
       className={cn(
+<<<<<<< HEAD
         "w-full border-primary/30 bg-muted/20 p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4 shadow-sm",
+=======
+        "w-full border-primary/30 bg-muted/20 p-4 sm:p-6 space-y-4 shadow-sm",
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         className
       )}
     >
@@ -1171,7 +1187,11 @@ export const TaskInlineForm = ({
                     <Button
                       size="sm"
                       variant="outline"
+<<<<<<< HEAD
                       className="flex-1 sm:flex-none border-yellow-300 text-yellow-900 hover:bg-yellow-100 min-h-[44px] sm:min-h-0"
+=======
+                      className="flex-1 sm:flex-none border-yellow-300 text-yellow-900 hover:bg-yellow-100"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       onClick={handleRejectTask}
                     >
                       <X className="h-4 w-4 mr-1" />
@@ -1179,7 +1199,11 @@ export const TaskInlineForm = ({
                     </Button>
                     <Button
                       size="sm"
+<<<<<<< HEAD
                       className="flex-1 sm:flex-none bg-yellow-600 hover:bg-yellow-700 text-white border-none min-h-[44px] sm:min-h-0"
+=======
+                      className="flex-1 sm:flex-none bg-yellow-600 hover:bg-yellow-700 text-white border-none"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       onClick={handleApproveTask}
                     >
                       <Check className="h-4 w-4 mr-1" />
@@ -1207,7 +1231,10 @@ export const TaskInlineForm = ({
                 disabled={isRestrictedUser}
                 maxLength={200}
                 aria-describedby="title-char-count"
+<<<<<<< HEAD
                 className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               />
               <div className="flex justify-between items-center">
                 <span className="text-xs text-muted-foreground" id="title-char-count">
@@ -1225,7 +1252,10 @@ export const TaskInlineForm = ({
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 disabled={isRestrictedUser}
+<<<<<<< HEAD
                 className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               />
             </div>
           </div>
@@ -1237,6 +1267,7 @@ export const TaskInlineForm = ({
               onValueChange={(value) => setPriority(Number(value) as PriorityLevel)}
               disabled={isRestrictedUser}
             >
+<<<<<<< HEAD
               <SelectTrigger className="w-full min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -1247,6 +1278,14 @@ export const TaskInlineForm = ({
                     value={option.value.toString()} 
                     className="text-[14px] sm:text-sm min-h-[44px] sm:min-h-[36px] flex items-center py-2.5 sm:py-1.5 px-3 sm:px-2 cursor-pointer"
                   >
+=======
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PRIORITY_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value.toString()}>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     {option.label} ({option.value})
                   </SelectItem>
                 ))}
@@ -1283,7 +1322,11 @@ export const TaskInlineForm = ({
               }}
               disabled={isRestrictedUser || (!isEdit && !canSelectProject) || onlyInMyTasks}
             >
+<<<<<<< HEAD
               <SelectTrigger className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm">
+=======
+              <SelectTrigger>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 <SelectValue placeholder="Proje seçiniz" />
               </SelectTrigger>
               <SelectContent>
@@ -1351,7 +1394,10 @@ export const TaskInlineForm = ({
               disabled={isRestrictedUser}
               maxLength={2000}
               aria-describedby="description-char-count"
+<<<<<<< HEAD
               className="text-[14px] sm:text-sm min-h-[100px] sm:min-h-0"
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             />
             <div className="flex justify-end">
               <span className="text-xs text-muted-foreground" id="description-char-count">
@@ -1448,6 +1494,33 @@ export const TaskInlineForm = ({
             </div>
           </div>
 
+<<<<<<< HEAD
+=======
+          {isRestrictedUser && !approvalStatus && (
+            <div className="flex justify-end mb-4">
+              <Button 
+                variant="outline" 
+                className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                onClick={async () => {
+                  if (!taskId || !user?.id) return;
+                  try {
+                    // Tamamlandı isteği gönder
+                    const { requestTaskApproval } = await import("@/services/firebase/taskService");
+                    await requestTaskApproval(taskId, user.id);
+                    toast.success("Görev tamamlandı olarak işaretlendi ve onay için yöneticiye gönderildi.");
+                    onSuccess?.(taskId);
+                  } catch (error: unknown) {
+                    const errorMessage = error instanceof Error ? error.message : "İşlem başarısız";
+                    toast.error(errorMessage);
+                  }
+                }}
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Görevi Tamamla (Onay İste)
+              </Button>
+            </div>
+          )}
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
           <div className="space-y-3">
             <Label className="flex items-center gap-2 text-[11px] sm:text-xs">
@@ -1465,9 +1538,15 @@ export const TaskInlineForm = ({
                     handleAddChecklistItem();
                   }
                 }}
+<<<<<<< HEAD
                 className="flex-1 min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
               />
               <Button type="button" onClick={handleAddChecklistItem} className="min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0">
+=======
+                className="flex-1"
+              />
+              <Button type="button" onClick={handleAddChecklistItem}>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -1489,7 +1568,10 @@ export const TaskInlineForm = ({
                       variant="ghost"
                       size="sm"
                       onClick={() => handleRemoveChecklistItem(item.id)}
+<<<<<<< HEAD
                       className="min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0"
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -1511,11 +1593,18 @@ export const TaskInlineForm = ({
                 placeholder="Link adı"
                 value={linkLabel}
                 onChange={(e) => setLinkLabel(e.target.value)}
+<<<<<<< HEAD
                 className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
               />
               <Input
                 placeholder="https://..."
                 className="sm:col-span-2 min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
+=======
+              />
+              <Input
+                placeholder="https://..."
+                className="sm:col-span-2"
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
                 onKeyDown={(e) => {
@@ -1526,8 +1615,13 @@ export const TaskInlineForm = ({
                 }}
               />
             </div>
+<<<<<<< HEAD
             <div className="flex gap-2 flex-wrap">
               <Button type="button" variant="outline" size="sm" onClick={handleAddLink} className="min-h-[44px] sm:min-h-0 flex-1 sm:flex-initial">
+=======
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={handleAddLink}>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 <LinkIcon className="h-4 w-4 mr-1" />
                 Link Ekle
               </Button>
@@ -1546,7 +1640,10 @@ export const TaskInlineForm = ({
                     variant="outline" 
                     size="sm" 
                     onClick={() => fileInputRef.current?.click()}
+<<<<<<< HEAD
                     className="min-h-[44px] sm:min-h-0 flex-1 sm:flex-initial"
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   >
                     <Paperclip className="h-4 w-4 mr-1" />
                     Dosya Yükle
@@ -1554,8 +1651,13 @@ export const TaskInlineForm = ({
                 </div>
               )}
               {!isEdit && (
+<<<<<<< HEAD
                 <div title="Dosya yüklemek için önce görevi oluşturmalısınız" className="cursor-not-allowed opacity-50 flex-1 sm:flex-initial">
                   <Button type="button" variant="outline" size="sm" disabled className="min-h-[44px] sm:min-h-0 w-full sm:w-auto">
+=======
+                <div title="Dosya yüklemek için önce görevi oluşturmalısınız" className="cursor-not-allowed opacity-50">
+                  <Button type="button" variant="outline" size="sm" disabled>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     <Paperclip className="h-4 w-4 mr-1" />
                     Dosya Yükle
                   </Button>
@@ -1590,7 +1692,10 @@ export const TaskInlineForm = ({
                       variant="ghost"
                       size="sm"
                       onClick={() => handleRemoveAttachment(att.id)}
+<<<<<<< HEAD
                       className="min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0"
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -1610,12 +1715,19 @@ export const TaskInlineForm = ({
                 }
               }}
               disabled={saving}
+<<<<<<< HEAD
               className="min-h-[44px] sm:min-h-0 w-full sm:w-auto"
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             >
               Vazgeç
             </Button>
             {!isRestrictedUser && (
+<<<<<<< HEAD
               <Button onClick={handleSubmit} disabled={saving} className="min-h-[44px] sm:min-h-0 w-full sm:w-auto">
+=======
+              <Button onClick={handleSubmit} disabled={saving}>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 {saving ? "Kaydediliyor..." : isEdit ? "Güncelle" : "Görevi Oluştur"}
               </Button>
             )}

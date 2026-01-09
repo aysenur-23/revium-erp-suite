@@ -26,7 +26,10 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ResponsiveTable, ResponsiveTableColumn } from "@/components/shared/ResponsiveTable";
+<<<<<<< HEAD
 import { StatCard } from "@/components/Dashboard/StatCard";
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,7 +53,11 @@ const RawMaterials = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<RawMaterial | null>(null);
+<<<<<<< HEAD
   const [loading, setLoading] = useState(false); // Başlangıçta false - placeholder data ile hızlı render
+=======
+  const [loading, setLoading] = useState(true);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [page, setPage] = useState(1);
   const [limit] = useState(50);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -112,17 +119,25 @@ const RawMaterials = () => {
         } catch (error) {
           console.error("Error fetching users:", error);
         }
+<<<<<<< HEAD
       }, 50); // 50ms gecikme ile non-blocking yükleme (daha hızlı)
+=======
+      }, 100); // 100ms gecikme ile non-blocking yükleme
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     };
     fetchUsers();
   }, [users.length]);
 
   // Materyalleri yükle
   const fetchMaterials = useCallback(async () => {
+<<<<<<< HEAD
     // Defer materials loading: İlk render'dan 100ms sonra yükle (non-blocking)
     setLoading(true);
     await new Promise(resolve => setTimeout(resolve, 100));
     
+=======
+    setLoading(true);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     try {
       const materialsData = await getRawMaterials();
       // Kullanıcı adlarını ekle
@@ -155,10 +170,18 @@ const RawMaterials = () => {
   }, [users]);
 
   useEffect(() => {
+<<<<<<< HEAD
     // Materyalleri yükle (kullanıcılar yüklenmesini beklemeden)
     // Kullanıcı adları sonra eklenecek
     fetchMaterials();
   }, [fetchMaterials]);
+=======
+    // Kullanıcılar yüklendiyse materyalleri yükle
+    if (users.length > 0) {
+      fetchMaterials();
+    }
+  }, [users.length, fetchMaterials]);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   const getCategoryLabel = (category: string) => {
     const labels: Record<string, string> = {
@@ -479,6 +502,7 @@ const RawMaterials = () => {
 
         {/* İstatistikler */}
         {statsExpanded && (
+<<<<<<< HEAD
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 xs:gap-2.5 sm:gap-2.5 md:gap-3">
             {rawMaterialStatCards.map((item) => {
               const variantMap: Record<string, "default" | "primary" | "success" | "warning" | "info"> = {
@@ -504,6 +528,47 @@ const RawMaterials = () => {
               );
             })}
           </div>
+=======
+          <Card className="border-2">
+            <CardContent className="p-2">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2">
+                {rawMaterialStatCards.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Card
+                      key={item.key}
+                      className={cn(
+                        "border border-border/60 shadow-none cursor-pointer transition-all hover:shadow-md focus-within:ring-2 focus-within:ring-primary/40 h-full flex flex-col",
+                        item.isActive && "border-primary shadow-lg ring-2 ring-primary/20"
+                      )}
+                      role="button"
+                      tabIndex={0}
+                      onClick={item.onClick}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          item.onClick();
+                        }
+                      }}
+                      aria-label={`${item.label} kartı`}
+                    >
+                      <CardContent className="p-2 flex items-center gap-1.5 sm:gap-2 flex-1">
+                        <div className={cn("h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0", item.accent)}>
+                          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm uppercase tracking-wide text-muted-foreground truncate">{item.label}</p>
+                          <p className="text-lg sm:text-xl font-semibold text-foreground mt-0.5 sm:mt-1 truncate">{item.value}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 hidden sm:block">{item.description}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+                </div>
+              </CardContent>
+            </Card>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         )}
 
         {/* Filtreler */}
@@ -573,7 +638,11 @@ const RawMaterials = () => {
                         key: "name",
                         header: "Malzeme Adı",
                         accessor: (material) => (
+<<<<<<< HEAD
                               <div className="flex items-center justify-start gap-1.5 min-w-0 w-full">
+=======
+                              <div className="flex items-center justify-start gap-1.5 min-w-0">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                 <Package className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                 <TooltipProvider>
                                   <Tooltip>
@@ -591,7 +660,11 @@ const RawMaterials = () => {
                         ),
                         priority: "high",
                         sticky: true,
+<<<<<<< HEAD
                         minWidth: 200,
+=======
+                        minWidth: 180,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         headerClassName: "text-left",
                         cellClassName: "text-left",
                       },
@@ -602,7 +675,11 @@ const RawMaterials = () => {
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
+<<<<<<< HEAD
                                     <p className="text-xs text-muted-foreground line-clamp-2 truncate text-left w-full" title={material.description || material.notes || "-"}>
+=======
+                                    <p className="text-xs text-muted-foreground line-clamp-2 truncate text-left" title={material.description || material.notes || "-"}>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                       {material.description || material.notes || "-"}
                                     </p>
                                   </TooltipTrigger>
@@ -615,7 +692,11 @@ const RawMaterials = () => {
                               </TooltipProvider>
                         ),
                         priority: "medium",
+<<<<<<< HEAD
                         minWidth: 200,
+=======
+                        minWidth: 180,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         headerClassName: "text-left",
                         cellClassName: "text-left",
                       },
@@ -627,14 +708,22 @@ const RawMaterials = () => {
                           const minStock = Number(material.minStock !== undefined ? material.minStock : material.min_stock) || 0;
                           const stockStatus = getStockStatus(currentStock, minStock);
                           return (
+<<<<<<< HEAD
                               <div className="flex items-center justify-start gap-1.5 w-full">
+=======
+                              <div className="flex items-center justify-start gap-1.5">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               <span className={cn(stockStatus.color, "text-xs font-semibold whitespace-nowrap")}>
                                   {currentStock} {material.unit}
                                 </span>
                                 <Badge
                                   variant={stockStatus.variant}
                                   className={cn(
+<<<<<<< HEAD
                                     "font-medium text-xs px-1.5 py-0.5 flex-shrink-0",
+=======
+                                    "font-medium text-xs px-1.5 py-0.5",
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                     stockStatus.variant === "destructive" && "bg-red-500 hover:bg-red-600 text-white",
                                     stockStatus.variant === "secondary" && "bg-yellow-500 hover:bg-yellow-600 text-white",
                                     stockStatus.variant === "default" && "bg-green-500 hover:bg-green-600 text-white"
@@ -646,7 +735,11 @@ const RawMaterials = () => {
                           );
                         },
                         priority: "high",
+<<<<<<< HEAD
                         minWidth: 200,
+=======
+                        minWidth: 180,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         headerClassName: "text-left",
                         cellClassName: "text-left",
                       },
@@ -655,7 +748,11 @@ const RawMaterials = () => {
                         header: "Oluşturan",
                         accessor: (material) => (
                           material.createdBy ? (
+<<<<<<< HEAD
                                 <div className="flex items-center justify-start gap-1 w-full">
+=======
+                                <div className="flex items-center justify-start gap-1">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                   <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                                   <span className="text-xs text-muted-foreground truncate">
                                     {users.find(u => u.id === material.createdBy)?.fullName || 
@@ -669,7 +766,11 @@ const RawMaterials = () => {
                           )
                         ),
                         priority: "low",
+<<<<<<< HEAD
                         minWidth: 200,
+=======
+                        minWidth: 180,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         headerClassName: "text-left",
                         cellClassName: "text-left",
                       },
@@ -679,7 +780,11 @@ const RawMaterials = () => {
                         headerClassName: "text-left",
                         cellClassName: "text-left",
                         accessor: (material) => (
+<<<<<<< HEAD
                           <div className="flex items-center justify-start gap-1 w-full" onClick={(e) => e.stopPropagation()}>
+=======
+                          <div className="flex items-center justify-start gap-1" onClick={(e) => e.stopPropagation()}>
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -726,7 +831,11 @@ const RawMaterials = () => {
                               </div>
                         ),
                         priority: "high",
+<<<<<<< HEAD
                         minWidth: 200,
+=======
+                        minWidth: 180,
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       },
                     ]}
                     emptyMessage="Kayıt bulunamadı"

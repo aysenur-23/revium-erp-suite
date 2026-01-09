@@ -6,7 +6,11 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { getOrders, getOrderItems, Order, OrderItem } from "@/services/firebase/orderService";
 import { Download, TrendingUp, Package, Users, Calendar, Clock } from "lucide-react";
+<<<<<<< HEAD
 
+=======
+// pdfGenerator will be dynamically imported when needed
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { useAuth } from "@/contexts/AuthContext";
 import { Timestamp } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,7 +83,11 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
     try {
       // Firebase'den siparişleri al
       const orders = await getOrders();
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Tarih filtresi uygula
       const filteredOrders = orders.filter((order) => {
         const orderDate = getOrderDate(order);
@@ -102,7 +110,11 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
           return [];
         }
       });
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const allOrderItems = await Promise.all(orderItemsPromises);
       allOrderItems.flat().forEach((item) => {
         const productName = (item as OrderItem & { product_name?: string }).product_name || item.productName || "Bilinmeyen";
@@ -160,11 +172,19 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
 
     setLoading(true);
     try {
+<<<<<<< HEAD
 
       const { generateSalesReportPDF } = await import("@/services/pdf");
       // Generate PDF - await ile bekle
       const pdfBlob = await generateSalesReportPDF(reportData, startDate, endDate);
 
+=======
+      // Dynamically import pdfGenerator to avoid loading it on initial page load
+      const { generateSalesReportPDF } = await import("@/services/pdfGenerator");
+      // Generate PDF - await ile bekle
+      const pdfBlob = await generateSalesReportPDF(reportData, startDate, endDate);
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // PDF'i hemen indir (Drive upload'ını beklemeden)
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");
@@ -176,9 +196,15 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
       document.body.removeChild(a);
       // URL'yi hemen temizle (indirme başladıktan sonra)
       setTimeout(() => URL.revokeObjectURL(url), 100);
+<<<<<<< HEAD
 
       toast.success("Rapor indiriliyor...");
 
+=======
+      
+      toast.success("Rapor indiriliyor...");
+      
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Loading'i kapat (indirme başladı, Drive upload arka planda devam edecek)
       setLoading(false);
 
@@ -213,8 +239,13 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
         {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
         <DialogTitle className="sr-only">Satış Raporu Oluştur</DialogTitle>
         <DialogDescription className="sr-only">Tarih aralığı seçerek detaylı satış raporu oluşturun ve PDF olarak indirin</DialogDescription>
+<<<<<<< HEAD
 
         <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b bg-[rgb(255,255,255)] flex-shrink-0 sticky top-0 z-[10001] shadow-sm">
+=======
+        
+        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b bg-[rgb(255,255,255)] flex-shrink-0">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           <h2 className="text-[16px] sm:text-[18px] font-semibold flex items-center gap-2 leading-tight">
             <div className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg bg-primary/10 flex items-center justify-center">
               <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
@@ -227,6 +258,7 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
         </DialogHeader>
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch overscroll-behavior-contain">
           <div className="w-full p-4 sm:p-6 space-y-4 sm:space-y-6">
+<<<<<<< HEAD
             {/* Tarih Seçimi - Profesyonel Tasarım */}
             <Card className="bg-[rgb(249,250,251)] border-2">
               <CardHeader className="pb-3">
@@ -506,6 +538,287 @@ export const SalesReportDialog = ({ open, onOpenChange }: SalesReportDialogProps
           <Button
             onClick={generateReport}
             disabled={loading || !reportData}
+=======
+          {/* Tarih Seçimi - Profesyonel Tasarım */}
+          <Card className="bg-[rgb(249,250,251)] border-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-[11px] sm:text-xs font-semibold text-muted-foreground leading-tight">Tarih Aralığı Seçimi</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Hızlı Tarih Seçenekleri */}
+              <div className="mb-4">
+                <Label className="text-[11px] sm:text-xs font-medium text-muted-foreground mb-2 block">Hızlı Seçim</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const today = new Date();
+                      const start = new Date(today);
+                      start.setDate(today.getDate() - 7);
+                      setStartDate(start.toISOString().split('T')[0]);
+                      setEndDate(today.toISOString().split('T')[0]);
+                    }}
+                    className="text-[11px] sm:text-xs"
+                  >
+                    <Clock className="h-3 w-3 mr-1" />
+                    Son 7 Gün
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const today = new Date();
+                      const start = new Date(today);
+                      start.setDate(today.getDate() - 30);
+                      setStartDate(start.toISOString().split('T')[0]);
+                      setEndDate(today.toISOString().split('T')[0]);
+                    }}
+                    className="text-[11px] sm:text-xs"
+                  >
+                    <Calendar className="h-3 w-3 mr-1" />
+                    Son 30 Gün
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const today = new Date();
+                      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+                      setStartDate(start.toISOString().split('T')[0]);
+                      setEndDate(today.toISOString().split('T')[0]);
+                    }}
+                    className="text-[11px] sm:text-xs"
+                  >
+                    Bu Ay
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const today = new Date();
+                      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                      const end = new Date(today.getFullYear(), today.getMonth(), 0);
+                      setStartDate(start.toISOString().split('T')[0]);
+                      setEndDate(end.toISOString().split('T')[0]);
+                    }}
+                    className="text-[11px] sm:text-xs"
+                  >
+                    Geçen Ay
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const today = new Date();
+                      const start = new Date(today.getFullYear(), 0, 1);
+                      setStartDate(start.toISOString().split('T')[0]);
+                      setEndDate(today.toISOString().split('T')[0]);
+                    }}
+                    className="text-[11px] sm:text-xs"
+                  >
+                    Bu Yıl
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+                  <Label className="text-[11px] sm:text-xs font-medium">Başlangıç Tarihi</Label>
+                  <Input 
+                    type="date" 
+                    value={startDate} 
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="border-2 focus:border-primary"
+                  />
+          </div>
+          <div className="space-y-2">
+                  <Label className="text-[11px] sm:text-xs font-medium">Bitiş Tarihi</Label>
+                  <Input 
+                    type="date" 
+                    value={endDate} 
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="border-2 focus:border-primary"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Rapor Önizleme - Profesyonel Tasarım */}
+          {reportData && (
+            <div className="space-y-6 border-t pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[14px] sm:text-[15px] font-semibold flex items-center gap-2 leading-tight">
+                  <div className="h-2 w-2 rounded-full bg-primary"></div>
+                  Rapor Önizlemesi
+                </h3>
+                <Badge variant="outline" className="text-[10px] sm:text-[11px]">
+                  {startDate} - {endDate}
+                </Badge>
+              </div>
+              {/* İstatistik Kartları - Profesyonel ve Sade */}
+              <div className="grid grid-cols-3 gap-4">
+                <Card className="bg-[rgb(255,255,255)] border-[rgb(221,83,53)] border-2" style={{ backgroundColor: 'rgba(221, 83, 53, 0.05)' }}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-[11px] sm:text-xs font-semibold text-muted-foreground flex items-center gap-2 leading-tight">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      Toplam Gelir
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold text-primary">₺{reportData.totalRevenue.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-snug">Ortalama: ₺{reportData.avgOrderValue.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-[rgb(239,246,255)] border-[rgb(191,219,254)] border-2">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-[11px] sm:text-xs font-semibold text-muted-foreground flex items-center gap-2 leading-tight">
+                      <Package className="h-4 w-4 text-blue-500" />
+                      Toplam Sipariş
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold text-blue-600">{reportData.totalOrders}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Tarih aralığında</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-[rgb(240,253,244)] border-[rgb(187,247,208)] border-2">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-[11px] sm:text-xs font-semibold text-muted-foreground flex items-center gap-2 leading-tight">
+                      <Users className="h-4 w-4 text-green-500" />
+                      Aktif Müşteri
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold text-green-600">{reportData.activeCustomers}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Sipariş veren müşteri</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Sipariş Durumu Dağılımı */}
+              <Card className="border-2 shadow-sm">
+                <CardHeader className="bg-[rgb(249,250,251)] border-b">
+                  <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-primary"></div>
+                    Sipariş Durumu Dağılımı
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50/50">
+                          <TableHead className="font-semibold">Durum</TableHead>
+                          <TableHead className="text-right font-semibold">Sipariş Sayısı</TableHead>
+                          <TableHead className="text-right font-semibold">Toplam Tutar</TableHead>
+                          <TableHead className="text-right font-semibold">Oran</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(() => {
+                          const statusMap = new Map<string, { count: number; total: number }>();
+                          reportData.orders.forEach((order) => {
+                            const status = order.status || "Bilinmeyen";
+                            const total = getOrderTotal(order);
+                            if (!statusMap.has(status)) {
+                              statusMap.set(status, { count: 0, total: 0 });
+                            }
+                            const stat = statusMap.get(status)!;
+                            stat.count += 1;
+                            stat.total += total;
+                          });
+                          const statusLabels: Record<string, string> = {
+                            draft: "Taslak",
+                            pending: "Beklemede",
+                            confirmed: "Onaylandı",
+                            planned: "Planlandı",
+                            in_production: "Üretimde",
+                            in_progress: "Üretimde",
+                            quality_check: "Kalite Kontrol",
+                            on_hold: "Beklemede",
+                            completed: "Tamamlandı",
+                            shipped: "Kargoda",
+                            delivered: "Teslim Edildi",
+                            cancelled: "İptal",
+                          };
+                          const totalOrders = reportData.orders.length;
+                          return Array.from(statusMap.entries())
+                            .sort((a, b) => b[1].count - a[1].count)
+                            .map(([status, data]) => (
+                              <TableRow key={status} className="hover:bg-gray-50/50 transition-colors">
+                                <TableCell className="font-medium">{statusLabels[status] || status}</TableCell>
+                                <TableCell className="text-right font-semibold">{data.count}</TableCell>
+                                <TableCell className="text-right font-semibold text-primary">₺{data.total.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                <TableCell className="text-right font-semibold text-muted-foreground">{totalOrders > 0 ? ((data.count / totalOrders) * 100).toFixed(1) : 0}%</TableCell>
+                              </TableRow>
+                            ));
+                        })()}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Ürün Tablosu - Profesyonel Tasarım */}
+              <Card className="border-2 shadow-sm">
+                <CardHeader className="bg-[rgb(249,250,251)] border-b">
+                  <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-primary"></div>
+                    En Çok Satan Ürünler
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50/50">
+                          <TableHead className="font-semibold">Sıra</TableHead>
+                          <TableHead className="font-semibold">Ürün Adı</TableHead>
+                          <TableHead className="text-right font-semibold">Adet</TableHead>
+                          <TableHead className="text-right font-semibold">Gelir</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reportData.topProducts.slice(0, 10).map((product, index) => (
+                          <TableRow key={index} className="hover:bg-gray-50/50 transition-colors">
+                            <TableCell className="font-medium text-muted-foreground">#{index + 1}</TableCell>
+                            <TableCell className="font-medium">{product.name}</TableCell>
+                            <TableCell className="text-right font-semibold">{product.quantity}</TableCell>
+                            <TableCell className="text-right font-semibold text-primary">₺{product.revenue.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {loading && !reportData && (
+            <Card className="border-2 border-dashed">
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-sm font-medium text-muted-foreground">Veriler yükleniyor...</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          </div>
+        </div>
+        <div className="flex-shrink-0 px-4 sm:px-6 pb-4 sm:pb-6 pt-4 border-t">
+          <Button 
+            onClick={generateReport} 
+            disabled={loading || !reportData} 
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             size="lg"
             className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg"
           >

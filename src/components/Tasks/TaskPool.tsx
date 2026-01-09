@@ -640,7 +640,11 @@ const TaskPool = () => {
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-semibold text-lg">{task.title}</h3>
                             {project && (
+<<<<<<< HEAD
                               <Badge variant="secondary" className="h-5 px-2 py-0 text-[11px] font-normal leading-tight">
+=======
+                              <Badge variant="secondary" className="text-xs font-normal">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                 {project.name}
                               </Badge>
                             )}
@@ -653,7 +657,11 @@ const TaskPool = () => {
                               // Sadece yüksek öncelikli görevleri göster (3 = Yüksek, 4 = Çok Yüksek, 5 = Acil)
                               if (newPriority >= 3) {
                                 return (
+<<<<<<< HEAD
                                   <Badge variant={newPriority >= 4 ? "destructive" : "secondary"} className="h-5 px-2 py-0 text-[11px] font-normal leading-tight">
+=======
+                                  <Badge variant={newPriority >= 4 ? "destructive" : "secondary"} className="text-xs">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                     {option.label}
                                   </Badge>
                                 );

@@ -22,7 +22,11 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+<<<<<<< HEAD
 import { TaskInlineForm } from "@/components/Tasks/TaskInlineForm";
+=======
+import { TaskDetailModal } from "@/components/Tasks/TaskDetailModal";
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -55,8 +59,11 @@ const TasksArchive = () => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+<<<<<<< HEAD
   const [inlineFormVisible, setInlineFormVisible] = useState(false);
   const [inlineFormTaskId, setInlineFormTaskId] = useState<string | null>(null);
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   // Erişim kontrolü - Firestore'dan
   useEffect(() => {
@@ -199,6 +206,7 @@ const TasksArchive = () => {
   };
 
   const openTaskDetail = (taskId: string, initialStatus?: string) => {
+<<<<<<< HEAD
     setInlineFormTaskId(taskId);
     setInlineFormVisible(true);
   };
@@ -206,6 +214,13 @@ const TasksArchive = () => {
   const closeTaskDetail = () => {
     setInlineFormVisible(false);
     setInlineFormTaskId(null);
+=======
+    setSelectedTaskId(taskId);
+  };
+
+  const closeTaskDetail = () => {
+    setSelectedTaskId(null);
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   };
 
   const handleUnarchiveList = (listId: string) => {
@@ -314,7 +329,11 @@ const TasksArchive = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 mb-2">
                             <h3 className="font-semibold text-sm sm:text-base flex-1 break-words">{task.title}</h3>
+<<<<<<< HEAD
                             <Badge variant="outline" className="flex-shrink-0 self-start sm:self-auto h-5 px-2 py-0 text-[11px] font-normal leading-tight">
+=======
+                            <Badge variant="outline" className="flex-shrink-0 self-start sm:self-auto">
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               {task.status === "pending" && "Beklemede"}
                               {task.status === "in_progress" && "Devam Ediyor"}
                               {task.status === "completed" && "Tamamlandı"}
@@ -437,6 +456,7 @@ const TasksArchive = () => {
           </Card>
         </Tabs>
 
+<<<<<<< HEAD
         {/* Task Inline Form */}
         {inlineFormVisible && (
           <TaskInlineForm
@@ -449,6 +469,25 @@ const TasksArchive = () => {
             }}
           />
         )}
+=======
+        {/* Task Detail Modal */}
+        {selectedTaskId && (() => {
+          const task = archivedTasks.find(t => t.id === selectedTaskId);
+          return (
+            <TaskDetailModal
+              taskId={selectedTaskId}
+              open={!!selectedTaskId}
+              onOpenChange={(open) => {
+                if (!open) closeTaskDetail();
+              }}
+              onUpdate={() => {
+                fetchData();
+              }}
+              initialStatus={task?.status as "pending" | "in_progress" | "completed" | "cancelled" || "pending"}
+            />
+          );
+        })()}
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

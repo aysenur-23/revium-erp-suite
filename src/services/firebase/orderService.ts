@@ -21,7 +21,10 @@ import {
   Unsubscribe,
   QueryConstraint,
   FieldValue,
+<<<<<<< HEAD
   writeBatch,
+=======
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase";
 import { logAudit } from "@/utils/auditLogger";
@@ -284,6 +287,7 @@ export const createOrder = async (
       updatedAt: serverTimestamp(),
     });
 
+<<<<<<< HEAD
     // Sipariş kalemlerini batch write ile ekle (optimize edildi)
     if (items && items.length > 0) {
       const batch = writeBatch(firestore);
@@ -330,6 +334,32 @@ export const createOrder = async (
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     } as Order;
+=======
+    // Sipariş kalemlerini ekle
+    if (items && items.length > 0) {
+      const itemsCollection = collection(firestore, "orders", docRef.id, "items");
+      for (const item of items) {
+        const itemDocRef = await addDoc(itemsCollection, item);
+        // Her item için ayrı audit log
+        if (orderData.createdBy) {
+          await logAudit(
+            "CREATE",
+            "order_items",
+            itemDocRef.id,
+            orderData.createdBy,
+            null,
+            item,
+            { orderId: docRef.id }
+          );
+        }
+      }
+    }
+
+    const createdOrder = await getOrderById(docRef.id);
+    if (!createdOrder) {
+      throw new Error("Sipariş oluşturulamadı");
+    }
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
     // Hammadde düşürme kontrolü: PROD- ile başlayan siparişler veya deductMaterials=true olan siparişler
     const isProductionOrder = orderData.orderNumber?.startsWith("PROD-") || orderData.order_number?.startsWith("PROD-");
@@ -340,6 +370,7 @@ export const createOrder = async (
         const { getProductRecipes } = await import("@/services/firebase/recipeService");
         const { getRawMaterialById, updateRawMaterial, addMaterialTransaction } = await import("@/services/firebase/materialService");
         
+<<<<<<< HEAD
         // Tüm reçeteleri paralel olarak topla
         const allRecipePromises = items
           .filter(item => item.product_id || item.productId)
@@ -430,6 +461,52 @@ export const createOrder = async (
             }
           })
         );
+=======
+        for (const item of items) {
+          if (item.product_id || item.productId) {
+            const productId = item.product_id || item.productId;
+            const quantity = item.quantity || 1;
+            
+            // Ürün reçetesini al
+            const recipes = await getProductRecipes(productId);
+            
+            // Her reçete için hammadde stokunu düş
+            for (const recipe of recipes) {
+              if (recipe.rawMaterialId) {
+                const material = await getRawMaterialById(recipe.rawMaterialId);
+                if (material) {
+                  // Toplam kullanılacak miktar = reçete miktarı × ürün miktarı
+                  const totalQuantity = recipe.quantityPerUnit * quantity;
+                  
+                  // Stok kontrolü
+                  if (material.currentStock < totalQuantity) {
+                    if (import.meta.env.DEV) {
+                      console.warn(`Yetersiz stok: ${material.name} için ${totalQuantity} gerekli, ${material.currentStock} mevcut`);
+                    }
+                    // Stok yetersiz olsa bile devam et, sadece uyarı ver
+                  }
+                  
+                  // Stoktan düş
+                  const newStock = Math.max(0, material.currentStock - totalQuantity);
+                  await updateRawMaterial(recipe.rawMaterialId, {
+                    currentStock: newStock,
+                  });
+                  
+                  // Stok hareketi kaydı ekle (stok zaten güncellendi, skipStockUpdate: true)
+                  await addMaterialTransaction({
+                    materialId: recipe.rawMaterialId,
+                    type: "out",
+                    quantity: totalQuantity,
+                    reason: `${isProductionOrder ? 'Üretim siparişi' : 'Sipariş'}: ${orderData.orderNumber || docRef.id} - ${item.product_name || 'Ürün'} (${quantity} adet)`,
+                    relatedOrderId: docRef.id,
+                    createdBy: orderData.createdBy,
+                  }, true); // skipStockUpdate: true - stok zaten güncellendi
+                }
+              }
+            }
+          }
+        }
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       } catch (error) {
         if (import.meta.env.DEV) {
           console.error("Hammadde stok düşürme hatası:", error);

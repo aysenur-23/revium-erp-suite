@@ -272,6 +272,7 @@ export const getOrCreatePrivateTasksProject = async (userId: string): Promise<Pr
  */
 export const deleteProject = async (projectId: string, userId?: string): Promise<void> => {
   try {
+<<<<<<< HEAD
     // Proje ID kontrolü
     if (!projectId || projectId.trim() === "") {
       throw new Error("Proje ID'si geçersiz");
@@ -286,6 +287,12 @@ export const deleteProject = async (projectId: string, userId?: string): Promise
         console.warn(`Proje bulunamadı (ID: ${projectId}). Zaten silinmiş olabilir.`);
       }
       return; // Sessizce çık - proje zaten yok
+=======
+    // Eski veriyi al
+    const oldProject = await getProjectById(projectId);
+    if (!oldProject) {
+      throw new Error("Proje bulunamadı");
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     }
     
     // Yetki kontrolü
@@ -300,7 +307,11 @@ export const deleteProject = async (projectId: string, userId?: string): Promise
       
       const canDelete = await canDeleteProject(oldProject, userProfile);
       if (!canDelete) {
+<<<<<<< HEAD
         throw new Error("Bu projeyi silmek için yetkiniz yok. Sadece yöneticiler projeleri silebilir.");
+=======
+        throw new Error("Bu projeyi silmek için yetkiniz yok. Sadece yöneticiler, ekip liderleri veya projeyi oluşturan kişi silebilir.");
+>>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       }
     }
     
