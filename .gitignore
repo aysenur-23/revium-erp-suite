@@ -1,0 +1,70 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+
+# Production
+dist
+build
+public_html
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Firebase
+.firebase
+.firebaserc
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Functions build output
+functions/lib
+
+# Server
+server/.env
+server/node_modules
+server/*.log
+
+# Legacy/old files
+backend/
+legacy_before_firebase_migration/
+api/
+revpad-functions/
+
+# Google OAuth credentials
+client_secret_*.json
+*.apps.googleusercontent.com.json
+
+# Temporary files
+tmp/
+test-email.html
+
+# Cursor plans (old plans)
+.cursor/plans/*.plan.md

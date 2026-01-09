@@ -1,0 +1,1075 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global overflow prevention */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  /* Prevent horizontal scroll on all devices */
+  position: relative;
+  /* Prevent text selection issues on mobile */
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+#root {
+  max-width: 100vw;
+  overflow-x: hidden;
+  min-height: 100vh;
+  position: relative;
+  /* Removed contain: layout style paint - it breaks grid/flex layouts in dialogs */
+}
+
+/* Prevent text overflow and wrapping issues */
+* {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Box-sizing only - removed max-width: 100% as it breaks grid/flex layouts */
+* {
+  box-sizing: border-box;
+}
+
+/* Ensure tables and containers don't overflow */
+table, 
+.table,
+[class*="table"],
+[role="table"] {
+  width: 100%;
+  max-width: 100%;
+  table-layout: auto;
+}
+
+/* Overscroll behavior only - removed contain: layout style paint as it breaks layouts */
+/* If containment is needed, use .contain-safe class instead */
+[class*="overflow"],
+[style*="overflow"] {
+  overscroll-behavior: contain;
+}
+
+/* Optional: Safe containment class for specific use cases */
+.contain-safe {
+  contain: layout style paint;
+}
+
+/* Popover ve Command component'leri için özel kurallar - global max-width'ten muaf */
+/* Radix Popover CSS variable'ının çalışması için */
+[data-radix-popover-content] {
+  max-width: none !important;
+  /* Popover'ın görünürlüğünü garantile */
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* PopoverContent genişliği için - CSS variable desteği */
+[data-radix-popover-content][style*="--radix-popover-trigger-width"] {
+  width: var(--radix-popover-trigger-width) !important;
+}
+
+/* CommandList için özel kural - scroll çalışsın */
+[cmdk-list] {
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  /* CommandList'in görünürlüğünü garantile */
+  display: block !important;
+  visibility: visible !important;
+}
+
+/* Command içindeki elementler için */
+[cmdk-input-wrapper],
+[cmdk-group] {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Autocomplete dropdown positioning fix */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px white inset !important;
+  box-shadow: 0 0 0 30px white inset !important;
+}
+
+/* Autocomplete suggestions dropdown fix */
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button {
+  visibility: hidden;
+  display: none !important;
+  pointer-events: none;
+  height: 0;
+  width: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+}
+
+/* Fix autocomplete dropdown z-index and positioning */
+input[list],
+input[autocomplete],
+input[type="email"],
+input[type="password"],
+input[type="text"],
+input[type="tel"] {
+  position: relative;
+  z-index: 1;
+}
+
+/* Ensure autocomplete dropdown appears correctly */
+input:-webkit-autofill {
+  -webkit-text-fill-color: inherit !important;
+}
+
+/* Browser autocomplete dropdown positioning fix */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px white inset !important;
+  box-shadow: 0 0 0 30px white inset !important;
+}
+
+/* Fix browser autocomplete suggestions list positioning */
+/* Chrome/Safari autocomplete dropdown */
+input[type="email"]:autofill,
+input[type="text"]:autofill,
+input[type="password"]:autofill {
+  position: relative;
+  z-index: 1;
+}
+
+/* Ensure form containers allow autocomplete dropdowns to appear correctly */
+form,
+[class*="space-y"],
+[class*="TabsContent"],
+[class*="CardContent"] {
+  position: relative;
+  overflow: visible !important;
+}
+
+/* Fix autocomplete dropdown z-index issues */
+input[type="email"]:focus ~ *,
+input[type="text"]:focus ~ *,
+input[type="password"]:focus ~ * {
+  position: relative;
+  z-index: 0;
+}
+
+/* Ensure autocomplete dropdowns don't overlap other elements */
+input[type="email"],
+input[type="text"],
+input[type="password"],
+input[type="tel"] {
+  position: relative;
+  z-index: 10;
+}
+
+/* Fix for browser autocomplete suggestions appearing in wrong place */
+input[list]::-webkit-list-button,
+input::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+
+/* Mobile-specific autocomplete fixes */
+@media (max-width: 768px) {
+  /* Ensure form containers allow autocomplete on mobile */
+  form,
+  [class*="space-y"],
+  [class*="TabsContent"],
+  [class*="CardContent"] {
+    position: relative !important;
+    overflow: visible !important;
+    z-index: 1;
+    isolation: isolate;
+  }
+  
+  /* Mobile input positioning - email inputs get highest priority */
+  input[type="email"],
+  input[type="text"] {
+    position: relative !important;
+    z-index: 1000 !important;
+    transform: translateZ(0); /* Force hardware acceleration */
+    -webkit-transform: translateZ(0);
+    will-change: transform;
+    /* Ensure autocomplete dropdown appears correctly */
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  
+  /* Ensure autocomplete dropdown appears above other elements on mobile */
+  input[type="email"]:focus,
+  input[type="text"]:focus {
+    position: relative !important;
+    z-index: 1000 !important;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    /* Force autocomplete dropdown to appear in correct position */
+    isolation: isolate;
+  }
+  
+  /* Password inputs should be below email autocomplete */
+  input[type="password"] {
+    position: relative !important;
+    z-index: 1 !important;
+    margin-top: 0 !important;
+  }
+  
+  /* Add spacing between email and password fields on mobile */
+  div:has(input[type="email"]) + div:has(input[type="password"]),
+  div:has(input[type="text"]) + div:has(input[type="password"]) {
+    margin-top: 1.5rem !important;
+    padding-top: 0.5rem;
+  }
+  
+  /* Ensure email input container has proper stacking context */
+  div:has(input[type="email"]),
+  div:has(input[type="text"]) {
+    position: relative !important;
+    z-index: 1000 !important;
+    isolation: isolate;
+    /* Ensure container doesn't clip autocomplete */
+    overflow: visible !important;
+  }
+  
+  /* Password input container should be below */
+  div:has(input[type="password"]) {
+    position: relative !important;
+    z-index: 1 !important;
+    overflow: visible !important;
+  }
+  
+  /* Card container adjustments for mobile */
+  [class*="Card"],
+  [class*="CardContent"] {
+    position: relative !important;
+    overflow: visible !important;
+    z-index: 1;
+    isolation: isolate;
+  }
+  
+  /* Prevent autocomplete from being clipped */
+  [class*="CardContent"] > * {
+    position: relative;
+    overflow: visible !important;
+  }
+  
+  /* Fix browser autocomplete dropdown positioning on mobile */
+  input[type="email"]::-webkit-autofill,
+  input[type="text"]::-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 30px white inset !important;
+    box-shadow: 0 0 0 30px white inset !important;
+    -webkit-text-fill-color: inherit !important;
+  }
+  
+  /* Ensure autocomplete suggestions appear correctly on mobile */
+  input[type="email"]:autofill,
+  input[type="text"]:autofill {
+    position: relative !important;
+    z-index: 1000 !important;
+  }
+  
+  /* Fix for Select dropdown on mobile - ensure it appears above autocomplete */
+  [data-radix-select-content] {
+    z-index: 10010 !important;
+    position: fixed !important;
+  }
+}
+
+/* Responsive container max-width prevention - only for mobile */
+@media (max-width: 640px) {
+  .container,
+  [class*="container"] {
+    max-width: 100%;
+  }
+}
+
+/* Responsive images */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Mobile optimizations */
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+}
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 32% 91%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 142 76% 36%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 221 83% 53%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(221 83% 53%) 0%, hsl(221 83% 43%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(142 76% 36%) 0%, hsl(142 76% 46%) 100%);
+    
+    --shadow-sm: 0 1px 2px 0 hsl(221 83% 53% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(221 83% 53% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(221 83% 53% / 0.1);
+
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+
+    --card: 217 33% 17%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 217 33% 17%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 142 76% 36%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 221 83% 53%;
+
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 221 83% 53%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    /* Mobile optimizations */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Prevent text size adjust on iOS */
+    -webkit-text-size-adjust: 100%;
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
+    overscroll-behavior-y: contain;
+    overscroll-behavior-x: contain;
+  }
+
+  /* Mobile touch optimizations */
+  button, a, input, select, textarea {
+    touch-action: manipulation;
+  }
+
+  /* Improved focus styles for better accessibility */
+  *:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+
+  /* Smooth transitions for interactive elements */
+  button, a, [role="button"], [tabindex] {
+    transition: all 0.2s ease-in-out;
+  }
+
+  /* Better disabled state visibility */
+  *:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+  }
+
+  /* Task menu trigger button - prevent green color and visibility issues */
+  /* Sadece görevler sayfasındaki 3 nokta menüsü için */
+  button.task-menu-trigger,
+  /* 3 nokta menüsü her zaman görünür ve yeşil olmaz */
+  button.task-menu-trigger {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: inline-flex !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+  }
+
+  button.task-menu-trigger:hover,
+  button.task-menu-trigger:focus,
+  button.task-menu-trigger:active {
+    background-color: hsl(var(--muted) / 0.5) !important;
+    border-color: hsl(var(--border) / 0.5) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: inline-flex !important;
+  }
+
+  button.task-menu-trigger[data-menu-open="true"],
+  button.task-menu-trigger[data-state="open"] {
+    background-color: hsl(var(--muted) / 0.8) !important;
+    border-color: hsl(var(--border)) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: inline-flex !important;
+  }
+
+  button.task-menu-trigger svg {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    color: hsl(var(--foreground)) !important;
+  }
+
+  /* Safe area support for iOS */
+  @supports (padding: max(0px)) {
+    body {
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+  }
+
+  /* Prevent pull-to-refresh on overscroll */
+
+  @media (max-width: 768px) {
+    /* Mobile specific optimizations */
+    body {
+      overscroll-behavior-y: contain;
+      overscroll-behavior-x: contain;
+    }
+  }
+
+  /* Ensure all scrollable containers work properly */
+  [data-scroll-container] {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  }
+
+
+  /* Ensure all elements with overflow can be scrolled with mouse wheel and touchpad */
+  [style*="overflow-y: auto"],
+  [style*="overflow-y: scroll"],
+  [class*="overflow-y-auto"],
+  [class*="overflow-y-scroll"],
+  [class*="overflow-auto"] {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+    scroll-behavior: smooth;
+  }
+
+  /* Ensure main content area can always scroll */
+  /* Flexbox scroll için parent container'ın height constraint'i olmalı */
+  /* Parent div: flex-1 flex overflow-hidden */
+  div.flex.flex-1.overflow-hidden {
+    /* Flexbox scroll için min-height: 0 gerekli */
+    min-height: 0;
+  }
+  
+  /* Flexbox scroll için main elementinin min-height constraint'i olmalı */
+  main {
+    min-height: 0;
+  }
+  
+  /* Scroll container için özel class - flexbox scroll için height: 0 gerekli */
+  /* flex: 1 ile birlikte scroll çalışması için */
+  main.main-scroll-container,
+  main[class*="main-scroll-container"] {
+    /* Flexbox scroll için min-height: 0 gerekli */
+    min-height: 0;
+    /* Scroll'un çalışması için overflow-y: auto olmalı */
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+  }
+  
+  /* Overflow-auto veya overflow-y-auto class'ına sahip main elementleri için (fallback) */
+  main.overflow-y-auto,
+  main.overflow-auto,
+  main[class*="overflow-y-auto"],
+  main[class*="overflow-auto"] {
+    /* Flexbox scroll için min-height: 0 gerekli */
+    min-height: 0;
+  }
+
+  /* Tüm sayfa container'larının scroll edilebilir olmasını garantile */
+  main > div {
+    width: 100%;
+    /* min-width: 0 kaldırıldı - scroll'u engelliyor olabilir */
+    /* min-height kaldırıldı - scroll'un çalışması için içeriğin doğal yüksekliğine izin ver */
+    /* Flexbox'ta scroll için height constraint olmamalı, içerik doğal yüksekliğinde olmalı */
+    /* Scroll'un çalışması için min-height: 0 olmalı (flexbox scroll için) */
+    min-height: 0;
+  }
+
+  /* Scroll yönetimi: Body scroll'u engelle, main element scroll edilebilir olacak */
+  /* SPA'larda body scroll'u engellemek normaldir, scroll main element'te olacak */
+  html, body {
+    height: 100%;
+    width: 100%;
+    /* Body scroll'u engelle - main element scroll edilebilir olacak */
+    overflow: hidden;
+  }
+  
+  /* Root element scroll'u engelle */
+  #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  /* Better focus management for accessibility */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+
+         /* Professional responsive design - Touch targets and spacing */
+         /* Mobile-first: Ensure minimum touch targets on mobile */
+         @media (max-width: 767px) {
+           /* Touch targets - Apple HIG minimum 44x44px */
+           button:not(.no-touch-target),
+           a[role="button"],
+           [role="button"]:not(.no-touch-target),
+           input[type="button"],
+           input[type="submit"],
+           input[type="reset"],
+           label[for] {
+             min-height: 44px;
+             min-width: 44px;
+           }
+           
+           /* Form inputs should also have comfortable touch targets */
+           input:not([type="checkbox"]):not([type="radio"]),
+           select,
+           textarea {
+             min-height: 44px;
+           }
+           
+           /* Better spacing on mobile - reduced for compactness */
+           .space-y-4 > * + * {
+             margin-top: 0.75rem;
+           }
+           
+           .space-y-6 > * + * {
+             margin-top: 1rem;
+           }
+           
+           /* Improved padding for mobile */
+           .p-4 {
+             padding: 0.75rem;
+           }
+           
+           .p-6 {
+             padding: 1rem;
+           }
+           
+           /* Better gap for mobile */
+           .gap-4 {
+             gap: 0.75rem;
+           }
+           
+           .gap-6 {
+             gap: 1rem;
+           }
+         }
+         
+         /* Tablet optimizations */
+         @media (min-width: 768px) and (max-width: 1023px) {
+           button:not(.no-touch-target),
+           a[role="button"],
+           [role="button"]:not(.no-touch-target) {
+             min-height: 40px;
+           }
+         }
+         
+         /* Desktop - no minimum touch target requirement */
+         @media (min-width: 1024px) {
+           button:not(.no-touch-target),
+           a[role="button"],
+           [role="button"]:not(.no-touch-target) {
+             min-height: auto;
+             min-width: auto;
+           }
+         }
+
+
+/* Professional scrollbar styling - responsive */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+@media (max-width: 640px) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+@media (max-width: 640px) {
+  ::-webkit-scrollbar-thumb {
+    border-radius: 3px;
+  }
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+@media (max-width: 640px) {
+  * {
+    scrollbar-width: thin;
+  }
+}
+
+/* Custom scrollbar utilities for tables */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+.scrollbar-thumb-muted-foreground\/20::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.2);
+}
+
+.scrollbar-thumb-muted-foreground\/30::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.3);
+}
+
+.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+  /* Responsive container improvements */
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      max-width: 640px;
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .container {
+      max-width: 768px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      max-width: 1024px;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .container {
+      max-width: 1280px;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .container {
+      max-width: 1536px;
+    }
+  }
+
+         /* Professional responsive typography - Mobile-first approach (320px-4K) */
+         /* Base styles (mobile - 320px+) */
+         h1 {
+           font-size: 1.25rem;
+           line-height: 1.5rem;
+           letter-spacing: -0.02em;
+         }
+         h2 {
+           font-size: 1.125rem;
+           line-height: 1.375rem;
+           letter-spacing: -0.01em;
+         }
+         h3 {
+           font-size: 1rem;
+           line-height: 1.375rem;
+         }
+         h4 {
+           font-size: 0.9375rem;
+           line-height: 1.375rem;
+         }
+         p {
+           font-size: 0.8125rem;
+           line-height: 1.5rem;
+         }
+         
+         /* Small mobile (475px+) */
+         @media (min-width: 475px) {
+           h1 {
+             font-size: 1.5rem;
+             line-height: 1.75rem;
+           }
+           h2 {
+             font-size: 1.25rem;
+             line-height: 1.5rem;
+           }
+           h3 {
+             font-size: 1.125rem;
+             line-height: 1.5rem;
+           }
+           p {
+             font-size: 0.875rem;
+           }
+         }
+         
+         /* Tablet and up (640px+) */
+         @media (min-width: 640px) {
+           h1 {
+             font-size: 1.875rem;
+             line-height: 2.25rem;
+           }
+           h2 {
+             font-size: 1.5rem;
+             line-height: 1.75rem;
+           }
+           h3 {
+             font-size: 1.25rem;
+             line-height: 1.75rem;
+           }
+           p {
+             font-size: 1rem;
+             line-height: 1.5rem;
+           }
+         }
+         
+         /* Desktop (1024px+) */
+         @media (min-width: 1024px) {
+           h1 {
+             font-size: 2.25rem;
+             line-height: 2.5rem;
+           }
+           h2 {
+             font-size: 1.875rem;
+             line-height: 2.25rem;
+           }
+           h3 {
+             font-size: 1.5rem;
+             line-height: 2rem;
+           }
+         }
+         
+         /* Large Desktop (1280px+) */
+         @media (min-width: 1280px) {
+           h1 {
+             font-size: 2.5rem;
+             line-height: 2.75rem;
+           }
+           h2 {
+             font-size: 2rem;
+             line-height: 2.5rem;
+           }
+         }
+         
+         /* Extra Large Desktop (1536px+) */
+         @media (min-width: 1536px) {
+           h1 {
+             font-size: 3rem;
+             line-height: 3.5rem;
+           }
+           h2 {
+             font-size: 2.25rem;
+             line-height: 2.75rem;
+           }
+         }
+         
+         /* 4K and above (1920px+) */
+         @media (min-width: 1920px) {
+           h1 {
+             font-size: 3.5rem;
+             line-height: 4rem;
+           }
+           h2 {
+             font-size: 2.5rem;
+             line-height: 3rem;
+           }
+         }
+
+  /* Responsive grid improvements for better breakpoint handling */
+  @media (max-width: 640px) {
+    .responsive-grid-1 {
+      grid-template-columns: 1fr;
+    }
+    .responsive-grid-2 {
+      grid-template-columns: 1fr;
+    }
+    .responsive-grid-3 {
+      grid-template-columns: 1fr;
+    }
+    .responsive-grid-4 {
+      grid-template-columns: 1fr;
+    }
+    .responsive-grid-5 {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (min-width: 640px) and (max-width: 1024px) {
+    .responsive-grid-2 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .responsive-grid-3 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .responsive-grid-4 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .responsive-grid-5 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .responsive-grid-3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .responsive-grid-4 {
+      grid-template-columns: repeat(4, 1fr);
+    }
+    .responsive-grid-5 {
+      grid-template-columns: repeat(5, 1fr);
+    }
+  }
+
+  /* Better responsive spacing */
+  @media (max-width: 640px) {
+    .responsive-padding {
+      padding: 0.75rem;
+    }
+    .responsive-gap {
+      gap: 0.75rem;
+    }
+  }
+
+  @media (min-width: 640px) {
+    .responsive-padding {
+      padding: 1rem;
+    }
+    .responsive-gap {
+      gap: 1rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .responsive-padding {
+      padding: 1.5rem;
+    }
+    .responsive-gap {
+      gap: 1.5rem;
+    }
+  }
+}
+
+/* Utility class for safe area padding */
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  
+  .pt-safe {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+  
+  .pl-safe {
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+  
+  .pr-safe {
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+/* Görev modalı genişliği için özel kural - DialogContent'in varsayılan sm:max-w-lg sınıfını override et */
+/* Tüm olası selector'ları kullanarak maksimum specificity sağlıyoruz */
+[data-task-modal],
+[data-radix-dialog-content][data-task-modal],
+[data-task-modal][role="dialog"],
+div[data-task-modal],
+[data-radix-dialog-content][data-task-modal][data-state],
+[data-task-modal][data-state],
+[data-radix-dialog-content][data-task-modal][data-state="open"],
+[data-task-modal][data-state="open"],
+[data-radix-dialog-content][data-task-modal][data-state="closed"],
+[data-task-modal][data-state="closed"] {
+  max-width: 100vw !important;
+  width: 100vw !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  transform: none !important;
+  margin: 0 !important;
+  translate: none !important;
+}
+
+@media (min-width: 640px) {
+  [data-task-modal],
+  [data-radix-dialog-content][data-task-modal],
+  [data-task-modal][role="dialog"],
+  div[data-task-modal],
+  [data-radix-dialog-content][data-task-modal][data-state],
+  [data-task-modal][data-state],
+  [data-radix-dialog-content][data-task-modal][data-state="open"],
+  [data-task-modal][data-state="open"],
+  [data-radix-dialog-content][data-task-modal][data-state="closed"],
+  [data-task-modal][data-state="closed"] {
+    max-width: 95vw !important;
+    width: 95vw !important;
+    left: 2.5vw !important;
+    right: auto !important;
+    top: 5vh !important;
+    bottom: auto !important;
+    transform: none !important;
+    margin: 0 !important;
+    translate: none !important;
+  }
+}
+
+/* Removed aggressive global Radix Dialog overrides - dialogs should configure their own sizing */
+/* Only task modal override remains, strictly scoped */
+
+/* CreateOrderDialog - Ensure proper vertical centering */
+[data-radix-dialog-content].create-order-dialog,
+.create-order-dialog[data-radix-dialog-content] {
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  left: 50% !important;
+  right: auto !important;
+  margin: 0 !important;
+}

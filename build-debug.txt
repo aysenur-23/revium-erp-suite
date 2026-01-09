@@ -1,0 +1,407 @@
+﻿node.exe : 2026-01-08T13:39:
+39.763Z vite:config bundled 
+config file loaded in 71.03m
+s
+At C:\Program Files\nodejs\n
+px.ps1:29 char:3
++   & $NODE_EXE $NPX_CLI_JS 
+$args
++   ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~
+    + CategoryInfo          
+    : NotSpecified: (2026-  
+  01-08T13:3...aded in 71   
+ .03ms:String) [], Remot    
+eException
+    + FullyQualifiedErrorId 
+    : NativeCommandError
+ 
+2026-01-08T13:39:39.801Z vit
+e:config using resolved conf
+ig: {
+  base: '/',
+  server: {
+    preTransformRequests: tr
+ue,
+    host: '::',
+    port: 5173,
+    hmr: { overlay: false },
+    sourcemapIgnoreList: [Fu
+nction: isInNodeModules$1],
+    middlewareMode: false,
+    fs: {
+      strict: true,
+      allow: [Array],
+      deny: [Array],
+      cachedChecks: undefine
+d
+    }
+  },
+  plugins: [
+    'vite:build-metadata',
+    'vite:watch-package-data
+',
+    'vite:pre-alias',
+    'alias',
+    'vite:modulepreload-poly
+fill',
+    'vite:resolve',
+    'vite:html-inline-proxy'
+,
+    'vite:css',
+    'vite:esbuild',
+    'vite:json',
+    'vite:wasm-helper',
+    'vite:worker',
+    'vite:asset',
+    'vite:react-swc',
+    'csp-plugin',
+    'copy-favicon',
+    'vite:wasm-fallback',
+    'vite:define',
+    'vite:css-post',
+    'vite:build-html',
+    'vite:worker-import-meta
+-url',
+    'vite:asset-import-meta-
+url',
+    'vite:force-systemjs-wra
+p-complete',
+    'commonjs',
+    'vite:data-uri',
+    'vite:dynamic-import-var
+s',
+    'vite:import-glob',
+    'vite:build-import-analy
+sis',
+    'vite:esbuild-transpile'
+,
+    'vite:terser',
+    'vite:reporter',
+    'vite:load-fallback'
+  ],
+  resolve: {
+    mainFields: [ 'browser',
+ 'module', 'jsnext:main', 'j
+snext' ],
+    conditions: [],
+    extensions: [
+      '.mjs',  '.js',
+      '.mts',  '.ts',
+      '.jsx',  '.tsx',
+      '.json'
+    ],
+    dedupe: [ 'react', 'reac
+t-dom' ],
+    preserveSymlinks: false,
+    alias: [ [Object], [Obje
+ct], [Object] ]
+  },
+  optimizeDeps: {
+    holdUntilCrawlEnd: true,
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      'lucide-react',
+      '@radix-ui/react-dialo
+g',
+      '@radix-ui/react-selec
+t',
+      '@radix-ui/react-dropd
+own-menu',
+      '@radix-ui/react-toolt
+ip',
+      '@radix-ui/react-accor
+dion',
+      '@radix-ui/react-alert
+-dialog',
+      '@radix-ui/react-avata
+r',
+      '@radix-ui/react-check
+box',
+      '@radix-ui/react-colla
+psible',
+      '@radix-ui/react-conte
+xt-menu',
+      '@radix-ui/react-popov
+er',
+      '@radix-ui/react-tabs'
+,
+      '@tanstack/react-query
+',
+      'sonner',
+      'class-variance-author
+ity',
+      'clsx',
+      'tailwind-merge',
+      'firebase/app',
+      'firebase/auth',
+      'firebase/firestore',
+      'firebase/storage'
+    ],
+    exclude: [ 'pdfGenerator
+', 'jspdf', 'html2canvas' ],
+    esbuildOptions: { preser
+veSymlinks: false }
+  },
+  build: {
+    target: [ 'es2015', 'edg
+e88', 'firefox78', 'chrome87
+', 'safari14' ],
+    cssTarget: [ 'es2015', '
+edge88', 'firefox78', 'chrom
+e87', 'safari14' ],
+    outDir: 'dist',
+    assetsDir: 'assets',
+    assetsInlineLimit: 4096,
+    cssCodeSplit: true,
+    sourcemap: false,
+    rollupOptions: {
+      treeshake: [Object],
+      output: [Object],
+      onwarn: [Function: onw
+arn]
+    },
+    minify: 'esbuild',
+    terserOptions: {},
+    write: true,
+    emptyOutDir: null,
+    copyPublicDir: true,
+    manifest: false,
+    lib: false,
+    ssr: false,
+    ssrManifest: false,
+    ssrEmitAssets: false,
+    reportCompressedSize: fa
+lse,
+    chunkSizeWarningLimit: 1
+000,
+    watch: null,
+    commonjsOptions: { inclu
+de: [Array], extensions: [Ar
+ray] },
+    dynamicImportVarsOptions
+: { warnOnError: true, exclu
+de: [Array] },
+    modulePreload: { polyfil
+l: true },
+    cssMinify: true
+  },
+  esbuild: {
+    jsxDev: false,
+    jsx: 'automatic',
+    jsxImportSource: 'react'
+,
+    tsconfigRaw: { compilerO
+ptions: [Object] }
+  },
+  configFile: 'C:/Users/asla
+n/Downloads/revium-erp-suite
+-main/revium-erp-suite-main/
+vite.config.ts',
+  configFileDependencies: [
+    'C:/Users/aslan/Download
+s/revium-erp-suite-main/revi
+um-erp-suite-main/vite-plugi
+n-csp.ts',
+    'C:/Users/aslan/Download
+s/revium-erp-suite-main/revi
+um-erp-suite-main/vite.confi
+g.ts'
+[36mvite v5.4.19 [32mbuilding for production...[36m[39m
+  ],
+  inlineConfig: {
+    root: undefined,
+    base: undefined,
+    mode: undefined,
+    configFile: undefined,
+    logLevel: undefined,
+    clearScreen: undefined,
+    build: {}
+  },
+  root: 'C:/Users/aslan/Down
+loads/revium-erp-suite-main/
+revium-erp-suite-main',
+  decodedBase: '/',
+  rawBase: '/',
+  publicDir: 'C:/Users/aslan
+/Downloads/revium-erp-suite-
+main/revium-erp-suite-main/p
+ublic',
+  cacheDir: 'C:/Users/aslan/
+Downloads/revium-erp-suite-m
+ain/revium-erp-suite-main/no
+de_modules/.vite',
+  command: 'build',
+  mode: 'production',
+  ssr: {
+    target: 'node',
+    optimizeDeps: { noDiscov
+ery: true, esbuildOptions: [
+Object] }
+  },
+  isWorker: false,
+  mainConfig: null,
+  bundleChain: [],
+  isProduction: true,
+  css: { lightningcss: undef
+ined },
+  preview: {
+    port: undefined,
+    strictPort: undefined,
+    host: '::',
+    allowedHosts: undefined,
+    https: undefined,
+    open: undefined,
+    proxy: undefined,
+    cors: undefined,
+    headers: undefined
+  },
+  envDir: 'C:/Users/aslan/Do
+wnloads/revium-erp-suite-mai
+n/revium-erp-suite-main',
+  env: {
+    VITE_EMAIL_API_URL: 'htt
+p://localhost:3000/api/send-
+email',
+    VITE_APP_URL: 'https://r
+evpad.net',
+    VITE_FIREBASE_API_KEY: '
+AIzaSyCloqjpaVe56iwMq_J7QFtk
+w9r8t9Z7tIk',
+    VITE_FIREBASE_AUTH_DOMAI
+N: 'revpad-15232.firebaseapp
+.com',
+    VITE_FIREBASE_PROJECT_ID
+: 'revpad-15232',
+    VITE_FIREBASE_STORAGE_BU
+CKET: 'revpad-15232.firebase
+storage.app',
+    VITE_FIREBASE_MESSAGING_
+SENDER_ID: '189145988180',
+    VITE_FIREBASE_APP_ID: '1
+:189145988180:web:e4a3078221
+072432a001c1',
+    VITE_FIREBASE_MEASUREMEN
+T_ID: 'G-EREJTZ924E',
+    VITE_GOOGLE_CLIENT_ID: '
+189145988180-ifbkkgbb9cbqn28
+3m71q06131isao1gu.apps.googl
+eusercontent.com',
+    BASE_URL: '/',
+    MODE: 'production',
+    DEV: false,
+    PROD: true
+  },
+  assetsInclude: [Function: 
+assetsInclude],
+  logger: {
+    hasWarned: false,
+    info: [Function: info],
+    warn: [Function: warn],
+    warnOnce: [Function: war
+nOnce],
+    error: [Function: error]
+,
+    clearScreen: [Function: 
+clearScreen],
+    hasErrorLogged: [Functio
+n: hasErrorLogged]
+  },
+  packageCache: Map(1) {
+    'fnpd_C:/Users/aslan/Dow
+nloads/revium-erp-suite-main
+/revium-erp-suite-main' => {
+      dir: 'C:/Users/aslan/D
+ownloads/revium-erp-suite-ma
+in/revium-erp-suite-main',
+      data: [Object],
+      hasSideEffects: [Funct
+ion: hasSideEffects],
+      webResolvedImports: {}
+,
+      nodeResolvedImports: {
+},
+      setResolvedCache: [Fun
+ction: setResolvedCache],
+      getResolvedCache: [Fun
+ction: getResolvedCache]
+    },
+    set: [Function (anonymou
+s)]
+  },
+  createResolver: [Function:
+ createResolver],
+  worker: { format: 'iife', 
+plugins: '() => plugins', ro
+llupOptions: {} },
+  appType: 'spa',
+  experimental: { importGlob
+RestoreExtension: false, hmr
+PartialAccept: false },
+  webSocketToken: 'NF80ZmdsA
+auH',
+  additionalAllowedHosts: [ 
+'::', '::' ],
+  getSortedPlugins: [Functio
+n: getSortedPlugins],
+  getSortedPluginHooks: [Fun
+ction: getSortedPluginHooks]
+}
+transforming...
+Browserslist: browsers data 
+(caniuse-lite) is 7 months o
+ld. Please run:
+  npx update-browserslist-db
+@latest
+  Why you should do it regul
+arly: https://github.com/bro
+wserslist/update-db#readme
+[32mÔ£ô[39m 2121 modules transformed.
+Ô£à favicon.ico olu┼şturuldu (rev-favicon.png'den)
+[31mx[39m Build failed in 
+6.98s
+[31merror during build:
+[31m[vite:load-fallback] Co
+uld not load C:\Users\aslan\
+Downloads\revium-erp-suite-m
+ain\revium-erp-suite-main\sr
+c/utils/scrollTest (imported
+ by src/components/Layout/Ma
+inLayout.tsx): ENOENT: no su
+ch file or directory, open '
+C:\Users\aslan\Downloads\rev
+ium-erp-suite-main\revium-er
+p-suite-main\src\utils\scrol
+lTest'[31m
+    at async open (node:inte
+rnal/fs/promises:633:25)
+    at async Object.readFile
+ (node:internal/fs/promises:
+1237:14)
+    at async Object.load (fi
+le:///C:/Users/aslan/Downloa
+ds/revium-erp-suite-main/rev
+ium-erp-suite-main/node_modu
+les/vite/dist/node/chunks/de
+p-C6uTJdX2.js:65341:25)
+    at async PluginDriver.ho
+okFirstAndGetPlugin (file://
+/C:/Users/aslan/Downloads/re
+vium-erp-suite-main/revium-e
+rp-suite-main/node_modules/r
+ollup/dist/es/shared/node-en
+try.js:20630:28)
+    at async file:///C:/User
+s/aslan/Downloads/revium-erp
+-suite-main/revium-erp-suite
+-main/node_modules/rollup/di
+st/es/shared/node-entry.js:1
+9750:33
+    at async Queue.work (fil
+e:///C:/Users/aslan/Download
+s/revium-erp-suite-main/revi
+um-erp-suite-main/node_modul
+es/rollup/dist/es/shared/nod
+e-entry.js:20840:32)[39m

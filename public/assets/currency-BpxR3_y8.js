@@ -1,0 +1,1 @@
+const R=[{value:"TRY",label:"TRY (₺)"},{value:"USD",label:"USD ($)"},{value:"EUR",label:"EUR (€)"},{value:"GBP",label:"GBP (£)"}],a={TRY:"₺",USD:"$",EUR:"€",GBP:"£"},l="TRY";export{a as C,l as D,R as a};
