@@ -43,107 +43,12 @@ const DialogContent = React.forwardRef<
   const sidebarContext = useSidebarContext();
   
   // Dialog açıldığında mobilde menüyü kapat
-<<<<<<< HEAD
-  // NOT: useEffect kaldırıldı - DialogContent mount olduğunda sidebar'ı kapatmak
-  // GlobalSearch gibi her zaman render edilen Dialog'lar sidebar'ı hemen kapatıyordu
-  // Artık sadece overlay tıklamasında sidebar kapanacak
-  
-  // Accessibility: DialogTitle ve DialogDescription kontrolü
-  // Eğer children içinde DialogTitle veya DialogDescription yoksa, otomatik olarak sr-only versiyonlarını ekle
-  let hasTitle = false;
-  let hasDescription = false;
-  
-  // Recursive function to check for DialogTitle and DialogDescription
-  const checkForTitleAndDescription = (node: React.ReactNode, depth: number = 0): void => {
-    // Max depth kontrolü (sonsuz döngüyü önlemek için)
-    if (depth > 10) return;
-    if (!node) return;
-    
-    // Fragment kontrolü
-    if (React.isValidElement(node) && node.type === React.Fragment) {
-      if (node.props?.children) {
-        React.Children.forEach(node.props.children, (child) => checkForTitleAndDescription(child, depth + 1));
-      }
-      return;
-    }
-    
-    if (React.isValidElement(node)) {
-      // Check if it's a DialogTitle or DialogDescription
-      const nodeType = node.type as any;
-      const displayName = nodeType?.displayName || nodeType?.name || nodeType?.$$typeof?.toString();
-      
-      // DialogTitle kontrolü - daha kapsamlı
-      // Radix UI'nin Title component'ini kontrol et
-      const isTitle = displayName === DialogPrimitive.Title.displayName || 
-          displayName === 'DialogTitle' ||
-          nodeType === DialogPrimitive.Title ||
-          (typeof nodeType === 'function' && (nodeType.displayName === 'DialogTitle' || nodeType.name === 'DialogTitle')) ||
-          (node.props && (node.props as any).__isDialogTitle) ||
-          // String kontrolü - bazı durumlarda string olarak gelebilir
-          (typeof node === 'string' && node.includes('DialogTitle'));
-      
-      if (isTitle) {
-        hasTitle = true;
-        // Early return yapma - children'ı da kontrol et
-      }
-      
-      // DialogDescription kontrolü - daha kapsamlı
-      // Radix UI'nin Description component'ini kontrol et
-      const isDescription = displayName === DialogPrimitive.Description.displayName || 
-          displayName === 'DialogDescription' ||
-          nodeType === DialogPrimitive.Description ||
-          (typeof nodeType === 'function' && (nodeType.displayName === 'DialogDescription' || nodeType.name === 'DialogDescription')) ||
-          (node.props && (node.props as any).__isDialogDescription) ||
-          // String kontrolü - bazı durumlarda string olarak gelebilir
-          (typeof node === 'string' && node.includes('DialogDescription'));
-      
-      if (isDescription) {
-        hasDescription = true;
-        // Early return yapma - children'ı da kontrol et
-      }
-      
-      // Eğer hem title hem description bulunduysa, erken çık
-      if (hasTitle && hasDescription) {
-        return;
-      }
-      
-      // Recursively check children - tüm olası children formatlarını kontrol et
-      if (node.props?.children) {
-        const childrenArray = React.Children.toArray(node.props.children);
-        childrenArray.forEach((child) => checkForTitleAndDescription(child, depth + 1));
-      }
-    } else if (Array.isArray(node)) {
-      node.forEach((item) => checkForTitleAndDescription(item, depth + 1));
-    }
-  };
-  
-  // Check all children recursively - React.Children.toArray kullanarak daha güvenli kontrol
-  const childrenArray = React.Children.toArray(children);
-  childrenArray.forEach((child) => checkForTitleAndDescription(child, 0));
-  
-  // Eksik DialogTitle veya DialogDescription varsa, otomatik olarak sr-only versiyonlarını ekle
-  // Her zaman ekle (Radix UI uyarılarını önlemek için) - duplicate kontrolü zaten yapıldı
-  // Not: Radix UI'nin kontrolü render sırasında yapılıyor, bu yüzden her zaman eklemek daha güvenli
-  const enhancedChildren = (
-    <>
-      {/* Her zaman ekle - eğer zaten varsa Radix UI duplicate'i handle edecek */}
-      <DialogPrimitive.Title className="sr-only" key="auto-title" aria-hidden={hasTitle ? true : undefined}>
-        {hasTitle ? '' : 'Dialog'}
-      </DialogPrimitive.Title>
-      <DialogPrimitive.Description className="sr-only" key="auto-description" aria-hidden={hasDescription ? true : undefined}>
-        {hasDescription ? '' : 'Dialog içeriği'}
-      </DialogPrimitive.Description>
-      {children}
-    </>
-  );
-=======
   // DialogContent mount olduğunda menüyü kapat (Dialog açıldığında)
   React.useEffect(() => {
     if (sidebarContext) {
       sidebarContext.closeSidebar();
     }
   }, [sidebarContext]);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   
   return (
     <DialogPortal>
@@ -159,44 +64,23 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-<<<<<<< HEAD
-          // Her zaman fixed olmalı (modal çalışması için gerekli)
-          "fixed z-[10001]",
-          // Mobil için left-0 right-0 bottom-0 gerekli (modal render edilmesi için)
-          // Tablet/desktop için CSS'teki !important kuralları bu class'ları override edecek
-          "left-0 right-0 bottom-0",
-          "grid w-full gap-3 sm:gap-4 border-t bg-background p-3 sm:p-4 md:p-6 pb-safe shadow-lg duration-200",
-=======
           // Mobile: Full screen bottom sheet style with safe area support
           "fixed left-0 right-0 bottom-0 z-[10001] grid w-full gap-3 sm:gap-4 border-t bg-background p-3 sm:p-4 md:p-6 pb-safe shadow-lg duration-200",
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-          "!max-h-[95vh] sm:!max-h-[80vh] !overflow-hidden",
+          "!max-h-[95vh] sm:!max-h-[90vh] !overflow-hidden",
           "scroll-smooth -webkit-overflow-scrolling-touch overscroll-behavior-contain",
           // Professional mobile optimizations
           "touch-manipulation",
           // Desktop: Centered modal (sadece data-task-modal yoksa)
-<<<<<<< HEAD
-          // CSS'teki !important kuralları bu class'ları override edecek
-          // NOT: sm:left, sm:translate-x gibi positioning class'ları kaldırıldı - CSS'teki !important kuralları çalışsın
-          !hasTaskModal && "sm:rounded-lg sm:border sm:border-t",
-          !hasTaskModal && "sm:data-[state=closed]:slide-out-to-left sm:data-[state=closed]:slide-out-to-top sm:data-[state=open]:slide-in-from-left sm:data-[state=open]:slide-in-from-top",
-          !hasTaskModal && "sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95",
-=======
-          !hasTaskModal && "sm:left-[7.5vw] sm:top-[10vh] sm:bottom-auto sm:right-auto sm:max-w-[85vw] sm:translate-x-0 sm:translate-y-0 sm:rounded-lg sm:border sm:border-t",
-          !hasTaskModal && "sm:data-[state=closed]:slide-out-to-left sm:data-[state=closed]:slide-out-to-top sm:data-[state=open]:slide-in-from-left sm:data-[state=open]:slide-in-from-top",
-          !hasTaskModal && "sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:!max-h-[80vh]",
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+          !hasTaskModal && "sm:left-[50%] sm:top-[50%] sm:bottom-auto sm:right-auto sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:border sm:border-t",
+          !hasTaskModal && "sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]",
+          !hasTaskModal && "sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:!max-h-[85vh]",
           className,
         )}
         {...props}
       >
-<<<<<<< HEAD
-        {enhancedChildren}
-=======
         {children}
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         <DialogPrimitive.Close className="absolute right-3 sm:right-4 top-3 sm:top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none touch-manipulation min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] flex items-center justify-center z-[10002] active:scale-95">
           <X className="h-5 w-5 sm:h-4 sm:w-4" />
           <span className="sr-only">Close</span>

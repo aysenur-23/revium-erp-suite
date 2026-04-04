@@ -89,34 +89,9 @@ export const UserManagement = () => {
                 phone: u.phone || null,
                 department_id: u.departmentId || null,
                 created_at: u.createdAt instanceof Timestamp ? u.createdAt : (u.createdAt instanceof Date ? Timestamp.fromDate(u.createdAt) : Timestamp.now()),
-<<<<<<< HEAD
-                roles: u.role || [], // UserProfile'da role (tekil), User interface'inde roles (çoğul)
-=======
                 roles: u.role || [],
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 last_login_at: u.lastLoginAt instanceof Timestamp ? u.lastLoginAt : (u.lastLoginAt instanceof Date ? Timestamp.fromDate(u.lastLoginAt) : null),
-              }))
-              .sort((a, b) => {
-                // Kayıt olma tarihine göre sırala (en eski en üstte)
-                const aTime = a.created_at instanceof Timestamp ? a.created_at.toMillis() : (a.created_at instanceof Date ? a.created_at.getTime() : 0);
-                const bTime = b.created_at instanceof Timestamp ? b.created_at.toMillis() : (b.created_at instanceof Date ? b.created_at.getTime() : 0);
-                return aTime - bTime;
-              });
-<<<<<<< HEAD
-            
-            if (import.meta.env.DEV) {
-              console.log("Real-time listener: Kullanıcı listesi güncellendi", {
-                userCount: fetchedUsers.length,
-                sampleUser: fetchedUsers[0] ? {
-                  id: fetchedUsers[0].id,
-                  email: fetchedUsers[0].email,
-                  roles: fetchedUsers[0].roles
-                } : null
-              });
-            }
-            
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+              }));
             setUsers(fetchedUsers);
             setLoading(false);
           } catch (error) {
@@ -167,13 +142,7 @@ export const UserManagement = () => {
           created_at: u.createdAt instanceof Timestamp ? u.createdAt : (u.createdAt instanceof Date ? Timestamp.fromDate(u.createdAt) : Timestamp.now()),
           roles: u.role || [],
           last_login_at: u.lastLoginAt instanceof Timestamp ? u.lastLoginAt : (u.lastLoginAt instanceof Date ? Timestamp.fromDate(u.lastLoginAt) : null),
-        }))
-        .sort((a, b) => {
-          // Kayıt olma tarihine göre sırala (en eski en üstte)
-          const aTime = a.created_at instanceof Timestamp ? a.created_at.toMillis() : (a.created_at instanceof Date ? a.created_at.getTime() : 0);
-          const bTime = b.created_at instanceof Timestamp ? b.created_at.toMillis() : (b.created_at instanceof Date ? b.created_at.getTime() : 0);
-          return aTime - bTime;
-        }));
+        })));
 
       setRoles(fetchedRoles);
 
@@ -240,7 +209,7 @@ export const UserManagement = () => {
       // Kullanıcının rolünü güncelle - roles collection'ındaki tanımlarla senkronize
       await updateFirebaseUserProfile(selectedUser.id, {
         role: updatedRoles,
-      }, user?.id || null);
+      });
 
       // Eğer team_leader rolü atanıyorsa, kullanıcıyı bir departmanın manager'ı olarak ata (ZORUNLU)
       if (newRole === "team_leader") {
@@ -272,7 +241,7 @@ export const UserManagement = () => {
               // Rol güncellemesini geri al
               await updateFirebaseUserProfile(selectedUser.id, {
                 role: [oldRole],
-              }, user?.id || null);
+              });
               return;
             }
           } else {
@@ -292,7 +261,7 @@ export const UserManagement = () => {
           // Rol güncellemesini geri al
           await updateFirebaseUserProfile(selectedUser.id, {
             role: [oldRole],
-          }, user?.id || null);
+          });
           return;
         }
       } else if (oldRole === "team_leader" && newRole !== "team_leader") {
@@ -383,45 +352,14 @@ export const UserManagement = () => {
         return;
       }
 
-<<<<<<< HEAD
-      // Kullanıcının mevcut rolleri (User interface'inde roles çoğul, Firestore'da role tekil)
-=======
       // Kullanıcının mevcut rolleri
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const currentRoles = targetUser.roles || [];
       
       // Eğer kullanıcı team_leader değilse, ekle
       if (!currentRoles.includes("team_leader")) {
-<<<<<<< HEAD
-        const newRoles = [...currentRoles, "team_leader"];
-        const updateResult = await updateFirebaseUserProfile(userId, {
-          role: newRoles, // Firestore'a role (tekil) olarak yazılıyor
-        }, user?.id || null);
-        
-        if (!updateResult.success) {
-          toast.error(`Rol güncelleme hatası: ${updateResult.message || "Bilinmeyen hata"}`);
-          return;
-        }
-        
-        if (import.meta.env.DEV) {
-          console.log("Rol güncellendi:", {
-            userId,
-            oldRoles: currentRoles,
-            newRoles: newRoles
-          });
-        }
-        
-        // Kullanıcı listesini hemen güncelle (optimistic update)
-        setUsers(prevUsers => prevUsers.map(u => 
-          u.id === userId 
-            ? { ...u, roles: newRoles }
-            : u
-        ));
-=======
         await updateFirebaseUserProfile(userId, {
           role: [...currentRoles, "team_leader"],
-        }, user?.id || null);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+        });
       }
 
       // Seçilen departmanın mevcut manager'ını kontrol et
@@ -442,22 +380,14 @@ export const UserManagement = () => {
           
           // Eğer başka departmanda manager değilse, team_leader rolünü kaldır
           if (!otherDeptAsManager) {
-<<<<<<< HEAD
-            const oldManagerRoles = oldManager.roles || []; // User interface'inde roles çoğul
-=======
             const oldManagerRoles = oldManager.roles || [];
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             const updatedOldManagerRoles = oldManagerRoles.filter((r: string) => r !== "team_leader");
             if (updatedOldManagerRoles.length === 0) {
               updatedOldManagerRoles.push("viewer"); // En azından viewer rolü olsun
             }
             await updateFirebaseUserProfile(oldManager.id, {
-<<<<<<< HEAD
-              role: updatedOldManagerRoles, // Firestore'a role (tekil) olarak yazılıyor
-=======
               role: updatedOldManagerRoles,
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-            }, user?.id || null);
+            });
           }
         }
       }
@@ -479,26 +409,8 @@ export const UserManagement = () => {
 
       toast.success(`${targetUser.full_name || targetUser.email} kullanıcısı "${targetDepartment.name}" departmanının lideri olarak atandı`);
       
-<<<<<<< HEAD
-      // Kullanıcı listesini yenile (await ile bekle)
-      // Real-time listener otomatik güncelleyecek ama manuel yenileme de yapalım
-      try {
-        await fetchData();
-        
-        // Firestore eventual consistency için kısa bir gecikme sonrası tekrar kontrol et
-        setTimeout(async () => {
-          await fetchData();
-        }, 1000);
-      } catch (fetchError) {
-        if (import.meta.env.DEV) {
-          console.error("Kullanıcı listesi yenileme hatası:", fetchError);
-        }
-        // Hata olsa bile real-time listener güncelleyecek
-      }
-=======
       // Kullanıcı listesini yenile
       fetchData();
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     } catch (error: unknown) {
       toast.error("Ekip lideri atanırken hata: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
     }
@@ -508,7 +420,7 @@ export const UserManagement = () => {
     try {
       await updateFirebaseUserProfile(userId, {
         departmentId: departmentId === "none" ? null : departmentId,
-      }, user?.id || null);
+      });
 
       toast.success("Kullanıcı departmanı başarıyla güncellendi");
       fetchData();
@@ -580,7 +492,7 @@ export const UserManagement = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-            <span className="text-[14px] sm:text-[15px] leading-tight">Kullanıcılar ({users.length})</span>
+            <span className="text-lg sm:text-xl md:text-2xl">Kullanıcılar ({users.length})</span>
             <SearchInput
               placeholder="Kullanıcı ara..."
               value={searchTerm}
@@ -590,15 +502,9 @@ export const UserManagement = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-<<<<<<< HEAD
-          <div className="overflow-x-auto -mx-4 sm:mx-0 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-            <div className="inline-block min-w-full align-middle px-4 sm:px-0">
-              <Table className="min-w-[800px] sm:min-w-0 w-full">
-=======
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <div className="inline-block min-w-full align-middle px-4 sm:px-0">
               <Table className="min-w-[800px] sm:min-w-0">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               <TableHeader>
               <TableRow>
                 <TableHead className="min-w-[150px]">Kullanıcı</TableHead>
@@ -615,14 +521,14 @@ export const UserManagement = () => {
                   <TableCell>
                     <div className="flex items-center gap-2 sm:gap-3">
                       <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
-                        <AvatarFallback className="text-[10px] sm:text-[11px]">{getInitials(tableUser.full_name)}</AvatarFallback>
+                        <AvatarFallback className="text-xs sm:text-sm">{getInitials(tableUser.full_name)}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium text-[11px] sm:text-xs truncate">{tableUser.full_name}</div>
+                        <div className="font-medium text-sm sm:text-base truncate">{tableUser.full_name}</div>
                         {tableUser.phone && (
-                          <div className="text-[10px] sm:text-[11px] text-muted-foreground truncate">{formatPhoneForDisplay(tableUser.phone)}</div>
+                          <div className="text-xs sm:text-sm text-muted-foreground truncate">{formatPhoneForDisplay(tableUser.phone)}</div>
                         )}
-                        <div className="text-[10px] sm:text-[11px] text-muted-foreground md:hidden truncate">{tableUser.email}</div>
+                        <div className="text-xs text-muted-foreground md:hidden truncate">{tableUser.email}</div>
                       </div>
                     </div>
                   </TableCell>
@@ -634,7 +540,7 @@ export const UserManagement = () => {
                           value={tableUser.department_id || "none"}
                           onValueChange={(value) => handleDepartmentChange(tableUser.id, value)}
                         >
-                          <SelectTrigger className="w-full min-w-[120px] sm:min-w-[140px] sm:w-[180px] text-[11px] sm:text-xs h-8 sm:h-10">
+                          <SelectTrigger className="w-full min-w-[120px] sm:min-w-[140px] sm:w-[180px] text-xs sm:text-sm h-8 sm:h-10">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -664,7 +570,7 @@ export const UserManagement = () => {
                         </Button>
                       </div>
                     ) : (
-                      <span className="text-[10px] sm:text-[11px] text-muted-foreground truncate block">
+                      <span className="text-xs sm:text-sm text-muted-foreground truncate block">
                         {departments.find(d => d.id === tableUser.department_id)?.name || "Atanmamış"}
                       </span>
                     )}
@@ -696,10 +602,10 @@ export const UserManagement = () => {
                             <span 
                               className={
                                 isOnline 
-                                  ? "text-green-600 dark:text-green-400 font-medium text-[10px] sm:text-[11px]" 
+                                  ? "text-green-600 dark:text-green-400 font-medium text-xs sm:text-sm" 
                                   : lastLoginText === "Hiç giriş yapmamış"
-                                  ? "text-muted-foreground italic text-[10px] sm:text-[11px]"
-                                  : "text-muted-foreground text-[10px] sm:text-[11px]"
+                                  ? "text-muted-foreground italic text-xs sm:text-sm"
+                                  : "text-muted-foreground text-xs sm:text-sm"
                               }
                               title={lastLoginDate ? `Son giriş: ${lastLoginDate.toLocaleString("tr-TR")}` : "Hiç giriş yapılmamış"}
                             >
@@ -717,7 +623,7 @@ export const UserManagement = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 w-8 sm:h-9 sm:w-auto sm:min-w-[120px] sm:min-h-0 text-[11px] sm:text-xs p-0 sm:px-3"
+                            className="h-8 w-8 sm:h-9 sm:w-auto sm:min-w-[120px] sm:min-h-0 text-xs sm:text-sm p-0 sm:px-3"
                             onClick={() => {
                               setSelectedUser(tableUser);
                               setNewRole(getUserRole(tableUser));
@@ -775,11 +681,7 @@ export const UserManagement = () => {
           </AlertDialogHeader>
           <div className="py-4">
             <Select value={newRole} onValueChange={setNewRole}>
-<<<<<<< HEAD
-              <SelectTrigger className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm">
-=======
               <SelectTrigger>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 <SelectValue placeholder="Rol seçin" />
               </SelectTrigger>
               <SelectContent>
@@ -791,15 +693,9 @@ export const UserManagement = () => {
               </SelectContent>
             </Select>
           </div>
-<<<<<<< HEAD
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel className="w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs">İptal</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRoleChange} className="w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs">
-=======
           <AlertDialogFooter>
             <AlertDialogCancel>İptal</AlertDialogCancel>
             <AlertDialogAction onClick={handleRoleChange}>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               Kaydet
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -823,12 +719,12 @@ export const UserManagement = () => {
             </div>
           </AlertDialogHeader>
           <div className="py-4 space-y-3">
-            <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">
+            <p className="text-sm text-muted-foreground">
               <strong>{selectedUser?.full_name}</strong> kullanıcısını silmek istediğinizden emin misiniz?
             </p>
             <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4 space-y-2">
-              <p className="text-[11px] sm:text-xs font-semibold text-destructive leading-tight">Bu işlem şunları yapacak:</p>
-              <ul className="text-[11px] sm:text-xs text-muted-foreground space-y-1 list-disc list-inside leading-snug">
+              <p className="text-sm font-semibold text-destructive">Bu işlem şunları yapacak:</p>
+              <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
                 <li>Kullanıcı veritabanından silinecek</li>
                 <li>Tüm log kayıtları silinecek</li>
                 <li>Kullanıcı tüm görevlerden çıkarılacak</li>
@@ -838,13 +734,8 @@ export const UserManagement = () => {
               </ul>
             </div>
           </div>
-<<<<<<< HEAD
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel className="w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs">İptal</AlertDialogCancel>
-=======
           <AlertDialogFooter>
             <AlertDialogCancel>İptal</AlertDialogCancel>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             <AlertDialogAction
               onClick={() => {
                 // Son bir kez kontrol et - kendi hesabını silmeye çalışıyorsa engelle
@@ -857,11 +748,7 @@ export const UserManagement = () => {
                 setShowDeleteDialog(false);
                 setShowDeleteConfirmDialog(true);
               }}
-<<<<<<< HEAD
-              className="bg-destructive hover:bg-destructive/90 w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
-=======
               className="bg-destructive hover:bg-destructive/90"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             >
               Devam Et
             </AlertDialogAction>
@@ -895,21 +782,12 @@ export const UserManagement = () => {
               </p>
             </div>
           </div>
-<<<<<<< HEAD
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel disabled={deleting} className="w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs">İptal</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteUser}
-              disabled={deleting}
-              className="bg-destructive hover:bg-destructive/90 w-full sm:w-auto min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
-=======
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>İptal</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteUser}
               disabled={deleting}
               className="bg-destructive hover:bg-destructive/90"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             >
               {deleting ? "Siliniyor..." : "Evet, Sil"}
             </AlertDialogAction>

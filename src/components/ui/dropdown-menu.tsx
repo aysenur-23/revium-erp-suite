@@ -67,49 +67,6 @@ DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayNam
 
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-<<<<<<< HEAD
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
-    avoidCollisions?: boolean;
-    collisionPadding?: number;
-  }
->(({ className, sideOffset = 4, side = "bottom", style, avoidCollisions = false, collisionPadding = 16, ...props }, ref) => {
-  // className'de max-h veya overflow belirtilmişse default'ları kullanma
-  const hasMaxH = className?.includes('max-h') || className?.includes('max-h-');
-  const hasOverflow = className?.includes('overflow');
-  
-  return (
-    <DropdownMenuPrimitive.Portal>
-      <DropdownMenuPrimitive.Content
-        ref={ref}
-        side={side}
-        sideOffset={sideOffset}
-        collisionPadding={collisionPadding}
-        avoidCollisions={avoidCollisions}
-        className={cn(
-          "z-[9999] min-w-[8rem] w-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-          // Sadece className'de belirtilmemişse default olarak ekle
-          !hasMaxH && "max-h-[85vh]",
-          !hasOverflow && "overflow-y-auto",
-          className,
-        )}
-        style={{
-          // Default değerler
-          WebkitOverflowScrolling: 'touch',
-          touchAction: 'pan-y pinch-zoom',
-          overscrollBehavior: 'contain',
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(0, 0, 0, 0.2) transparent',
-          height: 'auto',
-          maxHeight: '85vh',
-          // Props'tan gelen style'ı sonra ekle (override için)
-          ...(style as React.CSSProperties),
-        } as React.CSSProperties}
-        {...props}
-      />
-    </DropdownMenuPrimitive.Portal>
-  );
-});
-=======
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
 >(({ className, sideOffset = 4, side = "bottom", ...props }, ref) => (
   <DropdownMenuPrimitive.Portal>
@@ -137,7 +94,6 @@ const DropdownMenuContent = React.forwardRef<
     />
   </DropdownMenuPrimitive.Portal>
 ));
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
 const DropdownMenuItem = React.forwardRef<

@@ -44,90 +44,18 @@ export interface RoleDefinition {
 const ROLE_PERMISSIONS_COLLECTION = "role_permissions";
 const ROLES_COLLECTION = "roles";
 
-<<<<<<< HEAD
-// Permission cache configuration
-const CACHE_TTL = 5 * 60 * 1000; // 5 dakika cache TTL
-const cacheTimestamps = new Map<string, number>();
-
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 // Permission cache for real-time updates
 const permissionCache = new Map<string, RolePermission | null>();
 const permissionListeners = new Map<string, Unsubscribe>();
 const cacheCallbacks = new Set<() => void>();
 
 /**
-<<<<<<< HEAD
- * Check if cache entry is expired
- */
-const isCacheExpired = (cacheKey: string): boolean => {
-  const timestamp = cacheTimestamps.get(cacheKey);
-  if (!timestamp) return true;
-  return Date.now() - timestamp > CACHE_TTL;
-};
-
-/**
- * Update cache timestamp
- */
-const updateCacheTimestamp = (cacheKey: string): void => {
-  cacheTimestamps.set(cacheKey, Date.now());
-};
-
-/**
- * Clear permission cache (optionally for specific role)
- */
-export const clearPermissionCache = (role?: string): void => {
-  if (role) {
-    // Clear only specific role's cache
-    for (const key of permissionCache.keys()) {
-      if (key.startsWith(`${role}:`)) {
-        permissionCache.delete(key);
-        cacheTimestamps.delete(key);
-      }
-    }
-  } else {
-    // Clear all cache
-    permissionCache.clear();
-    cacheTimestamps.clear();
-  }
-  // Notify all callbacks
-  cacheCallbacks.forEach(callback => {
-    try {
-      callback();
-    } catch (e) {
-      // Callback hatası diğerlerini etkilemesin
-    }
-  });
-};
-
-/**
- * Force refresh all permissions from Firestore
- */
-export const forceRefreshPermissions = async (): Promise<void> => {
-  // Clear all cache
-  permissionCache.clear();
-  cacheTimestamps.clear();
-
-  // Unsubscribe all listeners
-  permissionListeners.forEach(unsubscribe => unsubscribe());
-  permissionListeners.clear();
-
-  // Notify callbacks
-  cacheCallbacks.forEach(callback => {
-    try {
-      callback();
-    } catch (e) {
-      // Ignore callback errors
-    }
-  });
-=======
  * Clear permission cache
  */
 export const clearPermissionCache = (): void => {
   permissionCache.clear();
   // Notify all callbacks
   cacheCallbacks.forEach(callback => callback());
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 };
 
 /**
@@ -167,19 +95,6 @@ const DEFAULT_ROLES: RoleDefinition[] = [
  */
 const initializeDefaultRoles = async (): Promise<void> => {
   try {
-<<<<<<< HEAD
-    // Sadece authenticated kullanıcılar için çalış
-    const { getAuth } = await import("firebase/auth");
-    const { auth } = await import("@/lib/firebase");
-    const currentAuth = auth || getAuth();
-
-    if (!currentAuth?.currentUser) {
-      // Giriş yapmamış kullanıcılar için sessizce çık
-      return;
-    }
-
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const rolesRef = collection(db, ROLES_COLLECTION);
     const snapshot = await getDocs(rolesRef);
 
@@ -189,17 +104,8 @@ const initializeDefaultRoles = async (): Promise<void> => {
       }
     }
   } catch (error) {
-<<<<<<< HEAD
-    // Permission hatalarını sessizce handle et
-    const errorObj = error && typeof error === 'object' ? error as { code?: string; message?: string } : null;
-    if (errorObj?.code !== 'permission-denied' && !errorObj?.message?.includes('permissions')) {
-      if (import.meta.env.DEV) {
-        console.error("Error initializing default roles:", error);
-      }
-=======
     if (import.meta.env.DEV) {
       console.error("Error initializing default roles:", error);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     }
   }
 };
@@ -209,34 +115,13 @@ const initializeDefaultRoles = async (): Promise<void> => {
  */
 export const getRoles = async (): Promise<RoleDefinition[]> => {
   try {
-<<<<<<< HEAD
-    // Sadece authenticated kullanıcılar için initializeDefaultRoles çağır
-    const { getAuth } = await import("firebase/auth");
-    const { auth } = await import("@/lib/firebase");
-    const currentAuth = auth || getAuth();
-
-    if (currentAuth?.currentUser) {
-      await initializeDefaultRoles();
-    }
-
-=======
     await initializeDefaultRoles();
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const rolesRef = collection(db, ROLES_COLLECTION);
     const snapshot = await getDocs(rolesRef);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoleDefinition));
   } catch (error) {
-<<<<<<< HEAD
-    // Permission hatalarını sessizce handle et
-    const errorObj = error && typeof error === 'object' ? error as { code?: string; message?: string } : null;
-    if (errorObj?.code !== 'permission-denied' && !errorObj?.message?.includes('permissions')) {
-      if (import.meta.env.DEV) {
-        console.error("Error getting roles:", error);
-      }
-=======
     if (import.meta.env.DEV) {
       console.error("Error getting roles:", error);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     }
     return DEFAULT_ROLES;
   }
@@ -253,15 +138,9 @@ export const addRole = async (role: Omit<RoleDefinition, "id" | "isSystem">): Pr
       key: roleKey,
       isSystem: false
     };
-<<<<<<< HEAD
-
-    await setDoc(doc(db, ROLES_COLLECTION, roleKey), newRole);
-
-=======
     
     await setDoc(doc(db, ROLES_COLLECTION, roleKey), newRole);
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Initialize permissions for the new role
     const permissionsRef = collection(db, ROLE_PERMISSIONS_COLLECTION);
     for (const resource of RESOURCES) {
@@ -276,20 +155,12 @@ export const addRole = async (role: Omit<RoleDefinition, "id" | "isSystem">): Pr
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       };
-<<<<<<< HEAD
-
-=======
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // undefined değerleri kaldır (Firestore undefined kabul etmez)
       const cleanPermission = Object.fromEntries(
         Object.entries(permissionData).filter(([_, value]) => value !== undefined)
       );
-<<<<<<< HEAD
-
-=======
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       await addDoc(permissionsRef, cleanPermission);
     }
   } catch (error: unknown) {
@@ -315,47 +186,27 @@ export const deleteRole = async (roleKey: string): Promise<void> => {
     const usersRef = collection(db, "users");
     const usersQuery = query(usersRef);
     const usersSnapshot = await getDocs(usersQuery);
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const { writeBatch } = await import("firebase/firestore");
     let batch = writeBatch(db);
     let batchCount = 0;
     const maxBatchSize = 500;
-<<<<<<< HEAD
-
-    for (const userDoc of usersSnapshot.docs) {
-      const userData = userDoc.data();
-      const userRoles = userData.role || [];
-
-=======
     
     for (const userDoc of usersSnapshot.docs) {
       const userData = userDoc.data();
       const userRoles = userData.role || [];
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Eğer kullanıcı bu role sahipse, rolü kaldır
       if (userRoles.includes(roleKey)) {
         const updatedRoles = userRoles.filter((r: string) => r !== roleKey);
         // Eğer hiç rol kalmadıysa, varsayılan rol ekle
         const finalRoles = updatedRoles.length > 0 ? updatedRoles : ["personnel"];
-<<<<<<< HEAD
-
-=======
         
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         batch.update(userDoc.ref, {
           role: finalRoles,
         });
         batchCount++;
-<<<<<<< HEAD
-
-=======
         
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         if (batchCount >= maxBatchSize) {
           await batch.commit();
           batchCount = 0;
@@ -364,11 +215,7 @@ export const deleteRole = async (roleKey: string): Promise<void> => {
         }
       }
     }
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Kalan batch'i commit et
     if (batchCount > 0) {
       await batch.commit();
@@ -381,11 +228,7 @@ export const deleteRole = async (roleKey: string): Promise<void> => {
     const permissionsRef = collection(db, ROLE_PERMISSIONS_COLLECTION);
     const q = query(permissionsRef, where("role", "==", roleKey));
     const permissionsSnapshot = await getDocs(q);
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     for (const docSnap of permissionsSnapshot.docs) {
       await deleteDoc(doc(db, ROLE_PERMISSIONS_COLLECTION, docSnap.id));
     }
@@ -404,15 +247,6 @@ const initializeDefaultPermissions = async (): Promise<void> => {
   try {
     const permissionsRef = collection(db, ROLE_PERMISSIONS_COLLECTION);
     const snapshot = await getDocs(permissionsRef);
-<<<<<<< HEAD
-
-    const roles = await getRoles();
-    const existingPermissions = snapshot.docs.map(doc => doc.data() as RolePermission);
-
-    // Eksik permissions'ları kontrol et ve oluştur
-    const missingPermissions: Omit<RolePermission, "id">[] = [];
-
-=======
     
     const roles = await getRoles();
     const existingPermissions = snapshot.docs.map(doc => doc.data() as RolePermission);
@@ -420,7 +254,6 @@ const initializeDefaultPermissions = async (): Promise<void> => {
     // Eksik permissions'ları kontrol et ve oluştur
     const missingPermissions: Omit<RolePermission, "id">[] = [];
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     for (const roleDef of roles) {
       const role = roleDef.key;
       for (const resource of RESOURCES) {
@@ -428,11 +261,7 @@ const initializeDefaultPermissions = async (): Promise<void> => {
         const exists = existingPermissions.some(
           (p) => p.role === role && p.resource === resource
         );
-<<<<<<< HEAD
-
-=======
         
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         if (!exists) {
           // Eksik permission için varsayılan değerler
           let canCreate = false;
@@ -440,19 +269,11 @@ const initializeDefaultPermissions = async (): Promise<void> => {
           let canUpdate = false;
           let canDelete = false;
           let subPermissions: SubPermissions = {};
-<<<<<<< HEAD
-
-          // Alt yetkileri al
-          const subPerms = getSubPermissionsForResource(resource);
-          const subPermKeys = Object.keys(subPerms);
-
-=======
           
           // Alt yetkileri al
           const subPerms = getSubPermissionsForResource(resource);
           const subPermKeys = Object.keys(subPerms);
           
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           if (role === "super_admin") {
             canCreate = true;
             canRead = true;
@@ -492,11 +313,7 @@ const initializeDefaultPermissions = async (): Promise<void> => {
               subPermissions.canViewSchedule = true;
             }
           }
-<<<<<<< HEAD
-
-=======
           
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           const permissionData: Omit<RolePermission, "id"> & { subPermissions?: SubPermissions } = {
             role,
             resource,
@@ -507,29 +324,17 @@ const initializeDefaultPermissions = async (): Promise<void> => {
             createdAt: Timestamp.now(),
             updatedAt: Timestamp.now(),
           };
-<<<<<<< HEAD
-
-=======
           
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // subPermissions sadece varsa ekle (undefined değerleri Firestore kabul etmez)
           if (Object.keys(subPermissions).length > 0) {
             permissionData.subPermissions = subPermissions;
           }
-<<<<<<< HEAD
-
-=======
           
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           missingPermissions.push(permissionData);
         }
       }
     }
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Eksik permissions'ları oluştur
     if (missingPermissions.length > 0) {
       for (const permission of missingPermissions) {
@@ -553,19 +358,11 @@ const initializeDefaultPermissions = async (): Promise<void> => {
         await addDoc(permissionsRef, cleanPermission);
       }
     }
-<<<<<<< HEAD
-
-    // Eğer hiç permission yoksa, tüm roller için oluştur
-    if (snapshot.size === 0 && missingPermissions.length === 0) {
-      const defaultPermissions: Omit<RolePermission, "id">[] = [];
-
-=======
     
     // Eğer hiç permission yoksa, tüm roller için oluştur
     if (snapshot.size === 0 && missingPermissions.length === 0) {
       const defaultPermissions: Omit<RolePermission, "id">[] = [];
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       for (const roleDef of roles) {
         const role = roleDef.key;
         for (const resource of RESOURCES) {
@@ -573,11 +370,7 @@ const initializeDefaultPermissions = async (): Promise<void> => {
           const subPerms = getSubPermissionsForResource(resource);
           const subPermKeys = Object.keys(subPerms);
           let subPermissions: SubPermissions = {};
-<<<<<<< HEAD
-
-=======
           
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // Super Admin and Admin have all permissions
           if (role === "super_admin") {
             // Süper yönetici ve admin için tüm alt yetkileri true yap
@@ -594,20 +387,12 @@ const initializeDefaultPermissions = async (): Promise<void> => {
               createdAt: Timestamp.now(),
               updatedAt: Timestamp.now(),
             };
-<<<<<<< HEAD
-
-=======
             
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             // subPermissions sadece varsa ekle (undefined değerleri Firestore kabul etmez)
             if (Object.keys(subPermissions).length > 0) {
               permissionData.subPermissions = subPermissions;
             }
-<<<<<<< HEAD
-
-=======
             
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             defaultPermissions.push(permissionData);
           }
           // Team Leader has most permissions except role_permissions
@@ -628,20 +413,12 @@ const initializeDefaultPermissions = async (): Promise<void> => {
               createdAt: Timestamp.now(),
               updatedAt: Timestamp.now(),
             };
-<<<<<<< HEAD
-
-=======
             
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             // subPermissions sadece varsa ekle (undefined değerleri Firestore kabul etmez)
             if (Object.keys(subPermissions).length > 0) {
               permissionData.subPermissions = subPermissions;
             }
-<<<<<<< HEAD
-
-=======
             
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             defaultPermissions.push(permissionData);
           }
           // Personnel has limited permissions
@@ -665,20 +442,12 @@ const initializeDefaultPermissions = async (): Promise<void> => {
               createdAt: Timestamp.now(),
               updatedAt: Timestamp.now(),
             };
-<<<<<<< HEAD
-
-=======
             
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             // subPermissions sadece varsa ekle (undefined değerleri Firestore kabul etmez)
             if (Object.keys(subPermissions).length > 0) {
               permissionData.subPermissions = subPermissions;
             }
-<<<<<<< HEAD
-
-=======
             
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             defaultPermissions.push(permissionData);
           }
           // Other roles (viewer, custom roles) have read-only permissions
@@ -697,11 +466,7 @@ const initializeDefaultPermissions = async (): Promise<void> => {
           }
         }
       }
-<<<<<<< HEAD
-
-=======
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Add all permissions to Firestore
       for (const permission of defaultPermissions) {
         // undefined değerleri kaldır (Firestore undefined kabul etmez)
@@ -739,28 +504,16 @@ export const updatePermissionsWithSubPermissions = async (): Promise<void> => {
   try {
     const permissionsRef = collection(db, ROLE_PERMISSIONS_COLLECTION);
     const snapshot = await getDocs(permissionsRef);
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     for (const docSnap of snapshot.docs) {
       const permission = docSnap.data() as RolePermission;
       const subPerms = getSubPermissionsForResource(permission.resource);
       const subPermKeys = Object.keys(subPerms);
-<<<<<<< HEAD
-
-      // Eğer alt yetkiler yoksa veya eksikse, ekle
-      let needsUpdate = false;
-      let updatedSubPermissions: SubPermissions = { ...(permission.subPermissions || {}) };
-
-=======
       
       // Eğer alt yetkiler yoksa veya eksikse, ekle
       let needsUpdate = false;
       let updatedSubPermissions: SubPermissions = { ...(permission.subPermissions || {}) };
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Süper yönetici için tüm alt yetkileri true yap
       if (permission.role === "super_admin" && subPermKeys.length > 0) {
         subPermKeys.forEach(key => {
@@ -780,11 +533,7 @@ export const updatePermissionsWithSubPermissions = async (): Promise<void> => {
             }
           });
         }
-<<<<<<< HEAD
-
-=======
         
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Ekip lideri için canCreate, canUpdate ve canDelete yetkilerini de kontrol et
         if (permission.canCreate !== true) {
           needsUpdate = true;
@@ -814,21 +563,13 @@ export const updatePermissionsWithSubPermissions = async (): Promise<void> => {
           }
         }
       }
-<<<<<<< HEAD
-
-=======
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Güncelleme gerekiyorsa yap
       if (needsUpdate) {
         const updateData: Partial<RolePermission> = {
           updatedAt: Timestamp.now(),
         };
-<<<<<<< HEAD
-
-=======
         
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Ekip lideri için ana yetkileri de güncelle
         if (permission.role === "team_leader" && permission.resource !== "role_permissions") {
           if (permission.canCreate !== true) {
@@ -842,29 +583,17 @@ export const updatePermissionsWithSubPermissions = async (): Promise<void> => {
             updateData.canDelete = true;
           }
         }
-<<<<<<< HEAD
-
-=======
         
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // subPermissions sadece varsa ekle (undefined değerleri Firestore kabul etmez)
         if (Object.keys(updatedSubPermissions).length > 0) {
           updateData.subPermissions = updatedSubPermissions;
         }
-<<<<<<< HEAD
-
-=======
         
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // undefined değerleri kaldır
         const cleanUpdateData = Object.fromEntries(
           Object.entries(updateData).filter(([_, value]) => value !== undefined)
         );
-<<<<<<< HEAD
-
-=======
         
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         await updateDoc(doc(db, ROLE_PERMISSIONS_COLLECTION, docSnap.id), cleanUpdateData);
       }
     }
@@ -882,18 +611,6 @@ export const getRolePermissions = async (): Promise<RolePermission[]> => {
   try {
     // Initialize default roles first
     await initializeDefaultRoles();
-<<<<<<< HEAD
-
-    // Initialize default permissions if needed
-    await initializeDefaultPermissions();
-
-    // Mevcut izinleri alt yetkilerle güncelle
-    await updatePermissionsWithSubPermissions();
-
-    const permissionsRef = collection(db, ROLE_PERMISSIONS_COLLECTION);
-    const snapshot = await getDocs(permissionsRef);
-
-=======
     
     // Initialize default permissions if needed
     await initializeDefaultPermissions();
@@ -904,23 +621,10 @@ export const getRolePermissions = async (): Promise<RolePermission[]> => {
     const permissionsRef = collection(db, ROLE_PERMISSIONS_COLLECTION);
     const snapshot = await getDocs(permissionsRef);
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const permissions = snapshot.docs.map((docSnap) => ({
       id: docSnap.id,
       ...docSnap.data(),
     })) as RolePermission[];
-<<<<<<< HEAD
-
-    // Pre-populate cache with all permissions for faster access
-    permissions.forEach(permission => {
-      const cacheKey = `${permission.role}:${permission.resource}`;
-      if (!permissionCache.has(cacheKey) || isCacheExpired(cacheKey)) {
-        permissionCache.set(cacheKey, permission);
-        updateCacheTimestamp(cacheKey);
-      }
-    });
-
-=======
     
     // Pre-populate cache with all permissions for faster access
     permissions.forEach(permission => {
@@ -930,7 +634,6 @@ export const getRolePermissions = async (): Promise<RolePermission[]> => {
       }
     });
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return permissions;
   } catch (error: unknown) {
     if (import.meta.env.DEV) {
@@ -951,11 +654,7 @@ export const getPermission = async (
   useCache: boolean = true
 ): Promise<RolePermission | null> => {
   const cacheKey = `${role}:${resource}`;
-<<<<<<< HEAD
-
-=======
   
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   try {
     const permissionsRef = collection(db, ROLE_PERMISSIONS_COLLECTION);
     const q = query(
@@ -963,11 +662,7 @@ export const getPermission = async (
       where("role", "==", role),
       where("resource", "==", resource)
     );
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // If cache is disabled, get directly from Firestore
     if (!useCache) {
       const snapshot = await getDocs(q);
@@ -980,37 +675,18 @@ export const getPermission = async (
         ...docSnap.data(),
       } as RolePermission;
     }
-<<<<<<< HEAD
-
-    // If cache already has value, return it immediately if not expired
-    if (permissionCache.has(cacheKey)) {
-      if (!isCacheExpired(cacheKey)) {
-        return permissionCache.get(cacheKey) || null;
-      }
-      // If expired, assume listener will refresh it or we just update timestamp if listener is active
-      // Since we have real-time listener, treat as fresh but update timestamp
-      updateCacheTimestamp(cacheKey);
-      return permissionCache.get(cacheKey) || null;
-    }
-
-=======
     
     // If cache already has value, return it immediately
     if (permissionCache.has(cacheKey)) {
       return permissionCache.get(cacheKey) || null;
     }
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Set up real-time listener if not already set
     if (!permissionListeners.has(cacheKey)) {
       // First, get initial value synchronously to avoid race condition
       const initialSnapshot = await getDocs(q);
       let initialPermission: RolePermission | null = null;
-<<<<<<< HEAD
-
-=======
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (!initialSnapshot.empty) {
         const docSnap = initialSnapshot.docs[0];
         initialPermission = {
@@ -1018,18 +694,10 @@ export const getPermission = async (
           ...docSnap.data(),
         } as RolePermission;
       }
-<<<<<<< HEAD
-
-      // Cache the initial value immediately
-      permissionCache.set(cacheKey, initialPermission);
-      updateCacheTimestamp(cacheKey);
-
-=======
       
       // Cache the initial value immediately
       permissionCache.set(cacheKey, initialPermission);
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Then set up real-time listener for future updates
       const unsubscribe = onSnapshot(q, (snapshot) => {
         if (snapshot.empty) {
@@ -1042,10 +710,6 @@ export const getPermission = async (
           } as RolePermission;
           permissionCache.set(cacheKey, permission);
         }
-<<<<<<< HEAD
-        updateCacheTimestamp(cacheKey);
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Notify all callbacks about cache change
         cacheCallbacks.forEach(callback => callback());
       }, (error) => {
@@ -1053,17 +717,6 @@ export const getPermission = async (
           console.error(`Error listening to permission ${cacheKey}:`, error);
         }
       });
-<<<<<<< HEAD
-
-      permissionListeners.set(cacheKey, unsubscribe);
-
-      // Return the initial value we just cached
-      return initialPermission;
-    }
-
-    // Listener already exists, return cached value (should be available now)
-    updateCacheTimestamp(cacheKey);
-=======
       
       permissionListeners.set(cacheKey, unsubscribe);
       
@@ -1072,7 +725,6 @@ export const getPermission = async (
     }
     
     // Listener already exists, return cached value (should be available now)
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return permissionCache.get(cacheKey) || null;
   } catch (error: unknown) {
     if (import.meta.env.DEV) {
@@ -1182,11 +834,7 @@ export const getSubPermissionsForResource = (resource: string): Record<string, s
       canViewHistory: "Geçmiş kayıtları görme",
     },
   };
-<<<<<<< HEAD
-
-=======
   
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   return subPermissions[resource] || {};
 };
 
@@ -1199,11 +847,7 @@ export const updatePermission = async (
 ): Promise<void> => {
   try {
     const permissionRef = doc(db, ROLE_PERMISSIONS_COLLECTION, permissionId);
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Get current permission to find cache key
     const currentPermission = await getDoc(permissionRef);
     if (currentPermission.exists()) {
@@ -1212,11 +856,7 @@ export const updatePermission = async (
       // Invalidate cache for this permission - listener will update it
       permissionCache.delete(cacheKey);
     }
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // undefined değerleri kaldır (Firestore undefined kabul etmez)
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
@@ -1234,20 +874,12 @@ export const updatePermission = async (
         }
       }
     }
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await updateDoc(permissionRef, {
       ...cleanUpdates,
       updatedAt: Timestamp.now(),
     });
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Cache will be updated by real-time listener automatically
     // No need to manually update cache
   } catch (error: unknown) {

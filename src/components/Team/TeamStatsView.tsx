@@ -1,112 +1,3 @@
-<<<<<<< HEAD
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Building2, Target, Award, BarChart3 } from "lucide-react";
-import { addDays, isAfter, isBefore, startOfDay, subDays } from "date-fns";
-import { Timestamp } from "firebase/firestore";
-import { useAuth } from "@/contexts/AuthContext";
-import { Department } from "@/services/firebase/departmentService";
-import { UserProfile } from "@/services/firebase/authService";
-import { Task } from "@/services/firebase/taskService";
-import { DepartmentDetailModal } from "@/components/Admin/DepartmentDetailModal";
-
-interface TeamStatsViewProps {
-  selectedTeamFilter?: string;
-  users?: UserProfile[];
-  departments?: Department[];
-  tasks?: Task[];
-}
-
-export const TeamStatsView = ({
-  selectedTeamFilter = "all",
-  users = [],
-  departments = [],
-  tasks = []
-}: TeamStatsViewProps) => {
-  const { user, isAdmin } = useAuth();
-  const [managedDepartments, setManagedDepartments] = useState<Department[]>([]);
-  const [teamMembers, setTeamMembers] = useState<UserProfile[]>([]);
-  const [teamTasks, setTeamTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!users.length && !departments.length) {
-      // If parent hasn't provided data yet
-      return;
-    }
-
-    const processData = () => {
-      let relevantDepts: Department[] = [];
-      let members: UserProfile[] = [];
-
-      if (isAdmin) {
-        relevantDepts = departments;
-
-        // Filter by selected team
-        if (selectedTeamFilter !== "all") {
-          relevantDepts = relevantDepts.filter(d => d.id === selectedTeamFilter);
-        }
-      } else {
-        // Team Leader: only managed depts
-        relevantDepts = departments.filter(d => d.managerId === user?.id);
-      }
-
-      if (relevantDepts.length === 0) {
-        setManagedDepartments([]);
-        setTeamMembers([]);
-        setTeamTasks([]);
-        setLoading(false);
-        return;
-      }
-
-      setManagedDepartments(relevantDepts);
-
-      const relevantDeptIds = relevantDepts.map(d => d.id);
-
-      // Find members
-      members = users.filter(u => {
-        if (u.approvedTeams && u.approvedTeams.some(id => relevantDeptIds.includes(id))) return true;
-        if (u.pendingTeams && u.pendingTeams.some(id => relevantDeptIds.includes(id))) return true;
-        if (u.departmentId && relevantDeptIds.includes(u.departmentId)) return true;
-        return false;
-      });
-
-      setTeamMembers(members);
-
-      // Filter tasks
-      // Only tasks created by team members or by current user (if related to team)
-      const memberIds = members.map(m => m.id);
-      const filteredTasks = tasks.filter(t =>
-        memberIds.includes(t.createdBy) || t.createdBy === user?.id
-      );
-
-      setTeamTasks(filteredTasks);
-      setLoading(false);
-    };
-
-    // Use timeout to unblock UI
-    const t = setTimeout(processData, 0);
-    return () => clearTimeout(t);
-
-  }, [users, departments, tasks, isAdmin, user?.id, selectedTeamFilter]);
-
-
-  // Geciken görevler
-  const overdueTasks = teamTasks.filter(t => {
-    if (!t.dueDate || t.status === "completed" || t.status === "cancelled") return false;
-    // Helper to safely conversion
-    let dueDate: Date | null = null;
-    const d = t.dueDate as any;
-    if (d?.toDate) dueDate = d.toDate();
-    else if (d instanceof Date) dueDate = d;
-    else if (d instanceof Timestamp) dueDate = d.toDate();
-
-    if (!dueDate) return false;
-=======
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -323,21 +214,10 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
     } else {
       return false;
     }
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return isBefore(dueDate, new Date());
   });
 
   // Yaklaşan terminler (3 gün içinde)
-<<<<<<< HEAD
-  const dueSoonTasks = teamTasks.filter(t => {
-    if (!t.dueDate || t.status === "completed" || t.status === "cancelled") return false;
-    let dueDate: Date | null = null;
-    const d = t.dueDate as any;
-    if (d?.toDate) dueDate = d.toDate();
-    else if (d instanceof Date) dueDate = d;
-
-    if (!dueDate) return false;
-=======
   const dueSoonTasks = tasks.filter(t => {
     if (!t.dueDate || t.status === "completed" || t.status === "cancelled") return false;
     let dueDate: Date;
@@ -351,7 +231,6 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
     } else {
       return false;
     }
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const today = startOfDay(new Date());
     const threeDaysAfter = addDays(today, 3);
     return !isBefore(dueDate, today) && isBefore(dueDate, threeDaysAfter);
@@ -359,16 +238,6 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
 
   // Son 7 gün içinde tamamlanan görevler
   const sevenDaysAgo = subDays(new Date(), 7);
-<<<<<<< HEAD
-  const recentCompletedTasks = teamTasks.filter(t => {
-    if (t.status !== "completed" || !t.updatedAt) return false;
-    let updatedAt: Date | null = null;
-    const d = t.updatedAt as any;
-    if (d?.toDate) updatedAt = d.toDate();
-    else if (d instanceof Date) updatedAt = d;
-
-    if (!updatedAt) return false;
-=======
   const recentCompletedTasks = tasks.filter(t => {
     if (t.status !== "completed" || !t.updatedAt) return false;
     let updatedAt: Date;
@@ -382,20 +251,10 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
     } else {
       return false;
     }
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return isAfter(updatedAt, sevenDaysAgo);
   });
 
   // Ortalama öncelik
-<<<<<<< HEAD
-  const avgPriority = teamTasks.length > 0
-    ? teamTasks.reduce((sum, t) => sum + (t.priority || 0), 0) / teamTasks.length
-    : 0;
-
-  // En aktif üyeler
-  const memberTaskCounts = teamMembers.map(member => {
-    const memberTasks = teamTasks.filter(t => t.createdBy === member.id);
-=======
   const avgPriority = tasks.length > 0
     ? tasks.reduce((sum, t) => sum + (t.priority || 0), 0) / tasks.length
     : 0;
@@ -403,7 +262,6 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
   // En aktif üyeler (en çok görev tamamlayan)
   const memberTaskCounts = teamMembers.map(member => {
     const memberTasks = tasks.filter(t => t.createdBy === member.id);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const completedCount = memberTasks.filter(t => t.status === "completed").length;
     return {
       member,
@@ -414,15 +272,9 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
   }).sort((a, b) => b.completedTasks - a.completedTasks).slice(0, 5);
 
   const overallStats = {
-<<<<<<< HEAD
-    completedTasks: teamTasks.filter(t => t.status === "completed").length,
-    completionRate: teamTasks.length > 0
-      ? (teamTasks.filter(t => t.status === "completed").length / teamTasks.length) * 100
-=======
     completedTasks: tasks.filter(t => t.status === "completed").length,
     completionRate: tasks.length > 0 
       ? (tasks.filter(t => t.status === "completed").length / tasks.length) * 100 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       : 0,
     overdueTasks: overdueTasks.length,
     dueSoonTasks: dueSoonTasks.length,
@@ -431,29 +283,13 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
   };
 
   const getDepartmentStats = (deptId: string) => {
-<<<<<<< HEAD
-=======
     // Departman üyelerini bul - tüm yöntemleri kontrol et
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const deptMembers = teamMembers.filter(m => {
       if (m.approvedTeams && m.approvedTeams.includes(deptId)) return true;
       if (m.pendingTeams && m.pendingTeams.includes(deptId)) return true;
       if (m.departmentId === deptId) return true;
       return false;
     });
-<<<<<<< HEAD
-
-    const deptMemberIds = deptMembers.map(m => m.id);
-
-    const deptTasks = teamTasks.filter(t => {
-      if (t.productionProcessId === deptId) return true;
-      if (deptMemberIds.includes(t.createdBy)) return true;
-      return false;
-    });
-
-    const completed = deptTasks.filter(t => t.status === "completed").length;
-    // const cancelled = deptTasks.filter(t => t.status === "cancelled").length;
-=======
     
     // Departman üyelerinin ID'lerini al
     const deptMemberIds = deptMembers.map(m => m.id);
@@ -469,7 +305,6 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
     
     const completed = deptTasks.filter(t => t.status === "completed").length;
     const cancelled = deptTasks.filter(t => t.status === "cancelled").length;
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const total = deptTasks.length;
     const activeTasks = deptTasks.filter(t => t.status !== "completed" && t.status !== "cancelled").length;
     const completionRate = total > 0 ? (completed / total) * 100 : 0;
@@ -484,26 +319,18 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
   };
 
   if (loading) {
-<<<<<<< HEAD
-    return (
-      <div className="space-y-2 h-full flex flex-col">
-=======
   return (
     <div className="space-y-2 h-full flex flex-col">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
-<<<<<<< HEAD
-=======
   // Bu sayfaya sadece yönetici veya ekip lideri erişebilir
   // Yönetici herkes için görür, ekip lideri sadece kendi ekibi için görür
   // Bu uyarı anlamsız çünkü zaten bu sayfaya erişebilenler ya yönetici ya da ekip lideridir
 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   return (
     <div className="space-y-0.5 min-w-0 max-w-full">
       {/* Aktivite ve Analiz */}
@@ -528,17 +355,10 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold">{overallStats.avgPriority}</span>
                     <span className="text-xs text-muted-foreground">
-<<<<<<< HEAD
-                      • {teamTasks.filter(t => (t.priority || 0) >= 4).length} yüksek
-                    </span>
-                    <span className="text-xs text-red-600 font-medium">
-                      • {teamTasks.filter(t => (t.priority || 0) === 5).length} kritik
-=======
                       • {tasks.filter(t => (t.priority || 0) >= 4).length} yüksek
                     </span>
                     <span className="text-xs text-red-600 font-medium">
                       • {tasks.filter(t => (t.priority || 0) === 5).length} kritik
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     </span>
                   </div>
                 </div>
@@ -636,10 +456,7 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
         </CardContent>
       </Card>
 
-<<<<<<< HEAD
-=======
       {/* Sadece ekip lideri için modal (isteğe bağlı) */}
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       {!isAdmin && selectedDepartmentId && (
         <DepartmentDetailModal
           open={!!selectedDepartmentId}
@@ -650,7 +467,4 @@ export const TeamStatsView = ({ selectedTeamFilter = "all" }: TeamStatsViewProps
     </div>
   );
 };
-<<<<<<< HEAD
-=======
 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1

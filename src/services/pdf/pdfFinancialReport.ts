@@ -323,6 +323,6 @@ export const generateFinancialReportPDF = async (data: FinancialReportData, star
         }
         return blob;
     } catch (outputError) {
-        throw new Error("PDF oluşturulamadı: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
+        throw new Error("PDF olu_turulamad1: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
     }
 };

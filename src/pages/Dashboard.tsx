@@ -1,8 +1,4 @@
 import { useMemo, memo } from "react";
-<<<<<<< HEAD
-import * as React from "react";
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { StatCard } from "@/components/Dashboard/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +11,6 @@ import { useQuery } from "@tanstack/react-query";
 import { getTasks, getTaskAssignments, Task, TaskAssignment } from "@/services/firebase/taskService";
 import { getProducts, Product } from "@/services/firebase/productService";
 import { getRawMaterials, RawMaterial } from "@/services/firebase/materialService";
-import { getWarrantyRecords, WarrantyRecord } from "@/services/firebase/warrantyService";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Dashboard = () => {
@@ -24,72 +19,20 @@ const Dashboard = () => {
   const { isAdmin, user } = useAuth();
   const statsExpanded = true; // İstatistikler her zaman açık
   
-<<<<<<< HEAD
-  // Defer non-critical queries: İlk render'dan sonra yükle
-  const [shouldLoadTasks, setShouldLoadTasks] = React.useState(false);
-  const [shouldLoadLowStock, setShouldLoadLowStock] = React.useState(false);
-  const [shouldLoadWarranty, setShouldLoadWarranty] = React.useState(false);
-  
-  React.useEffect(() => {
-    // İlk render'dan 200ms sonra tasks'ı yükle (non-blocking)
-    const timer1 = setTimeout(() => setShouldLoadTasks(true), 200);
-    // İlk render'dan 400ms sonra low stock'ı yükle
-    const timer2 = setTimeout(() => setShouldLoadLowStock(true), 400);
-    // İlk render'dan 600ms sonra warranty'yi yükle
-    const timer3 = setTimeout(() => setShouldLoadWarranty(true), 600);
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-    };
-  }, []);
-  
-  // Tasks'i dinamik olarak güncelle - Kullanıcının oluşturduğu ve atanan görevleri al
-  // Optimized: Daha az görev yükle, lazy loading ile, defer edilmiş yükleme
-=======
-  // Tasks'i dinamik olarak güncelle - Kullanıcının oluşturduğu ve atanan görevleri al
-  // Geçmiş ve yaklaşan görevleri bulmak için daha fazla görev al
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+  // Tasks'i dinamik olarak güncelle - İlk yüklemede sadece kritik verileri al
+  // Performans için: Sadece kullanıcının görevlerini al
   const { data: tasks = [], isLoading: tasksLoading } = useQuery({
     queryKey: ["dashboard-tasks", user?.id],
     queryFn: async () => {
       try {
-<<<<<<< HEAD
-        // Performans için: Sadece son 30 görevi al (50 → 30), limit ile
-        const allTasks = await getTasks({ limit: 30 });
-=======
-        // Tüm görevleri al (geçmiş görevleri de bulmak için)
+        // İlk yüklemede sadece son 20 görevi al (performans için)
         const allTasks = await getTasks();
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-        // Kullanıcının oluşturduğu veya kendisine atanan görevleri filtrele
+        // Kullanıcının görevlerini önceliklendir
         if (user?.id) {
-          // Önce kullanıcının oluşturduğu görevleri al
-          const createdTasks = allTasks.filter(t => t.createdBy === user.id);
-<<<<<<< HEAD
-          // Sonra kullanıcıya atanan görevleri bulmak için son görevleri kontrol et
-          // Performans için: Son 30 görevi al (50 → 30)
-          const recentTasks = allTasks.slice(0, 30);
-=======
-          // Sonra kullanıcıya atanan görevleri bulmak için tüm görevleri kontrol et
-          // (Assignment'lar sonra kontrol edilecek)
-          // Performans için: Son 200 görevi al (geçmiş görevleri de kapsamak için)
-          const recentTasks = allTasks.slice(0, 200);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-          // Kullanıcının oluşturduğu görevler + son görevleri birleştir (duplicate'leri kaldır)
-          const taskMap = new Map();
-          createdTasks.forEach(t => taskMap.set(t.id, t));
-          recentTasks.forEach(t => {
-            if (!taskMap.has(t.id)) {
-              taskMap.set(t.id, t);
-            }
-          });
-          return Array.from(taskMap.values());
+          const userTasks = allTasks.filter(t => t.createdBy === user.id).slice(0, 20);
+          if (userTasks.length > 0) return userTasks;
         }
-<<<<<<< HEAD
-        return allTasks.slice(0, 30); // 50 → 30
-=======
-        return allTasks.slice(0, 200);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+        return allTasks.slice(0, 20);
       } catch (error: unknown) {
         if (import.meta.env.DEV) {
           console.error("Tasks yüklenirken hata:", error);
@@ -97,39 +40,24 @@ const Dashboard = () => {
         return [];
       }
     },
-<<<<<<< HEAD
-    enabled: !!user?.id && shouldLoadTasks, // Sadece kullanıcı varsa ve defer süresi geçtiyse çalıştır
-=======
     enabled: !!user?.id, // Sadece kullanıcı varsa çalıştır
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     refetchInterval: 180000, // 3 dakikada bir güncelle (performans için)
     refetchOnWindowFocus: false, // Window focus'ta refetch yapma (performans için)
     staleTime: 120000, // 2 dakika stale time (performans için)
     // İlk yüklemede daha hızlı render için
     placeholderData: [], // Boş array ile başla, loading state'i daha hızlı geçer
-<<<<<<< HEAD
-    // Defer et: İlk render'dan sonra yükle (non-blocking)
-    refetchOnMount: false, // Cache'den göster, sonra güncelle
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   });
 
   // Task assignments'ları dinamik olarak güncelle (kabul edilen görevleri kontrol etmek için)
-  // Tüm görevler için assignment'ları al (kullanıcıya atanan görevleri bulmak için)
+  // Performans için: Sadece ilk 10 görev için assignment'ları al
   const { data: taskAssignmentsMap = new Map(), isLoading: assignmentsLoading } = useQuery({
-    queryKey: ["dashboard-task-assignments", tasks.map(t => t.id).join(",")],
+    queryKey: ["dashboard-task-assignments", tasks.slice(0, 10).map(t => t.id).join(",")],
     queryFn: async () => {
       if (!user?.id || tasks.length === 0) return new Map();
       try {
         const assignmentsMap = new Map<string, TaskAssignment[]>();
-        // Tüm görevler için assignment'ları al (kullanıcıya atanan görevleri bulmak için)
-<<<<<<< HEAD
-        // Performans için: Maksimum 20 görev için assignment'ları al (30 → 20)
-        const limitedTasks = tasks.slice(0, 20);
-=======
-        // Performans için: Maksimum 100 görev için assignment'ları al
-        const limitedTasks = tasks.slice(0, 100);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+        // Sadece ilk 10 görev için assignment'ları al (performans için)
+        const limitedTasks = tasks.slice(0, 10);
         // Her görev için assignment'ları al (batch işlem, paralel)
         await Promise.all(
           limitedTasks.map(async (task) => {
@@ -148,28 +76,13 @@ const Dashboard = () => {
         return new Map();
       }
     },
-<<<<<<< HEAD
-    enabled: tasks.length > 0 && !!user?.id && shouldLoadTasks, // Tasks yüklendikten sonra çalıştır
-=======
     enabled: tasks.length > 0 && !!user?.id,
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     refetchInterval: 180000, // 3 dakikada bir güncelle (performans için)
     refetchOnWindowFocus: false, // Window focus'ta refetch yapma (performans için)
     staleTime: 120000, // 2 dakika stale time (performans için)
   });
 
   // Düşük stoklu ürünleri ve hammaddeleri dinamik olarak güncelle
-<<<<<<< HEAD
-  // Performans için: Sadece ilk 30 ürün/hammaddeyi kontrol et, defer et
-  const { data: lowStockItems = [], isLoading: lowStockLoading } = useQuery({
-    queryKey: ["dashboard-low-stock-items"],
-    enabled: shouldLoadLowStock, // Defer et: İlk render'dan sonra yükle
-    queryFn: async () => {
-      try {
-        const [products, rawMaterials] = await Promise.all([
-          getProducts().then(p => p.slice(0, 30)), // Son 30 ürün (50 → 30)
-          getRawMaterials().then(r => r.slice(0, 30)), // Son 30 hammadde (50 → 30)
-=======
   // Performans için: Sadece ilk 50 ürün/hammaddeyi kontrol et
   const { data: lowStockItems = [], isLoading: lowStockLoading } = useQuery({
     queryKey: ["dashboard-low-stock-items"],
@@ -178,7 +91,6 @@ const Dashboard = () => {
         const [products, rawMaterials] = await Promise.all([
           getProducts().then(p => p.slice(0, 50)), // Son 50 ürün
           getRawMaterials().then(r => r.slice(0, 50)), // Son 50 hammadde
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         ]);
         
         // Düşük stoklu ve tükenen ürünleri filtrele
@@ -236,71 +148,6 @@ const Dashboard = () => {
     refetchInterval: 180000, // 3 dakikada bir güncelle (performans için)
     refetchOnWindowFocus: false, // Window focus'ta refetch yapma (performans için)
     staleTime: 120000, // 2 dakika stale time (performans için)
-<<<<<<< HEAD
-    refetchOnMount: false, // Cache'den göster, sonra güncelle (performans için)
-    placeholderData: [], // Hızlı render için
-  });
-
-  // Aktif warranty kayıtlarını al (bizde olan ürünler)
-  // Defer et: İlk render'dan sonra yükle (non-critical)
-  const { data: activeWarrantyItems = [], isLoading: warrantyLoading } = useQuery({
-    queryKey: ["dashboard-active-warranty-items"],
-    enabled: shouldLoadWarranty, // Defer et: İlk render'dan sonra yükle
-    queryFn: async () => {
-      try {
-        // Performans için: Sadece ilk 50 warranty kaydı ve 50 ürün
-        const [warrantyRecords, allProducts] = await Promise.all([
-          getWarrantyRecords().then(w => w.slice(0, 50)), // Son 50 warranty kaydı
-          getProducts().then(p => p.slice(0, 50)), // Son 50 ürün
-=======
-  });
-
-  // Aktif warranty kayıtlarını al (bizde olan ürünler)
-  const { data: activeWarrantyItems = [], isLoading: warrantyLoading } = useQuery({
-    queryKey: ["dashboard-active-warranty-items"],
-    queryFn: async () => {
-      try {
-        const [warrantyRecords, allProducts] = await Promise.all([
-          getWarrantyRecords(),
-          getProducts(),
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-        ]);
-        
-        // Aktif warranty kayıtlarını filtrele (bizde olanlar: received veya in_repair)
-        const activeRecords = warrantyRecords.filter(
-          (record: WarrantyRecord) => record.status === "received" || record.status === "in_repair"
-        );
-        
-        // Ürün bilgilerini eşleştir
-        const warrantyItems = activeRecords.map((record: WarrantyRecord) => {
-          const product = allProducts.find((p: Product) => p.id === record.productId);
-          return {
-            id: record.id,
-            name: product?.name || "Bilinmeyen Ürün",
-            productId: record.productId,
-            status: record.status,
-            receivedDate: record.receivedDate,
-            reason: record.reason,
-            type: "warranty" as const,
-          };
-        });
-        
-        return warrantyItems;
-      } catch (error: unknown) {
-        if (import.meta.env.DEV) {
-          console.error("Aktif warranty kayıtları yüklenirken hata:", error);
-        }
-        return [];
-      }
-    },
-    refetchInterval: 180000, // 3 dakikada bir güncelle (performans için)
-    refetchOnWindowFocus: false, // Window focus'ta refetch yapma (performans için)
-    staleTime: 120000, // 2 dakika stale time (performans için)
-<<<<<<< HEAD
-    refetchOnMount: false, // Cache'den göster, sonra güncelle (performans için)
-    placeholderData: [], // Hızlı render için
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   });
 
   // Performans için: useMemo ile optimize edilmiş hesaplamalar
@@ -314,8 +161,8 @@ const Dashboard = () => {
     const sevenDaysLater = new Date(today);
     sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
 
-    // Tüm görevleri kontrol et (geçmiş görevleri de bulmak için)
-    const limitedTasks = tasks;
+    // Performans için: Sadece ilk 50 görevi kontrol et
+    const limitedTasks = tasks.slice(0, 50);
 
     // "Görevlerim" sayfasındaki mantıkla aynı: Sadece kabul edilen görevleri say
     const myTasks = limitedTasks.filter((task) => {
@@ -377,29 +224,24 @@ const Dashboard = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 xs:space-y-2.5 sm:space-y-3 w-full max-w-full mx-auto px-1 xs:px-2">
-        <div className="flex items-center justify-between gap-2 xs:gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-[16px] xs:text-[17px] sm:text-[18px] md:text-xl font-semibold text-foreground truncate">Dashboard</h1>
-            <p className="text-[11px] xs:text-[11px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">Hoş geldiniz, işte bugünkü özet</p>
+      <div className="space-y-2 sm:space-y-3 md:space-y-4 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Hoş geldiniz, işte bugünkü özet</p>
           </div>
         </div>
 
         {statsExpanded && (
           <div className={isAdmin 
-<<<<<<< HEAD
-            ? "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 xs:gap-2.5 sm:gap-2.5 md:gap-3"
-            : "grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 xs:gap-2.5 sm:gap-3"
-=======
-            ? "grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 xs:gap-2.5 sm:gap-2.5 md:gap-3"
-            : "grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 xs:gap-2.5 sm:gap-3"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+            ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4 lg:gap-3 xl:gap-4"
+            : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5 lg:gap-6"
           }>
           {isLoading || !stats ? (
             // Loading skeleton
             Array.from({ length: isAdmin ? 6 : 4 }).map((_, i) => (
               <Card key={i} className="animate-pulse">
-                <CardContent className="p-3 sm:p-4">
+                <CardContent className="p-4 sm:p-6">
                   <div className="h-4 bg-muted rounded w-3/4 mb-4"></div>
                   <div className="h-8 bg-muted rounded w-1/2 mb-2"></div>
                   <div className="h-3 bg-muted rounded w-2/3"></div>
@@ -501,14 +343,14 @@ const Dashboard = () => {
           </div>
         )}
 
-        <div className="grid gap-2.5 sm:gap-3 grid-cols-1 lg:grid-cols-2">
+        <div className="grid gap-3 sm:gap-4 md:gap-5 lg:gap-6 grid-cols-1 lg:grid-cols-2">
           <Card>
-            <CardHeader className="p-3 sm:p-4">
+            <CardHeader className="p-4 sm:p-6">
               <CardTitle className="text-[14px] sm:text-[15px]">Son Siparişler</CardTitle>
             </CardHeader>
-            <CardContent className="p-3 sm:p-4">
+            <CardContent className="p-4 sm:p-6">
               {!stats?.recent_orders || stats.recent_orders.length === 0 ? (
-                <p className="text-[11px] sm:text-xs text-muted-foreground text-center py-6 sm:py-8">Henüz sipariş yok</p>
+                <p className="text-muted-foreground text-center py-6 sm:py-8 text-xs sm:text-sm md:text-base">Henüz sipariş yok</p>
               ) : (
                 <div className="space-y-2 sm:space-y-3 md:space-y-4">
                   {(Array.isArray(stats.recent_orders) ? stats.recent_orders : []).map((order) => (
@@ -519,7 +361,7 @@ const Dashboard = () => {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                          <p className="font-medium truncate text-[11px] sm:text-xs">{order.order_number}</p>
+                          <p className="font-medium truncate text-xs sm:text-sm md:text-base">{order.order_number}</p>
                           {order.status && (
                             <Badge 
                               variant={
@@ -529,11 +371,7 @@ const Dashboard = () => {
                                   ? 'secondary' 
                                   : 'outline'
                               }
-<<<<<<< HEAD
-                              className="h-4 px-1.5 py-0 text-[10px] font-normal leading-tight"
-=======
                               className="text-[10px] sm:text-xs"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             >
                               {order.status === 'confirmed' ? 'Onaylandı' :
                                order.status === 'pending' ? 'Beklemede' :
@@ -551,11 +389,11 @@ const Dashboard = () => {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground truncate">{order.customer_name}</p>
+                        <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground truncate">{order.customer_name}</p>
                       </div>
                       <div className="text-left sm:text-right sm:ml-4 flex-shrink-0">
-                        <p className="font-medium text-[11px] sm:text-xs">₺{(Number(order.total) || 0).toLocaleString('tr-TR')}</p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground">
+                        <p className="font-medium text-xs sm:text-sm md:text-base">₺{(Number(order.total) || 0).toLocaleString('tr-TR')}</p>
+                        <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">
                           {new Date(order.order_date).toLocaleDateString('tr-TR')}
                         </p>
                       </div>
@@ -567,23 +405,23 @@ const Dashboard = () => {
           </Card>
 
           <Card>
-            <CardHeader className="p-3 sm:p-4">
+            <CardHeader className="p-4 sm:p-6">
               <CardTitle className="text-[14px] sm:text-[15px]">Gecikmiş ve Yaklaşan Görevler</CardTitle>
             </CardHeader>
-            <CardContent className="p-3 sm:p-4">
+            <CardContent className="p-4 sm:p-6">
               {isLoadingData ? (
                 <div className="flex items-center justify-center py-6 sm:py-8">
                   <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin text-primary" />
                 </div>
               ) : overdueTasks.length === 0 && upcomingTasks.length === 0 ? (
-                <p className="text-[11px] sm:text-xs text-muted-foreground text-center py-6 sm:py-8">Gecikmiş veya yaklaşan görev yok</p>
+                <p className="text-muted-foreground text-center py-6 sm:py-8 text-xs sm:text-sm md:text-base">Gecikmiş veya yaklaşan görev yok</p>
               ) : (
                 <div className="space-y-3 sm:space-y-4">
                   {overdueTasks.length > 0 && (
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <AlertTriangle className="h-4 w-4 text-destructive" />
-                        <p className="text-[11px] sm:text-xs font-semibold text-destructive">Gecikmiş ({overdueTasks.length})</p>
+                        <p className="text-sm font-semibold text-destructive">Gecikmiş ({overdueTasks.length})</p>
                       </div>
                       <div className="space-y-1.5 sm:space-y-2">
                         {overdueTasks.slice(0, 5).map((task) => (
@@ -608,7 +446,7 @@ const Dashboard = () => {
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <Clock className="h-4 w-4 text-warning" />
-                        <p className="text-[11px] sm:text-xs font-semibold">Yaklaşan ({upcomingTasks.length})</p>
+                        <p className="text-sm font-semibold">Yaklaşan ({upcomingTasks.length})</p>
                       </div>
                       <div className="space-y-1.5 sm:space-y-2">
                         {upcomingTasks.slice(0, 5).map((task) => (
@@ -635,16 +473,16 @@ const Dashboard = () => {
           </Card>
 
           <Card>
-            <CardHeader className="p-3 sm:p-4">
+            <CardHeader className="p-4 sm:p-6">
               <CardTitle className="text-[14px] sm:text-[15px]">Düşük Stoklu Ürünler ve Hammaddeler</CardTitle>
             </CardHeader>
-            <CardContent className="p-3 sm:p-4">
+            <CardContent className="p-4 sm:p-6">
               {lowStockLoading ? (
                 <div className="flex items-center justify-center py-6 sm:py-8">
                   <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin text-primary" />
                 </div>
-              ) : (!lowStockItems || lowStockItems.length === 0) ? (
-                <p className="text-[11px] sm:text-xs text-muted-foreground text-center py-6 sm:py-8">Düşük stoklu ürün veya hammadde yok</p>
+              ) : !lowStockItems || lowStockItems.length === 0 ? (
+                <p className="text-muted-foreground text-center py-6 sm:py-8 text-xs sm:text-sm md:text-base">Düşük stoklu ürün veya hammadde yok</p>
               ) : (
                 <div className="space-y-2 sm:space-y-3 md:space-y-4">
                   {(Array.isArray(lowStockItems) ? lowStockItems : []).map((item) => (
@@ -655,67 +493,20 @@ const Dashboard = () => {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                          <p className="font-medium text-[11px] sm:text-xs truncate">{item.name}</p>
-                          <Badge variant="outline" className="text-[10px]">
+                          <p className="font-medium text-xs sm:text-sm md:text-base truncate">{item.name}</p>
+                          <Badge variant="outline" className="text-[10px] sm:text-xs">
                             {item.type === "rawMaterial" ? "Hammadde" : "Ürün"}
                           </Badge>
                         </div>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground">Min: {item.min_stock} {item.unit}</p>
+                        <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">Min: {item.min_stock} {item.unit}</p>
                       </div>
                       <div className="text-left sm:text-right sm:ml-4 flex-shrink-0">
-                        <Badge variant={item.stock === 0 ? "destructive" : "secondary"} className="text-[10px]">
+                        <Badge variant={item.stock === 0 ? "destructive" : "secondary"} className="text-[10px] sm:text-xs">
                           {item.stock} {item.unit}
                         </Badge>
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="p-3 sm:p-4">
-              <CardTitle className="text-[14px] sm:text-[15px]">Satış Sonrası Takip</CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 sm:p-4">
-              {warrantyLoading ? (
-                <div className="flex items-center justify-center py-6 sm:py-8">
-                  <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin text-primary" />
-                </div>
-              ) : (!activeWarrantyItems || activeWarrantyItems.length === 0) ? (
-                <p className="text-[11px] sm:text-xs text-muted-foreground text-center py-6 sm:py-8">Aktif satış sonrası takip kaydı yok</p>
-              ) : (
-                <div className="space-y-2 sm:space-y-3 md:space-y-4">
-                  {(Array.isArray(activeWarrantyItems) ? activeWarrantyItems : []).map((item) => {
-                    const receivedDate = item.receivedDate?.toDate ? item.receivedDate.toDate() : null;
-                    const statusLabel = item.status === "received" ? "Alındı" : item.status === "in_repair" ? "Onarımda" : "";
-                    return (
-                      <div 
-                        key={item.id} 
-                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 py-2 sm:py-2.5 border-b last:border-0 hover:bg-muted/50 rounded-lg px-2 sm:px-3 transition-colors cursor-pointer"
-                        onClick={() => navigate("/warranty")}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                            <p className="font-medium text-[11px] sm:text-xs truncate">{item.name}</p>
-                            <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                              Satış Sonrası
-                            </Badge>
-                          </div>
-                          <p className="text-[11px] sm:text-xs text-muted-foreground">
-                            {item.reason && item.reason.length > 50 ? `${item.reason.substring(0, 50)}...` : item.reason}
-                            {receivedDate && ` • ${receivedDate.toLocaleDateString("tr-TR")}`}
-                          </p>
-                        </div>
-                        <div className="text-left sm:text-right sm:ml-4 flex-shrink-0">
-                          <Badge variant={item.status === "in_repair" ? "default" : "secondary"} className="text-[10px]">
-                            {statusLabel}
-                          </Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               )}
             </CardContent>

@@ -41,7 +41,6 @@ import {
   rejectTaskApproval,
   archiveTask,
   unarchiveTask,
-  deleteTask,
   requestTaskFromPool,
   approvePoolRequest,
   rejectPoolRequest,
@@ -105,7 +104,6 @@ import { UserMultiSelect } from "./UserMultiSelect";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { PRIORITY_OPTIONS, PriorityLevel, convertOldPriorityToNew, convertNewPriorityToOld } from "@/utils/priority";
 
 interface AssignedUser {
   id: string;
@@ -142,179 +140,6 @@ const taskStatusWorkflow: StatusItem[] = [
   { value: "completed", label: "Tamamlandı", icon: CheckCircle2, color: "text-emerald-600" },
   { value: "approved", label: "Onaylandı", icon: CheckCircle2, color: "text-green-600" },
 ];
-
-// StatusProgressButton Props
-interface StatusProgressButtonProps {
-  task: any;
-  user: { id: string; fullName?: string } | null;
-  loading: boolean;
-  currentStatus: string;
-  myAssignment: { id: string; status: string } | null;
-  assignedUsers: Array<{ id: string; status?: string }>;
-  isSuperAdmin: boolean;
-  canUpdate: boolean;
-  updatingStatus: boolean;
-  onStatusChange: (status: string) => void;
-  onRequestApproval: () => void;
-  getNextStatus: () => StatusItem | null;
-}
-
-// İlerleme Butonu Component - IIFE yerine normal component
-const StatusProgressButton: React.FC<StatusProgressButtonProps> = ({
-  task,
-  user,
-  loading,
-  currentStatus,
-  myAssignment,
-  assignedUsers,
-  isSuperAdmin,
-  canUpdate,
-  updatingStatus,
-  onStatusChange,
-  onRequestApproval,
-  getNextStatus,
-}) => {
-  // Normalize status
-  const normalizeStatusLocal = (status: string | undefined | null): string => {
-    if (!status) return "pending";
-    if (status.startsWith("column_")) {
-      const statusFromColumn = status.replace("column_", "");
-      if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(statusFromColumn)) {
-        return statusFromColumn === "cancelled" ? "pending" : statusFromColumn;
-      }
-      return "pending";
-    }
-    if (["pending", "in_progress", "completed", "approved", "cancelled"].includes(status)) {
-      return status === "cancelled" ? "pending" : status;
-    }
-    return "pending";
-  };
-
-  // DEBUG: Component render ediliyor mu?
-  if (!task || !user) {
-    return null;
-  }
-  
-  if (loading) {
-    return null;
-  }
-  
-  const normalizedCurrentStatus = normalizeStatusLocal(currentStatus);
-  
-  // Eğer görev onaylandıysa, buton gösterilmez
-  if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "approved") {
-    return null;
-  }
-  
-  // Görev üyesi kontrolü - Tüm görev üyelerinde buton görünmeli
-  const isAssignedViaMyAssignment = myAssignment && myAssignment.status !== "rejected";
-  const isAssignedInList = Array.isArray(assignedUsers) && assignedUsers.length > 0 && assignedUsers.some(u => {
-    const matches = u.id === user?.id;
-    const notRejected = u.status !== "rejected";
-    return matches && notRejected;
-  });
-  // task.assignedUsers hem string array hem de Profile array olabilir
-  const isInTaskAssignedUsers = Array.isArray(task?.assignedUsers) && task.assignedUsers.some((u: unknown) => {
-    if (typeof u === 'string') {
-      return u === user?.id;
-    }
-    if (typeof u === 'object' && u !== null && 'id' in u) {
-      return (u as { id: string }).id === user?.id;
-    }
-    return false;
-  });
-  const isCreator = task?.createdBy === user?.id;
-  const isAssigned = !!isAssignedViaMyAssignment || isAssignedInList || isInTaskAssignedUsers;
-  // Tüm görev üyelerinde buton görünmeli - sadece görev üyesi (personel, ekip lideri, yönetici) veya oluşturan
-  // Yönetici olmak yeterli değil, görev üyesi olmak gerekiyor
-  const hasPermission = isAssigned || isCreator;
-  
-  // Görev üyesi değilse butonu hiç gösterme
-  if (!hasPermission) {
-    return null;
-  }
-  
-  const nextStatusItem = getNextStatus();
-  
-  // Eğer nextStatusItem yoksa ama görev tamamlandı ve onaya gönderilmemişse "Onaya Gönder" butonu göster
-  if (!nextStatusItem) {
-    if (normalizedCurrentStatus === "completed" && task?.approvalStatus !== "pending" && task?.approvalStatus !== "approved" && hasPermission) {
-      return (
-        <Button
-          onClick={onRequestApproval}
-          disabled={updatingStatus}
-          className="w-full gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px] text-base"
-          size="lg"
-        >
-          {updatingStatus ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span className="font-semibold">Gönderiliyor...</span>
-            </>
-          ) : (
-            <>
-              <Send className="h-5 w-5" />
-              <span className="font-semibold">Onaya Gönder</span>
-            </>
-          )}
-        </Button>
-      );
-    }
-    return null;
-  }
-  
-  // "approved" durumuna geçiş yapılamaz - sadece "Onaya Gönder" butonu gösterilir
-  if (nextStatusItem.value === "approved") {
-    // Eğer görev tamamlandı ve onaya gönderilmemişse "Onaya Gönder" butonu göster
-    if (normalizedCurrentStatus === "completed" && task?.approvalStatus !== "pending" && task?.approvalStatus !== "approved" && hasPermission) {
-      return (
-        <Button
-          onClick={onRequestApproval}
-          disabled={updatingStatus}
-          className="w-full gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px] text-base"
-          size="lg"
-        >
-          {updatingStatus ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span className="font-semibold">Gönderiliyor...</span>
-            </>
-          ) : (
-            <>
-              <Send className="h-5 w-5" />
-              <span className="font-semibold">Onaya Gönder</span>
-            </>
-          )}
-        </Button>
-      );
-    }
-    return null;
-  }
-  
-  const NextIcon = nextStatusItem.icon;
-  
-  return (
-    <Button
-      onClick={() => onStatusChange(nextStatusItem.value)}
-      disabled={updatingStatus}
-      className="w-full gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-      size="lg"
-    >
-      {updatingStatus ? (
-        <>
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Güncelleniyor...
-        </>
-      ) : (
-        <>
-          <NextIcon className="h-5 w-5" />
-          <ArrowRight className="h-4 w-4" />
-          {nextStatusItem.label} Aşamasına Geç
-        </>
-      )}
-    </Button>
-  );
-};
 
 // Tarih formatlama fonksiyonu
 const formatDateSafe = (dateInput?: string | Date | Timestamp | null) => {
@@ -391,8 +216,6 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showRejectApprovalDialog, setShowRejectApprovalDialog] = useState(false);
   const [showRejectRejectionDialog, setShowRejectRejectionDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deletingTask, setDeletingTask] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectionApprovalReason, setRejectionApprovalReason] = useState("");
   const [rejectionRejectionReason, setRejectionRejectionReason] = useState("");
@@ -439,7 +262,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   const [newTaskLabelInput, setNewTaskLabelInput] = useState("");
   const [newTaskLabelColor, setNewTaskLabelColor] = useState("#61BD4F");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
-  const [newTaskPriority, setNewTaskPriority] = useState<PriorityLevel>(1); // Default: Normal (1)
+  const [newTaskPriority, setNewTaskPriority] = useState<1 | 2 | 3 | 4 | 5>(2);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(propProjectId || null);
   const [isPrivate, setIsPrivate] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -504,7 +327,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       setNewTaskLabelInput("");
       setNewTaskLabelColor("#61BD4F");
       setNewTaskDueDate("");
-      setNewTaskPriority(1); // Default: Normal (1)
+      setNewTaskPriority(2);
       setSelectedProjectId(propProjectId || null);
       setIsPrivate(false);
       setLoading(false);
@@ -878,8 +701,8 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       setActivities(taskActivities);
       setChecklists(taskChecklists);
       
-      // Yetki kontrollerini güncelle (rejected hariç tüm atanan kullanıcılar)
-      await updatePermissions(taskData as FirebaseTask, users.filter(u => u.status !== "rejected").map(u => u.id));
+      // Yetki kontrollerini güncelle
+      await updatePermissions(taskData as FirebaseTask, users.map(u => u.id));
     } catch (error: unknown) {
       if (import.meta.env.DEV) {
         console.error("Fetch task details error:", error);
@@ -959,11 +782,11 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   // Task veya assignedUsers değiştiğinde yetkileri güncelle
   useEffect(() => {
     if (task && user) {
-      // Rejected hariç tüm atanan kullanıcıların ID'lerini al
+      // Rejected hariç tüm kullanıcıları dahil et (pending, accepted, completed)
       const assignedUserIds = assignedUsers
         .filter(u => u.status !== "rejected")
         .map(u => u.id);
-      
+
       // ÖNCE updatePermissions'ı çağır - bu Firestore'dan doğru yetkileri alır
       // (gizli görevler için özel kontroller yapar)
       const updateAndCheck = async () => {
@@ -1046,54 +869,41 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   };
 
   const handleStatusUpdate = async (newStatus: string) => {
-    if (!user?.id || !taskId) {
-      toast.error("Kullanıcı veya görev bilgisi bulunamadı.");
+    // Yetki kontrolü: Sadece atanan kullanıcılar, oluşturan ve adminler durum güncelleyebilir
+    if (!canInteract) {
+      const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
+      showPermissionErrorToast("interact", "task");
       return;
     }
 
-    // Yetki kontrolü: Görev üyeleri (rejected hariç), oluşturan ve adminler durum güncelleyebilir
-    // ÖNCE: assignedUsers listesinden kontrol et (rejected hariç)
-    const isAssignedInList = Array.isArray(assignedUsers) && assignedUsers.some(u => {
-      const matches = u.id === user.id;
-      const notRejected = u.status !== "rejected";
-      return matches && notRejected;
-    });
-    
-    // İKİNCİ: myAssignment'dan kontrol et (rejected hariç)
-    const isAssignedViaMyAssignment = myAssignment && myAssignment.status !== "rejected";
-    
-    // ÜÇÜNCÜ: task.assignedUsers array'inden kontrol et (fallback)
-    const isInTaskAssignedUsers = task?.assignedUsers?.some((uid: string) => uid === user.id) || false;
-    
-    // DÖRDÜNCÜ: task.assignedUsers field'ından kontrol et (eğer string array ise)
-    const isInTaskAssignedUsersField = Array.isArray(task?.assignedUsers) && task.assignedUsers.includes(user.id);
-    
-    const isAssigned = isAssignedInList || !!isAssignedViaMyAssignment || isInTaskAssignedUsers || isInTaskAssignedUsersField;
-    const isCreator = task?.createdBy === user.id;
-
     // Alt yetki kontrolü - durum değiştirme
-    // SADECE görev üyesi (rejected hariç) veya oluşturan ise izin var
-    // Yöneticiler için özel durum YOK - sadece görev üyeleri durum değiştirebilir
-    const hasPermission = isCreator || isAssigned;
-    
-    if (!hasPermission) {
-      if (import.meta.env.DEV) {
-        console.warn("handleStatusUpdate: Durum değiştirme yetkisi yok", {
-          isSuperAdmin,
-          canUpdate,
-          isAssigned,
-          isAssignedInList,
-          isAssignedViaMyAssignment,
-          isInTaskAssignedUsers,
-          isInTaskAssignedUsersField,
-          isCreator,
-          assignedUsers: assignedUsers.map(u => ({ id: u.id, status: u.status })),
-          myAssignment: myAssignment ? { id: myAssignment.id, status: myAssignment.status } : null,
-          taskAssignedUsers: task?.assignedUsers,
-        });
+    try {
+      const { canPerformSubPermission } = await import("@/utils/permissions");
+      const userProfile: UserProfile = {
+        id: user?.id || "",
+        email: user?.email || "",
+        emailVerified: user?.emailVerified || false,
+        fullName: user?.fullName || "",
+        displayName: user?.fullName || "",
+        phone: user?.phone || null,
+        dateOfBirth: user?.dateOfBirth || null,
+        role: user?.roles || [],
+        createdAt: null,
+        updatedAt: null,
+      };
+      const hasPermission = await canPerformSubPermission(userProfile, "tasks", "canChangeStatus");
+      // SISTEM_YETKILERI.md'ye göre: Super Admin, Team Leader, görevi oluşturan ve görevi kabul eden kullanıcılar durum değiştirebilir
+      const isAssignedAndAccepted = assignedUsers.some(u => u.id === user?.id && u.status === "accepted");
+      const isCreator = task?.createdBy === user?.id;
+      if (!hasPermission && !isSuperAdmin && !canUpdate && !isCreator && !isAssignedAndAccepted) {
+        toast.error("Durum değiştirme yetkiniz yok. Sadece görevi kabul ettiğiniz görevlerin durumunu değiştirebilirsiniz.");
+        return;
       }
-      toast.error("Durum değiştirme yetkiniz yok. Sadece görev üyesi olduğunuz görevlerin durumunu değiştirebilirsiniz.");
-      return;
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("Permission check error:", error);
+      }
+      // Hata durumunda devam et (eski davranış)
     }
 
     try {
@@ -1133,37 +943,6 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       }
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error(errorMessage || "Durum güncellenirken hata oluştu");
-    }
-  };
-
-  const handleUpdatePrivacy = async (newIsPrivate: boolean) => {
-    if (!task?.id || !user?.id || task.createdBy !== user.id) {
-      toast.error("Bu görevin gizlilik ayarını değiştirme yetkiniz yok.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const { updateTask } = await import("@/services/firebase/taskService");
-      const { addTaskActivity } = await import("@/services/firebase/taskService");
-      await updateTask(task.id, { isPrivate: newIsPrivate }, user.id);
-      setTask(prev => prev ? { ...prev, isPrivate: newIsPrivate } : null);
-      toast.success(`Görev gizliliği ${newIsPrivate ? "gizli" : "herkese açık"} olarak güncellendi.`);
-      
-      // Activity log ekle
-      await addTaskActivity(
-        task.id,
-        user.id,
-        "updated",
-        `bu görevin gizliliğini ${newIsPrivate ? "gizli" : "herkese açık"} olarak değiştirdi`,
-        { field: "isPrivate", oldValue: !newIsPrivate, newValue: newIsPrivate },
-        user.fullName || "",
-        user.email || ""
-      );
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || "Gizlilik güncellenemedi.");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -1248,40 +1027,49 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     const normalizedCurrentStatus = normalizeStatus(currentStatus);
     const currentIndex = getCurrentStatusIndex();
     
+    // DEBUG: getNextStatus çağrısı (HER ZAMAN göster)
+    console.log("🔍 getNextStatus çağrıldı", {
+      currentStatus,
+      normalizedCurrentStatus,
+      currentIndex,
+      approvalStatus: task?.approvalStatus,
+      taskStatus: task?.status,
+      taskId: task?.id,
+    });
+    
     // Eğer görev onaylandıysa, sonraki durum yok
     if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "approved") {
+      console.log("❌ getNextStatus: Görev onaylandı, null döndürülüyor");
       return null;
     }
     
     // Eğer görev tamamlandı ama onaylanmadıysa, "Onaya Gönder" butonu gösterilecek
     // Bu durumda nextStatusItem null dönebilir, ama butonlar yine de gösterilecek
     if (currentIndex === -1) {
+      console.log("✅ getNextStatus: currentIndex -1, ilk durum döndürülüyor");
       return taskStatusWorkflow[0]; // İlk durum
     }
     
-    // Eğer görev tamamlandı ama onaya gönderilmemişse, null döndür (Onaya Gönder butonu gösterilecek)
-    if (normalizedCurrentStatus === "completed" && task?.approvalStatus !== "approved" && task?.approvalStatus !== "pending") {
-      return null;
-    }
-    
-    // Eğer görev "completed" durumundaysa, "approved" durumuna direkt geçiş yapılamaz
-    // Sadece "Onaya Gönder" butonu gösterilir
-    if (normalizedCurrentStatus === "completed") {
+    // Eğer görev tamamlandı ama onaylanmadıysa, null döndür (çünkü "Onaya Gönder" butonu gösterilecek)
+    // Bu kontrol buton render mantığında yapılıyor, burada null döndürmek yeterli
+    if (normalizedCurrentStatus === "completed" && task?.approvalStatus !== "approved") {
+      console.log("⚠️ getNextStatus: Görev tamamlandı ama onaylanmadı, null döndürülüyor (Onaya Gönder butonu gösterilecek)");
       return null;
     }
     
     // Eğer son aşamadaysa (approved), null döndür
     if (currentIndex >= taskStatusWorkflow.length - 1) {
+      console.log("❌ getNextStatus: Son aşamada, null döndürülüyor");
       return null;
     }
     
     const nextStatus = taskStatusWorkflow[currentIndex + 1];
-    
-    // "approved" durumuna direkt geçiş yapılamaz - sadece onay süreci ile geçilebilir
-    if (nextStatus && nextStatus.value === "approved") {
-      return null;
-    }
-    
+    console.log("✅ getNextStatus: Sonraki durum bulundu", {
+      nextStatusValue: nextStatus.value,
+      nextStatusLabel: nextStatus.label,
+      currentIndex,
+      nextIndex: currentIndex + 1,
+    });
     return nextStatus;
   };
 
@@ -1296,16 +1084,10 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     }
     
     // Sadece sıradaki aşamaya geçiş mümkün
-    // "approved" durumuna direkt geçiş yapılamaz - sadece onay süreci ile geçilebilir
     const statusFlow: Record<string, string> = {
       pending: "in_progress",
       in_progress: "completed",
     };
-    
-    // "approved" durumuna direkt geçiş yapılamaz
-    if (normalizedNew === "approved") {
-      return false;
-    }
     
     const isValid = statusFlow[normalizedCurrent] === normalizedNew;
     
@@ -1321,69 +1103,56 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       return;
     }
 
+    // Debug log
+    if (import.meta.env.DEV) {
+      console.log("handleStatusChange başladı:", {
+        taskId,
+        userId: user.id,
+        currentStatus,
+        nextStatus,
+        canInteract,
+        isSuperAdmin,
+        isAssigned: assignedUsers.some(u => u.id === user.id),
+        isCreator: task?.createdBy === user.id,
+      });
+    }
 
-    // Yetki kontrolü: canInteract kontrolü - ama görev üyesi veya oluşturan ise devam et
-    // ÖNCE: assignedUsers listesinden kontrol et (rejected hariç)
-    const isAssignedInList = Array.isArray(assignedUsers) && assignedUsers.some(u => {
-      const matches = u.id === user.id;
-      const notRejected = u.status !== "rejected";
-      return matches && notRejected;
-    });
-    
-    // İKİNCİ: myAssignment'dan kontrol et (rejected hariç)
-    const isAssignedViaMyAssignment = myAssignment && myAssignment.status !== "rejected";
-    
-    // ÜÇÜNCÜ: task.assignedUsers array'inden kontrol et (fallback)
-    const isInTaskAssignedUsers = task?.assignedUsers?.some((uid: string) => uid === user.id) || false;
-    
-    // DÖRDÜNCÜ: task.assignedUsers field'ından kontrol et (eğer string array ise)
-    const isInTaskAssignedUsersField = Array.isArray(task?.assignedUsers) && task.assignedUsers.includes(user.id);
-    
-    const isAssigned = isAssignedInList || !!isAssignedViaMyAssignment || isInTaskAssignedUsers || isInTaskAssignedUsersField;
-    const isCreator = task?.createdBy === user.id;
-    
-    // Alt yetki kontrolü - durum değiştirme
-    // SADECE görev üyesi (rejected hariç) veya oluşturan ise izin var
-    // Yöneticiler için özel durum YOK - sadece görev üyeleri durum değiştirebilir
-    const hasPermission = isCreator || isAssigned;
-    
-    if (!hasPermission) {
+    // Yetki kontrolü: canInteract kontrolü
+    if (!canInteract) {
       if (import.meta.env.DEV) {
-        console.warn("handleStatusChange: Durum değiştirme yetkisi yok", {
+        console.warn("handleStatusChange: canInteract false", {
           canInteract,
           isSuperAdmin,
           canUpdate,
-          isAssigned,
-          isAssignedInList,
-          isAssignedViaMyAssignment,
-          isInTaskAssignedUsers,
-          isInTaskAssignedUsersField,
-          isCreator,
-          assignedUsers: assignedUsers.map(u => ({ id: u.id, status: u.status })),
-          myAssignment: myAssignment ? { id: myAssignment.id, status: myAssignment.status } : null,
-          taskAssignedUsers: task?.assignedUsers,
+          isAssigned: assignedUsers.some(u => u.id === user.id),
+          isCreator: task?.createdBy === user.id,
         });
       }
-      toast.error("Durum değiştirme yetkiniz yok. Sadece görev üyesi olduğunuz görevlerin durumunu değiştirebilirsiniz.");
+      const { showPermissionErrorToast } = await import("@/utils/toastHelpers");
+      showPermissionErrorToast("interact", "task");
       return;
     }
 
     // Validasyon kontrolü
     if (!isValidStatusTransition(currentStatus, nextStatus)) {
+      const normalizedCurrent = normalizeStatus(currentStatus);
+      const normalizedNext = normalizeStatus(nextStatus);
+      if (import.meta.env.DEV) {
+        console.error("handleStatusChange: Geçersiz durum geçişi", {
+          currentStatus,
+          nextStatus,
+          normalizedCurrent,
+          normalizedNext,
+          expectedNext: normalizedCurrent === "pending" ? "in_progress" : normalizedCurrent === "in_progress" ? "completed" : null,
+        });
+      }
       toast.error(`Geçersiz durum geçişi: ${getStatusLabel(currentStatus)} → ${getStatusLabel(nextStatus)}`);
       return;
     }
 
-    // "approved" durumuna direkt geçiş yapılamaz - sadece onay süreci ile geçilebilir
-    const normalizedNextStatus = normalizeStatus(nextStatus);
-    if (normalizedNextStatus === "approved") {
-      toast.error("Görev 'Onaylandı' durumuna direkt geçirilemez. Lütfen 'Onaya Gönder' butonunu kullanın.");
-      return;
-    }
-    
     setUpdatingStatus(true);
     try {
-      // Durum güncellemesini yap (tüm durumlar için direkt geçiş, approved hariç)
+      // Durum güncellemesini yap (tüm durumlar için direkt geçiş)
       await updateTaskStatus(
         taskId,
         nextStatus as "pending" | "in_progress" | "completed"
@@ -1396,18 +1165,11 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       await fetchTaskDetails();
       onUpdate?.();
     } catch (error: unknown) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      
-      // Firestore izin hatasını kullanıcıya göster
-      if (errorMsg.includes("Missing or insufficient permissions") || errorMsg.includes("permission-denied") || errorMsg.includes("Firestore güvenlik kuralları")) {
-        toast.error("Görev durumunu değiştirme izniniz yok. Firestore güvenlik kuralları görev üyelerine izin vermiyor. Lütfen yöneticinizle iletişime geçin.");
-      } else {
-        toast.error("Durum güncellenemedi: " + (errorMsg || "Bilinmeyen hata"));
-      }
-      
       if (import.meta.env.DEV) {
         console.error("Task status update error:", error);
       }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error("Durum güncellenemedi: " + (errorMessage || "Bilinmeyen hata"));
     } finally {
       setUpdatingStatus(false);
     }
@@ -1416,11 +1178,6 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   // Onaya gönder butonu için handler
   const handleRequestApproval = async () => {
     if (!taskId || !user?.id) {
-      return;
-    }
-
-    // Double-click koruması - eğer zaten işlem yapılıyorsa, tekrar çalıştırma
-    if (updatingStatus) {
       return;
     }
 
@@ -1441,37 +1198,15 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     }
   };
 
-  // Geri alma işlemi - sadece görev üyeleri ve görevi oluşturan için, belirli bir duruma geri alır
+  // Geri alma işlemi - sadece yöneticiler için, belirli bir duruma geri alır
   const handleRevertStatus = async (targetStatus: string) => {
     if (!taskId || !user?.id) {
       return;
     }
 
-    // Yetki kontrolü: SADECE görev üyesi (rejected hariç) veya oluşturan durum geri alabilir
-    // ÖNCE: assignedUsers listesinden kontrol et (rejected hariç)
-    const isAssignedInList = Array.isArray(assignedUsers) && assignedUsers.some(u => {
-      const matches = u.id === user.id;
-      const notRejected = u.status !== "rejected";
-      return matches && notRejected;
-    });
-    
-    // İKİNCİ: myAssignment'dan kontrol et (rejected hariç)
-    const isAssignedViaMyAssignment = myAssignment && myAssignment.status !== "rejected";
-    
-    // ÜÇÜNCÜ: task.assignedUsers array'inden kontrol et (fallback)
-    const isInTaskAssignedUsers = task?.assignedUsers?.some((uid: string) => uid === user.id) || false;
-    
-    // DÖRDÜNCÜ: task.assignedUsers field'ından kontrol et (eğer string array ise)
-    const isInTaskAssignedUsersField = Array.isArray(task?.assignedUsers) && task.assignedUsers.includes(user.id);
-    
-    const isAssigned = isAssignedInList || !!isAssignedViaMyAssignment || isInTaskAssignedUsers || isInTaskAssignedUsersField;
-    const isCreator = task?.createdBy === user.id;
-    
-    // Sadece görev üyesi (rejected hariç) veya oluşturan ise izin var
-    const hasPermission = isCreator || isAssigned;
-    
-    if (!hasPermission) {
-      toast.error("Durum geri alma yetkiniz yok. Sadece görev üyesi olduğunuz görevlerin durumunu geri alabilirsiniz.");
+    // SISTEM_YETKILERI.md'ye göre: Super Admin ve Team Leader durumu geri alabilir
+    if (!isSuperAdmin && !canUpdate) {
+      toast.error("Sadece yöneticiler durumu geri alabilir.");
       return;
     }
 
@@ -2044,7 +1779,6 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     if (!user) return;
     
     // Alt yetki kontrolü - görev atama
-    let hasPermission = false;
     try {
       const { canPerformSubPermission } = await import("@/utils/permissions");
       const userProfile: UserProfile = {
@@ -2059,21 +1793,17 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         createdAt: null,
         updatedAt: null,
       };
-      const hasSubPermission = await canPerformSubPermission(userProfile, "tasks", "canAssign");
+      const hasPermission = await canPerformSubPermission(userProfile, "tasks", "canAssign");
       // SISTEM_YETKILERI.md'ye göre: Super Admin ve Team Leader görev atayabilir
-      hasPermission = hasSubPermission || isSuperAdmin || canUpdate;
+      if (!hasPermission && !isSuperAdmin && !canUpdate) {
+        toast.error("Görev atama yetkiniz yok");
+        return;
+      }
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error("Permission check error:", error);
       }
-      // Hata durumunda yetki yok sayılır
-      hasPermission = false;
-    }
-    
-    // Yetki kontrolü başarısız ise işlemi durdur
-    if (!hasPermission) {
-      toast.error("Görev atama yetkiniz yok");
-      return;
+      // Hata durumunda devam et (eski davranış)
     }
     
     setSaving(true);
@@ -2250,28 +1980,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
   };
 
   const handleDeleteTask = () => {
-    setShowDeleteDialog(true);
-  };
-
-  const confirmDeleteTask = async () => {
-    if (!taskId || !user?.id) return;
-    
-    setDeletingTask(true);
-    try {
-      await deleteTask(taskId, user.id);
-      toast.success("Görev başarıyla silindi");
-      setShowDeleteDialog(false);
-      onOpenChange(false);
-      onUpdate?.();
-    } catch (error: unknown) {
-      if (import.meta.env.DEV) {
-        console.error("Delete task error:", error);
-      }
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || "Görev silinemedi");
-    } finally {
-      setDeletingTask(false);
-    }
+    toast.info("Silme işlemi için görev listesi üzerinden ilerleyin.");
   };
 
   const handleCreateTask = async () => {
@@ -2354,7 +2063,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
         title: newTaskTitle.trim(),
         description: newTaskDescription.trim() || null,
         status: initialStatus,
-        priority: Math.min(convertNewPriorityToOld(newTaskPriority), 5) as 1 | 2 | 3 | 4 | 5, // TaskService hala 1-5 kullanıyor
+        priority: newTaskPriority,
         dueDate: dueDateTimestamp,
         labels: labelNames.length > 0 ? labelNames : null,
         projectId: finalProjectId || null,
@@ -2400,7 +2109,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
       setNewTaskLabelInput("");
       setNewTaskLabelColor("#61BD4F");
       setNewTaskDueDate("");
-      setNewTaskPriority(1); // Default: Normal (1)
+      setNewTaskPriority(2);
       setSelectedProjectId(propProjectId || null);
       setIsPrivate(false);
       
@@ -2532,12 +2241,12 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent 
-          className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border"
+          className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border"
           data-task-modal
         >
           <div className="flex flex-col h-full min-h-0">
             <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
-              <DialogTitle className="text-[16px] sm:text-[18px] font-semibold text-foreground leading-tight">Yeni Görev Oluştur</DialogTitle>
+              <DialogTitle className="text-[18px] sm:text-[20px] font-semibold text-foreground">Yeni Görev Oluştur</DialogTitle>
               <DialogDescription className="sr-only">
                 Yeni görev oluşturmak için formu doldurun
               </DialogDescription>
@@ -2547,7 +2256,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
               <div className="max-w-full mx-auto flex-1 overflow-y-auto overscroll-contain min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
                 <div className="space-y-6">
                 <div className="space-y-3">
-                  <Label className="text-[11px] sm:text-xs font-bold text-[#172B4D] flex items-center gap-2 sm:gap-3">
+                  <Label className="text-sm sm:text-base font-bold text-[#172B4D] flex items-center gap-2 sm:gap-3">
                     <Package className="h-4 w-4 sm:h-5 sm:w-5 text-[#0079BF]" />
                     Görev Başlığı <span className="text-destructive">*</span>
                   </Label>
@@ -2555,7 +2264,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                     placeholder="Örn: Yeni özellik geliştir..."
                     value={newTaskTitle}
                     onChange={(e) => setNewTaskTitle(e.target.value)}
-                    className="h-11 sm:h-12 bg-white border-2 border-[#DFE1E6] text-[#172B4D] text-[11px] sm:text-xs focus:border-[#0079BF] focus:ring-2 focus:ring-[#0079BF]/20"
+                    className="h-11 sm:h-12 bg-white border-2 border-[#DFE1E6] text-[#172B4D] text-base focus:border-[#0079BF] focus:ring-2 focus:ring-[#0079BF]/20"
                     disabled={creatingTask}
                     autoFocus
                   />
@@ -2564,7 +2273,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                 {/* Proje ve Gizlilik */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                    <div className="space-y-3">
-                    <Label className="text-[11px] sm:text-xs font-bold text-[#172B4D] flex items-center gap-2 sm:gap-3">
+                    <Label className="text-sm sm:text-base font-bold text-[#172B4D] flex items-center gap-2 sm:gap-3">
                       <Package className="h-4 w-4 sm:h-5 sm:w-5 text-[#0079BF]" />
                       Proje <span className="text-destructive">*</span>
                     </Label>
@@ -2621,62 +2330,59 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                     </Select>
                   </div>
                   
-                  {/* Gizlilik - Sadece görevi oluşturan kişi görebilir (yeni görev oluştururken herkes görebilir) */}
-                  {(!taskId || task?.createdBy === user?.id) && (
-                    <div className="space-y-3">
-                      <Label className="text-[11px] sm:text-xs font-bold text-[#172B4D] flex items-center gap-2 sm:gap-3">
-                        <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-[#0079BF]" />
-                        Gizlilik
-                      </Label>
-                      <div className="flex items-center gap-3 h-12 px-4 border-2 border-[#DFE1E6] rounded-md bg-white">
-                         <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="private-task"
-                            checked={isPrivate}
-                            disabled={creatingTask || (selectedProjectId && projects.find(p => p.id === selectedProjectId)?.isPrivate)}
-                            onChange={(e) => {
-                              // Gizli projede görev oluştururken checkbox disabled olduğu için bu fonksiyon çalışmayacak
-                              // Ama yine de güvenlik için kontrol ekliyoruz
-                              const selectedProject = selectedProjectId ? projects.find(p => p.id === selectedProjectId) : null;
-                              
-                              // Eğer proje gizli ise, checkbox zaten disabled olduğu için buraya gelmemeli
-                              if (selectedProject?.isPrivate) {
-                                return; // Gizli projede değişiklik yapılamaz
-                              }
-                              
-                              setIsPrivate(e.target.checked);
-                              
-                              // Gizlilik seçildiğinde, eğer seçili proje gizli değilse proje seçimini sıfırla
-                              if (e.target.checked && selectedProjectId && !selectedProject?.isPrivate) {
-                                setSelectedProjectId(null);
-                                // Projeleri yeniden yükle (sadece gizli projeleri göstermek için)
-                                // useEffect ile otomatik yüklenecek
-                              }
-                            }}
-                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <Label 
-                            htmlFor="private-task" 
-                            className={cn(
-                              "text-sm font-medium text-gray-700 flex items-center gap-2",
-                              selectedProjectId && projects.find(p => p.id === selectedProjectId)?.isPrivate 
-                                ? "cursor-default" 
-                                : "cursor-pointer"
-                            )}
-                          >
-                            <Lock className="h-4 w-4 text-gray-500" />
-                            Sadece atanan kişiler görebilir
-                          </Label>
-                        </div>
+                  <div className="space-y-3">
+                    <Label className="text-sm sm:text-base font-bold text-[#172B4D] flex items-center gap-2 sm:gap-3">
+                      <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-[#0079BF]" />
+                      Gizlilik
+                    </Label>
+                    <div className="flex items-center gap-3 h-12 px-4 border-2 border-[#DFE1E6] rounded-md bg-white">
+                       <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="private-task"
+                          checked={isPrivate}
+                          disabled={creatingTask || (selectedProjectId && projects.find(p => p.id === selectedProjectId)?.isPrivate)}
+                          onChange={(e) => {
+                            // Gizli projede görev oluştururken checkbox disabled olduğu için bu fonksiyon çalışmayacak
+                            // Ama yine de güvenlik için kontrol ekliyoruz
+                            const selectedProject = selectedProjectId ? projects.find(p => p.id === selectedProjectId) : null;
+                            
+                            // Eğer proje gizli ise, checkbox zaten disabled olduğu için buraya gelmemeli
+                            if (selectedProject?.isPrivate) {
+                              return; // Gizli projede değişiklik yapılamaz
+                            }
+                            
+                            setIsPrivate(e.target.checked);
+                            
+                            // Gizlilik seçildiğinde, eğer seçili proje gizli değilse proje seçimini sıfırla
+                            if (e.target.checked && selectedProjectId && !selectedProject?.isPrivate) {
+                              setSelectedProjectId(null);
+                              // Projeleri yeniden yükle (sadece gizli projeleri göstermek için)
+                              // useEffect ile otomatik yüklenecek
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <Label 
+                          htmlFor="private-task" 
+                          className={cn(
+                            "text-sm font-medium text-gray-700 flex items-center gap-2",
+                            selectedProjectId && projects.find(p => p.id === selectedProjectId)?.isPrivate 
+                              ? "cursor-default" 
+                              : "cursor-pointer"
+                          )}
+                        >
+                          <Lock className="h-4 w-4 text-gray-500" />
+                          Sadece atanan kişiler görebilir
+                        </Label>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* Açıklama */}
                 <div className="space-y-3">
-                  <Label className="text-[11px] sm:text-xs font-bold text-[#172B4D] flex items-center gap-3">
+                  <Label className="text-base font-bold text-[#172B4D] flex items-center gap-3">
                     <MessageSquare className="h-5 w-5 text-[#0079BF]" />
                     Açıklama
                   </Label>
@@ -2686,13 +2392,13 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                     onChange={(e) => setNewTaskDescription(e.target.value)}
                     rows={5}
                     disabled={creatingTask}
-                    className="bg-white border-2 border-[#DFE1E6] text-[#172B4D] resize-none text-[11px] sm:text-xs focus:border-[#0079BF] focus:ring-2 focus:ring-[#0079BF]/20"
+                    className="bg-white border-2 border-[#DFE1E6] text-[#172B4D] resize-none text-base focus:border-[#0079BF] focus:ring-2 focus:ring-[#0079BF]/20"
                   />
                 </div>
 
                 {/* Checklist */}
                 <div className="space-y-4">
-                  <Label className="text-[11px] sm:text-xs font-bold text-[#172B4D] flex items-center gap-3">
+                  <Label className="text-base font-bold text-[#172B4D] flex items-center gap-3">
                     <ListChecks className="h-5 w-5 text-[#0079BF]" />
                     Kontrol Listesi
                   </Label>
@@ -2710,7 +2416,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                             }}
                             className="w-5 h-5 rounded border-2 border-[#DFE1E6] text-[#0079BF] cursor-pointer focus:ring-2 focus:ring-[#0079BF]/20"
                           />
-                          <span className={cn("flex-1 text-[11px] sm:text-xs", item.completed ? "line-through text-[#5E6C84]" : "text-[#172B4D] font-medium")}>
+                          <span className={cn("flex-1 text-base", item.completed ? "line-through text-[#5E6C84]" : "text-[#172B4D] font-medium")}>
                             {item.text}
                           </span>
                           <button
@@ -2766,7 +2472,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
                 {/* Kişi Ata */}
                 <div className="space-y-4">
-                  <Label className="text-[11px] sm:text-xs font-bold text-[#172B4D] flex items-center gap-3">
+                  <Label className="text-base font-bold text-[#172B4D] flex items-center gap-3">
                     <UserPlus className="h-5 w-5 text-[#0079BF]" />
                     Kişi Ata
                   </Label>
@@ -2780,7 +2486,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
                 {/* Etiketler */}
                 <div className="space-y-4">
-                  <Label className="text-[11px] sm:text-xs font-bold text-[#172B4D] flex items-center gap-3">
+                  <Label className="text-base font-bold text-[#172B4D] flex items-center gap-3">
                     <Tag className="h-5 w-5 text-[#0079BF]" />
                     Etiketler
                   </Label>
@@ -2789,7 +2495,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                       {newTaskLabels.map((label, idx) => (
                         <div
                           key={idx}
-                          className="flex items-center gap-2 px-4 py-2 rounded-full text-[11px] sm:text-xs font-semibold text-white cursor-pointer hover:opacity-90 transition-opacity shadow-md"
+                          className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white cursor-pointer hover:opacity-90 transition-opacity shadow-md"
                           style={{ backgroundColor: label.color }}
                           onClick={() => removeQuickLabel(label.name)}
                         >
@@ -2844,7 +2550,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
                 {/* Bitiş Tarihi */}
                 <div className="space-y-3">
-                  <Label className="text-[11px] sm:text-xs font-bold text-[#172B4D] flex items-center gap-3">
+                  <Label className="text-base font-bold text-[#172B4D] flex items-center gap-3">
                     <CalendarDays className="h-5 w-5 text-[#0079BF]" />
                     Bitiş Tarihi
                   </Label>
@@ -2859,24 +2565,24 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
                 {/* Öncelik */}
                 <div className="space-y-3">
-                  <Label className="text-[11px] sm:text-xs font-bold text-[#172B4D] flex items-center gap-3">
+                  <Label className="text-base font-bold text-[#172B4D] flex items-center gap-3">
                     <Tag className="h-5 w-5 text-[#0079BF]" />
                     Öncelik
                   </Label>
                   <Select
                     value={newTaskPriority.toString()}
-                    onValueChange={(value) => setNewTaskPriority(Number(value) as PriorityLevel)}
+                    onValueChange={(value) => setNewTaskPriority(Number(value) as 1 | 2 | 3 | 4 | 5)}
                     disabled={creatingTask}
                   >
                     <SelectTrigger className="h-12 border-2 border-[#DFE1E6] focus:border-[#0079BF] focus:ring-2 focus:ring-[#0079BF]/20">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {PRIORITY_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value.toString()}>
-                          {option.label} ({option.value})
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="1">Çok Düşük</SelectItem>
+                      <SelectItem value="2">Düşük</SelectItem>
+                      <SelectItem value="3">Orta</SelectItem>
+                      <SelectItem value="4">Yüksek</SelectItem>
+                      <SelectItem value="5">Kritik</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2886,7 +2592,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                   <Button
                     onClick={handleCreateTask}
                     disabled={creatingTask || !newTaskTitle.trim()}
-                    className="bg-[#0079BF] hover:bg-[#005A8B] text-white flex-1 font-bold h-14 text-[11px] sm:text-xs shadow-lg hover:shadow-xl transition-all disabled:opacity-50"
+                    className="bg-[#0079BF] hover:bg-[#005A8B] text-white flex-1 font-bold h-14 text-base shadow-lg hover:shadow-xl transition-all disabled:opacity-50"
                   >
                     {creatingTask ? (
                       <>
@@ -2998,7 +2704,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent 
-          className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border" 
+          className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border" 
           data-task-modal
         >
           {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
@@ -3016,7 +2722,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                   <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                     <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground truncate leading-tight">
+                  <h2 className="text-lg sm:text-xl font-semibold text-foreground truncate">
                     Görev Detayı - {task?.title || "Yeni Görev"}
                   </h2>
                   <p className="sr-only">
@@ -3065,19 +2771,19 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
             
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0 flex flex-col">
             <div className="max-w-full mx-auto flex-1 overflow-y-auto overscroll-contain min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
-                {loading ? (
+                {loading && (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                   </div>
-                ) : (
+                )}
                 <div className="space-y-6">
                     {/* SISTEM_YETKILERI.md'ye göre: Super Admin, Team Leader ve görevi oluşturan onaylayabilir */}
                     {task?.approvalStatus === "pending" && user && (task.createdBy === user.id || isSuperAdmin || canUpdate) && (
                       <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                           <div>
-                            <h4 className="text-[11px] sm:text-xs font-semibold text-yellow-900">Görev Tamamlanma Onayı Bekliyor</h4>
-                            <p className="text-[11px] sm:text-xs text-yellow-700">
+                            <h4 className="text-sm font-semibold text-yellow-900">Görev Tamamlanma Onayı Bekliyor</h4>
+                            <p className="text-sm text-yellow-700">
                               Bu görev tamamlandı olarak işaretlendi ve onayınızı bekliyor.
                             </p>
                           </div>
@@ -3118,11 +2824,11 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                       <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
                         <div className="space-y-3">
                           <div>
-                            <h4 className="text-[11px] sm:text-xs font-semibold text-amber-900 flex items-center gap-2">
+                            <h4 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
                               <UserPlus className="h-4 w-4" />
                               Görev Havuzu Talepleri
                             </h4>
-                            <p className="text-[11px] sm:text-xs text-amber-700 mt-1">
+                            <p className="text-sm text-amber-700 mt-1">
                               Bu görev için {task?.poolRequests?.length || 0} talep var. Talepleri onaylayabilir veya reddedebilirsiniz.
                             </p>
                           </div>
@@ -3140,7 +2846,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                                       </AvatarFallback>
                                     </Avatar>
                                     <div>
-                                      <p className="text-[11px] sm:text-xs font-medium text-gray-900">{userName}</p>
+                                      <p className="text-sm font-medium text-gray-900">{userName}</p>
                                       <p className="text-xs text-gray-500">Görevi talep etti</p>
                                     </div>
                                   </div>
@@ -3209,8 +2915,8 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                       <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                           <div>
-                            <h4 className="text-[11px] sm:text-xs font-semibold text-amber-900">Görev Havuzunda</h4>
-                            <p className="text-[11px] sm:text-xs text-amber-700">
+                            <h4 className="text-sm font-semibold text-amber-900">Görev Havuzunda</h4>
+                            <p className="text-sm text-amber-700">
                               Bu görev görev havuzunda. İsterseniz görevi havuzdan kaldırabilirsiniz.
                             </p>
                           </div>
@@ -3269,8 +2975,8 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                       <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                           <div>
-                            <h4 className="text-[11px] sm:text-xs font-semibold text-blue-900">Görev Havuzunda</h4>
-                            <p className="text-[11px] sm:text-xs text-blue-700">
+                            <h4 className="text-sm font-semibold text-blue-900">Görev Havuzunda</h4>
+                            <p className="text-sm text-blue-700">
                               Bu görev görev havuzunda. Bu görevi talep edebilirsiniz.
                             </p>
                           </div>
@@ -3319,8 +3025,8 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                         <div className="flex items-center gap-2">
                           <Clock className="h-4 w-4 text-yellow-600" />
                           <div>
-                            <h4 className="text-[11px] sm:text-xs font-semibold text-yellow-900">Talep Gönderildi</h4>
-                            <p className="text-[11px] sm:text-xs text-yellow-700">
+                            <h4 className="text-sm font-semibold text-yellow-900">Talep Gönderildi</h4>
+                            <p className="text-sm text-yellow-700">
                               Bu görev için talep gönderdiniz. Onay bekleniyor.
                             </p>
                           </div>
@@ -3356,12 +3062,21 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                     </div>
 
                     {/* Status Timeline */}
+                    {(() => {
+                      console.log("🔍 TaskDetailModal: Görev Durumu Card render ediliyor", {
+                        task: task ? "VAR" : "YOK",
+                        taskId: task?.id,
+                        loading,
+                        open,
+                      });
+                      return null;
+                    })()}
                     <Card>
                       <CardHeader className="space-y-1">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <CardTitle className="text-[14px] sm:text-[15px] font-semibold">Görev Durumu</CardTitle>
-                            <p className="text-[11px] sm:text-xs text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                               {(() => {
                                 // Status'ü normalize et - "column_" prefix'ini kaldır
                                 // task?.status'ü direkt normalize et, çünkü bu ham değer olabilir
@@ -3398,13 +3113,9 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                             </p>
                           </div>
                           <div className="text-xs text-muted-foreground text-right">
-                            Son güncelleyen: {(() => {
-                              // Önce updatedBy kontrol et (her güncellemede güncellenir), yoksa statusUpdatedBy, yoksa mevcut kullanıcı
-                              const lastEditorId = (task as any)?.updatedBy || (task as any)?.statusUpdatedBy;
-                              return lastEditorId 
-                                ? (usersMap[lastEditorId] || lastEditorId)
-                                : (user?.fullName || "-");
-                            })()}
+                            Son güncelleyen: {(task as any)?.statusUpdatedBy 
+                              ? (usersMap[(task as any).statusUpdatedBy] || (task as any).statusUpdatedBy)
+                              : (user?.fullName || "-")}
                             <br />
                             <span className="text-[11px]">
                               {(task as any)?.statusUpdatedAt ? formatDateSafe((task as any).statusUpdatedAt as Timestamp | Date | string | null) : ""}
@@ -3422,20 +3133,9 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                             const currentIndex = getCurrentStatusIndex();
                             const isActive = index === currentIndex;
                             const isCompleted = index < currentIndex;
-                            // Sadece görev üyesi (rejected hariç) veya oluşturan tüm eski adımlara geri dönebilir (onay bekleyen görevler hariç)
+                            // SISTEM_YETKILERI.md'ye göre: Super Admin ve Team Leader tüm eski adımlara geri dönebilir (onay bekleyen görevler hariç)
                             // "approved" durumuna tıklanırsa "completed" durumuna geri alınır
-                            // Görev üyesi kontrolü
-                            const isInTaskAssignedUsers = Array.isArray(task?.assignedUsers) && task.assignedUsers.includes(user?.id || "");
-                            const isAssignedInList = Array.isArray(assignedUsers) && assignedUsers.some(u => {
-                              const matches = u.id === user?.id;
-                              const notRejected = u.status !== "rejected";
-                              return matches && notRejected;
-                            });
-                            const isAssignedViaMyAssignment = myAssignment && myAssignment.status !== "rejected";
-                            const isCreator = task?.createdBy === user?.id;
-                            const isAssigned = isInTaskAssignedUsers || isAssignedInList || !!isAssignedViaMyAssignment;
-                            const hasPermission = isAssigned || isCreator;
-                            const canRevert = hasPermission && index < currentIndex && 
+                            const canRevert = (isSuperAdmin || canUpdate) && index < currentIndex && 
                                               task?.approvalStatus !== "pending";
                             
                             return (
@@ -3512,29 +3212,361 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                             );
                           })}
                           </div>
-                        </div>
-                        
-                        {/* İlerleme Butonu - Timeline'dan sonra, aynı Card içinde */}
-                        <div className="pt-4 mt-4">
-                          {/* TEST: Bu div görünüyor mu? */}
-                          <div className="p-2 mb-2 bg-green-200 border-2 border-green-500">
-                            <p className="text-xs font-bold text-green-700">TEST: İlerleme butonu div'i render edildi!</p>
+                          
+                          {/* Next Status Button / Onaya Gönder Button / Accept/Reject Buttons */}
+                          {(() => {
+                            console.log("🔍 TaskDetailModal: Buton bölümü başlangıcı - CardContent içinde", {
+                              task: task ? "VAR" : "YOK",
+                              taskId: task?.id,
+                            });
+                            return null;
+                          })()}
+                          <div className="pt-4 border-t mt-4">
+                          {!task ? (
+                            (() => {
+                              // Debug: Her zaman log göster
+                              console.log("🔍 TaskDetailModal: Görev yükleniyor", {
+                                taskId,
+                                currentStatus,
+                              });
+                              return (
+                                <div className="p-4 bg-yellow-100 border border-yellow-400 rounded">
+                                  <p className="text-sm text-yellow-800 text-center">⚠️ Görev yükleniyor...</p>
+                                </div>
+                              );
+                            })()
+                          ) : (() => {
+                            // Debug: Her zaman log göster
+                            console.log("🔍 TaskDetailModal: Buton bölümü render ediliyor", {
+                              task: task ? "VAR" : "YOK",
+                              taskId: task?.id,
+                              currentStatus,
+                              taskStatus: task?.status,
+                            });
+                            
+                            // Status'ü normalize et
+                          const normalizedCurrentStatus = normalizeStatus(currentStatus);
+                          
+                          // Eğer görev onaylandıysa, buton gösterilmez - sadece bilgi mesajı göster
+                          if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "approved") {
+                            return (
+                              <div className="p-4 bg-green-50 border border-green-200 rounded">
+                                <p className="text-sm text-green-800 text-center">✅ Görev onaylandı ve tamamlandı</p>
+                              </div>
+                            );
+                          }
+                          
+                          const isCreator = task?.createdBy === user?.id;
+                          // Göreve atanan kullanıcı kontrolü - tüm durumlar için (rejected hariç)
+                          const isAssigned = myAssignment || assignedUsers.some(u => u.id === user?.id);
+                          const isAssignedAndAccepted = myAssignment?.status === "accepted" || 
+                            assignedUsers.some(u => u.id === user?.id && u.status === "accepted");
+                          const isAssignedAndPending = myAssignment?.status === "pending" || 
+                            assignedUsers.some(u => u.id === user?.id && u.status === "pending");
+                          // task.assignedUsers array'inden de kontrol et (fallback)
+                          const isInTaskAssignedUsersArray = task?.assignedUsers?.some((uid: string) => uid === user?.id) || false;
+                          
+                          // Eğer göreve atanmış ama henüz kabul etmemişse, "Kabul Et" ve "Reddet" butonları göster
+                          if (isAssigned && isAssignedAndPending && !isAssignedAndAccepted) {
+                            return (
+                              <div className="flex flex-col gap-2">
+                                <Button
+                                  onClick={handleAcceptTask}
+                                  disabled={processing}
+                                  className="gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md hover:shadow-lg transition-all w-full"
+                                  size="lg"
+                                >
+                                  {processing ? (
+                                    <>
+                                      <Loader2 className="h-5 w-5 animate-spin" />
+                                      İşleniyor...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="h-5 w-5" />
+                                      Görevi Kabul Et
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  onClick={() => setShowRejectDialog(true)}
+                                  disabled={processing}
+                                  variant="destructive"
+                                  className="gap-2 font-semibold shadow-md hover:shadow-lg transition-all w-full"
+                                  size="lg"
+                                >
+                                  <XCircle className="h-5 w-5" />
+                                  Görevi Reddet
+                                </Button>
+                                <p className="text-xs text-muted-foreground text-center">
+                                  Görevi kabul etmek veya reddetmek için yukarıdaki butonları kullanın
+                                </p>
+                              </div>
+                            );
+                          }
+                          
+                          // Kullanıcı isteği: Buton SADECE görev üyeleri tarafından görülebilmeli
+                          // Göreve atanan kullanıcılar (status ne olursa olsun, rejected hariç) görevi ilerletebilir
+                          
+                          // ÖNCE: assignedUsers listesinden kontrol et (rejected hariç)
+                          const isAssignedInList = assignedUsers.some(u => {
+                            const matches = u.id === user?.id;
+                            const notRejected = u.status !== "rejected";
+                            return matches && notRejected;
+                          });
+                          
+                          // İKİNCİ: myAssignment'dan kontrol et (rejected hariç)
+                          const isAssignedViaMyAssignment = myAssignment && myAssignment.status !== "rejected";
+                          
+                          // ÜÇÜNCÜ: task.assignedUsers array'inden kontrol et (fallback - status kontrolü yok, direkt kontrol)
+                          const isInTaskAssignedUsers = task?.assignedUsers?.some((uid: string) => uid === user?.id) || false;
+                          
+                          // DÖRDÜNCÜ: task.assignedUsers field'ından kontrol et (eğer string array ise)
+                          const isInTaskAssignedUsersField = Array.isArray(task?.assignedUsers) && task.assignedUsers.includes(user?.id || "");
+                          
+                          // Göreve atanan herkes (pending, accepted, completed durumlarında) butonu görebilmeli
+                          // Creator, admin ve team leader'lar da görebilmeli
+                          const isAssignedForButton = isAssignedInList || !!isAssignedViaMyAssignment || isInTaskAssignedUsers || isInTaskAssignedUsersField;
+                          const isCreatorForButton = task?.createdBy === user?.id;
+                          
+                          // Buton görünürlük kontrolü: Görev üyeleri (rejected hariç), creator, admin ve team leader
+                          const hasPermission = isAssignedForButton || isCreatorForButton || canUpdate || isSuperAdmin;
+                          
+                          // DEBUG: Buton görünürlük kontrolü için detaylı log (HER ZAMAN göster)
+                          console.log("🔍 TaskDetailModal: Buton görünürlük kontrolü - DETAYLI", {
+                            userId: user?.id,
+                            taskId: task?.id,
+                            isAssignedInList,
+                            isAssignedViaMyAssignment,
+                            isInTaskAssignedUsers,
+                            isInTaskAssignedUsersField,
+                            isAssignedForButton,
+                            isCreatorForButton,
+                            canInteract,
+                            isSuperAdmin,
+                            hasPermission,
+                            assignedUsers: assignedUsers.map(u => ({ id: u.id, status: u.status })),
+                            myAssignment: myAssignment ? { id: myAssignment.id, status: myAssignment.status } : null,
+                            taskAssignedUsers: task?.assignedUsers,
+                            taskCreatedBy: task?.createdBy,
+                            taskStatus: task?.status,
+                            currentStatus,
+                            normalizedCurrentStatus: normalizeStatus(currentStatus),
+                          });
+                          
+                          // hasPermission kontrolü kaldırıldı - butonlar her zaman görünür, sadece disabled olur
+                          // HER AŞAMADA BUTON GÖSTER - görev üyeleri tüm aşamaları ilerletebilmeli
+                          const nextStatusItem = getNextStatus();
+                          
+                          // DEBUG: nextStatusItem ve durum bilgilerini logla (HER ZAMAN göster)
+                          console.log("🔍 TaskDetailModal: Buton render kontrolü - HER ZAMAN", {
+                            currentStatus,
+                            normalizedCurrentStatus,
+                            nextStatusItem: nextStatusItem ? { value: nextStatusItem.value, label: nextStatusItem.label } : null,
+                            approvalStatus: task?.approvalStatus,
+                            hasPermission,
+                            taskStatus: task?.status,
+                            taskId: task?.id,
+                            userId: user?.id,
+                            currentIndex: getCurrentStatusIndex(),
+                          });
+                          
+                          // Tamamlandı durumunda ve onaya gönderilmemişse "Onaya Gönder" butonu göster
+                          // Ama eğer görev üyesi/admin ise, normal geçiş butonu da gösterilebilir
+                          if (normalizedCurrentStatus === "completed" && task?.approvalStatus !== "pending" && task?.approvalStatus !== "approved") {
+                            if (import.meta.env.DEV) {
+                              console.log("✅ TaskDetailModal: Completed durumunda 'Onaya Gönder' butonu gösteriliyor");
+                            }
+                            // Hem "Onaya Gönder" hem de normal geçiş butonu göster (eğer nextStatusItem varsa)
+                            if (nextStatusItem) {
+                              return (
+                                <div className="flex flex-col gap-2">
+                                  <Button
+                                    onClick={() => handleStatusChange(nextStatusItem.value)}
+                                    disabled={updatingStatus || !hasPermission}
+                                    className="gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                                    size="lg"
+                                  >
+                                    {updatingStatus ? (
+                                      <>
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                        Güncelleniyor...
+                                      </>
+                                    ) : (
+                                      <>
+                                        {(() => {
+                                          const NextIcon = nextStatusItem.icon;
+                                          return <NextIcon className="h-5 w-5" />;
+                                        })()}
+                                        <ArrowRight className="h-4 w-4" />
+                                        {nextStatusItem.label} Aşamasına Geç
+                                      </>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    onClick={handleRequestApproval}
+                                    disabled={updatingStatus}
+                                    className="gap-2 bg-secondary hover:bg-secondary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all w-full"
+                                    size="lg"
+                                  >
+                                    {updatingStatus ? (
+                                      <>
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                        Gönderiliyor...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Send className="h-5 w-5" />
+                                        Onaya Gönder
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              );
+                            }
+                            // Sadece "Onaya Gönder" butonu göster
+                            return (
+                              <div className="flex justify-center">
+                                <Button
+                                  onClick={handleRequestApproval}
+                                  disabled={updatingStatus || !hasPermission}
+                                  className="gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                  size="lg"
+                                >
+                                  {updatingStatus ? (
+                                    <>
+                                      <Loader2 className="h-5 w-5 animate-spin" />
+                                      Gönderiliyor...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Send className="h-5 w-5" />
+                                      Onaya Gönder
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            );
+                          }
+                          
+                          // Diğer durumlar için normal geçiş butonu (pending -> in_progress, in_progress -> completed)
+                          // Görev üyeleri (assigned users) tüm aşamaları ilerletebilmeli
+                          // HER AŞAMADA BUTON GÖSTER - nextStatusItem varsa göster, hasPermission kontrolü butonun disabled durumunu belirler
+                          if (nextStatusItem) {
+                            if (import.meta.env.DEV) {
+                              console.log("✅ TaskDetailModal: nextStatusItem var, buton gösteriliyor", {
+                                nextStatusValue: nextStatusItem.value,
+                                nextStatusLabel: nextStatusItem.label,
+                              });
+                            }
+                            // Tüm durum geçişleri için buton göster
+                            // hasPermission false ise buton disabled olur ama yine de görünür
+                            return (
+                              <div className="flex flex-col gap-2">
+                                <Button
+                                  onClick={() => handleStatusChange(nextStatusItem.value)}
+                                  disabled={updatingStatus || !hasPermission}
+                                  className="gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg transition-all w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                                  size="lg"
+                                >
+                                  {updatingStatus ? (
+                                    <>
+                                      <Loader2 className="h-5 w-5 animate-spin" />
+                                      Güncelleniyor...
+                                    </>
+                                  ) : (
+                                    <>
+                                      {(() => {
+                                        const NextIcon = nextStatusItem.icon;
+                                        return <NextIcon className="h-5 w-5" />;
+                                      })()}
+                                      <ArrowRight className="h-4 w-4" />
+                                      {nextStatusItem.label} Aşamasına Geç
+                                    </>
+                                  )}
+                                </Button>
+                                {!hasPermission && (
+                                  <p className="text-xs text-muted-foreground text-center">
+                                    Bu görevin durumunu değiştirme yetkiniz yok
+                                  </p>
+                                )}
+                                {hasPermission && (
+                                  <p className="text-xs text-muted-foreground text-center">
+                                    {normalizeStatus(currentStatus) === "pending" && "Görevi başlatmak için tıklayın"}
+                                    {normalizeStatus(currentStatus) === "in_progress" && "Görevi tamamlamak için tıklayın"}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          }
+                          
+                          // nextStatusItem null ise, duruma göre mesaj veya buton göster
+                          // Not: Completed durumunda "Onaya Gönder" butonu yukarıda (satır 3032) handle ediliyor
+                          console.log("⚠️ TaskDetailModal: nextStatusItem null, durum kontrolü yapılıyor", {
+                            normalizedCurrentStatus,
+                            approvalStatus: task?.approvalStatus,
+                            nextStatusItem: null,
+                            currentStatus,
+                            taskStatus: task?.status,
+                            currentIndex: getCurrentStatusIndex(),
+                            taskId: task?.id,
+                          });
+                          
+                          // Eğer görev onaylandıysa, bilgi mesajı göster
+                          if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "approved") {
+                            return (
+                              <div className="p-4 bg-green-50 border border-green-200 rounded">
+                                <p className="text-sm text-green-800 text-center">✅ Görev onaylandı ve tamamlandı</p>
+                              </div>
+                            );
+                          }
+                          
+                          // Eğer görev tamamlandı ve onay bekliyorsa, bilgi mesajı göster
+                          if (normalizedCurrentStatus === "completed" && task?.approvalStatus === "pending") {
+                            return (
+                              <div className="p-4 bg-blue-50 border border-blue-200 rounded">
+                                <p className="text-sm text-blue-800 text-center">Görev tamamlandı ve onay bekleniyor</p>
+                              </div>
+                            );
+                          }
+                          
+                          // Diğer durumlar için bilgi mesajı göster
+                          return (
+                            <div className="p-4 bg-gray-50 border border-gray-200 rounded">
+                              <p className="text-sm text-gray-600 text-center">
+                                Görev durumu değiştirilemez - son aşamada
+                              </p>
+                            </div>
+                          );
+                        })()}
                           </div>
-                          <StatusProgressButton 
-                            task={task}
-                            user={user}
-                            loading={loading}
-                            currentStatus={currentStatus}
-                            myAssignment={myAssignment}
-                            assignedUsers={assignedUsers}
-                            isSuperAdmin={isSuperAdmin}
-                            canUpdate={canUpdate}
-                            updatingStatus={updatingStatus}
-                            onStatusChange={handleStatusChange}
-                            onRequestApproval={handleRequestApproval}
-                            getNextStatus={getNextStatus}
-                          />
                         </div>
+
+                        {/* Reddin Notu - Görev alan kişilere göster */}
+                        {task?.approvalStatus === "rejected" && task?.rejectionReason && (
+                          <div className="mt-4 pt-4 border-t">
+                            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                              <div className="flex items-start gap-2">
+                                <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-red-900 mb-1">Görev Onayı Reddedildi</p>
+                                  <p className="text-sm text-red-800 whitespace-pre-wrap">{task.rejectionReason}</p>
+                                  {task.rejectedBy && usersMap[task.rejectedBy] && (
+                                    <p className="text-xs text-red-700 mt-2">
+                                      Reddeden: {usersMap[task.rejectedBy]}
+                                      {task.rejectedAt && (
+                                        <span className="ml-2">
+                                          • {formatDateSafe(task.rejectedAt as Timestamp | Date | string | null)}
+                                        </span>
+                                      )}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                       </div>
                     </CardContent>
                   </Card>
@@ -3546,7 +3578,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                         <div className="flex items-center justify-between">
                           <div>
                             <CardTitle className="text-[14px] sm:text-[15px] font-semibold">Açıklama</CardTitle>
-                            <p className="text-[11px] sm:text-xs text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                               Görev detayları ve notlar
                             </p>
                           </div>
@@ -3595,11 +3627,11 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                             </div>
                           </div>
                         ) : task.description ? (
-                          <p className="text-[11px] sm:text-xs whitespace-pre-wrap leading-relaxed">
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed">
                             {task.description}
                           </p>
                         ) : (
-                          <div className="text-[11px] sm:text-xs text-muted-foreground border border-dashed rounded-lg p-6 text-center bg-muted/30">
+                          <div className="text-sm text-muted-foreground border border-dashed rounded-lg p-6 text-center bg-muted/30">
                             Henüz açıklama eklenmemiş.
                           </div>
                         )}
@@ -3615,7 +3647,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                                 <Tag className="h-4 w-4" />
                                 Etiketler
                               </CardTitle>
-                              <p className="text-[11px] sm:text-xs text-muted-foreground">
+                              <p className="text-sm text-muted-foreground">
                                 Görevi kategorize etmek için etiketler
                               </p>
                             </div>
@@ -3653,7 +3685,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                                     );
                                     })
                                   ) : (
-                                    <p className="text-[11px] sm:text-xs text-[#5E6C84]">Etiket bulunmuyor.</p>
+                                    <p className="text-sm text-[#5E6C84]">Etiket bulunmuyor.</p>
                                   )}
                                 </div>
                                 <div className="space-y-3">
@@ -3662,7 +3694,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                                       value={labelInput}
                                       onChange={(e) => setLabelInput(e.target.value)}
                                       placeholder="Etiket adı girin..."
-                                      className="flex-1 text-[11px] sm:text-xs bg-white border-[#DFE1E6] text-[#172B4D] h-10"
+                                      className="flex-1 text-sm bg-white border-[#DFE1E6] text-[#172B4D] h-10"
                                       onKeyDown={(e) => {
                                         if (e.key === "Enter") {
                                           e.preventDefault();
@@ -3728,7 +3760,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                                   );
                                   })
                                 ) : (
-                                  <p className="text-[11px] sm:text-xs text-muted-foreground italic">Etiket bulunmuyor.</p>
+                                  <p className="text-sm text-muted-foreground italic">Etiket bulunmuyor.</p>
                                 )}
                               </div>
                             )}
@@ -3757,7 +3789,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                           >
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                              <p className="text-[11px] sm:text-xs font-medium text-[#172B4D] truncate">{attachment.name}</p>
+                              <p className="text-sm font-medium text-[#172B4D] truncate">{attachment.name}</p>
                                 {(attachment.attachmentType === "drive_link" ||
                                   attachment.storageProvider === "google_drive") && (
                                   <Badge variant="outline" className="text-xs">
@@ -3804,7 +3836,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                           </div>
                         ))
                       ) : (
-                          <div className="text-center py-8 text-muted-foreground text-[11px] sm:text-xs rounded-lg border border-dashed bg-muted/30">
+                          <div className="text-center py-8 text-muted-foreground text-sm rounded-lg border border-dashed bg-muted/30">
                             <Paperclip className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                             <p>Henüz dosya eklenmemiş</p>
                           </div>
@@ -3821,7 +3853,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                               <ListChecks className="h-4 w-4" />
                               Checklistler
                             </CardTitle>
-                            <p className="text-[11px] sm:text-xs text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                               Görev için kontrol listeleri
                             </p>
                           </div>
@@ -3864,7 +3896,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                           <div key={checklist.id} className="border border-[#DFE1E6] rounded-xl p-5 space-y-4 bg-[#F4F5F7] shadow-sm">
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="font-medium text-[11px] sm:text-xs text-[#172B4D]">{(checklist as any).title || "Checklist"}</p>
+                                <p className="font-medium text-sm text-[#172B4D]">{(checklist as any).title || "Checklist"}</p>
                                 <p className="text-xs text-[#5E6C84]">
                                   {completedItems}/{totalItems} tamamlandı
                                 </p>
@@ -3893,7 +3925,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                             <div className="space-y-2.5">
                               {items && items.length > 0 ? (
                                 items?.map((item: { id: string; text: string; completed: boolean; createdAt?: Timestamp; completedAt?: Timestamp | null }) => (
-                                  <div key={item.id} className="flex items-center gap-3 text-[11px] sm:text-xs p-2.5 rounded-lg hover:bg-white/50 transition-colors">
+                                  <div key={item.id} className="flex items-center gap-3 text-sm p-2.5 rounded-lg hover:bg-white/50 transition-colors">
                                     <Checkbox
                                       checked={!!item.completed}
                                       onCheckedChange={(checked) => handleToggleChecklistItem(checklist.id, item.id, checked === true)}
@@ -3960,8 +3992,8 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
                   {myAssignment && myAssignment.status === "pending" && (
                     <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50 p-6 space-y-4 shadow-sm">
-                      <div className="font-semibold text-blue-700 text-[11px] sm:text-xs">Size Atanan Görev</div>
-                      <p className="text-[11px] sm:text-xs text-[#172B4D] leading-relaxed">
+                      <div className="font-semibold text-blue-700 text-base">Size Atanan Görev</div>
+                      <p className="text-sm text-[#172B4D] leading-relaxed">
                         Bu görev size atanmış. Lütfen kabul edin veya reddedin.
                       </p>
                       <div className="flex gap-3 flex-wrap">
@@ -3984,8 +4016,8 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
 
                   {myAssignment && myAssignment.status === "rejected" && myAssignment.rejection_reason && (
                     <div className="rounded-2xl border-2 border-red-200 bg-gradient-to-br from-red-50 to-red-100/50 p-6 space-y-3 shadow-sm">
-                      <div className="font-semibold text-red-700 text-[11px] sm:text-xs">Görev Reddedildi</div>
-                      <p className="text-[11px] sm:text-xs text-[#172B4D] leading-relaxed">
+                      <div className="font-semibold text-red-700 text-base">Görev Reddedildi</div>
+                      <p className="text-sm text-[#172B4D] leading-relaxed">
                         <strong>Reddetme Sebebi:</strong> {myAssignment.rejection_reason}
                       </p>
                     </div>
@@ -3999,7 +4031,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                         <div className="flex items-center justify-between">
                           <div>
                             <CardTitle className="text-[14px] sm:text-[15px] font-semibold">Görevdeki Kişiler</CardTitle>
-                            <p className="text-[11px] sm:text-xs text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                               Atanan kullanıcılar ve durumları
                             </p>
                           </div>
@@ -4057,7 +4089,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                             </Avatar>
                             <div className="flex-1">
                               <div className="font-medium text-[#172B4D]">{assignedUser.full_name}</div>
-                              <div className="text-[10px] sm:text-[11px] text-[#5E6C84]">{assignedUser.email}</div>
+                              <div className="text-sm text-[#5E6C84]">{assignedUser.email}</div>
                               {assignedUser.rejection_reason && (
                                 <div className="text-xs text-red-600 mt-1">
                                   Reddetme sebebi: {assignedUser.rejection_reason}
@@ -4128,7 +4160,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                           </div>
                         ))}
                         {assignedUsers.length === 0 && (
-                          <div className="text-center py-8 text-[#5E6C84] text-[11px] sm:text-xs rounded-xl border border-dashed border-[#DFE1E6] bg-[#F4F5F7]">
+                          <div className="text-center py-8 text-[#5E6C84] text-sm rounded-xl border border-dashed border-[#DFE1E6] bg-[#F4F5F7]">
                             <User className="h-8 w-8 mx-auto mb-2 text-[#A5ADBA]" />
                             <p>Henüz kimse atanmadı</p>
                           </div>
@@ -4165,7 +4197,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="rounded-lg border bg-muted/30 px-3 py-2">
                           <p className="text-xs text-muted-foreground uppercase tracking-wide">Oluşturulma</p>
-                          <p className="text-[11px] sm:text-xs font-medium mt-1">
+                          <p className="text-sm font-medium mt-1">
                             {task.createdAt ? format(task.createdAt instanceof Timestamp ? task.createdAt.toDate() : new Date(task.createdAt), "dd MMM yyyy HH:mm", { locale: tr }) : "-"}
                           </p>
                         </div>
@@ -4200,14 +4232,14 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                               </Button>
                             </div>
                           ) : (
-                            <p className="text-[11px] sm:text-xs font-medium mt-1">
+                            <p className="text-sm font-medium mt-1">
                               {task.dueDate ? format(task.dueDate instanceof Timestamp ? task.dueDate.toDate() : new Date(task.dueDate), "dd MMM yyyy HH:mm", { locale: tr }) : "-"}
                             </p>
                           )}
                         </div>
                         <div className="rounded-lg border bg-muted/30 px-3 py-2">
                           <p className="text-xs text-muted-foreground uppercase tracking-wide">Durum</p>
-                          <p className="text-[11px] sm:text-xs font-medium mt-1">
+                          <p className="text-sm font-medium mt-1">
                             {(() => {
                               // Status label'ını gösterirken approvalStatus'u da kontrol et
                               const normalizedStatus = normalizeStatus(task.status);
@@ -4218,29 +4250,6 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                             })()}
                           </p>
                         </div>
-                        {/* Gizlilik - Sadece görevi oluşturan kişi görebilir */}
-                        {task?.createdBy === user?.id && (
-                          <div className="rounded-lg border bg-muted/30 px-3 py-2">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Gizlilik</p>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                id="task-privacy-edit"
-                                checked={task.isPrivate || false}
-                                onChange={(e) => handleUpdatePrivacy(e.target.checked)}
-                                disabled={saving}
-                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <Label 
-                                htmlFor="task-privacy-edit" 
-                                className="text-[11px] sm:text-xs font-medium text-gray-700 flex items-center gap-2 cursor-pointer"
-                              >
-                                <Lock className="h-3.5 w-3.5 text-gray-500" />
-                                Gizli görev
-                              </Label>
-                            </div>
-                          </div>
-                        )}
                       </div>
                       
                       {/* Reddin Notu - Görev alan kişilere göster */}
@@ -4251,7 +4260,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                               <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Red Nedeni</p>
-                                <p className="text-[11px] sm:text-xs text-red-800 whitespace-pre-wrap font-medium">{task.rejectionReason}</p>
+                                <p className="text-sm text-red-800 whitespace-pre-wrap font-medium">{task.rejectionReason}</p>
                                 {task.rejectedBy && usersMap[task.rejectedBy] && (
                                   <p className="text-xs text-red-700 mt-2">
                                     Reddeden: {usersMap[task.rejectedBy]}
@@ -4294,7 +4303,7 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                                   <Icon className="h-5 w-5" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-[11px] sm:text-xs font-semibold text-[#172B4D] mb-0.5">{action.title}</p>
+                                  <p className="text-sm font-semibold text-[#172B4D] mb-0.5">{action.title}</p>
                                   <p className="text-xs text-[#5E6C84] truncate">{action.description}</p>
                                 </div>
                                 <ChevronRight className="h-4 w-4 text-[#A5ADBA] flex-shrink-0" />
@@ -4340,20 +4349,20 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                         </SelectContent>
                       </Select>
                       <div className="flex gap-3">
-                        <Button className="flex-1 bg-[#0079BF] hover:bg-[#005A8B] text-white h-12 font-semibold shadow-md hover:shadow-lg transition-all text-[11px] sm:text-xs" onClick={handleLinkOrderClick}>
+                        <Button className="flex-1 bg-[#0079BF] hover:bg-[#005A8B] text-white h-12 font-semibold shadow-md hover:shadow-lg transition-all" onClick={handleLinkOrderClick}>
                           Bağla
                         </Button>
-                        <Button variant="outline" className="flex-1 border-2 border-[#E1E4EA] text-[#172B4D] hover:bg-[#F4F5F7] hover:border-[#0079BF] h-12 font-semibold transition-all text-[11px] sm:text-xs" onClick={handleRefreshCard}>
+                        <Button variant="outline" className="flex-1 border-2 border-[#E1E4EA] text-[#172B4D] hover:bg-[#F4F5F7] hover:border-[#0079BF] h-12 font-semibold transition-all" onClick={handleRefreshCard}>
                           Yenile
                         </Button>
                       </div>
                       {task.productionOrderId && (
                         <div className="mt-4 rounded-xl border border-[#DFE1E6] bg-gradient-to-br from-[#F4F5F7] to-white p-4 space-y-3 shadow-sm">
-                          <div className="flex items-center gap-2 text-[11px] sm:text-xs font-semibold text-[#172B4D]">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-[#172B4D]">
                             <Package className="h-4 w-4" />
                             Bağlı Sipariş
                           </div>
-                          <p className="text-[11px] sm:text-xs text-[#172B4D] font-medium">
+                          <p className="text-sm text-[#172B4D] font-medium">
                             {(task as any).productionOrderNumber || task.productionOrderId}
                           </p>
                           {(task as any).productionOrderCustomer && (
@@ -4440,7 +4449,6 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
                     </Card>
                   )}
                 </div>
-                )}
             </div>
           </div>
         </div>
@@ -4689,52 +4697,6 @@ export const TaskDetailModal = ({ taskId, open, onOpenChange, onUpdate, initialS
             disabled={processing || rejectionRejectionReason.trim().length < 20}
           >
             {processing ? "Reddediliyor..." : "Reddi Reddet"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    {/* Delete Task Confirmation Dialog */}
-    <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Görevi Sil</DialogTitle>
-          <DialogDescription>
-            Bu görevi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="py-4">
-          <p className="text-sm text-muted-foreground">
-            Görev başlığı: <strong>{task?.title}</strong>
-          </p>
-          <p className="text-sm text-destructive mt-2">
-            Bu görev ve tüm ilişkili veriler (yorumlar, ekler, kontrol listeleri) kalıcı olarak silinecektir.
-          </p>
-        </div>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => setShowDeleteDialog(false)}
-            disabled={deletingTask}
-          >
-            İptal
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={confirmDeleteTask}
-            disabled={deletingTask}
-          >
-            {deletingTask ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Siliniyor...
-              </>
-            ) : (
-              <>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Sil
-              </>
-            )}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -22,11 +22,7 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-<<<<<<< HEAD
-import { TaskInlineForm } from "@/components/Tasks/TaskInlineForm";
-=======
 import { TaskDetailModal } from "@/components/Tasks/TaskDetailModal";
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -59,11 +55,6 @@ const TasksArchive = () => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
-<<<<<<< HEAD
-  const [inlineFormVisible, setInlineFormVisible] = useState(false);
-  const [inlineFormTaskId, setInlineFormTaskId] = useState<string | null>(null);
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   // Erişim kontrolü - Firestore'dan
   useEffect(() => {
@@ -206,21 +197,11 @@ const TasksArchive = () => {
   };
 
   const openTaskDetail = (taskId: string, initialStatus?: string) => {
-<<<<<<< HEAD
-    setInlineFormTaskId(taskId);
-    setInlineFormVisible(true);
-  };
-
-  const closeTaskDetail = () => {
-    setInlineFormVisible(false);
-    setInlineFormTaskId(null);
-=======
     setSelectedTaskId(taskId);
   };
 
   const closeTaskDetail = () => {
     setSelectedTaskId(null);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   };
 
   const handleUnarchiveList = (listId: string) => {
@@ -271,9 +252,9 @@ const TasksArchive = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-3 sm:space-y-4">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6">
         <div>
-          <h1 className="text-[16px] sm:text-[18px] font-bold text-foreground flex items-center gap-1.5 sm:gap-2">
+          <h1 className="text-[20px] sm:text-[24px] font-bold text-foreground flex items-center gap-1.5 sm:gap-2">
             <Archive className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" />
             Arşiv
           </h1>
@@ -284,7 +265,7 @@ const TasksArchive = () => {
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "tasks" | "lists")} className="w-full">
           <Card>
-            <CardHeader className="p-3 sm:p-4 md:p-5">
+            <CardHeader className="p-3 sm:p-4 md:p-6">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
                 <div className="flex-1 min-w-0 w-full sm:w-auto">
                   <SearchInput
@@ -308,7 +289,7 @@ const TasksArchive = () => {
                 </TabsList>
               </div>
             </CardHeader>
-            <CardContent className="p-3 sm:p-4 md:p-5">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               <TabsContent value="tasks" className="mt-0">
               {filteredTasks.length === 0 ? (
                 <EmptyState
@@ -325,15 +306,11 @@ const TasksArchive = () => {
                       className="p-3 sm:p-4 rounded-lg border bg-card hover:shadow-md transition-shadow cursor-pointer"
                       onClick={() => openTaskDetail(task.id, task.status)}
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5 sm:gap-3">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 mb-2">
                             <h3 className="font-semibold text-sm sm:text-base flex-1 break-words">{task.title}</h3>
-<<<<<<< HEAD
-                            <Badge variant="outline" className="flex-shrink-0 self-start sm:self-auto h-5 px-2 py-0 text-[11px] font-normal leading-tight">
-=======
                             <Badge variant="outline" className="flex-shrink-0 self-start sm:self-auto">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                               {task.status === "pending" && "Beklemede"}
                               {task.status === "in_progress" && "Devam Ediyor"}
                               {task.status === "completed" && "Tamamlandı"}
@@ -429,7 +406,7 @@ const TasksArchive = () => {
                       key={list.id}
                       className="p-3 sm:p-4 rounded-lg border bg-card hover:shadow-md transition-shadow"
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-sm sm:text-base mb-1 break-words">{list.title}</h3>
                           <p className="text-xs sm:text-sm text-muted-foreground">
@@ -456,20 +433,6 @@ const TasksArchive = () => {
           </Card>
         </Tabs>
 
-<<<<<<< HEAD
-        {/* Task Inline Form */}
-        {inlineFormVisible && (
-          <TaskInlineForm
-            mode="edit"
-            taskId={inlineFormTaskId || undefined}
-            onCancel={closeTaskDetail}
-            onSuccess={() => {
-              closeTaskDetail();
-              fetchData();
-            }}
-          />
-        )}
-=======
         {/* Task Detail Modal */}
         {selectedTaskId && (() => {
           const task = archivedTasks.find(t => t.id === selectedTaskId);
@@ -487,7 +450,6 @@ const TasksArchive = () => {
             />
           );
         })()}
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

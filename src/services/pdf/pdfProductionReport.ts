@@ -111,7 +111,7 @@ export const generateProductionReportPDF = async (data: ProductionReportData, st
     drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
         title: "Toplam Sipariş",
         value: totalOrders.toString(),
-        description: "Tarih aralığında",
+        description: "Seçili dönemde açılan siparişler",
         color: {
             background: TAILWIND_COLORS.infoCardBg,
             border: TAILWIND_COLORS.infoCardBorder,
@@ -125,7 +125,7 @@ export const generateProductionReportPDF = async (data: ProductionReportData, st
     drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
         title: "Tamamlanan",
         value: completed.toString(),
-        description: "Başarıyla tamamlandı",
+        description: "Üretimi başarıyla tamamlananlar",
         color: {
             background: TAILWIND_COLORS.successCardBg,
             border: TAILWIND_COLORS.successCardBorder,
@@ -139,7 +139,7 @@ export const generateProductionReportPDF = async (data: ProductionReportData, st
     drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
         title: "Tamamlanma Oranı",
         value: `${completionRate.toFixed(1)}%`,
-        description: "Başarı oranı",
+        description: "Toplam siparişe göre başarı oranı",
         color: {
             background: TAILWIND_COLORS.primaryCardBg,
             border: TAILWIND_COLORS.primaryCardBorder,
@@ -373,7 +373,7 @@ export const generateProductionReportPDF = async (data: ProductionReportData, st
         ['Üretimde', inProduction.toString()],
         ['Planlandı', planned.toString()],
         ['Kalite Kontrol', qualityCheck.toString()],
-        ['En Çok Üretilen Ürün Sayısı', data.topProducts ? data.topProducts.length.toString() : "0"],
+        ['En �ok �retilen �r�n Say1s1', data.topProducts ? data.topProducts.length.toString() : "0"],
     ];
 
     currentY = drawSummarySection(doc, mar, currentY, contentWidth, "Rapor Özeti", summaryData, [37, 99, 235]);
@@ -402,6 +402,6 @@ export const generateProductionReportPDF = async (data: ProductionReportData, st
         }
         return blob;
     } catch (outputError) {
-        throw new Error("PDF oluşturulamadı: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
+        throw new Error("PDF olu_turulamad1: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
     }
 };

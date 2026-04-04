@@ -1,10 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Bell, CheckCircle2, XCircle, ClipboardList, RefreshCw, CheckCircle, Clock, AlertCircle, FileText, Package } from "lucide-react";
-<<<<<<< HEAD
-import { useIsMobile } from "@/hooks/use-mobile";
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -22,10 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
-<<<<<<< HEAD
-=======
 import { ScrollArea } from "@/components/ui/scroll-area";
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import {
   getNotifications,
   subscribeToNotifications,
@@ -59,7 +52,7 @@ const hasActionMetadata = (notification: FirebaseNotification): boolean => {
   const meta = notification.metadata;
   if (meta && typeof meta === "object" && "action" in meta) {
     const value = (meta as Record<string, unknown>).action;
-    return typeof value === "string" && (value === "accepted" || value === "rejected" || value === "rejection_approved" || value === "rejection_rejected" || value === "pool_request_approved" || value === "approved");
+    return typeof value === "string" && (value === "accepted" || value === "rejected" || value === "rejection_approved" || value === "rejection_rejected" || value === "pool_request_approved");
   }
   return false;
 };
@@ -109,22 +102,9 @@ const isActionableTaskApprovalNotification = (notification: TaskNotification): b
 export const NotificationCenter = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-<<<<<<< HEAD
-  const isMobile = useIsMobile();
   const [notifications, setNotifications] = useState<TaskNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
-  const [viewportHeight, setViewportHeight] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerHeight;
-    }
-    return 800;
-  });
-=======
-  const [notifications, setNotifications] = useState<TaskNotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [open, setOpen] = useState(false);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectRejectionDialogOpen, setRejectRejectionDialogOpen] = useState(false);
   const [rejectApprovalDialogOpen, setRejectApprovalDialogOpen] = useState(false);
@@ -134,25 +114,6 @@ export const NotificationCenter = () => {
   const [rejectionApprovalReason, setRejectionApprovalReason] = useState("");
   const [processing, setProcessing] = useState(false);
 
-<<<<<<< HEAD
-  // Viewport height'ı takip et
-  useEffect(() => {
-    const updateViewportHeight = () => {
-      setViewportHeight(window.innerHeight);
-    };
-    
-    updateViewportHeight();
-    window.addEventListener('resize', updateViewportHeight);
-    window.addEventListener('orientationchange', updateViewportHeight);
-    
-    return () => {
-      window.removeEventListener('resize', updateViewportHeight);
-      window.removeEventListener('orientationchange', updateViewportHeight);
-    };
-  }, []);
-
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   // Gerçek zamanlı bildirim güncellemeleri için subscribe
   useEffect(() => {
     if (!user?.id) return;
@@ -180,11 +141,7 @@ export const NotificationCenter = () => {
     };
     
     // Batch localStorage writes to improve performance
-<<<<<<< HEAD
-    const pendingWrites: Set<string> = new Set();
-=======
     let pendingWrites: Set<string> = new Set();
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     let writeTimeout: NodeJS.Timeout | null = null;
     
     // Gösterilen bildirim ID'sini kaydet (debounced)
@@ -610,29 +567,6 @@ export const NotificationCenter = () => {
           )}
         </Button>
       </DropdownMenuTrigger>
-<<<<<<< HEAD
-      <DropdownMenuContent 
-        align={isMobile ? "start" : "end"}
-        avoidCollisions={true}
-        collisionPadding={isMobile ? 24 : 16}
-        sideOffset={isMobile ? 8 : 4}
-        className="w-[calc(100vw-2rem)] sm:w-96 max-w-[calc(100vw-2rem)] sm:max-w-96 p-0 flex flex-col overflow-hidden"
-        style={{
-          maxHeight: isMobile ? `${Math.max(viewportHeight - 100, 400)}px` : '85vh',
-          height: isMobile ? `${Math.max(viewportHeight - 100, 400)}px` : 'auto',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        } as React.CSSProperties}
-      >
-        <div className="sticky top-0 z-10 bg-background border-b px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
-              <span className="font-semibold text-sm sm:text-lg truncate">Bildirimler</span>
-              {unreadCount > 0 && (
-                <Badge variant="destructive" className="ml-1 sm:ml-2 h-5 min-w-5 px-1.5 text-xs flex-shrink-0">
-=======
       <DropdownMenuContent align="end" className="w-96 p-0">
         <div className="sticky top-0 z-10 bg-background border-b px-4 py-3">
           <div className="flex items-center justify-between">
@@ -641,7 +575,6 @@ export const NotificationCenter = () => {
               <span className="font-semibold text-lg">Bildirimler</span>
               {unreadCount > 0 && (
                 <Badge variant="destructive" className="ml-2 h-5 min-w-5 px-1.5 text-xs">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </Badge>
               )}
@@ -650,39 +583,15 @@ export const NotificationCenter = () => {
               <Button
                 variant="ghost"
                 size="sm"
-<<<<<<< HEAD
-                className="h-7 text-[10px] sm:text-xs text-primary hover:text-primary/80 flex-shrink-0 whitespace-nowrap"
-                onClick={markAllAsRead}
-              >
-                <span className="hidden sm:inline">Tümünü okundu işaretle</span>
-                <span className="sm:hidden">Tümü</span>
-=======
                 className="h-7 text-xs text-primary hover:text-primary/80"
                 onClick={markAllAsRead}
               >
                 Tümünü okundu işaretle
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               </Button>
             )}
           </div>
         </div>
-<<<<<<< HEAD
-        <div 
-          className="flex-1 min-h-0 overflow-hidden"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            height: isMobile ? `${Math.max(viewportHeight - 200, 300)}px` : '500px',
-            maxHeight: isMobile ? `${Math.max(viewportHeight - 200, 300)}px` : '500px',
-          }}
-        >
-          <div className="h-full w-full overflow-y-auto overflow-x-hidden" style={{
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
-          }}>
-=======
         <ScrollArea className="h-[500px]">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           {notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4">
               <Bell className="h-12 w-12 text-muted-foreground/40 mb-3" />
@@ -699,11 +608,7 @@ export const NotificationCenter = () => {
                   } ${!notification.read ? 'shadow-sm' : ''}`}
                 >
                   <div
-<<<<<<< HEAD
-                    className="p-3 sm:p-4 cursor-pointer"
-=======
                     className="p-4 cursor-pointer"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -806,13 +711,8 @@ export const NotificationCenter = () => {
                       setOpen(false);
                     }}
                   >
-<<<<<<< HEAD
-                    <div className="flex items-start gap-2 sm:gap-3">
-                      <div className={`flex-shrink-0 mt-0.5 p-1.5 sm:p-2 rounded-lg ${
-=======
                     <div className="flex items-start gap-3">
                       <div className={`flex-shrink-0 mt-0.5 p-2 rounded-lg ${
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         !notification.read 
                           ? notification.type === "task_assigned" ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400"
                           : notification.type === "task_updated" ? "bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400"
@@ -823,19 +723,11 @@ export const NotificationCenter = () => {
                       }`}>
                         {getNotificationIcon(notification.type)}
                       </div>
-<<<<<<< HEAD
-                      <div className="flex-1 min-w-0 space-y-1 sm:space-y-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 sm:gap-2">
-                              <p className={`text-xs sm:text-sm font-semibold leading-tight break-words ${
-=======
                       <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <p className={`text-sm font-semibold leading-tight ${
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                 !notification.read 
                                   ? "text-slate-900 dark:text-slate-100" 
                                   : "text-slate-700 dark:text-slate-300"
@@ -849,11 +741,7 @@ export const NotificationCenter = () => {
                           </div>
                         </div>
                         {notification.message && (
-<<<<<<< HEAD
-                          <p className={`text-xs sm:text-sm leading-relaxed line-clamp-3 break-words ${
-=======
                           <p className={`text-sm leading-relaxed line-clamp-3 ${
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             !notification.read 
                               ? "text-slate-700 dark:text-slate-300" 
                               : "text-slate-600 dark:text-slate-400"
@@ -899,15 +787,9 @@ export const NotificationCenter = () => {
                             })()}
                           </p>
                         )}
-<<<<<<< HEAD
-                        <div className="flex items-center gap-1.5 sm:gap-2 pt-1">
-                          <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
-                          <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">
-=======
                         <div className="flex items-center gap-2 pt-1">
                           <Clock className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             {notification.createdAt 
                               ? formatDistanceToNow(notification.createdAt.toDate(), {
                                   addSuffix: true,
@@ -920,42 +802,24 @@ export const NotificationCenter = () => {
                     </div>
                   </div>
                   {isActionableAssignmentNotification(notification) && (
-<<<<<<< HEAD
-                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 border-t border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <Button
-                          size="sm"
-                          className="flex-1 h-8 sm:h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-medium shadow-sm"
-=======
                     <div className="px-4 pb-4 pt-2 border-t border-slate-200 dark:border-slate-700">
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
                           className="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           onClick={(e) => {
                             e.stopPropagation();
                             handleAcceptTask(notification);
                           }}
                           disabled={processing}
                         >
-<<<<<<< HEAD
-                          <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
-                          <span className="hidden sm:inline">Kabul Et</span>
-                          <span className="sm:hidden">Kabul</span>
-=======
                           <CheckCircle2 className="h-4 w-4 mr-1.5" />
                           Kabul Et
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
-<<<<<<< HEAD
-                          className="flex-1 h-8 sm:h-9 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs sm:text-sm font-medium"
-=======
                           className="flex-1 h-9 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-medium"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedNotification(notification);
@@ -963,53 +827,31 @@ export const NotificationCenter = () => {
                           }}
                           disabled={processing}
                         >
-<<<<<<< HEAD
-                          <XCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
-=======
                           <XCircle className="h-4 w-4 mr-1.5" />
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           Reddet
                         </Button>
                       </div>
                     </div>
                   )}
                   {isRejectionPendingApproval(notification) && notification.assignmentId && (
-<<<<<<< HEAD
-                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 border-t border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <Button
-                          size="sm"
-                          className="flex-1 h-8 sm:h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-medium shadow-sm"
-=======
                     <div className="px-4 pb-4 pt-2 border-t border-slate-200 dark:border-slate-700">
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
                           className="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           onClick={(e) => {
                             e.stopPropagation();
                             handleApproveRejection(notification);
                           }}
                           disabled={processing}
                         >
-<<<<<<< HEAD
-                          <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
-                          <span className="hidden sm:inline">Reddi Onayla</span>
-                          <span className="sm:hidden">Onayla</span>
-=======
                           <CheckCircle2 className="h-4 w-4 mr-1.5" />
                           Reddi Onayla
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
-<<<<<<< HEAD
-                          className="flex-1 h-8 sm:h-9 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs sm:text-sm font-medium"
-=======
                           className="flex-1 h-9 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-medium"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedNotification(notification);
@@ -1017,55 +859,31 @@ export const NotificationCenter = () => {
                           }}
                           disabled={processing}
                         >
-<<<<<<< HEAD
-                          <XCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
-                          <span className="hidden sm:inline">Reddi Reddet</span>
-                          <span className="sm:hidden">Reddet</span>
-=======
                           <XCircle className="h-4 w-4 mr-1.5" />
                           Reddi Reddet
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         </Button>
                       </div>
                     </div>
                   )}
                   {isRejectionByAssignee(notification) && notification.assignmentId && (
-<<<<<<< HEAD
-                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 border-t border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <Button
-                          size="sm"
-                          className="flex-1 h-8 sm:h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-medium shadow-sm"
-=======
                     <div className="px-4 pb-4 pt-2 border-t border-slate-200 dark:border-slate-700">
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
                           className="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           onClick={(e) => {
                             e.stopPropagation();
                             handleApproveRejection(notification);
                           }}
                           disabled={processing}
                         >
-<<<<<<< HEAD
-                          <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
-                          <span className="hidden sm:inline">Reddi Kabul Et</span>
-                          <span className="sm:hidden">Kabul</span>
-=======
                           <CheckCircle2 className="h-4 w-4 mr-1.5" />
                           Reddi Kabul Et
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
-<<<<<<< HEAD
-                          className="flex-1 h-8 sm:h-9 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs sm:text-sm font-medium"
-=======
                           className="flex-1 h-9 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-medium"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedNotification(notification);
@@ -1073,53 +891,31 @@ export const NotificationCenter = () => {
                           }}
                           disabled={processing}
                         >
-<<<<<<< HEAD
-                          <XCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
-                          <span className="hidden sm:inline">Reddi Reddet</span>
-                          <span className="sm:hidden">Reddet</span>
-=======
                           <XCircle className="h-4 w-4 mr-1.5" />
                           Reddi Reddet
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                         </Button>
                       </div>
                     </div>
                   )}
                   {isActionableTaskApprovalNotification(notification) && (
-<<<<<<< HEAD
-                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 border-t border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <Button
-                          size="sm"
-                          className="flex-1 h-8 sm:h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-medium shadow-sm"
-=======
                     <div className="px-4 pb-4 pt-2 border-t border-slate-200 dark:border-slate-700">
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
                           className="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           onClick={(e) => {
                             e.stopPropagation();
                             handleApproveTaskApproval(notification);
                           }}
                           disabled={processing}
                         >
-<<<<<<< HEAD
-                          <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
-=======
                           <CheckCircle2 className="h-4 w-4 mr-1.5" />
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           Onayla
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
-<<<<<<< HEAD
-                          className="flex-1 h-8 sm:h-9 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs sm:text-sm font-medium"
-=======
                           className="flex-1 h-9 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-medium"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedNotification(notification);
@@ -1127,11 +923,7 @@ export const NotificationCenter = () => {
                           }}
                           disabled={processing}
                         >
-<<<<<<< HEAD
-                          <XCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
-=======
                           <XCircle className="h-4 w-4 mr-1.5" />
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                           Reddet
                         </Button>
                       </div>
@@ -1141,14 +933,8 @@ export const NotificationCenter = () => {
               ))}
             </div>
           )}
-<<<<<<< HEAD
-          </div>
-        </div>
-        <div className="sticky bottom-0 z-10 bg-background border-t px-4 py-3 flex-shrink-0">
-=======
         </ScrollArea>
         <div className="sticky bottom-0 z-10 bg-background border-t px-4 py-3">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           <Button
             variant="ghost"
             className="w-full h-9 text-sm font-medium text-primary hover:text-primary/80 hover:bg-primary/5"
@@ -1167,24 +953,11 @@ export const NotificationCenter = () => {
       {/* Reject Task Dialog */}
       <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <DialogContent>
-<<<<<<< HEAD
-          {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
-          <DialogTitle className="sr-only">Görevi Reddet</DialogTitle>
-          <DialogDescription className="sr-only">
-            Görevi reddetmek için lütfen en az 20 karakterlik bir sebep belirtin.
-          </DialogDescription>
-          <DialogHeader>
-            <h2 className="text-lg font-semibold">Görevi Reddet</h2>
-            <p className="text-sm text-muted-foreground">
-              Görevi reddetmek için lütfen en az 20 karakterlik bir sebep belirtin.
-            </p>
-=======
           <DialogHeader>
             <DialogTitle>Görevi Reddet</DialogTitle>
             <DialogDescription>
               Görevi reddetmek için lütfen en az 20 karakterlik bir sebep belirtin.
             </DialogDescription>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -1235,24 +1008,11 @@ export const NotificationCenter = () => {
       {/* Reject Rejection Dialog */}
       <Dialog open={rejectRejectionDialogOpen} onOpenChange={setRejectRejectionDialogOpen}>
         <DialogContent>
-<<<<<<< HEAD
-          {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
-          <DialogTitle className="sr-only">Görev Reddi Reddet</DialogTitle>
-          <DialogDescription className="sr-only">
-            Görev reddi reddedildiğinde görev tekrar atanan kişiye döner. Lütfen en az 20 karakterlik bir sebep belirtin.
-          </DialogDescription>
-          <DialogHeader>
-            <h2 className="text-lg font-semibold">Görev Reddi Reddet</h2>
-            <p className="text-sm text-muted-foreground">
-              Görev reddi reddedildiğinde görev tekrar atanan kişiye döner. Lütfen en az 20 karakterlik bir sebep belirtin.
-            </p>
-=======
           <DialogHeader>
             <DialogTitle>Görev Reddi Reddet</DialogTitle>
             <DialogDescription>
               Görev reddi reddedildiğinde görev tekrar atanan kişiye döner. Lütfen en az 20 karakterlik bir sebep belirtin.
             </DialogDescription>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -1303,24 +1063,11 @@ export const NotificationCenter = () => {
       {/* Reject Task Approval Dialog */}
       <Dialog open={rejectApprovalDialogOpen} onOpenChange={setRejectApprovalDialogOpen}>
         <DialogContent>
-<<<<<<< HEAD
-          {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
-          <DialogTitle className="sr-only">Görev Onayını Reddet</DialogTitle>
-          <DialogDescription className="sr-only">
-            Görev onayını reddetmek için lütfen bir not ekleyin. Görev tekrar panoya dönecektir.
-          </DialogDescription>
-          <DialogHeader>
-            <h2 className="text-lg font-semibold">Görev Onayını Reddet</h2>
-            <p className="text-sm text-muted-foreground">
-              Görev onayını reddetmek için lütfen bir not ekleyin. Görev tekrar panoya dönecektir.
-            </p>
-=======
           <DialogHeader>
             <DialogTitle>Görev Onayını Reddet</DialogTitle>
             <DialogDescription>
               Görev onayını reddetmek için lütfen bir not ekleyin. Görev tekrar panoya dönecektir.
             </DialogDescription>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">

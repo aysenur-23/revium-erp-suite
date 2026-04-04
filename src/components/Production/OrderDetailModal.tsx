@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, type FormEvent } from "react";
+import { useEffect, useState, useCallback, type FormEvent } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -42,7 +42,6 @@ import { getAllUsers, UserProfile } from "@/services/firebase/authService";
 import { getProducts, Product } from "@/services/firebase/productService";
 import { Timestamp } from "firebase/firestore";
 import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
-import { PRIORITY_OPTIONS } from "@/utils/priority";
 
 // Helper functions
 const resolveDateValue = (value?: unknown): Date | null => {
@@ -145,11 +144,8 @@ interface OrderDetailModalProps {
 }
 
 export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, onUpdate }: OrderDetailModalProps) => {
-<<<<<<< HEAD
-=======
   if (!order) return null;
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-  const { user, isAdmin, isTeamLeader } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [tasks, setTasks] = useState<Awaited<ReturnType<typeof getTasks>>>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -164,11 +160,6 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [canUpdate, setCanUpdate] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
-<<<<<<< HEAD
-  
-  if (!order) return null;
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [formData, setFormData] = useState({
     order_number: "",
     product_name: "",
@@ -185,19 +176,19 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
     shipping_notes: "",
   });
   
-  // Personel kontrolü - Personel üretim siparişi detayını görebilir ama düzenleyemez
-  // Bu değişkeni en üste taşıyoruz çünkü diğer değişkenlerde kullanılıyor
-  const isPersonnel = Boolean(user?.roles?.includes("personnel"));
-  const isManager = Boolean(user?.roles?.includes('manager')) || isAdmin;
-  const isCreator = user?.id === order?.createdBy;
-  const canUpdateStatus = !isPersonnel && (isManager || isAdmin || isTeamLeader || isCreator);
-  
   const orderNumber = order?.order_number || order?.orderNumber || order?.id || "-";
   const dueDateValue = resolveDateValue(order?.due_date || order?.dueDate);
   const createdAtValue = resolveDateValue(order?.created_at || order?.createdAt);
   const updatedAtValue = resolveDateValue(order?.updated_at || order?.updatedAt);
   const shippingAddress = order?.delivery_address || order?.shippingAddress || order?.shipping_address;
   const shippingNotes = order?.delivery_notes || order?.shippingNotes || order?.shipping_notes;
+  
+  const isManager = user?.roles?.includes('manager') || isAdmin;
+  const isCreator = user?.id === order?.createdBy;
+  const canUpdateStatus = !isPersonnel && (isManager || isAdmin || isCreator);
+  
+  // Personel kontrolü - Personel üretim siparişi detayını görebilir ama düzenleyemez
+  const isPersonnel = user?.roles?.includes("personnel") || false;
 
   // Yetki kontrolleri - Firestore'dan kontrol et
   useEffect(() => {
@@ -224,8 +215,8 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
           canUpdateResource(userProfile, "orders"),
           canDeleteResource(userProfile, "orders"),
         ]);
-        setCanUpdate(canUpdateOrder || isAdmin || isTeamLeader);
-        setCanDelete(canDeleteOrder || isAdmin || isTeamLeader);
+        setCanUpdate(canUpdateOrder);
+        setCanDelete(canDeleteOrder);
       } catch (error: unknown) {
         if (import.meta.env.DEV) {
           console.error("Error checking order permissions:", error);
@@ -398,29 +389,27 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
     }
   };
 
-  const getCurrentStatusIndex = useCallback(() => {
+  const getCurrentStatusIndex = () => {
     const normalized = normalizeStatusValue(currentStatus);
     const index = productionStatusWorkflow.findIndex((statusItem) => statusItem.value === normalized);
     return index === -1 ? 0 : index;
-  }, [currentStatus, productionStatusWorkflow]);
+  };
 
-  const getNextStatus = useMemo(() => {
-    return () => {
-      const currentIndex = getCurrentStatusIndex();
-      if (currentIndex === -1 || currentIndex >= productionStatusWorkflow.length - 1) {
-        return null;
-      }
-      // on_hold durumundan sonraki duruma geçiş yok, sadece geri dönüş var
-      if (currentStatus === "on_hold") {
-        return null;
-      }
-      // completed durumundan sonra geçiş yok, sipariş tamamlandı
-      if (currentStatus === "completed") {
-        return null;
-      }
-      return productionStatusWorkflow[currentIndex + 1];
-    };
-  }, [currentStatus, productionStatusWorkflow, getCurrentStatusIndex]);
+  const getNextStatus = () => {
+    const currentIndex = getCurrentStatusIndex();
+    if (currentIndex === -1 || currentIndex >= productionStatusWorkflow.length - 1) {
+      return null;
+    }
+    // on_hold durumundan sonraki duruma geçiş yok, sadece geri dönüş var
+    if (currentStatus === "on_hold") {
+      return null;
+    }
+    // completed durumundan sonra geçiş yok, sipariş tamamlandı
+    if (currentStatus === "completed") {
+      return null;
+    }
+    return productionStatusWorkflow[currentIndex + 1];
+  };
 
   const handleStatusChange = async (nextStatus: string) => {
     if (!order?.id || !user?.id) {
@@ -547,7 +536,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
             productName: formData.product_name,
             product_name: formData.product_name,
             quantity: quantityValue,
-          }, user?.id);
+          });
         }
       } catch (itemsError) {
         console.warn("Order items güncellenemedi:", itemsError);
@@ -594,58 +583,31 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-<<<<<<< HEAD
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] md:!max-w-[85vw] !w-[100vw] sm:!w-[95vw] md:!w-[85vw] !h-[100vh] sm:!h-[90vh] md:!h-[85vh] !max-h-[100vh] sm:!max-h-[90vh] md:!max-h-[85vh] !left-0 sm:!left-[2.5vw] md:!left-[7.5vw] !top-0 sm:!top-[5vh] md:!top-[7.5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
-=======
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
-        <DialogTitle className="sr-only">
-          Üretim Siparişi - {orderNumber}
-        </DialogTitle>
-        <DialogDescription className="sr-only">
-          {firstItem?.productName ? `${firstItem.productName} - Üretim siparişi detayları` : "Üretim siparişi detayları"}
-        </DialogDescription>
-        
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
-<<<<<<< HEAD
-          <DialogHeader className="p-2 sm:p-3 md:p-4 border-b bg-white flex-shrink-0 relative pr-10 sm:pr-12">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
-              <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 w-full sm:w-auto">
-=======
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-<<<<<<< HEAD
-                  <h2 className="text-[14px] sm:text-[16px] md:text-[18px] font-semibold text-foreground truncate">
+                  <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                     Üretim Siparişi - {orderNumber}
-                  </h2>
-                  {firstItem?.productName && (
-                    <p className="text-[10px] sm:text-[11px] md:text-xs text-muted-foreground truncate mt-0.5">
-=======
-                  <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground truncate">
-                    Üretim Siparişi - {orderNumber}
-                  </h2>
-                  {firstItem?.productName && (
-                    <p className="text-[11px] sm:text-xs text-muted-foreground truncate mt-0.5">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                  </DialogTitle>
+                  {firstItem?.productName ? (
+                    <DialogDescription className="text-xs text-muted-foreground truncate mt-0.5">
                       {firstItem.productName}
-                    </p>
+                    </DialogDescription>
+                  ) : (
+                    <DialogDescription className="sr-only">
+                      Üretim siparişi detayları
+                    </DialogDescription>
                   )}
                 </div>
               </div>
-<<<<<<< HEAD
-              <div className="flex flex-wrap items-center gap-2 flex-shrink-0 relative z-10 w-full sm:w-auto justify-start sm:justify-end">
-                <Badge variant={getStatusVariant(currentStatus)} className="text-[10px] sm:text-xs px-2 sm:px-3 py-1 relative z-10 w-full sm:w-auto justify-center sm:justify-start">
-=======
               <div className="flex flex-wrap items-center gap-2 flex-shrink-0 relative z-10 pr-10 sm:pr-12">
                 <Badge variant={getStatusVariant(currentStatus)} className="text-xs px-2 sm:px-3 py-1 relative z-10">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   {getStatusLabel(currentStatus)}
                 </Badge>
                 {!isEditing ? (
@@ -655,11 +617,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                         variant="outline"
                         size="sm"
                         onClick={() => setIsEditing(true)}
-<<<<<<< HEAD
-                        className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto"
-=======
-                        className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                        className="min-h-[44px] sm:min-h-0"
                       >
                         <Edit className="h-4 w-4 mr-2" />
                         Düzenle
@@ -670,11 +628,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                         variant="outline"
                         size="sm"
                         onClick={onDelete}
-<<<<<<< HEAD
-                        className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 text-destructive hover:text-destructive w-full sm:w-auto"
-=======
-                        className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0 text-destructive hover:text-destructive"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                        className="min-h-[44px] sm:min-h-0 text-destructive hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Sil
@@ -716,11 +670,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                         }
                       }}
                       disabled={saving}
-<<<<<<< HEAD
-                      className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto"
-=======
-                      className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                      className="min-h-[44px] sm:min-h-0"
                     >
                       <X className="h-4 w-4 mr-2" />
                       İptal
@@ -737,11 +687,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                         }
                       }}
                       disabled={saving}
-<<<<<<< HEAD
-                      className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto"
-=======
-                      className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                      className="min-h-[44px] sm:min-h-0"
                     >
                       {saving ? (
                         <>
@@ -761,50 +707,37 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
             </div>
           </DialogHeader>
 
-<<<<<<< HEAD
-          <div className="flex-1 overflow-hidden bg-gray-50/50 p-2 sm:p-3 md:p-4 min-h-0">
-            <div className="max-w-full mx-auto h-full overflow-y-auto overflow-x-hidden" style={{ WebkitOverflowScrolling: 'touch' }}>
-=======
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
             <div className="max-w-full mx-auto h-full overflow-y-auto">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               {loading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
               ) : isEditing ? (
-                <form id="production-order-edit-form" onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+                <form id="production-order-edit-form" onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-[14px] sm:text-[15px] font-semibold">Sipariş Bilgileri</CardTitle>
+                      <CardTitle className="text-lg sm:text-xl font-semibold">Sipariş Bilgileri</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3 sm:space-y-4">
+                    <CardContent className="space-y-4 sm:space-y-6">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                        <div className="space-y-1.5 sm:space-y-2">
-                          <Label htmlFor="order_number" showRequired className="text-[11px] sm:text-xs">Sipariş No</Label>
+                        <div className="space-y-2">
+                          <Label htmlFor="order_number" showRequired>Sipariş No</Label>
                           <Input
                             id="order_number"
                             value={formData.order_number}
                             onChange={(e) => setFormData({ ...formData, order_number: e.target.value })}
                             required
-<<<<<<< HEAD
-                            className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
-=======
-                            className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                            className="min-h-[44px] sm:min-h-0"
                           />
                         </div>
-                        <div className="space-y-1.5 sm:space-y-2">
-                          <Label htmlFor="status" className="text-[11px] sm:text-xs">Durum</Label>
+                        <div className="space-y-2">
+                          <Label htmlFor="status">Durum</Label>
                           <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
-<<<<<<< HEAD
-                            <SelectTrigger className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0">
-=======
-                            <SelectTrigger className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                            <SelectTrigger className="min-h-[44px] sm:min-h-0">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="text-[11px] sm:text-xs">
+                            <SelectContent>
                               {(() => {
                                 const currentStatus = order?.status || "planned";
                                 const validTransitions = getValidStatusTransitions(currentStatus);
@@ -822,7 +755,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                                 const allOptions = [...new Set([currentStatus, ...validTransitions])];
                                 
                                 return allOptions.map((status) => (
-                                  <SelectItem key={status} value={status} className="text-[11px] sm:text-xs">
+                                  <SelectItem key={status} value={status}>
                                     {statusLabels[status] || status}
                                   </SelectItem>
                                 ));
@@ -833,45 +766,37 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="customer_name" className="text-[11px] sm:text-xs">Müşteri Adı</Label>
+                        <Label htmlFor="customer_name">Müşteri Adı</Label>
                         <Input
                           id="customer_name"
                           value={formData.customer_name}
                           onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-<<<<<<< HEAD
-                          className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
-=======
-                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                          className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="product_name" showRequired className="text-[11px] sm:text-xs">Ürün Adı</Label>
-                        <div className="space-y-1.5 sm:space-y-2">
+                        <Label htmlFor="product_name" showRequired>Ürün Adı</Label>
+                        <div className="space-y-2">
                           <Select
                             value={formData.product_id || "none"}
                             onValueChange={handleProductSelect}
                             disabled={productsLoading}
                           >
-<<<<<<< HEAD
-                            <SelectTrigger className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0">
-=======
-                            <SelectTrigger className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                            <SelectTrigger className="min-h-[44px] sm:min-h-0">
                               <SelectValue placeholder={productsLoading ? "Ürünler yükleniyor..." : "Ürün seçin (Opsiyonel)"} />
                             </SelectTrigger>
-                            <SelectContent className="text-[11px] sm:text-xs">
-                              <SelectItem value="none" className="text-[11px] sm:text-xs">Ürün seçmeden devam et</SelectItem>
+                            <SelectContent>
+                              <SelectItem value="none">Ürün seçmeden devam et</SelectItem>
                               {products.map((product) => (
-                                <SelectItem key={product.id} value={product.id} className="text-[11px] sm:text-xs">
+                                <SelectItem key={product.id} value={product.id}>
                                   {product.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                           {productsLoading && (
-                            <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Loader2 className="h-4 w-4 animate-spin" /> Ürünler yükleniyor...
                             </div>
                           )}
@@ -881,14 +806,10 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             value={formData.product_name}
                             onChange={(e) => handleProductNameChange(e.target.value)}
                             required
-<<<<<<< HEAD
-                            className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
-=======
-                            className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                            className="min-h-[44px] sm:min-h-0"
                           />
                           {formData.product_id && (
-                            <p className="text-[11px] sm:text-xs text-muted-foreground flex items-center gap-1">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                               Dropdown'dan seçili ürün: {products.find(p => p.id === formData.product_id)?.name}
                             </p>
@@ -897,127 +818,93 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                        <div className="space-y-1.5 sm:space-y-2">
-                          <Label htmlFor="quantity" showRequired className="text-[11px] sm:text-xs">Miktar</Label>
+                        <div className="space-y-2">
+                          <Label htmlFor="quantity" showRequired>Miktar</Label>
                           <Input
                             id="quantity"
                             type="number"
                             value={formData.quantity}
                             onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                             required
-<<<<<<< HEAD
-                            className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
-=======
-                            className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                            className="min-h-[44px] sm:min-h-0"
                           />
                         </div>
-                        <div className="space-y-1.5 sm:space-y-2">
-                          <Label htmlFor="unit" className="text-[11px] sm:text-xs">Birim</Label>
+                        <div className="space-y-2">
+                          <Label htmlFor="unit">Birim</Label>
                           <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
-<<<<<<< HEAD
-                            <SelectTrigger className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0">
-=======
-                            <SelectTrigger className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                            <SelectTrigger className="min-h-[44px] sm:min-h-0">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="text-[11px] sm:text-xs">
-                              <SelectItem value="Adet" className="text-[11px] sm:text-xs">Adet</SelectItem>
-                              <SelectItem value="Kg" className="text-[11px] sm:text-xs">Kg</SelectItem>
-                              <SelectItem value="Lt" className="text-[11px] sm:text-xs">Lt</SelectItem>
-                              <SelectItem value="Mt" className="text-[11px] sm:text-xs">Mt</SelectItem>
-                              <SelectItem value="M2" className="text-[11px] sm:text-xs">M²</SelectItem>
+                            <SelectContent>
+                              <SelectItem value="Adet">Adet</SelectItem>
+                              <SelectItem value="Kg">Kg</SelectItem>
+                              <SelectItem value="Lt">Lt</SelectItem>
+                              <SelectItem value="Mt">Mt</SelectItem>
+                              <SelectItem value="M2">M²</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                        <div className="space-y-1.5 sm:space-y-2">
-                          <Label htmlFor="due_date" showRequired className="text-[11px] sm:text-xs">Termin Tarihi</Label>
+                        <div className="space-y-2">
+                          <Label htmlFor="due_date" showRequired>Termin Tarihi</Label>
                           <Input
                             id="due_date"
                             type="date"
                             value={formData.due_date}
                             onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
                             required
-<<<<<<< HEAD
-                            className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
-=======
-                            className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                            className="min-h-[44px] sm:min-h-0"
                           />
                         </div>
-                        <div className="space-y-1.5 sm:space-y-2">
-                          <Label htmlFor="priority" className="text-[11px] sm:text-xs">Öncelik</Label>
-                          <Select
-                            value={formData.priority?.toString() || "0"}
-                            onValueChange={(value) => setFormData({ ...formData, priority: value })}
-                          >
-<<<<<<< HEAD
-                            <SelectTrigger className="h-10 sm:h-10 text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
-=======
-                            <SelectTrigger className="h-10 text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {PRIORITY_OPTIONS.map((option) => (
-                                <SelectItem key={option.value} value={option.value.toString()}>
-                                  {option.label} ({option.value})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                        <div className="space-y-2">
+                          <Label htmlFor="priority">Öncelik (0-5)</Label>
+                          <Input
+                            id="priority"
+                            type="number"
+                            min="0"
+                            max="5"
+                            value={formData.priority}
+                            onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                            className="min-h-[44px] sm:min-h-0"
+                          />
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="notes" className="text-[11px] sm:text-xs">Notlar</Label>
+                        <Label htmlFor="notes" className="text-sm sm:text-base">Notlar</Label>
                         <Textarea
                           id="notes"
                           value={formData.notes}
                           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                           rows={3}
-<<<<<<< HEAD
-                          className="text-[11px] sm:text-xs min-h-[80px] sm:min-h-0"
-=======
-                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                          className="min-h-[44px] sm:min-h-0"
                           placeholder="Sipariş ile ilgili notlar..."
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-[11px] sm:text-xs">Teslimat Bilgileri</Label>
-                        <div className="space-y-1.5 sm:space-y-2">
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <Label htmlFor="shipping_address" className="text-[11px] sm:text-xs text-muted-foreground">Teslimat Adresi</Label>
+                        <Label className="text-sm sm:text-base">Teslimat Bilgileri</Label>
+                        <div className="space-y-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="shipping_address" className="text-xs text-muted-foreground">Teslimat Adresi</Label>
                             <Input
                               id="shipping_address"
                               value={formData.shipping_address}
                               onChange={(e) => setFormData({ ...formData, shipping_address: e.target.value })}
-<<<<<<< HEAD
-                              className="text-[11px] sm:text-xs h-10 sm:h-10 min-h-[44px] sm:min-h-0"
-=======
-                              className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                              className="min-h-[44px] sm:min-h-0"
                               placeholder="Teslimat adresi..."
                             />
                           </div>
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <Label htmlFor="shipping_notes" className="text-[11px] sm:text-xs text-muted-foreground">Teslimat Notları</Label>
+                          <div className="space-y-2">
+                            <Label htmlFor="shipping_notes" className="text-xs text-muted-foreground">Teslimat Notları</Label>
                             <Textarea
                               id="shipping_notes"
                               value={formData.shipping_notes}
                               onChange={(e) => setFormData({ ...formData, shipping_notes: e.target.value })}
                               rows={2}
-<<<<<<< HEAD
-                              className="text-[11px] sm:text-xs min-h-[60px] sm:min-h-0"
-=======
-                              className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                              className="min-h-[44px] sm:min-h-0"
                               placeholder="Teslimat ile ilgili notlar..."
                             />
                           </div>
@@ -1027,7 +914,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                   </Card>
                 </form>
               ) : (
-              <div className="space-y-3 sm:space-y-4">
+              <div className="space-y-4 sm:space-y-6">
                 {/* Highlight Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                   <Card className="bg-gradient-to-br from-blue-50/80 via-white to-white border-blue-100">
@@ -1038,10 +925,10 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-[11px] sm:text-xs font-semibold text-foreground">
+                      <p className="text-lg sm:text-xl font-semibold text-foreground">
                         {firstItem?.productName || "-"}
                       </p>
-                      <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                         {firstItem?.quantity || 0} Adet
                       </p>
                     </CardContent>
@@ -1101,7 +988,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <CardTitle className="text-lg sm:text-xl font-semibold">Sipariş Durumu</CardTitle>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                           {getNextStatus()
                             ? `${getStatusLabel(currentStatus)} aşamasındasınız. Sıradaki adım: ${getNextStatus()!.label}`
                             : currentStatus === "on_hold"
@@ -1111,12 +998,12 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             : "Workflow tamamlandı."}
                         </p>
                       </div>
-                      <div className="text-[11px] sm:text-xs text-muted-foreground text-right">
+                      <div className="text-xs text-muted-foreground text-right">
                         Son güncelleyen: {order?.statusUpdatedBy 
                           ? (usersMap[order.statusUpdatedBy] || order.statusUpdatedBy)
                           : (user?.fullName || "-")}
                         <br />
-                        <span className="text-[11px] sm:text-xs">
+                        <span className="text-[11px]">
                           {order?.statusUpdatedAt ? formatDateSafe(order.statusUpdatedAt as Timestamp | Date | string | null) : ""}
                         </span>
                       </div>
@@ -1161,7 +1048,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                                       : statusItem.label}
                                   </TooltipContent>
                                 </Tooltip>
-                                <p className={`text-[11px] sm:text-xs mt-2 text-center font-medium ${isActive ? "text-primary" : isCompleted ? "text-green-600" : "text-muted-foreground"}`}>
+                                <p className={`text-xs mt-2 text-center font-medium ${isActive ? "text-primary" : isCompleted ? "text-green-600" : "text-muted-foreground"}`}>
                                   {statusItem.label}
                                 </p>
                               </div>
@@ -1179,11 +1066,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                           <Button
                             onClick={() => handleStatusChange(getNextStatus()!.value)}
                             disabled={updatingStatus || !canUpdateStatus}
-<<<<<<< HEAD
-                            className="text-[11px] sm:text-xs gap-2 h-10 sm:h-10 min-h-[44px] sm:min-h-0 w-full sm:w-auto"
-=======
-                            className="text-[11px] sm:text-xs gap-2 min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                            className="gap-2 min-h-[44px] sm:min-h-0"
                           >
                             {updatingStatus ? (
                               <>
@@ -1211,7 +1094,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                   <Card>
                     <CardHeader className="space-y-1">
                       <CardTitle className="text-lg sm:text-xl font-semibold">Müşteri Bilgileri</CardTitle>
-                      <p className="text-[11px] sm:text-xs text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         İletişim detayları
                       </p>
                     </CardHeader>
@@ -1219,24 +1102,24 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                       <div className="space-y-2 sm:space-y-3">
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-[11px] sm:text-xs font-medium">{customer?.name || order?.customerName || order?.customer_name || "-"}</span>
+                          <span className="font-medium">{customer?.name || order?.customerName || order?.customer_name || "-"}</span>
                         </div>
                         {(customer?.company || order?.customerCompany || order?.customer_company) && (
                           <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-[11px] sm:text-xs">{customer?.company || order?.customerCompany || order?.customer_company}</span>
+                            <span>{customer?.company || order?.customerCompany || order?.customer_company}</span>
                           </div>
                         )}
                         {(customer?.phone || order?.customerPhone || order?.customer_phone) && (
                           <div className="flex items-center gap-2">
                             <Phone className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-[11px] sm:text-xs">{formatPhoneForDisplay(customer?.phone || order?.customerPhone || order?.customer_phone)}</span>
+                            <span>{formatPhoneForDisplay(customer?.phone || order?.customerPhone || order?.customer_phone)}</span>
                           </div>
                         )}
                         {(customer?.email || order?.customerEmail || order?.customer_email) && (
                           <div className="flex items-center gap-2">
                             <Mail className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-[11px] sm:text-xs">{customer?.email || order?.customerEmail || order?.customer_email}</span>
+                            <span>{customer?.email || order?.customerEmail || order?.customer_email}</span>
                           </div>
                         )}
                       </div>
@@ -1244,11 +1127,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                       {(customer?.phone || customer?.email || order?.customerPhone || order?.customerEmail) && (
                         <div className="flex flex-wrap gap-3 pt-1">
                           {(customer?.phone || order?.customerPhone || order?.customer_phone) && (
-<<<<<<< HEAD
-                            <Button variant="outline" size="sm" asChild className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto">
-=======
-                            <Button variant="outline" size="sm" asChild className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                            <Button variant="outline" size="sm" asChild className="min-h-[44px] sm:min-h-0">
                               <a href={`tel:${formatPhoneForTelLink(customer?.phone || order?.customerPhone || order?.customer_phone)}`}>
                                 Ara
                               </a>
@@ -1258,11 +1137,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             <Button 
                               variant="outline" 
                               size="sm" 
-<<<<<<< HEAD
-                              className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto"
-=======
-                              className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                              className="min-h-[44px] sm:min-h-0"
                               onClick={() => {
                                 const email = customer?.email || order?.customerEmail || order?.customer_email;
                                 if (email) {
@@ -1278,15 +1153,15 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
 
                       {(shippingAddress || shippingNotes) && (
                         <div className="space-y-2 rounded-lg border bg-muted/40 p-3 mt-3">
-                          <p className="text-[11px] sm:text-xs font-medium text-muted-foreground flex items-center gap-2">
+                          <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                             <Truck className="h-4 w-4" />
                             Teslimat Bilgileri
                           </p>
                           {shippingAddress && (
-                            <p className="text-[11px] sm:text-xs">{shippingAddress}</p>
+                            <p className="text-sm">{shippingAddress}</p>
                           )}
                           {shippingNotes && (
-                            <p className="text-[11px] sm:text-xs text-muted-foreground">{shippingNotes}</p>
+                            <p className="text-xs text-muted-foreground">{shippingNotes}</p>
                           )}
                         </div>
                       )}
@@ -1302,18 +1177,18 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         {orderSummaryRows.map((row) => (
                           <div key={row.label} className="rounded-lg border bg-muted/30 px-3 py-2">
-                            <p className="text-[11px] sm:text-xs text-muted-foreground uppercase tracking-wide">{row.label}</p>
-                            <p className="text-[11px] sm:text-xs font-medium mt-1">{row.value || "-"}</p>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide">{row.label}</p>
+                            <p className="text-sm font-medium mt-1">{row.value || "-"}</p>
                           </div>
                         ))}
                       </div>
                       {order?.notes && (
                         <div className="rounded-lg border bg-muted/20 p-3">
-                          <p className="text-[11px] sm:text-xs text-muted-foreground mb-1 flex items-center gap-2">
+                          <p className="text-sm text-muted-foreground mb-1 flex items-center gap-2">
                             <CircleDot className="h-4 w-4" />
                             İç Not
                           </p>
-                          <p className="text-[11px] sm:text-xs leading-relaxed">{order.notes}</p>
+                          <p className="text-sm leading-relaxed">{order.notes}</p>
                         </div>
                       )}
                     </CardContent>
@@ -1328,11 +1203,7 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                         <ListChecks className="h-4 w-4 sm:h-5 sm:w-5" />
                         Bağlı Görevler ({tasks.length})
                       </CardTitle>
-<<<<<<< HEAD
-                      <Button variant="outline" size="sm" onClick={fetchOrderTasks} disabled={tasksLoading} className="text-[11px] sm:text-xs h-10 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto">
-=======
-                      <Button variant="outline" size="sm" onClick={fetchOrderTasks} disabled={tasksLoading} className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+                      <Button variant="outline" size="sm" onClick={fetchOrderTasks} disabled={tasksLoading} className="min-h-[44px] sm:min-h-0">
                         Yenile
                       </Button>
                     </div>
@@ -1340,10 +1211,10 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                   <CardContent>
                     <div className="space-y-2">
                       {tasksLoading && (
-                        <p className="text-[11px] sm:text-xs text-muted-foreground">Görevler yükleniyor...</p>
+                        <p className="text-sm text-muted-foreground">Görevler yükleniyor...</p>
                       )}
                       {!tasksLoading && tasks.length === 0 && (
-                        <p className="text-[11px] sm:text-xs text-muted-foreground">Bu siparişe bağlı görev bulunmuyor.</p>
+                        <p className="text-sm text-muted-foreground">Bu siparişe bağlı görev bulunmuyor.</p>
                       )}
                       {!tasksLoading &&
                         tasks.map((task) => {
@@ -1352,14 +1223,14 @@ export const OrderDetailModal = ({ open, onOpenChange, order, onEdit, onDelete, 
                             <div key={task.id} className="p-3 rounded-md border border-border bg-muted/30">
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <p className="text-[11px] sm:text-xs font-semibold text-foreground">{task.title || "-"}</p>
+                                  <p className="text-sm font-semibold text-foreground">{task.title || "-"}</p>
                                   {taskDueDate && (
-                                    <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">
+                                    <p className="text-xs text-muted-foreground mt-1">
                                       Termin: {formatDateSafe(taskDueDate as Date | string | Timestamp | null)}
                                     </p>
                                   )}
                                 </div>
-                                <Badge variant={task.status === "completed" ? "default" : "secondary"} className="text-[10px]">
+                                <Badge variant={task.status === "completed" ? "default" : "secondary"}>
                                   {task.status || "-"}
                                 </Badge>
                               </div>

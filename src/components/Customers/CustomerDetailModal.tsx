@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,13 +16,13 @@ import { UserProfile } from "@/services/firebase/authService";
 import { getCustomerNotes, createCustomerNote, CustomerNote } from "@/services/firebase/customerNoteService";
 import { getSavedReports, SavedReport } from "@/services/firebase/reportService";
 import { getOrders, Order } from "@/services/firebase/orderService";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
 import { formatPhoneForDisplay, formatPhoneForTelLink, normalizePhone } from "@/utils/phoneNormalizer";
 import { tr } from "date-fns/locale";
-import { updateCustomer, deleteCustomer, Customer } from "@/services/firebase/customerService";
-import { Timestamp } from "firebase/firestore";
+import { updateCustomer, deleteCustomer, addCustomerComment, getCustomerComments, getCustomerActivities } from "@/services/firebase/customerService";
+import { ActivityCommentsPanel } from "@/components/shared/ActivityCommentsPanel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,13 +43,17 @@ interface CustomerDetailModalProps {
 }
 
 export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, onDelete }: CustomerDetailModalProps) => {
-  const { user, isTeamLeader } = useAuth();
+  const { user } = useAuth();
   const [notes, setNotes] = useState<CustomerNote[]>([]);
   const [quotes, setQuotes] = useState<SavedReport[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
-  const [newNoteContent, setNewNoteContent] = useState("");
-  const [isAddingNote, setIsAddingNote] = useState(false);
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [noteForm, setNoteForm] = useState({
+    type: "general" as CustomerNote["type"],
+    title: "",
+    content: "",
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -120,7 +125,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
         phone: formatPhoneForDisplay(customer.phone) || "",
         company: customer.company || "",
         address: customer.address || "",
-        tax_number: customer.taxId || "",
+        tax_number: customer.taxId || customer.tax_number || customer.tax_id || "",
         notes: customer.notes || "",
       });
     }
@@ -153,28 +158,26 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
 
   const handleAddNote = async () => {
     if (!customer?.id || !user?.id) return;
-    if (!newNoteContent.trim()) {
-      toast.error("Not içeriği gereklidir");
+    if (!noteForm.title.trim() || !noteForm.content.trim()) {
+      toast.error("Başlık ve içerik gereklidir");
       return;
     }
 
-    setIsAddingNote(true);
     try {
       await createCustomerNote({
         customerId: customer.id,
-        type: "general",
-        title: "Not",
-        content: newNoteContent.trim(),
+        type: noteForm.type,
+        title: noteForm.title.trim(),
+        content: noteForm.content.trim(),
         createdBy: user.id,
       });
       toast.success("Not eklendi");
-      setNewNoteContent("");
+      setNoteDialogOpen(false);
+      setNoteForm({ type: "general", title: "", content: "" });
       fetchData();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
       toast.error("Not eklenirken hata: " + errorMessage);
-    } finally {
-      setIsAddingNote(false);
     }
   };
 
@@ -190,7 +193,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
     }
 
     // Yetki kontrolü
-    if (!canUpdate && customer.createdBy !== user.id && !isTeamLeader) {
+    if (!canUpdate && customer.createdBy !== user.id) {
       toast.error("Müşteri düzenleme yetkiniz yok.");
       setIsEditing(false);
       return;
@@ -243,7 +246,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
     }
 
     // Yetki kontrolü
-    if (!canDelete && customer.createdBy !== user?.id && !isTeamLeader) {
+    if (!canDelete && customer.createdBy !== user?.id) {
       toast.error("Müşteri silme yetkiniz yok.");
       setDeleteDialogOpen(false);
       return;
@@ -328,8 +331,16 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
       let date: Date;
       
       // Timestamp kontrolü (Firebase Timestamp)
-      if (dateInput instanceof Timestamp) {
+      if (dateInput?.toDate && typeof dateInput.toDate === "function") {
         date = dateInput.toDate();
+      } 
+      // Timestamp objesi (seconds property ile)
+      else if (dateInput?.seconds) {
+        date = new Date(dateInput.seconds * 1000);
+      }
+      // Timestamp objesi (nanoseconds property ile)
+      else if (dateInput?.nanoseconds) {
+        date = new Date(dateInput.seconds * 1000 + dateInput.nanoseconds / 1000000);
       }
       // Date objesi
       else if (dateInput instanceof Date) {
@@ -348,13 +359,9 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
       else if (typeof dateInput === "number") {
         date = new Date(dateInput);
       }
-      // Diğer durumlar (object with seconds property)
-      else if (typeof dateInput === "object" && dateInput !== null && "seconds" in dateInput) {
-        const timestamp = dateInput as { seconds: number; nanoseconds?: number };
-        date = new Date(timestamp.seconds * 1000 + (timestamp.nanoseconds || 0) / 1000000);
-      }
+      // Diğer durumlar
       else {
-        return "-";
+        date = new Date(dateInput);
       }
       
       if (Number.isNaN(date.getTime())) return "-";
@@ -369,19 +376,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-<<<<<<< HEAD
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] md:!max-w-[85vw] !w-[100vw] sm:!w-[95vw] md:!w-[85vw] !h-[100vh] sm:!h-[90vh] md:!h-[80vh] !max-h-[100vh] sm:!max-h-[90vh] md:!max-h-[80vh] !left-0 sm:!left-[2.5vw] md:!left-[7.5vw] !top-0 sm:!top-[5vh] md:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
-=======
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
-        <DialogTitle className="sr-only" id="customer-detail-title">
-          {isEditing ? "Müşteri Düzenle" : `Müşteri Detayı - ${customer.name}`}
-        </DialogTitle>
-        <DialogDescription className="sr-only" id="customer-detail-description">
-          Müşteri detayları ve bilgileri
-        </DialogDescription>
-        
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           {/* Header */}
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -391,13 +386,17 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                   <User className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground truncate">
+                  <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                     {isEditing ? "Müşteri Düzenle" : customer.name}
-                  </h2>
-                  {!isEditing && customer.company && (
-                    <p className="text-[11px] sm:text-xs text-muted-foreground truncate mt-0.5">
+                  </DialogTitle>
+                  {!isEditing && customer.company ? (
+                    <DialogDescription className="text-xs text-muted-foreground truncate mt-0.5">
                       {customer.company}
-                    </p>
+                    </DialogDescription>
+                  ) : (
+                    <DialogDescription className="sr-only">
+                      Müşteri detayları ve bilgileri
+                    </DialogDescription>
                   )}
                 </div>
               </div>
@@ -408,7 +407,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="bg-primary/10 text-primary hover:bg-primary/20 rounded-lg px-3 py-1.5 font-medium shadow-sm text-[11px] sm:text-xs flex-shrink-0 min-h-[36px] sm:min-h-8"
+                      className="bg-primary/10 text-primary hover:bg-primary/20 rounded-lg px-3 py-1.5 font-medium shadow-sm text-xs sm:text-sm flex-shrink-0"
                       onClick={() => window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(customer.email)}`, '_blank')}
                       aria-label="E-posta gönder"
                     >
@@ -420,7 +419,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 min-h-[36px] sm:min-h-8"
+                      className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
                       onClick={() => window.location.href = `tel:${formatPhoneForTelLink(customer.phone)}`}
                       aria-label="Telefon ara"
                     >
@@ -432,9 +431,9 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 min-h-[36px] sm:min-h-8"
+                      className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
                       onClick={() => setIsEditing(true)}
-                      disabled={!canUpdate && customer.createdBy !== user?.id && !isTeamLeader}
+                      disabled={!canUpdate && customer.createdBy !== user?.id}
                     >
                       <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
                       Düzenle
@@ -444,7 +443,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-destructive/20 hover:bg-destructive/5 text-destructive rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 min-h-[36px] sm:min-h-8"
+                      className="border-destructive/20 hover:bg-destructive/5 text-destructive rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
                       onClick={() => setDeleteDialogOpen(true)}
                     >
                       <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
@@ -457,7 +456,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 min-h-[36px] sm:min-h-8"
+                    className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
                     onClick={() => {
                       setIsEditing(false);
                       setFormData({
@@ -466,7 +465,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                         phone: formatPhoneForDisplay(customer.phone) || "",
                         company: customer.company || "",
                         address: customer.address || "",
-                        tax_number: customer.taxId || "",
+                        tax_number: customer.taxId || customer.tax_number || customer.tax_id || "",
                         notes: customer.notes || "",
                       });
                     }}
@@ -478,7 +477,7 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                   <Button
                     variant="default"
                     size="sm"
-                    className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 text-white min-h-[36px] sm:min-h-8"
+                    className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0 text-white"
                     onClick={handleSubmit}
                     disabled={saving}
                   >
@@ -495,26 +494,26 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
           </div>
           </DialogHeader>
           {/* Quick Info Chips */}
-          {(customer.email || customer.phone || customer.taxId) && (
+          {(customer.email || customer.phone || customer.tax_number || customer.taxId || customer.tax_id) && (
             <div className="px-3 sm:px-6 py-2 sm:py-3 border-b bg-gray-50/50 flex flex-wrap items-center gap-2 flex-shrink-0">
               {customer.email && (
-                <div className="flex items-center gap-1 rounded-full border bg-muted/40 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-muted-foreground">
+                <div className="flex items-center gap-1 rounded-full border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">
                   <Mail className="h-3 w-3" />
                   <span className="text-muted-foreground/70">E-posta:</span>
                   <span className="text-foreground truncate max-w-[200px]">{customer.email}</span>
                 </div>
               )}
               {customer.phone && (
-                <div className="flex items-center gap-1 rounded-full border bg-muted/40 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-muted-foreground">
+                <div className="flex items-center gap-1 rounded-full border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">
                   <Phone className="h-3 w-3" />
                   <span className="text-muted-foreground/70">Telefon:</span>
                   <span className="text-foreground">{formatPhoneForDisplay(customer.phone)}</span>
                 </div>
               )}
-              {customer.taxId && (
-                <div className="flex items-center gap-1 rounded-full border bg-muted/40 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-muted-foreground">
+              {(customer.tax_number || customer.taxId || customer.tax_id) && (
+                <div className="flex items-center gap-1 rounded-full border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">
                   <span className="text-muted-foreground/70">Vergi No:</span>
-                  <span className="text-foreground">{customer.taxId}</span>
+                  <span className="text-foreground">{customer.tax_number || customer.taxId || customer.tax_id}</span>
                 </div>
               )}
         </div>
@@ -534,8 +533,8 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
           <div className="rounded-2xl border bg-gradient-to-br from-primary/10 via-white to-white border-primary/20 text-card-foreground p-4 shadow-sm transition hover:shadow-md hover:-translate-y-0.5 flex flex-col h-full">
             <div className="flex items-start justify-between flex-1">
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] sm:text-xs uppercase tracking-wide text-muted-foreground mb-1">Toplam Sipariş</p>
-                <p className="text-[11px] sm:text-xs font-semibold leading-tight">{stats.totalOrders}</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Toplam Sipariş</p>
+                <p className="text-2xl font-semibold leading-tight">{stats.totalOrders}</p>
               </div>
               <div className="rounded-full border p-2 bg-white/75 shadow-inner shrink-0 ml-2">
                 <Package className="h-5 w-5 text-primary" />
@@ -545,8 +544,8 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
           <div className="rounded-2xl border bg-gradient-to-br from-emerald-50/80 via-white to-white border-emerald-100 text-card-foreground p-4 shadow-sm transition hover:shadow-md hover:-translate-y-0.5 flex flex-col h-full">
             <div className="flex items-start justify-between flex-1">
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] sm:text-xs uppercase tracking-wide text-muted-foreground mb-1">Sipariş Tutarı</p>
-                <p className="text-lg sm:text-xl font-semibold leading-tight">{formatCurrency(stats.totalOrderAmount)}</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Sipariş Tutarı</p>
+                <p className="text-2xl font-semibold leading-tight">{formatCurrency(stats.totalOrderAmount)}</p>
               </div>
               <div className="rounded-full border p-2 bg-white/75 shadow-inner shrink-0 ml-2">
                 <TrendingUp className="h-5 w-5 text-emerald-600" />
@@ -556,8 +555,8 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
           <div className="rounded-2xl border bg-gradient-to-br from-blue-50/80 via-white to-white border-blue-100 text-card-foreground p-4 shadow-sm transition hover:shadow-md hover:-translate-y-0.5 flex flex-col h-full">
             <div className="flex items-start justify-between flex-1">
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] sm:text-xs uppercase tracking-wide text-muted-foreground mb-1">Fiyat Teklifleri</p>
-                <p className="text-lg sm:text-xl font-semibold leading-tight">{stats.totalQuotes}</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Fiyat Teklifleri</p>
+                <p className="text-2xl font-semibold leading-tight">{stats.totalQuotes}</p>
               </div>
               <div className="rounded-full border p-2 bg-white/75 shadow-inner shrink-0 ml-2">
                 <FileText className="h-5 w-5 text-blue-600" />
@@ -567,8 +566,8 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
           <div className="rounded-2xl border bg-gradient-to-br from-amber-50/80 via-white to-white border-amber-100 text-card-foreground p-4 shadow-sm transition hover:shadow-md hover:-translate-y-0.5 flex flex-col h-full">
             <div className="flex items-start justify-between flex-1">
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] sm:text-xs uppercase tracking-wide text-muted-foreground mb-1">Tamamlanan</p>
-                <p className="text-lg sm:text-xl font-semibold leading-tight">{stats.completedOrders}</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Tamamlanan</p>
+                <p className="text-2xl font-semibold leading-tight">{stats.completedOrders}</p>
               </div>
               <div className="rounded-full border p-2 bg-white/75 shadow-inner shrink-0 ml-2">
                 <CheckCircle2 className="h-5 w-5 text-amber-600" />
@@ -580,114 +579,114 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
           <TabsList className="grid w-full grid-cols-4 h-auto sm:h-10 md:h-11 bg-muted/50 rounded-lg p-1 border gap-1">
             <TabsTrigger 
               value="info" 
-              className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary text-[11px] sm:text-xs font-medium transition-all duration-200 min-h-[44px] sm:min-h-0"
+              className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs md:text-sm font-medium transition-all duration-200 min-h-[44px] sm:min-h-0"
             >
               Bilgiler
             </TabsTrigger>
             <TabsTrigger 
               value="quotes" 
-              className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary text-[11px] sm:text-xs font-medium transition-all duration-200 min-h-[44px] sm:min-h-0"
+              className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs md:text-sm font-medium transition-all duration-200 min-h-[44px] sm:min-h-0"
             >
               Fiyat Teklifleri
             </TabsTrigger>
             <TabsTrigger 
               value="orders" 
-              className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary text-[11px] sm:text-xs font-medium transition-all duration-200 min-h-[44px] sm:min-h-0"
+              className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs md:text-sm font-medium transition-all duration-200 min-h-[44px] sm:min-h-0"
             >
               Siparişler
             </TabsTrigger>
             <TabsTrigger 
               value="notes" 
-              className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary text-[11px] sm:text-xs font-medium transition-all duration-200 min-h-[44px] sm:min-h-0"
+              className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs md:text-sm font-medium transition-all duration-200 min-h-[44px] sm:min-h-0"
             >
               Notlar
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="info" className="space-y-3 sm:space-y-4 mt-4 sm:mt-6 focus:outline-none overflow-x-hidden max-w-full">
+          <TabsContent value="info" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6 focus:outline-none overflow-x-hidden max-w-full">
             {isEditing ? (
-              <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                 <Card>
-                  <CardContent className="p-3 sm:p-4 space-y-3 sm:space-y-4">
+                  <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                     <div>
-                      <h3 className="text-[14px] sm:text-[15px] font-semibold text-foreground mb-1">Müşteri Bilgileri</h3>
-                      <p className="text-[11px] sm:text-xs text-muted-foreground">Temel müşteri bilgilerini güncelleyin</p>
+                      <h3 className="text-base sm:text-lg font-semibold text-foreground mb-1">Müşteri Bilgileri</h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Temel müşteri bilgilerini güncelleyin</p>
                     </div>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="name" showRequired className="text-[11px] sm:text-xs">İsim</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="name" showRequired className="text-sm sm:text-base">İsim</Label>
                         <Input
                           id="name"
                           value={formData.name}
                           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+                          className="min-h-[44px] sm:min-h-0"
                           required
                         />
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="company" className="text-[11px] sm:text-xs">Şirket</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="company" className="text-sm sm:text-base">Şirket</Label>
                         <Input
                           id="company"
                           value={formData.company}
                           onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+                          className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="email" className="text-[11px] sm:text-xs">E-posta</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="email" className="text-sm sm:text-base">E-posta</Label>
                         <Input
                           id="email"
                           type="email"
                           value={formData.email}
                           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+                          className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="phone" className="text-[11px] sm:text-xs">Telefon</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone" className="text-sm sm:text-base">Telefon</Label>
                         <Input
                           id="phone"
                           value={formData.phone}
                           onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+                          className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="address" className="text-[11px] sm:text-xs">Adres</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="address" className="text-sm sm:text-base">Adres</Label>
                         <Textarea
                           id="address"
                           value={formData.address}
                           onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                           rows={3}
-                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0 resize-none"
+                          className="min-h-[44px] sm:min-h-0 resize-none"
                         />
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="tax_number" className="text-[11px] sm:text-xs">Vergi No</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="tax_number" className="text-sm sm:text-base">Vergi No</Label>
                         <Input
                           id="tax_number"
                           value={formData.tax_number}
                           onChange={(e) => setFormData({ ...formData, tax_number: e.target.value })}
-                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+                          className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
                     </div>
 
-                    <div className="space-y-1.5 sm:space-y-2">
-                      <Label htmlFor="notes" className="text-[11px] sm:text-xs">Notlar</Label>
+                    <div className="space-y-2">
+                      <Label htmlFor="notes" className="text-sm sm:text-base">Notlar</Label>
                       <Textarea
                         id="notes"
                         value={formData.notes}
                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                         rows={4}
-                        className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0 resize-none"
+                        className="min-h-[44px] sm:min-h-0 resize-none"
                         placeholder="Müşteri hakkında notlar..."
                       />
                     </div>
@@ -701,8 +700,8 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                   <div className="flex items-start gap-3">
                     <User className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] sm:text-xs font-medium text-foreground mb-0.5">İsim</p>
-                      <p className="text-[11px] sm:text-xs text-muted-foreground">{customer.name}</p>
+                      <p className="text-sm font-medium text-foreground mb-0.5">İsim</p>
+                      <p className="text-sm text-muted-foreground">{customer.name}</p>
                     </div>
                   </div>
 
@@ -710,8 +709,8 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                     <div className="flex items-start gap-3">
                       <Building2 className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                        <p className="text-[11px] sm:text-xs font-medium text-foreground mb-0.5">Şirket</p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground">{customer.company}</p>
+                        <p className="text-sm font-medium text-foreground mb-0.5">Şirket</p>
+                        <p className="text-sm text-muted-foreground">{customer.company}</p>
                       </div>
                     </div>
                   )}
@@ -720,8 +719,8 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                     <div className="flex items-start gap-3">
                       <Mail className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                        <p className="text-[11px] sm:text-xs font-medium text-foreground mb-0.5">E-posta</p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground break-all">{customer.email}</p>
+                        <p className="text-sm font-medium text-foreground mb-0.5">E-posta</p>
+                        <p className="text-sm text-muted-foreground break-all">{customer.email}</p>
                       </div>
                     </div>
                   )}
@@ -730,18 +729,18 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                     <div className="flex items-start gap-3">
                       <Phone className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                        <p className="text-[11px] sm:text-xs font-medium text-foreground mb-0.5">Telefon</p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground">{formatPhoneForDisplay(customer.phone)}</p>
+                        <p className="text-sm font-medium text-foreground mb-0.5">Telefon</p>
+                        <p className="text-sm text-muted-foreground">{formatPhoneForDisplay(customer.phone)}</p>
                         </div>
                       </div>
                   )}
 
-                  {customer.taxId && (
+                  {(customer.tax_number || customer.taxId || customer.tax_id) && (
                     <div className="flex items-start gap-3">
                       <Receipt className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[11px] sm:text-xs font-medium text-foreground mb-0.5">Vergi No</p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground">{customer.taxId}</p>
+                        <p className="text-sm font-medium text-foreground mb-0.5">Vergi No</p>
+                        <p className="text-sm text-muted-foreground">{customer.tax_number || customer.taxId || customer.tax_id}</p>
                       </div>
                     </div>
                   )}
@@ -753,8 +752,8 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                     <div className="flex items-start gap-3">
                       <MapPin className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[11px] sm:text-xs font-medium text-foreground mb-0.5">Adres</p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">{customer.address}</p>
+                        <p className="text-sm font-medium text-foreground mb-0.5">Adres</p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">{customer.address}</p>
                         </div>
                     </div>
                 </>
@@ -764,15 +763,15 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                    <p className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Oluşturma Tarihi</p>
-                      <p className="text-[11px] sm:text-xs font-medium text-foreground">
-                      {formatDateSafe(customer.createdAt)}
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Oluşturma Tarihi</p>
+                      <p className="text-sm font-medium text-foreground">
+                      {formatDateSafe(customer.createdAt || customer.created_at)}
                   </p>
                 </div>
                 <div>
-                    <p className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Son Güncelleme</p>
-                      <p className="text-[11px] sm:text-xs font-medium text-foreground">
-                      {formatDateSafe(customer.updatedAt)}
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Son Güncelleme</p>
+                      <p className="text-sm font-medium text-foreground">
+                      {formatDateSafe(customer.updatedAt || customer.updated_at)}
                         </p>
                   </div>
               </div>
@@ -782,18 +781,18 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
 
           <TabsContent value="quotes" className="space-y-3 sm:space-y-4 mt-4 sm:mt-6 focus:outline-none overflow-x-hidden max-w-full">
             <div className="flex items-center justify-between mb-4 sm:mb-6">
-              <h3 className="text-lg sm:text-xl font-bold text-foreground">Fiyat Teklifleri ({quotes.length})</h3>
+              <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">Fiyat Teklifleri ({quotes.length})</h3>
             </div>
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-                <p className="text-[11px] sm:text-xs text-muted-foreground">Yükleniyor...</p>
+                <p className="text-sm text-muted-foreground">Yükleniyor...</p>
               </div>
             ) : quotes.length === 0 ? (
               <Card className="border-2 border-dashed">
                 <CardContent className="p-12 text-center">
                   <FileText className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
-                  <p className="text-[11px] sm:text-xs font-medium text-muted-foreground">Henüz teklif bulunmuyor</p>
+                  <p className="text-sm font-medium text-muted-foreground">Henüz teklif bulunmuyor</p>
                 </CardContent>
               </Card>
             ) : (
@@ -803,19 +802,19 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-[11px] sm:text-xs mb-2 text-foreground">{quote.title}</p>
-                          <p className="text-[11px] sm:text-xs text-muted-foreground">
+                          <p className="font-bold text-base mb-2 text-foreground">{quote.title}</p>
+                          <p className="text-xs text-muted-foreground">
                             {formatDateSafe(quote.createdAt)}
                         </p>
                       </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
-                          <Badge variant="outline" className="text-[10px] font-semibold px-3 py-1 whitespace-nowrap">
+                          <Badge variant="outline" className="text-sm font-semibold px-3 py-1 whitespace-nowrap">
                           ₺{((quote.metadata as { grandTotal?: number } | null | undefined)?.grandTotal || 0).toLocaleString("tr-TR")}
                         </Badge>
                         <Button
                           size="sm"
                           variant="outline"
-                            className="text-[11px] sm:text-xs font-semibold"
+                            className="font-semibold"
                           onClick={async () => {
                             try {
                               if (!quote.fileUrl) {
@@ -856,20 +855,20 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
             )}
           </TabsContent>
 
-          <TabsContent value="orders" className="space-y-3 sm:space-y-4 mt-6 focus:outline-none overflow-x-hidden max-w-full">
+          <TabsContent value="orders" className="space-y-4 mt-6 focus:outline-none overflow-x-hidden max-w-full">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg sm:text-xl font-bold text-foreground">Siparişler ({orders.length})</h3>
+              <h3 className="text-xl md:text-2xl font-bold text-foreground">Siparişler ({orders.length})</h3>
             </div>
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-                <p className="text-[11px] sm:text-xs text-muted-foreground">Yükleniyor...</p>
+                <p className="text-sm text-muted-foreground">Yükleniyor...</p>
               </div>
             ) : orders.length === 0 ? (
               <Card className="border-2 border-dashed">
                 <CardContent className="p-12 text-center">
                   <Package className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
-                  <p className="text-[11px] sm:text-xs font-medium text-muted-foreground">Henüz sipariş bulunmuyor</p>
+                  <p className="text-sm font-medium text-muted-foreground">Henüz sipariş bulunmuyor</p>
                 </CardContent>
               </Card>
             ) : (
@@ -898,16 +897,16 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex-1 min-w-0">
-                            <p className="font-bold text-[11px] sm:text-xs mb-2 text-foreground">{order.orderNumber}</p>
-                            <p className="text-[11px] sm:text-xs text-muted-foreground">
+                            <p className="font-bold text-base mb-2 text-foreground">{order.orderNumber}</p>
+                            <p className="text-xs text-muted-foreground">
                               {formatDateSafe(order.createdAt)}
                         </p>
                       </div>
                           <div className="flex items-center gap-3 flex-shrink-0">
-                            <Badge variant={statusBadge.variant} className="text-[10px] font-semibold px-3 py-1 whitespace-nowrap">
+                            <Badge variant={statusBadge.variant} className="text-sm font-semibold px-3 py-1 whitespace-nowrap">
                               {statusBadge.label}
                         </Badge>
-                            <span className="font-bold text-[11px] sm:text-xs whitespace-nowrap text-foreground">
+                            <span className="font-bold text-base whitespace-nowrap text-foreground">
                           ₺{(order.totalAmount || 0).toLocaleString("tr-TR")}
                         </span>
                       </div>
@@ -920,69 +919,29 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
             )}
           </TabsContent>
 
-          <TabsContent value="notes" className="space-y-3 sm:space-y-4 mt-6 focus:outline-none overflow-x-hidden max-w-full">
+          <TabsContent value="notes" className="space-y-4 mt-6 focus:outline-none overflow-x-hidden max-w-full">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg sm:text-xl font-bold text-foreground">Notlar ({notes.length})</h3>
+              <h3 className="text-xl md:text-2xl font-bold text-foreground">Notlar ({notes.length})</h3>
+              <Button 
+                size="sm" 
+                onClick={() => setNoteDialogOpen(true)} 
+                className="font-semibold shadow-md hover:shadow-lg transition-all duration-200"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Not Ekle</span>
+                <span className="sm:hidden">Ekle</span>
+              </Button>
             </div>
-            
-            {/* Direkt Not Ekleme Alanı */}
-            <Card className="border-2 border-primary/20 bg-primary/5">
-              <CardContent className="p-4 space-y-3">
-                <Label className="text-[11px] sm:text-xs font-semibold">Yeni Not Ekle</Label>
-                <Textarea
-                  value={newNoteContent}
-                  onChange={(e) => setNewNoteContent(e.target.value)}
-                  placeholder="Notunuzu buraya yazın..."
-                  rows={4}
-                  className="text-[11px] sm:text-xs resize-none"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                      e.preventDefault();
-                      handleAddNote();
-                    }
-                  }}
-                />
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setNewNoteContent("")}
-                    disabled={isAddingNote || !newNoteContent.trim()}
-                    className="text-[11px] sm:text-xs"
-                  >
-                    Temizle
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleAddNote}
-                    disabled={isAddingNote || !newNoteContent.trim()}
-                    className="text-[11px] sm:text-xs"
-                  >
-                    {isAddingNote ? (
-                      <>
-                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                        Ekleniyor...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="h-3 w-3 mr-2" />
-                        Ekle
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-                <p className="text-[11px] sm:text-xs text-muted-foreground">Yükleniyor...</p>
+                <p className="text-sm text-muted-foreground">Yükleniyor...</p>
               </div>
             ) : notes.length === 0 ? (
               <Card className="border-2 border-dashed">
                 <CardContent className="p-12 text-center">
                   <MessageSquare className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
-                  <p className="text-[11px] sm:text-xs font-medium text-muted-foreground">Henüz not bulunmuyor</p>
+                  <p className="text-sm font-medium text-muted-foreground">Henüz not bulunmuyor</p>
                 </CardContent>
               </Card>
             ) : (
@@ -997,14 +956,14 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
                             <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                               <Icon className="h-4 w-4 text-primary" />
                             </div>
-                            <Badge variant="outline" className="text-[10px] font-semibold flex-shrink-0">{getNoteTypeLabel(note.type)}</Badge>
-                            <p className="font-bold text-[11px] sm:text-xs text-foreground truncate">{note.title}</p>
+                            <Badge variant="outline" className="text-xs font-semibold flex-shrink-0">{getNoteTypeLabel(note.type)}</Badge>
+                            <p className="font-bold text-sm text-foreground truncate">{note.title}</p>
                           </div>
-                          <p className="text-[11px] sm:text-xs text-muted-foreground flex-shrink-0 whitespace-nowrap">
+                          <p className="text-xs text-muted-foreground flex-shrink-0 whitespace-nowrap">
                             {formatDateSafe(note.createdAt)}
                           </p>
                         </div>
-                        <p className="text-[11px] sm:text-xs text-foreground whitespace-pre-wrap break-words leading-relaxed pl-12">
+                        <p className="text-sm text-foreground whitespace-pre-wrap break-words leading-relaxed pl-12">
                           {note.content}
                         </p>
                       </CardContent>
@@ -1020,26 +979,111 @@ export const CustomerDetailModal = ({ open, onOpenChange, customer, onUpdate, on
             </div>
           </div>
         </div>
+
+        {/* Silme Onay Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Müşteriyi sil?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Bu işlem geri alınamaz. Müşteri kalıcı olarak silinecek.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>İptal</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Sil
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Not Ekleme Dialog */}
+        <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+          <DialogContent className="rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold">Not Ekle</DialogTitle>
+              <DialogDescription className="text-sm">
+                Müşteri için yeni bir not ekleyin. Telefon görüşmeleri, arıza kayıtları veya genel notlar ekleyebilirsiniz.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Not Tipi</Label>
+                <Select
+                  value={noteForm.type}
+                  onValueChange={(value: CustomerNote["type"]) =>
+                    setNoteForm({ ...noteForm, type: value })
+                  }
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="phone_call_out">Telefonla Aradık</SelectItem>
+                    <SelectItem value="phone_call_in">Bizi Aradı</SelectItem>
+                    <SelectItem value="warranty">Arıza Kaydı</SelectItem>
+                    <SelectItem value="general">Genel Not</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Başlık *</Label>
+                <Input
+                  value={noteForm.title}
+                  onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })}
+                  placeholder="Not başlığı"
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">İçerik *</Label>
+                <Textarea
+                  value={noteForm.content}
+                  onChange={(e) => setNoteForm({ ...noteForm, content: e.target.value })}
+                  placeholder="Not içeriği"
+                  rows={5}
+                  className="resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <Button variant="outline" onClick={() => setNoteDialogOpen(false)} className="font-semibold">
+                İptal
+              </Button>
+              <Button onClick={handleAddNote} className="font-semibold shadow-md hover:shadow-lg transition-all duration-200">
+                Ekle
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
-
-      {/* Silme Onay Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-[16px] sm:text-[18px]">Müşteriyi sil?</AlertDialogTitle>
-            <AlertDialogDescription className="text-[11px] sm:text-xs">
-              Bu işlem geri alınamaz. Müşteri kalıcı olarak silinecek.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="text-[11px] sm:text-xs">İptal</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="text-[11px] sm:text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Sil
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
+      
+      {/* Activity Comments Panel */}
+      {customer?.id && user && (
+        <ActivityCommentsPanel
+          entityId={customer.id}
+          entityType="customer"
+          onAddComment={async (content: string) => {
+            await addCustomerComment(
+              customer.id,
+              user.id,
+              content,
+              user.fullName || user.displayName,
+              user.email
+            );
+          }}
+          onGetComments={async () => {
+            return await getCustomerComments(customer.id);
+          }}
+          onGetActivities={async () => {
+            return await getCustomerActivities(customer.id);
+          }}
+          currentUserId={user.id}
+          currentUserName={user.fullName || user.displayName}
+          currentUserEmail={user.email}
+        />
+      )}
     </Dialog>
   );
 };

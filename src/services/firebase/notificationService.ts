@@ -44,19 +44,15 @@ export const getNotifications = async (
   options?: { unreadOnly?: boolean; limit?: number }
 ): Promise<Notification[]> => {
   try {
-    // Firestore index gereksinimleri: equality filtreler önce, sonra orderBy
-    // Index: read (ASC), userId (ASC), createdAt (DESC)
     let q = query(
       collection(firestore, "notifications"),
-      where("userId", "==", userId)
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc")
     );
 
     if (options?.unreadOnly) {
       q = query(q, where("read", "==", false));
     }
-
-    // orderBy her zaman en sonda olmalı
-    q = query(q, orderBy("createdAt", "desc"));
 
     if (options?.limit) {
       q = query(q, limit(options.limit));
@@ -68,6 +64,10 @@ export const getNotifications = async (
       ...doc.data(),
     })) as Notification[];
   } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error("Get notifications error:", error);
+    }
+    
     const isIndexError =
       typeof error === "object" &&
       error !== null &&
@@ -78,34 +78,21 @@ export const getNotifications = async (
       (error as { message: string }).message.includes("index");
 
     if (isIndexError) {
-      // Index hatası durumunda boş array döndür (işlemin devam etmesini engelleme)
-      // Index oluşturulana kadar bildirimler görünmeyecek ama sistem çalışmaya devam edecek
-      // Hataları sessizce handle et - sadece development'ta ilk kez göster
-      if (import.meta.env.DEV) {
-        const message = (error as { message: string }).message;
-        const indexUrl = message.match(/https:\/\/[^\s]+/)?.[0];
-        // Sadece ilk kez göster (tekrar tekrar loglamayı önle)
-        if (!(window as any).__firestoreIndexWarningShown) {
-          console.debug("ℹ️ Firestore index eksik. Bildirimler index oluşturulana kadar görünmeyecek.");
-          if (indexUrl) {
-            console.debug("Index oluşturma linki:", indexUrl);
-          }
-          (window as any).__firestoreIndexWarningShown = true;
+      const message = (error as { message: string }).message;
+      const indexUrl = message.match(/https:\/\/[^\s]+/)?.[0];
+      if (indexUrl) {
+        if (import.meta.env.DEV) {
+          console.warn("⚠️ Firestore index gerekiyor! Lütfen şu linke tıklayarak index'i oluşturun:");
+          console.warn(indexUrl);
         }
+        const friendlyError = new Error("Firestore index gerekiyor. Lütfen index'i oluşturun.");
+        (friendlyError as { indexUrl?: string }).indexUrl = indexUrl;
+        (friendlyError as { code?: string }).code = "index-required";
+        throw friendlyError;
       }
-      return [];
     }
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-    // Diğer hatalar için de boş array döndür (sistemin çalışmaya devam etmesi için)
-    // Sadece gerçek hataları logla (index hatası değilse)
-    if (import.meta.env.DEV) {
-      console.debug("Get notifications error (non-index):", error);
-    }
-    return [];
+    throw error;
   }
 };
 
@@ -149,55 +136,45 @@ export const createNotification = async (
       ...createdNotification.data(),
     } as Notification;
 
-    // Bildirim başarıyla oluşturuldu, hemen döndür
-    // Email gönderimi arka planda yapılacak (hem Cloud Functions hem de manuel fallback)
-<<<<<<< HEAD
-
-=======
-    
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-    // Email gönderimini arka planda başlat (await etme)
-    // Önce Cloud Functions denenecek, eğer çalışmıyorsa manuel email gönderimi yapılacak
-    Promise.resolve().then(async () => {
-      try {
-        const userDoc = await getDoc(doc(firestore, "users", notificationData.userId));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          if (userData?.email) {
-            // Manuel email gönderimi (Cloud Functions çalışmıyorsa fallback)
-            // Hata olsa bile sessizce devam et
-            try {
-              const emailResult = await sendNotificationEmail(
-                userData.email,
-                notificationData.title,
-                notificationData.message,
-                notificationData.type,
-                notificationData.relatedId || null,
-                notificationData.metadata || null
-              );
-<<<<<<< HEAD
-
-=======
-              
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-              // Email gönderim sonucunu logla (sadece başarılı olduğunda)
-              if (import.meta.env.DEV && emailResult.success) {
-                console.log(`✅ Bildirim maili gönderildi: ${userData.email}`);
-              }
-            } catch (emailError: unknown) {
-              // Email gönderilemedi - sessizce devam et
-              // Cloud Functions da email gönderebilir, bu yüzden kritik değil
+    // E-posta gönder (async, hata olsa bile bildirim oluşturulur)
+    // ÖNEMLİ: E-posta gönderimi opsiyonel, hata olsa bile uygulama çalışmaya devam etmeli
+    // Tüm hatalar sessizce handle edilmeli, uygulama akışını bozmamalı
+    try {
+      const userDoc = await getDoc(doc(firestore, "users", notificationData.userId));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (userData?.email) {
+          // Mail gönderimi - tek deneme, hata olsa bile sessizce devam et
+          try {
+            const emailResult = await sendNotificationEmail(
+              userData.email,
+              notificationData.title,
+              notificationData.message,
+              notificationData.type,
+              notificationData.relatedId || null,
+              notificationData.metadata || null
+            );
+            
+            // Başarılı olsa bile sadece development'ta log göster (debug)
+            if (emailResult.success && import.meta.env.DEV) {
+              console.debug(`✅ Bildirim maili gönderildi: ${userData.email}`);
+            } else if (!emailResult.success && import.meta.env.DEV) {
+              // Hata olsa bile sessizce devam et, kullanıcıya gösterme
+              console.debug(`ℹ️ Bildirim maili gönderilemedi (backend kapalı veya ayarlar eksik): ${userData.email}`);
             }
+          } catch (emailError: unknown) {
+             // Sessizce devam et
           }
         }
-      } catch (error) {
-        // Hata olsa bile sessizce devam et
+        // E-posta adresi yoksa sessizce devam et
       }
-    }).catch(() => {
-      // Promise rejection'ı yakala ama hiçbir şey yapma
-    });
+      // Kullanıcı bulunamazsa sessizce devam et
+    } catch (emailError) {
+      // E-posta gönderim hatası bildirim oluşturmayı engellemez
+      // Sessizce handle et, hiçbir log gösterme
+      // Uygulama normal çalışmaya devam etmeli
+    }
 
-    // Bildirimi hemen döndür (email gönderimi arka planda devam edecek)
     return notification;
   } catch (error: unknown) {
     if (import.meta.env.DEV) console.error("Create notification error:", error);
@@ -245,19 +222,11 @@ export const markAllNotificationsAsRead = async (userId: string): Promise<void> 
       where("read", "==", false)
     );
     const snapshot = await getDocs(q);
-<<<<<<< HEAD
-
-    const batch = snapshot.docs.map((doc) =>
-      updateDoc(doc.ref, { read: true })
-    );
-
-=======
     
     const batch = snapshot.docs.map((doc) =>
       updateDoc(doc.ref, { read: true })
     );
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     await Promise.all(batch);
   } catch (error: unknown) {
     if (import.meta.env.DEV) console.error("Mark all notifications as read error:", error);
@@ -278,44 +247,6 @@ export const deleteNotification = async (notificationId: string): Promise<void> 
 };
 
 /**
-<<<<<<< HEAD
- * Kullanıcının tüm bildirimlerini sil
- * Kullanıcı hesabı silindiğinde çağrılır
- */
-export const deleteUserNotifications = async (userId: string): Promise<void> => {
-  try {
-    const q = query(
-      collection(firestore, "notifications"),
-      where("userId", "==", userId)
-    );
-    const snapshot = await getDocs(q);
-
-    if (snapshot.empty) {
-      if (import.meta.env.DEV) {
-        console.log(`Kullanıcı ${userId} için silinecek bildirim bulunamadı`);
-      }
-      return;
-    }
-
-    // Tüm bildirimleri paralel sil
-    const deletePromises = snapshot.docs.map((docSnapshot) =>
-      deleteDoc(doc(firestore, "notifications", docSnapshot.id))
-    );
-
-    await Promise.all(deletePromises);
-
-    if (import.meta.env.DEV) {
-      console.log(`${snapshot.size} bildirim silindi (kullanıcı: ${userId})`);
-    }
-  } catch (error: unknown) {
-    if (import.meta.env.DEV) console.error("Delete user notifications error:", error);
-    // Hata fırlatma - bu işlem kritik değil, ana işlem devam etmeli
-  }
-};
-
-/**
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
  * Bildirimleri gerçek zamanlı olarak dinle
  * @param userId Kullanıcı ID'si
  * @param options Bildirim seçenekleri
@@ -329,32 +260,12 @@ export const subscribeToNotifications = (
 ): Unsubscribe => {
   try {
     const notificationsRef = collection(firestore, "notifications");
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const buildQuery = () => {
       const constraints: QueryConstraint[] = [
         where("userId", "==", userId),
         orderBy("createdAt", "desc")
       ];
-<<<<<<< HEAD
-
-      if (options?.unreadOnly) {
-        constraints.push(where("read", "==", false));
-      }
-
-      if (options?.limit) {
-        constraints.push(limit(options.limit));
-      }
-
-      return query(notificationsRef, ...constraints);
-    };
-
-    let q = buildQuery();
-
-=======
       
       if (options?.unreadOnly) {
         constraints.push(where("read", "==", false));
@@ -369,7 +280,6 @@ export const subscribeToNotifications = (
     
     let q = buildQuery();
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // onSnapshot ile gerçek zamanlı dinleme
     const unsubscribe = onSnapshot(
       q,
@@ -379,11 +289,7 @@ export const subscribeToNotifications = (
             id: doc.id,
             ...doc.data(),
           })) as Notification[];
-<<<<<<< HEAD
-
-=======
           
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           callback(notifications);
         } catch (error: unknown) {
           if (import.meta.env.DEV) console.error("Subscribe to notifications error:", error);
@@ -393,29 +299,17 @@ export const subscribeToNotifications = (
       (error) => {
         // 404 ve network hatalarını sessizce handle et (Firestore otomatik yeniden bağlanacak)
         // Production'da da sessizce handle et - bu normal Firestore long-polling davranışı
-<<<<<<< HEAD
-        if (error?.code === 'unavailable' ||
-          error?.code === 'not-found' ||
-          error?.message?.includes('404') ||
-          error?.message?.includes('network') ||
-          error?.message?.includes('transport errored')) {
-=======
         if (error?.code === 'unavailable' || 
             error?.code === 'not-found' ||
             error?.message?.includes('404') || 
             error?.message?.includes('network') ||
             error?.message?.includes('transport errored')) {
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // Sessizce handle et - Firestore otomatik olarak yeniden bağlanacak
           // Production'da console'a yazma (performans ve gürültü azaltma)
           callback([]);
           return;
         }
-<<<<<<< HEAD
-
-=======
         
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         // Sadece gerçek hataları logla
         if (import.meta.env.DEV) {
           console.error("Notifications snapshot error:", error);
@@ -436,11 +330,7 @@ export const subscribeToNotifications = (
                     id: doc.id,
                     ...doc.data(),
                   })) as Notification[];
-<<<<<<< HEAD
-
-=======
                   
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   // Client-side filtreleme
                   if (options?.unreadOnly) {
                     notifications = notifications.filter(n => !n.read);
@@ -448,11 +338,7 @@ export const subscribeToNotifications = (
                   if (options?.limit) {
                     notifications = notifications.slice(0, options.limit);
                   }
-<<<<<<< HEAD
-
-=======
                   
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   callback(notifications);
                 } catch (err: unknown) {
                   if (import.meta.env.DEV) console.error("Fallback subscribe to notifications error:", err);
@@ -474,19 +360,11 @@ export const subscribeToNotifications = (
         }
       }
     );
-<<<<<<< HEAD
-
-    return unsubscribe;
-  } catch (error: unknown) {
-    if (import.meta.env.DEV) console.error("Subscribe to notifications setup error:", error);
-    return () => { };
-=======
     
     return unsubscribe;
   } catch (error: unknown) {
     if (import.meta.env.DEV) console.error("Subscribe to notifications setup error:", error);
     return () => {};
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   }
 };
 

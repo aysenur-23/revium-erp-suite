@@ -13,7 +13,6 @@ import {
   deleteDoc,
   query,
   orderBy,
-  limit,
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
@@ -71,16 +70,14 @@ export interface MaterialTransaction {
  */
 export const getRawMaterials = async (includeDeleted: boolean = false): Promise<RawMaterial[]> => {
   try {
-    // Performans için limit ekle (500 kayıt)
     let q;
     if (includeDeleted) {
-      q = query(collection(firestore, "rawMaterials"), orderBy("createdAt", "desc"), limit(500));
+      q = query(collection(firestore, "rawMaterials"), orderBy("createdAt", "desc"));
     } else {
       // Silinmiş olmayan hammaddeleri getir
       q = query(
         collection(firestore, "rawMaterials"),
-        orderBy("createdAt", "desc"),
-        limit(500)
+        orderBy("createdAt", "desc")
       );
     }
     const snapshot = await getDocs(q);
@@ -442,7 +439,7 @@ export const addMaterialTransaction = async (
       }
     }
 
-    const createdTransaction = {
+    return {
       id: docRef.id,
       materialId: transactionData.materialId,
       type: transactionData.type,
@@ -452,34 +449,6 @@ export const addMaterialTransaction = async (
       createdBy: transactionData.createdBy,
       createdAt: Timestamp.now(),
     } as MaterialTransaction;
-
-    // Audit log
-    try {
-      const { logAudit } = await import("@/utils/auditLogger");
-      await logAudit(
-        "CREATE",
-        "material_transactions",
-        docRef.id,
-        transactionData.createdBy,
-        null,
-        {
-          type: transactionData.type,
-          quantity: transactionData.quantity,
-          reason: transactionData.reason,
-        },
-        {
-          materialId: transactionData.materialId,
-          relatedOrderId: transactionData.relatedOrderId || null,
-        }
-      );
-    } catch (logError) {
-      if (import.meta.env.DEV) {
-        console.error("Material transaction audit log error:", logError);
-      }
-      // Log hatası işlemi engellememeli
-    }
-
-    return createdTransaction;
   } catch (error: unknown) {
     if (import.meta.env.DEV) {
       console.error("Add material transaction error:", error);

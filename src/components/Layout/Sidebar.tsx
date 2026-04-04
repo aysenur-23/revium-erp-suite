@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserProfile } from "@/services/firebase/authService";
 import { getDepartments } from "@/services/firebase/departmentService";
+import { onPermissionCacheChange } from "@/services/firebase/rolePermissionsService";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import logo from "@/assets/rev-logo.png";
 
@@ -56,13 +57,11 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
   };
 
   const cachedPerms = getCachedPermissions(user?.id);
-  // State'i sadece user.id değiştiğinde güncellemek için useRef kullan
-  const [showTeamManagement, setShowTeamManagement] = useState(() => cachedPerms.teamManagement);
-  const [showAdminPanel, setShowAdminPanel] = useState(() => cachedPerms.admin);
+  const [showTeamManagement, setShowTeamManagement] = useState(cachedPerms.teamManagement);
+  const [showAdminPanel, setShowAdminPanel] = useState(cachedPerms.admin);
   const [permissionsLoading, setPermissionsLoading] = useState(false); // Cache'den okuduğumuz için başlangıçta false
   const permissionsCheckedRef = useRef<string | null>(null); // Kullanıcı ID'sini cache'le
   const permissionsCacheRef = useRef<{ teamManagement: boolean; admin: boolean } | null>(null);
-  const lastUserIdRef = useRef<string | undefined>(undefined); // Son kullanıcı ID'sini takip et
 
   // Permission kontrol fonksiyonu - sadece user.id değiştiğinde çalışır
   const checkPermissions = useCallback(async (userId: string | undefined, userRoles: string[] | undefined, userEmail?: string, userEmailVerified?: boolean, userFullName?: string) => {
@@ -72,15 +71,23 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
       setPermissionsLoading(false);
       permissionsCheckedRef.current = null;
       permissionsCacheRef.current = null;
-      lastUserIdRef.current = undefined;
       return;
     }
 
-    // Aynı kullanıcı için zaten kontrol edildiyse ve cache varsa, state'i güncelleme
+    // Aynı kullanıcı için cache'lenmiş sonuçları kullan
     if (permissionsCheckedRef.current === userId && permissionsCacheRef.current) {
-      // State zaten doğru, sadece loading'i kapat
+      setShowTeamManagement(permissionsCacheRef.current.teamManagement);
+      setShowAdminPanel(permissionsCacheRef.current.admin);
       setPermissionsLoading(false);
       return;
+    }
+
+    // localStorage cache'i kontrol et
+    const cachedPerms = getCachedPermissions(userId);
+    if (cachedPerms.teamManagement || cachedPerms.admin) {
+      setShowTeamManagement(cachedPerms.teamManagement);
+      setShowAdminPanel(cachedPerms.admin);
+      // Cache'den okuduğumuz için loading false, ama arka planda güncelleme yapacağız
     }
 
     // Loading başlat (arka planda güncelleme için)
@@ -106,7 +113,7 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
         canViewAdminPanel(userProfile),
       ]);
       
-      // Sonuçları cache'le
+      // Sonuçları cache'le ve state'e kaydet
       permissionsCacheRef.current = {
         teamManagement: canViewTeam,
         admin: canViewAdmin,
@@ -124,22 +131,16 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
         // localStorage yazma hatası - sessizce devam et
       }
       
-      // State'i güncelle - sadece bu kullanıcı için kontrol ediliyorsa
-      // lastUserIdRef ile kontrol et - sadece aynı kullanıcı için güncelle
-      if (lastUserIdRef.current === userId) {
-        setShowTeamManagement(canViewTeam);
-        setShowAdminPanel(canViewAdmin);
-      }
+      // State'i güncelle - sadece bir kez, user.id değiştiğinde
+      setShowTeamManagement(canViewTeam);
+      setShowAdminPanel(canViewAdmin);
       setPermissionsLoading(false);
     } catch (error: unknown) {
       if (import.meta.env.DEV) {
         console.error("Error checking sidebar permissions:", error);
       }
-      // Hata durumunda sadece aynı kullanıcı için state'i güncelle
-      if (lastUserIdRef.current === userId) {
-        setShowTeamManagement(false);
-        setShowAdminPanel(false);
-      }
+      setShowTeamManagement(false);
+      setShowAdminPanel(false);
       setPermissionsLoading(false);
       permissionsCheckedRef.current = userId; // Hata durumunda da cache'le ki tekrar denemesin
       permissionsCacheRef.current = { teamManagement: false, admin: false };
@@ -149,80 +150,38 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
   // Ekip Yönetimi ve Admin Paneli yetkilerini Firestore'dan kontrol et - Sadece user.id değiştiğinde
   useEffect(() => {
     const userId = user?.id;
+    const userRoles = user?.roles;
+    const userEmail = user?.email;
+    const userEmailVerified = user?.emailVerified;
+    const userFullName = user?.fullName;
     
-    // Kullanıcı değişti mi kontrol et - sadece ID'ye bak
-    const userChanged = lastUserIdRef.current !== userId;
-    
-    if (userChanged) {
-      // Kullanıcı değişti - cache'i temizle ve state'i cache'den oku
-      lastUserIdRef.current = userId;
+    // Kullanıcı değiştiğinde cache'i temizle
+    if (permissionsCheckedRef.current !== userId) {
       permissionsCheckedRef.current = null;
       permissionsCacheRef.current = null;
-      
-      // Yeni kullanıcı için state'i cache'den oku
-      const cachedPerms = getCachedPermissions(userId);
-      setShowTeamManagement(cachedPerms.teamManagement);
-      setShowAdminPanel(cachedPerms.admin);
-      
-      // Yeni kullanıcı için yetkileri kontrol et
-      if (userId) {
-        const userRoles = user?.roles;
-        const userEmail = user?.email;
-        const userEmailVerified = user?.emailVerified;
-        const userFullName = user?.fullName;
-        checkPermissions(userId, userRoles, userEmail, userEmailVerified, userFullName);
-      } else {
-        // Kullanıcı yok - state'i sıfırla
-        setShowTeamManagement(false);
-        setShowAdminPanel(false);
-        setPermissionsLoading(false);
-      }
-    } else if (userId && permissionsCheckedRef.current !== userId) {
-      // Aynı kullanıcı ama henüz kontrol edilmedi - kontrol et
-      const userRoles = user?.roles;
-      const userEmail = user?.email;
-      const userEmailVerified = user?.emailVerified;
-      const userFullName = user?.fullName;
-      checkPermissions(userId, userRoles, userEmail, userEmailVerified, userFullName);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]); // Sadece user.id değiştiğinde çalış
+    
+    checkPermissions(userId, userRoles, userEmail, userEmailVerified, userFullName);
+  }, [user?.id, checkPermissions]); // Sadece user.id değiştiğinde çalış
 
-  // Permission cache değişikliklerini dinleme - KALDIRILDI
+  // Permission cache değiştiğinde cache'i temizle ama state'i güncelleme
   // Menü sadece user.id değiştiğinde güncellenmeli, cache değişikliklerinde sabit kalmalı
-  // onPermissionCacheChange callback'i menüyü her tıklamada değiştiriyordu, bu yüzden kaldırıldı
-  // Menü artık sadece kullanıcı değiştiğinde (login/logout) güncellenir
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const unsubscribe = onPermissionCacheChange(() => {
+      // Cache'i temizle ama state'i güncelleme - menü sabit kalmalı
+      // Sadece yeni bir kullanıcı giriş yaptığında veya user.id değiştiğinde menü güncellenir
+      permissionsCheckedRef.current = null;
+      permissionsCacheRef.current = null;
+    });
+    
+    return () => unsubscribe();
+  }, [user?.id]);
 
   const handleNavClick = () => {
     if (isMobile) {
       onOpenChange(false);
-    }
-  };
-
-  // Prefetch page on hover for faster navigation
-  const handlePrefetch = (path: string) => {
-    // Critical sayfalar için prefetch
-    const prefetchMap: Record<string, () => Promise<unknown>> = {
-      '/': () => import("../../pages/Dashboard"),
-      '/tasks': () => import("../../pages/Tasks"),
-      '/production': () => import("../../pages/Production"),
-      '/customers': () => import("../../pages/Customers"),
-      '/products': () => import("../../pages/Products"),
-      '/orders': () => import("../../pages/Orders"),
-      '/raw-materials': () => import("../../pages/RawMaterials"),
-      '/warranty': () => import("../../pages/Warranty"),
-      '/reports': () => import("../../pages/Reports"),
-      '/requests': () => import("../../pages/Requests"),
-      '/settings': () => import("../../pages/Settings"),
-      '/team-management': () => import("../../pages/TeamManagement"),
-      '/admin': () => import("../../pages/Admin"),
-      '/projects': () => import("../../pages/Projects"),
-      '/notifications': () => import("../../pages/Notifications"),
-    };
-    
-    const prefetchFn = prefetchMap[path];
-    if (prefetchFn) {
-      prefetchFn().catch(() => {}); // Sessizce hata yoksay
     }
   };
 
@@ -261,11 +220,7 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
           }}
           title="Ana sayfaya git"
         >
-<<<<<<< HEAD
-          <img src={logo} alt="Revium ERP" className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 rounded-lg object-contain bg-white p-1 flex-shrink-0" width={32} height={32} loading="eager" />
-=======
           <img src={logo} alt="Revium ERP" className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 rounded-lg object-contain bg-white p-1 flex-shrink-0" />
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           <span className="text-base sm:text-lg md:text-xl font-bold text-sidebar-foreground">Revium ERP</span>
         </div>
       </div>
@@ -283,7 +238,6 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
             )
           }
           onClick={handleNavClick}
-          onMouseEnter={() => handlePrefetch("/")}
         >
           <LayoutDashboard className="h-4 w-4 flex-shrink-0" />
           <span className="font-medium text-xs">Dashboard</span>
@@ -302,7 +256,6 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
               )
             }
             onClick={handleNavClick}
-            onMouseEnter={() => handlePrefetch("/team-management")}
           >
             <UserCog className="h-4 w-4 flex-shrink-0" />
             <span className="font-medium text-xs">Ekip Yönetimi</span>
@@ -322,7 +275,6 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
               )
             }
             onClick={handleNavClick}
-            onMouseEnter={() => handlePrefetch("/admin")}
           >
             <Shield className="h-4 w-4 flex-shrink-0" />
             <span className="font-medium text-xs">Admin Paneli</span>
@@ -331,7 +283,7 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
 
         {/* Görevler - Basit Link */}
         <NavLink
-          to="/tasks"
+          to="/tasks?project=all&filter=all&view=board"
           className={({ isActive }) =>
             cn(
               "flex items-center gap-2 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg transition-all duration-200",
@@ -341,7 +293,6 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
             )
           }
           onClick={handleNavClick}
-          onMouseEnter={() => handlePrefetch("/tasks")}
         >
           <Briefcase className="h-4 w-4 flex-shrink-0" />
           <span className="font-medium text-xs">Görevler</span>
@@ -356,15 +307,14 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
               cn(
                 "flex items-center gap-2 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg transition-all duration-200",
                 "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                "touch-manipulation min-h-[44px] sm:min-h-[36px] active:bg-sidebar-accent/80 text-[11px] sm:text-xs",
+                "touch-manipulation min-h-[44px] sm:min-h-[36px] active:bg-sidebar-accent/80 text-sm sm:text-xs",
                 isActive && "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
               )
             }
             onClick={handleNavClick}
-            onMouseEnter={() => handlePrefetch(item.path)}
           >
             <item.icon className="h-4 w-4 flex-shrink-0" />
-            <span className="font-medium text-[11px] sm:text-xs">{item.label}</span>
+            <span className="font-medium text-xs">{item.label}</span>
           </NavLink>
         ))}
       </nav>
@@ -376,10 +326,6 @@ export const Sidebar = ({ isMobile, open, onOpenChange, isCollapsed = false }: S
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent 
           side="left" 
-<<<<<<< HEAD
-          data-sidebar="true"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           className="p-0 w-64 max-w-[85vw] touch-manipulation overflow-y-auto"
           style={{ 
             WebkitOverflowScrolling: 'touch',

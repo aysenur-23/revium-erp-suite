@@ -110,19 +110,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-<<<<<<< HEAD
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] md:!max-w-[85vw] !w-[100vw] sm:!w-[95vw] md:!w-[85vw] !h-[100vh] sm:!h-[90vh] md:!h-[80vh] !max-h-[100vh] sm:!max-h-[90vh] md:!max-h-[80vh] !left-0 sm:!left-[2.5vw] md:!left-[7.5vw] !top-0 sm:!top-[5vh] md:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
-=======
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
-        <DialogTitle className="sr-only">
-          Yeni Talep Oluştur
-        </DialogTitle>
-        <DialogDescription className="sr-only">
-          Yeni talep oluşturun
-        </DialogDescription>
-        
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           {/* Header */}
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -131,15 +119,18 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground truncate">
+                <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                   Yeni Talep Oluştur
-                </h2>
+                </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Yeni talep oluşturun
+                </DialogDescription>
               </div>
               <div className="flex flex-wrap gap-2 flex-shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 min-h-[36px] sm:min-h-8"
+                  className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
                   onClick={() => onOpenChange(false)}
                   disabled={loading}
                 >
@@ -149,7 +140,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
                 <Button
                   variant="default"
                   size="sm"
-                  className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 text-white min-h-[36px] sm:min-h-8"
+                  className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0 text-white"
                   onClick={handleSubmit}
                   disabled={loading}
                 >
@@ -170,11 +161,11 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
               <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-[14px] sm:text-[15px]">Talep Bilgileri</CardTitle>
+                    <CardTitle className="text-base sm:text-lg">Talep Bilgileri</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label className="text-[11px] sm:text-xs">
+                      <Label className="text-sm sm:text-base">
                         Kime (Yönetici Seçimi) <span className="text-red-500">*</span>
                       </Label>
                       <Select value={assignedTo} onValueChange={setAssignedTo}>
@@ -192,7 +183,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-[11px] sm:text-xs">Talep Türü</Label>
+                      <Label className="text-sm sm:text-base">Talep Türü</Label>
                       <Select value={type} onValueChange={setType}>
                         <SelectTrigger className="min-h-[44px] sm:min-h-0">
                           <SelectValue />
@@ -208,7 +199,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-[11px] sm:text-xs">
+                      <Label className="text-sm sm:text-base">
                         Başlık <span className="text-red-500">*</span>
                       </Label>
                       <Input
@@ -221,7 +212,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-[11px] sm:text-xs">
+                      <Label className="text-sm sm:text-base">
                         Açıklama <span className="text-red-500">*</span>
                       </Label>
                       <Textarea
@@ -237,7 +228,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
                     {(type === "purchase" || type === "advance" || type === "expense") && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                         <div className="sm:col-span-2 space-y-2">
-                          <Label className="text-[11px] sm:text-xs">Tutar</Label>
+                          <Label className="text-sm sm:text-base">Tutar</Label>
                           <Input
                             type="number"
                             placeholder="0.00"
@@ -249,7 +240,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-[11px] sm:text-xs">Para Birimi</Label>
+                          <Label className="text-sm sm:text-base">Para Birimi</Label>
                           <Select value={currency} onValueChange={setCurrency}>
                             <SelectTrigger className="min-h-[44px] sm:min-h-0">
                               <SelectValue />
@@ -269,7 +260,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
                     {(type === "leave") && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div className="space-y-2">
-                          <Label className="text-[11px] sm:text-xs">Başlangıç Tarihi</Label>
+                          <Label className="text-sm sm:text-base">Başlangıç Tarihi</Label>
                           <Input 
                             type="date" 
                             value={requestDate}
@@ -278,7 +269,7 @@ export const RequestModal = ({ open, onOpenChange, onSuccess }: RequestModalProp
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-[11px] sm:text-xs">Bitiş Tarihi</Label>
+                          <Label className="text-sm sm:text-base">Bitiş Tarihi</Label>
                           <Input 
                             type="date" 
                             value={endDate}

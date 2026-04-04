@@ -114,7 +114,7 @@ export const generateSalesReportPDF = async (data: SalesReportData, startDate: s
     let cardX = mar;
 
     const totalRevenue = safeNumber(data.totalRevenue);
-    const avgOrderValue = safeNumber(data.avgOrderValue ?? (data.totalOrders && data.totalOrders > 0 ? totalRevenue / data.totalOrders : 0));
+    const avgOrderValue = safeNumber(data.avgOrderValue ? (data.totalOrders && data.totalOrders > 0 ? totalRevenue / data.totalOrders : 0));
 
     drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
         title: "Toplam Gelir",
@@ -133,7 +133,7 @@ export const generateSalesReportPDF = async (data: SalesReportData, startDate: s
     drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
         title: "Toplam Sipariş",
         value: totalOrders.toString(),
-        description: "Tarih aralığında",
+        description: "Seçili tarihler arasında oluşturulan siparişler",
         color: {
             background: TAILWIND_COLORS.infoCardBg,
             border: TAILWIND_COLORS.infoCardBorder,
@@ -147,7 +147,7 @@ export const generateSalesReportPDF = async (data: SalesReportData, startDate: s
     drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
         title: "Aktif Müşteri",
         value: activeCustomers.toString(),
-        description: "Sipariş veren müşteri",
+        description: "En az bir sipariş veren müşteri sayısı",
         color: {
             background: TAILWIND_COLORS.successCardBg,
             border: TAILWIND_COLORS.successCardBorder,
@@ -170,7 +170,7 @@ export const generateSalesReportPDF = async (data: SalesReportData, startDate: s
         const statusMap = new Map<string, { count: number; total: number }>();
         data.orders?.forEach((order) => {
             const status = order.status || "Bilinmeyen";
-            const total = safeNumber(order.total ?? order.totalAmount ?? order.total_amount ?? order.subtotal ?? 0);
+            const total = safeNumber(order.total ? order.totalAmount ? order.total_amount ? order.subtotal ? 0);
             if (!statusMap.has(status)) {
                 statusMap.set(status, { count: 0, total: 0 });
             }
@@ -321,6 +321,6 @@ export const generateSalesReportPDF = async (data: SalesReportData, startDate: s
         }
         return blob;
     } catch (outputError) {
-        throw new Error("PDF oluşturulamadı: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
+        throw new Error("PDF olu_turulamad1: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
     }
 };

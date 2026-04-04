@@ -146,7 +146,7 @@ export const generateUserStatsPDF = async (userStats: UserStatsReportData): Prom
         ["Kabul Edilen", userStats.accepted.toString(), userStats.total > 0 ? `%${Math.round((userStats.accepted / userStats.total) * 100)}` : "%0"],
         ["Beklemede", userStats.pending.toString(), userStats.total > 0 ? `%${Math.round((userStats.pending / userStats.total) * 100)}` : "%0"],
         ["Reddedilen", userStats.rejected.toString(), userStats.total > 0 ? `%${Math.round((userStats.rejected / userStats.total) * 100)}` : "%0"],
-        ["Aktif Görevler", userStats.active.toString(), userStats.total > 0 ? `%${Math.round((userStats.active / userStats.total) * 100)}` : "%0"],
+        ["Aktif G�revler", userStats.active.toString(), userStats.total > 0 ? `%${Math.round((userStats.active / userStats.total) * 100)}` : "%0"],
     ];
 
     // Detaylı istatistikler için profesyonel tablo stilleri
@@ -276,6 +276,6 @@ export const generateUserStatsPDF = async (userStats: UserStatsReportData): Prom
         }
         return blob;
     } catch (outputError) {
-        throw new Error("PDF oluşturulamadı: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
+        throw new Error("PDF olu_turulamad1: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
     }
 };

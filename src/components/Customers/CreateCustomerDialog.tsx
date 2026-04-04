@@ -152,19 +152,7 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-<<<<<<< HEAD
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] md:!max-w-[85vw] !w-[100vw] sm:!w-[95vw] md:!w-[85vw] !h-[100vh] sm:!h-[90vh] md:!h-[80vh] !max-h-[100vh] sm:!max-h-[90vh] md:!max-h-[80vh] !left-0 sm:!left-[2.5vw] md:!left-[7.5vw] !top-0 sm:!top-[5vh] md:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
-=======
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
-        <DialogTitle className="sr-only">
-          Yeni Müşteri
-        </DialogTitle>
-        <DialogDescription className="sr-only">
-          Yeni müşteri eklemek için formu doldurun
-        </DialogDescription>
-        
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           {/* Header */}
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -173,15 +161,18 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <User className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground truncate">
+                <DialogTitle className="text-[18px] sm:text-[20px] font-semibold text-foreground truncate">
                   Yeni Müşteri
-                </h2>
+                </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Yeni müşteri eklemek için formu doldurun
+                </DialogDescription>
               </div>
               <div className="flex flex-wrap gap-2 flex-shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 min-h-[36px] sm:min-h-8"
+                  className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
                   onClick={() => onOpenChange(false)}
                   disabled={loading}
                 >
@@ -191,7 +182,7 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
                 <Button
                   variant="default"
                   size="sm"
-                  className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 text-white min-h-[36px] sm:min-h-8"
+                  className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0 text-white"
                   onClick={handleSubmit}
                   disabled={loading}
                 >
@@ -208,91 +199,91 @@ export const CreateCustomerDialog = ({ open, onOpenChange, onSuccess }: CreateCu
         
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
             <div className="max-w-full mx-auto h-full overflow-y-auto">
-              <form onSubmit={handleSubmit} className="space-y-2">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                 <Card>
-                  <CardContent className="p-3 sm:p-4 space-y-1.5 sm:space-y-2">
+                  <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                     <div>
                       <h3 className="text-[14px] sm:text-[15px] font-semibold text-foreground mb-1">Müşteri Bilgileri</h3>
-                      <p className="text-[11px] sm:text-xs text-muted-foreground">Temel müşteri bilgilerini girin</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Temel müşteri bilgilerini girin</p>
                     </div>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="name" showRequired className="text-[11px] sm:text-xs">İsim</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name" showRequired className="text-sm sm:text-base">İsim</Label>
                         <Input
                           id="name"
                           value={formData.name}
                           onChange={(e) => setFieldValue("name", e.target.value)}
-                          className="min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
+                          className="min-h-[44px] sm:min-h-0"
                           required
                         />
-                        {errors.name && <p className="text-[11px] sm:text-xs text-destructive">{errors.name}</p>}
+                        {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="company" className="text-[11px] sm:text-xs">Şirket</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="company" className="text-sm sm:text-base">Şirket</Label>
                         <Input
                           id="company"
                           value={formData.company}
                           onChange={(e) => setFieldValue("company", e.target.value)}
-                          className="min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
+                          className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="email" className="text-[11px] sm:text-xs">E-posta</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="email" className="text-sm sm:text-base">E-posta</Label>
                         <Input
                           id="email"
                           type="email"
                           value={formData.email}
                           onChange={(e) => setFieldValue("email", e.target.value)}
-                          className="min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
+                          className="min-h-[44px] sm:min-h-0"
                         />
-                        {errors.email && <p className="text-[11px] sm:text-xs text-destructive">{errors.email}</p>}
+                        {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="phone" className="text-[11px] sm:text-xs">Telefon</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone" className="text-sm sm:text-base">Telefon</Label>
                         <Input
                           id="phone"
                           value={formData.phone}
                           onChange={(e) => setFieldValue("phone", e.target.value)}
-                          className="min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
+                          className="min-h-[44px] sm:min-h-0"
                         />
-                        {errors.phone && <p className="text-[11px] sm:text-xs text-destructive">{errors.phone}</p>}
+                        {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="address" className="text-[11px] sm:text-xs">Adres</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="address" className="text-sm sm:text-base">Adres</Label>
                         <Textarea
                           id="address"
                           value={formData.address}
                           onChange={(e) => setFieldValue("address", e.target.value)}
                           rows={3}
-                          className="min-h-[44px] sm:min-h-0 resize-none text-[11px] sm:text-xs"
+                          className="min-h-[44px] sm:min-h-0 resize-none"
                         />
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="tax_number" className="text-[11px] sm:text-xs">Vergi No</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="tax_number" className="text-sm sm:text-base">Vergi No</Label>
                         <Input
                           id="tax_number"
                           value={formData.tax_number}
                           onChange={(e) => setFieldValue("tax_number", e.target.value)}
-                          className="min-h-[44px] sm:min-h-0 text-[11px] sm:text-xs"
+                          className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="notes" className="text-[11px] sm:text-xs">Notlar</Label>
+                      <Label htmlFor="notes" className="text-sm sm:text-base">Notlar</Label>
                       <Textarea
                         id="notes"
                         value={formData.notes}
                         onChange={(e) => setFieldValue("notes", e.target.value)}
                         rows={4}
-                        className="min-h-[44px] sm:min-h-0 resize-none text-[11px] sm:text-xs"
+                        className="min-h-[44px] sm:min-h-0 resize-none"
                         placeholder="Müşteri hakkında notlar..."
                       />
                     </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,13 +26,9 @@ interface CreateProductDialogProps {
 }
 
 export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreateProductDialogProps) => {
-<<<<<<< HEAD
-  const { user, isAdmin, isTeamLeader } = useAuth();
-=======
   const { user } = useAuth();
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const getInitialFormData = () => ({
     name: "",
     sku: `PRD-${Date.now()}`,
     description: "",
@@ -45,6 +41,15 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
     max_stock: "",
     location: "",
   });
+
+  const [formData, setFormData] = useState(getInitialFormData());
+
+  // Dialog açıldığında formu sıfırla (stale SKU ve önceki veriler temizlensin)
+  useEffect(() => {
+    if (open) {
+      setFormData(getInitialFormData());
+    }
+  }, [open]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) {
@@ -106,19 +111,7 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-<<<<<<< HEAD
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] md:!max-w-[85vw] !w-[100vw] sm:!w-[95vw] md:!w-[85vw] !h-[100vh] sm:!h-[90vh] md:!h-[80vh] !max-h-[100vh] sm:!max-h-[90vh] md:!max-h-[80vh] !left-0 sm:!left-[2.5vw] md:!left-[7.5vw] !top-0 sm:!top-[5vh] md:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
-=======
-      <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-        {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
-        <DialogTitle className="sr-only">
-          Yeni Ürün
-        </DialogTitle>
-        <DialogDescription className="sr-only">
-          Yeni ürün eklemek için formu doldurun
-        </DialogDescription>
-        
+      <DialogContent className="!max-w-[100vw] sm:!max-w-[80vw] !w-[100vw] sm:!w-[80vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[10vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
         <div className="flex flex-col h-full min-h-0">
           {/* Header */}
           <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -127,15 +120,18 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                   <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground truncate">
+                <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground truncate">
                   Yeni Ürün
-                </h2>
+                </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Yeni ürün eklemek için formu doldurun
+                </DialogDescription>
               </div>
               <div className="flex flex-wrap gap-2 flex-shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 min-h-[36px] sm:min-h-8"
+                  className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
                   onClick={() => onOpenChange(false)}
                   disabled={loading}
                 >
@@ -145,7 +141,7 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                 <Button
                   variant="default"
                   size="sm"
-                  className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 text-white min-h-[36px] sm:min-h-8"
+                  className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0 text-white"
                   onClick={handleSubmit}
                   disabled={loading}
                 >
@@ -162,15 +158,15 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
         
           <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
             <div className="max-w-full mx-auto h-full overflow-y-auto">
-              <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-3 sm:space-y-4">
+              <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-4 sm:space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-[14px] sm:text-[15px]">Temel Bilgiler</CardTitle>
+                    <CardTitle className="text-lg sm:text-xl">Temel Bilgiler</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3 sm:space-y-4">
+                  <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="name" className="text-[11px] sm:text-xs">Ürün Adı</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="name" className="text-sm sm:text-base">Ürün Adı</Label>
                         <Input
                           id="name"
                           value={formData.name}
@@ -179,8 +175,8 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                           required
                         />
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="sku" className="text-[11px] sm:text-xs">SKU</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="sku" className="text-sm sm:text-base">SKU</Label>
                         <Input
                           id="sku"
                           value={formData.sku}
@@ -192,7 +188,7 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="description" className="text-[11px] sm:text-xs">Açıklama</Label>
+                      <Label htmlFor="description" className="text-sm sm:text-base">Açıklama</Label>
                       <Textarea
                         id="description"
                         value={formData.description}
@@ -203,41 +199,8 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="category" className="text-[11px] sm:text-xs">Kategori</Label>
-<<<<<<< HEAD
-                        {(isAdmin || isTeamLeader) ? (
-                          <div className="space-y-2">
-                            <Input
-                              id="category"
-                              value={formData.category}
-                              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                              placeholder="Kategori yazın veya seçin"
-                              className="min-h-[44px] sm:min-h-0"
-                              list="category-options"
-                            />
-                            <datalist id="category-options">
-                              {PRODUCT_CATEGORIES.map((cat) => (
-                                <option key={cat} value={cat} />
-                              ))}
-                            </datalist>
-                          </div>
-                        ) : (
-                          <Select value={formData.category ? formData.category : "none"} onValueChange={(value) => setFormData({ ...formData, category: value === "none" ? "" : value })}>
-                            <SelectTrigger className="min-h-[44px] sm:min-h-0">
-                              <SelectValue placeholder="Kategori seçin" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Kategori Yok</SelectItem>
-                              {PRODUCT_CATEGORIES.map((cat) => (
-                                <SelectItem key={cat} value={cat}>
-                                  {cat}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-=======
+                      <div className="space-y-2">
+                        <Label htmlFor="category" className="text-sm sm:text-base">Kategori</Label>
                         <Select value={formData.category ? formData.category : "none"} onValueChange={(value) => setFormData({ ...formData, category: value === "none" ? "" : value })}>
                           <SelectTrigger className="min-h-[44px] sm:min-h-0">
                             <SelectValue placeholder="Kategori seçin" />
@@ -251,10 +214,9 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                             ))}
                           </SelectContent>
                         </Select>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="stock" className="text-[11px] sm:text-xs">Stok</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="stock" className="text-sm sm:text-base">Stok</Label>
                         <Input
                           id="stock"
                           type="number"
@@ -264,8 +226,8 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                           required
                         />
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="unit" className="text-[11px] sm:text-xs">Birim</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="unit" className="text-sm sm:text-base">Birim</Label>
                         <Select value={formData.unit ? formData.unit : ""} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
                           <SelectTrigger className="min-h-[44px] sm:min-h-0">
                             <SelectValue />
@@ -282,8 +244,8 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="price" className="text-[11px] sm:text-xs">Satış Fiyatı</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="price" className="text-sm sm:text-base">Satış Fiyatı</Label>
                         <Input
                           id="price"
                           type="number"
@@ -293,8 +255,8 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                           className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="cost" className="text-[11px] sm:text-xs">Maliyet</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="cost" className="text-sm sm:text-base">Maliyet</Label>
                         <Input
                           id="cost"
                           type="number"
@@ -307,8 +269,8 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="min_stock" className="text-[11px] sm:text-xs">Min. Stok</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="min_stock" className="text-sm sm:text-base">Min. Stok</Label>
                         <Input
                           id="min_stock"
                           type="number"
@@ -317,8 +279,8 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                           className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="max_stock" className="text-[11px] sm:text-xs">Max. Stok</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="max_stock" className="text-sm sm:text-base">Max. Stok</Label>
                         <Input
                           id="max_stock"
                           type="number"
@@ -327,8 +289,8 @@ export const CreateProductDialog = ({ open, onOpenChange, onSuccess }: CreatePro
                           className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <Label htmlFor="location" className="text-[11px] sm:text-xs">Konum</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="location" className="text-sm sm:text-base">Konum</Label>
                         <Input
                           id="location"
                           value={formData.location}

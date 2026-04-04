@@ -20,7 +20,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { ResponsiveTable, ResponsiveTableColumn } from "@/components/shared/ResponsiveTable";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { getOrders, deleteOrder, updateOrder, Order, subscribeToOrders, getOrderItems } from "@/services/firebase/orderService";
 import { Timestamp } from "firebase/firestore";
@@ -28,7 +28,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { canCreateResource, canUpdateResource, canDeleteResource } from "@/utils/permissions";
 import { UserProfile } from "@/services/firebase/authService";
 import { CURRENCY_SYMBOLS, Currency } from "@/utils/currency";
-import { getPriorityMeta } from "@/utils/priority";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
@@ -79,13 +78,9 @@ const statusOptions: Array<{ value: ProductionOrder["status"]; label: string }> 
 ];
 
 const Production = () => {
-  const { isAdmin, isTeamLeader, user } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
-<<<<<<< HEAD
-  const [loading, setLoading] = useState(false); // Başlangıçta false - placeholder data ile hızlı render
-=======
   const [loading, setLoading] = useState(true);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -162,19 +157,6 @@ const Production = () => {
 
   // Gerçek zamanlı sipariş güncellemeleri için subscribe
   useEffect(() => {
-<<<<<<< HEAD
-    // Defer subscription: İlk render'dan 100ms sonra başlat (non-blocking)
-    const timer = setTimeout(() => {
-      setLoading(true);
-      
-      const filters: { status?: string } = {};
-      if (statusFilter !== 'all') {
-        filters.status = statusFilter;
-      }
-      
-      // Gerçek zamanlı dinleme başlat
-      const unsubscribe = subscribeToOrders(filters, async (firebaseOrders) => {
-=======
     const filters: { status?: string } = {};
     if (statusFilter !== 'all') {
       filters.status = statusFilter;
@@ -184,7 +166,6 @@ const Production = () => {
     
     // Gerçek zamanlı dinleme başlat
     const unsubscribe = subscribeToOrders(filters, async (firebaseOrders) => {
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       try {
         // Null/undefined kontrolü
         if (!Array.isArray(firebaseOrders)) {
@@ -242,36 +223,6 @@ const Production = () => {
         setOrders(paginatedOrders);
         setTotalPages(Math.ceil(filtered.length / 50));
         
-<<<<<<< HEAD
-        // İlk render için: items olmadan göster
-        setOrdersWithItems(new Map());
-        setLoading(false);
-        
-        // Defer items loading: İlk render'dan sonra yükle (200ms defer)
-        setTimeout(async () => {
-          const itemsMap = new Map<string, { productName?: string; quantity?: number; unit?: string }>();
-          await Promise.all(
-            paginatedOrders.map(async (order: Order) => {
-              try {
-                const items = await getOrderItems(order.id);
-                if (items.length > 0) {
-                  const firstItem = items[0];
-                  itemsMap.set(order.id, {
-                    productName: firstItem.productName || firstItem.product_name || undefined,
-                    quantity: firstItem.quantity,
-                    unit: "Adet", // OrderItem'da unit yok, varsayılan olarak "Adet"
-                  });
-                }
-              } catch (error: unknown) {
-                if (import.meta.env.DEV) {
-                  console.error(`Error loading items for order ${order.id}:`, error);
-                }
-              }
-            })
-          );
-          setOrdersWithItems(itemsMap);
-        }, 200);
-=======
         // Her sipariş için items'ı yükle (sadece görünür olanlar için)
         const itemsMap = new Map<string, { productName?: string; quantity?: number; unit?: string }>();
         await Promise.all(
@@ -295,7 +246,6 @@ const Production = () => {
         );
         setOrdersWithItems(itemsMap);
         setLoading(false);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       } catch (error: unknown) {
         if (import.meta.env.DEV) {
           console.error("Real-time production orders update error:", error);
@@ -308,14 +258,6 @@ const Production = () => {
     return () => {
       unsubscribe();
     };
-<<<<<<< HEAD
-    }, 100);
-    
-    return () => {
-      clearTimeout(timer);
-    };
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   }, [statusFilter, sortBy, sortOrder, searchQuery, page]);
 
   const getStatusVariant = (status: string) => {
@@ -389,6 +331,18 @@ const formatDate = (value?: string | Date | Timestamp | null | undefined) => {
   }
 };
 
+const getPriorityMeta = (priority?: number | null) => {
+  if (priority === undefined || priority === null) {
+    return { label: "Öncelik: 0", className: "bg-muted text-muted-foreground" };
+  }
+  if (priority >= 4) {
+    return { label: `Öncelik: ${priority}`, className: "bg-destructive/15 text-destructive" };
+  }
+  if (priority >= 2) {
+    return { label: `Öncelik: ${priority}`, className: "bg-amber-100 text-amber-800" };
+  }
+  return { label: `Öncelik: ${priority}`, className: "bg-slate-200 text-slate-800" };
+};
 
 const formatCurrency = (value?: number, currency?: Currency | string) => {
   if (value === undefined || value === null) {
@@ -441,13 +395,13 @@ const priorityOptions = [
     setUpdatingOrderId(orderId);
     try {
       // Yetki kontrolü
-      if (!canUpdate && !isAdmin && !isTeamLeader) {
+      if (!canUpdate && !isAdmin) {
         toast.error("Sipariş güncelleme yetkiniz yok.");
         setUpdatingOrderId(null);
         return;
       }
       // Üst yöneticiler için durum geçiş validasyonunu atla
-      const skipValidation = isAdmin === true || isTeamLeader || canUpdate;
+      const skipValidation = isAdmin === true || canUpdate;
       await updateOrder(orderId, payload as Partial<Order>, user?.id, skipValidation);
       toast.success("Sipariş güncellendi");
       // Subscription otomatik güncelleyecek
@@ -472,14 +426,14 @@ const priorityOptions = [
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg sm:text-xl font-semibold text-foreground">Üretim Siparişleri</h1>
-            <p className="text-muted-foreground mt-0.5 text-xs sm:text-sm">Üretim süreçlerini yönetin</p>
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Üretim Siparişleri</h1>
+            <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Üretim süreçlerini yönetin</p>
           </div>
           {canCreate && (
-            <Button className="gap-1 w-full sm:w-auto min-h-[36px] sm:min-h-8 text-xs sm:text-sm" onClick={() => setCreateDialogOpen(true)}>
+            <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={() => setCreateDialogOpen(true)}>
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Yeni Sipariş</span>
               <span className="sm:hidden">Yeni</span>
@@ -488,8 +442,8 @@ const priorityOptions = [
         </div>
 
         <Card>
-          <CardContent className="p-1.5">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2">
+          <CardContent className="p-3 sm:p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4">
               {/* Arama Kutusu */}
               <div className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] md:min-w-[250px]">
                 <SearchInput
@@ -548,170 +502,100 @@ const priorityOptions = [
         {/* Responsive Table View - Her zaman görünür */}
         <Card>
           <CardContent className="p-0">
-            <div className="w-full overflow-hidden">
-              <ResponsiveTable
-                data={orders}
-                columns={[
-                  {
-                    key: "order_number",
-                    header: "Sipariş No",
-                    accessor: (order) => (
+            <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+              <div className="inline-block min-w-full align-middle">
+                <Table className="min-w-[1000px] sm:min-w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4">Sipariş No</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden md:table-cell">Müşteri</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden lg:table-cell">Termin</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4">Durum</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden xl:table-cell">Öncelik</TableHead>
+                    <TableHead className="text-right text-xs font-semibold px-2 sm:px-4">Tutar</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.map((order) => {
+                    const priorityMeta = getPriorityMeta(order.priority);
+                    return (
+                      <TableRow
+                        key={order.id}
+                        className="hover:bg-muted/50 transition-colors"
+                      >
+                        <TableCell 
+                          className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 cursor-pointer"
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            setDetailModalOpen(true);
+                          }}
+                        >
                           <div className="flex flex-col gap-0.5">
-                        <span className="text-xs font-medium">{order.order_number || order.orderNumber || "-"}</span>
-                            <span className="md:hidden text-xs text-muted-foreground">
+                            <span>{order.order_number || order.orderNumber || "-"}</span>
+                            <span className="md:hidden text-[10px] text-muted-foreground">
                               {order.customer_name || order.customerName || "-"}
                             </span>
-                            <span className="lg:hidden text-xs text-muted-foreground">
+                            <span className="lg:hidden text-[10px] text-muted-foreground">
                               {formatDate(order.due_date || order.dueDate || order.created_at || order.createdAt)}
                             </span>
                           </div>
-                    ),
-                    priority: "high",
-                    sticky: true,
-                    minWidth: 120,
-                    headerClassName: "text-left",
-                    cellClassName: "text-left",
-                  },
-                  {
-                    key: "customer",
-                    header: "Müşteri",
-                    accessor: (order) => (
-                      <span className="text-xs font-medium truncate block w-full">
-                          {order.customer_name || order.customerName || "-"}
-                          {order.customer_company && (
-                            <span className="text-muted-foreground"> - {order.customer_company}</span>
-                          )}
-                      </span>
-                    ),
-                    priority: "medium",
-                    minWidth: 120,
-                    headerClassName: "text-left",
-                    cellClassName: "text-left",
-                  },
-                  {
-                    key: "due_date",
-                    header: "Termin",
-                    accessor: (order) => (
-                      <span className="text-xs font-medium">
-                        {formatDate(order.due_date || order.dueDate || order.created_at || order.createdAt)}
-                      </span>
-                    ),
-                    priority: "low",
-                    minWidth: 120,
-                    headerClassName: "text-left",
-                    cellClassName: "text-left",
-                  },
-                  {
-                    key: "status",
-                    header: "Durum",
-                    accessor: (order) => (
-                      <Badge className={`${getStatusColor(order.status)} text-xs`}>
-                        {getStatusLabel(order.status)}
-                      </Badge>
-                    ),
-                    priority: "high",
-                    minWidth: 120,
-                    headerClassName: "text-left",
-                    cellClassName: "text-left",
-                  },
-                  {
-                    key: "priority",
-                    header: "Öncelik",
-                    accessor: (order) => {
-                      const priorityMeta = getPriorityMeta(order.priority);
-                      return (
-                        <Badge className={`${priorityMeta.className} text-xs`}>
-                          {priorityMeta.label}
-                        </Badge>
-                      );
-                    },
-                    priority: "low",
-                    minWidth: 120,
-                    headerClassName: "text-left",
-                    cellClassName: "text-left",
-                  },
-                  {
-                    key: "total",
-                    header: "Tutar",
-                    accessor: (order) => (
-                      <span className="text-xs font-semibold whitespace-nowrap">
-                        {formatCurrency(order.totalAmount || order.total_amount || 0, order.currency)}
-                      </span>
-                    ),
-                    priority: "high",
-                    minWidth: 120,
-                    headerClassName: "text-left",
-                    cellClassName: "text-left",
-                  },
-                ]}
-                emptyMessage={searchQuery || statusFilter !== "all" ? "Arama sonucu bulunamadı" : "Henüz üretim siparişi bulunmuyor"}
-                onRowClick={(order) => {
-                  setSelectedOrder(order);
-                  setDetailModalOpen(true);
-                }}
-                renderCard={(order) => {
-                  const priorityMeta = getPriorityMeta(order.priority);
-                  return (
-                    <Card 
-                      className="cursor-pointer hover:shadow-lg transition-all"
-                      onClick={() => {
-                        setSelectedOrder(order);
-                        setDetailModalOpen(true);
-                      }}
-                    >
-                      <CardContent className="p-3 sm:p-4 space-y-2">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-xs sm:text-sm mb-1">
-                              {order.order_number || order.orderNumber || "-"}
-                            </h3>
-                            {order.customer_name && (
-                              <p className="text-xs sm:text-sm text-muted-foreground">
-                                {order.customer_name || order.customerName || "-"}
-                                {order.customer_company && ` - ${order.customer_company}`}
-                              </p>
+                        </TableCell>
+                        <TableCell className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 hidden md:table-cell">
+                          <div className="flex flex-col">
+                            <span className="font-medium">{order.customer_name || order.customerName || "-"}</span>
+                            {order.customer_company && (
+                              <span className="text-[10px] sm:text-xs text-muted-foreground">{order.customer_company}</span>
                             )}
                           </div>
-                          <Badge className={`${getStatusColor(order.status)} text-xs`}>
+                        </TableCell>
+                        <TableCell className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">
+                          {formatDate(
+                            order.due_date || order.dueDate || order.created_at || order.createdAt
+                          )}
+                        </TableCell>
+                        <TableCell className="px-2 sm:px-4 py-2 sm:py-3">
+                          <Badge className={`${getStatusColor(order.status)} text-[10px] sm:text-xs`}>
                             {getStatusLabel(order.status)}
                           </Badge>
-                        </div>
-                        <div className="flex flex-col gap-1.5 pt-2 border-t">
-                          <div className="flex items-center justify-between text-xs sm:text-sm">
-                            <span className="text-muted-foreground">Termin:</span>
-                            <span>
-                              {formatDate(order.due_date || order.dueDate || order.created_at || order.createdAt)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs sm:text-sm">
-                            <span className="text-muted-foreground">Öncelik:</span>
-                          <Badge className={`${priorityMeta.className} text-xs`}>
+                        </TableCell>
+                        <TableCell className="px-2 sm:px-4 py-2 sm:py-3 hidden xl:table-cell">
+                          <Badge className={`${priorityMeta.className} text-[10px] sm:text-xs`}>
                             {priorityMeta.label}
                           </Badge>
-                          </div>
-                          <div className="flex items-center justify-between text-xs sm:text-sm">
-                            <span className="text-muted-foreground">Tutar:</span>
-                            <span className="font-semibold">
+                        </TableCell>
+                        <TableCell 
+                          className="text-right text-xs font-semibold px-2 sm:px-4 py-2 sm:py-3 cursor-pointer"
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            setDetailModalOpen(true);
+                          }}
+                        >
                           {formatCurrency(order.totalAmount || order.total_amount || 0, order.currency)}
-                            </span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                }}
-              />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {orders.length === 0 && !loading && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-6 sm:py-8 text-xs sm:text-sm text-muted-foreground">
+                        {searchQuery || statusFilter !== "all" ? "Arama sonucu bulunamadı" : "Henüz üretim siparişi bulunmuyor"}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+              </div>
             </div>
             {totalPages > 1 && (
-              <div className="flex flex-col gap-2 p-2 border-t md:flex-row md:items-center md:justify-between">
-                <div className="text-[11px] sm:text-xs text-muted-foreground text-center md:text-left">
+              <div className="flex flex-col gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t md:flex-row md:items-center md:justify-between">
+                <div className="text-xs sm:text-sm text-muted-foreground text-center md:text-left">
                   Sayfa {page} / {totalPages}
                 </div>
                 <div className="flex gap-2 justify-center md:justify-end">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 sm:h-9 text-[11px] sm:text-xs"
+                    className="h-8 sm:h-9 text-xs sm:text-sm"
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1 || loading}
                   >
@@ -720,7 +604,7 @@ const priorityOptions = [
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 sm:h-9 text-[11px] sm:text-xs"
+                    className="h-8 sm:h-9 text-xs sm:text-sm"
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages || loading}
                   >
@@ -735,19 +619,10 @@ const priorityOptions = [
 
       <CreateOrderDialog
         open={createDialogOpen}
-        onOpenChange={(open) => {
-          setCreateDialogOpen(open);
-          if (!open) {
-            // Dialog kapandığında selectedOrder'ı temizle
-            setSelectedOrder(null);
-          }
-        }}
+        onOpenChange={setCreateDialogOpen}
         onSuccess={() => {
           // Subscription otomatik güncelleyecek
-          setCreateDialogOpen(false);
-          setSelectedOrder(null);
         }}
-        order={selectedOrder as unknown as Order} // Edit modu için mevcut sipariş
       />
 
       {selectedOrder && (
@@ -755,11 +630,6 @@ const priorityOptions = [
           open={detailModalOpen}
           onOpenChange={setDetailModalOpen}
           order={selectedOrder as unknown as Order}
-          onEdit={() => {
-            // Düzenleme dialog'unu aç (selectedOrder zaten set edilmiş)
-            setDetailModalOpen(false);
-            setCreateDialogOpen(true);
-          }}
           onDelete={() => {
             setDetailModalOpen(false);
             setDeleteDialogOpen(true);

@@ -33,9 +33,11 @@ export function testScroll(element: HTMLElement | null): ScrollTestResult {
   const overflowY = computedStyle.overflowY;
   const height = computedStyle.height;
   const minHeight = computedStyle.minHeight;
-  const maxHeight = computedStyle.maxHeight;
   const flex = computedStyle.flex;
   const display = computedStyle.display;
+
+  const isMainScrollMain =
+    element.tagName === "MAIN" && element.classList.contains("main-scroll-container");
 
   result.scrollHeight = element.scrollHeight;
   result.clientHeight = element.clientHeight;
@@ -47,13 +49,12 @@ export function testScroll(element: HTMLElement | null): ScrollTestResult {
     result.issues.push(`overflow-y: ${overflowY} (auto veya scroll olmalı)`);
   }
 
-  // Flexbox scroll için height constraint kontrolü
-  if (display === "flex" || flex !== "none") {
-    // Flexbox scroll için min-height: 0 olmalı
+  /* MainLayout main: flex öğesi overflow-y:auto ile yükseklik flex ile çözülür (0px değil); bu durumda
+     "height: 0 şart" sezgisi yanlış pozitif üretir. */
+  if (!isMainScrollMain && (display === "flex" || flex !== "none")) {
     if (minHeight !== "0px" && minHeight !== "0") {
       result.issues.push(`min-height: ${minHeight} (flexbox scroll için min-height: 0 olmalı)`);
     }
-    // Flexbox scroll için height: 0 gerekli (flex: 1 ile birlikte)
     if (height !== "0px" && height !== "0" && overflowY === "auto") {
       result.issues.push(`height: ${height} (flexbox scroll için height: 0 olmalı)`);
     }
@@ -94,7 +95,7 @@ export function testMainLayoutScroll(): ScrollTestResult | null {
  * Scroll test sonuçlarını konsola yazdırır (development için)
  */
 export function logScrollTest(): void {
-  if (process.env.NODE_ENV !== "development") return;
+  if (!import.meta.env.DEV) return;
 
   const result = testMainLayoutScroll();
   if (!result) {

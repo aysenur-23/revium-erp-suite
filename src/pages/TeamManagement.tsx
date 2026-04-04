@@ -1,28 +1,3 @@
-<<<<<<< HEAD
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
-import { MainLayout } from "@/components/Layout/MainLayout";
-import { Users, UserPlus, TrendingUp, Clock, Loader2, CheckCircle2, FileText, CheckSquare, BarChart3, ChevronLeft, ChevronRight, Award } from "lucide-react";
-
-// Lazy load child components for better performance
-// Note: We will pass data props to these components now
-const PendingTaskApprovals = lazy(() => import("@/components/Team/PendingTaskApprovals").then(m => ({ default: m.PendingTaskApprovals })));
-const TeamMembers = lazy(() => import("@/components/Team/TeamMembers").then(m => ({ default: m.TeamMembers })));
-const AuditLogs = lazy(() => import("@/components/Admin/AuditLogs").then(m => ({ default: m.AuditLogs })));
-const TeamStatsView = lazy(() => import("@/components/Team/TeamStatsView").then(m => ({ default: m.TeamStatsView })));
-import { StatCard } from "@/components/Dashboard/StatCard";
-import { useAuth } from "@/contexts/AuthContext";
-import { Navigate } from "react-router-dom";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { getAllUsers, UserProfile } from "@/services/firebase/authService";
-import { getDepartments } from "@/services/firebase/departmentService";
-import { getTasks, Task } from "@/services/firebase/taskService";
-import { getRoles, RoleDefinition } from "@/services/firebase/rolePermissionsService";
-import { getPendingTeamRequests, getAllPendingTeamRequests } from "@/services/firebase/teamApprovalService";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-=======
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Users, UserPlus, TrendingUp, Clock, Loader2, CheckCircle2, FileText, CheckSquare, BarChart3, RefreshCw, Info, Award, ChevronLeft, ChevronRight } from "lucide-react";
@@ -45,25 +20,13 @@ import { isMainAdmin, canUpdateResource } from "@/utils/permissions";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
 const TeamManagement = () => {
   const { user } = useAuth();
   const [canAccess, setCanAccess] = useState(false);
   const [isMainAdminUser, setIsMainAdminUser] = useState(false);
   const [loading, setLoading] = useState(true);
-<<<<<<< HEAD
-
-  // Data State - Centralized
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-  const [allDepartments, setAllDepartments] = useState<Awaited<ReturnType<typeof getDepartments>>>([]);
-  const [allTasks, setAllTasks] = useState<Task[]>([]);
-  const [allRoles, setAllRoles] = useState<RoleDefinition[]>([]);
-  const [loadingData, setLoadingData] = useState(true);
-
-=======
   
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [stats, setStats] = useState({
     totalMembers: 0,
     pendingApprovals: 0,
@@ -72,27 +35,6 @@ const TeamManagement = () => {
     completedTasks: 0,
     totalTasks: 0,
   });
-<<<<<<< HEAD
-
-  // Hero kısmındaki istatistikler için state (sağdan sola açılır/kapanır, default kapalı)
-  const [heroStatsExpanded, setHeroStatsExpanded] = useState(false);
-
-  // Ekip seçimi için state
-  const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("all");
-
-  // Ortak filtreleme state'leri
-  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
-
-  // Cache için ref'ler
-  const usersCacheRef = useRef<UserProfile[]>([]);
-  const departmentsCacheRef = useRef<Awaited<ReturnType<typeof getDepartments>>>([]);
-  const tasksCacheRef = useRef<Task[]>([]);
-  const rolesCacheRef = useRef<RoleDefinition[]>([]);
-  const cacheTimestampRef = useRef<number>(0);
-  const CACHE_DURATION = 2 * 60 * 1000; // 2 dakika
-
-  // Erişim kontrolü
-=======
   const [loadingStats, setLoadingStats] = useState(true);
   
   // Hero kısmındaki istatistikler için state (sağdan sola açılır/kapanır, default kapalı)
@@ -113,7 +55,6 @@ const TeamManagement = () => {
   const CACHE_DURATION = 2 * 60 * 1000; // 2 dakika
 
   // Erişim kontrolü - Firestore'dan
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   useEffect(() => {
     const checkAccess = async () => {
       if (!user) {
@@ -123,10 +64,6 @@ const TeamManagement = () => {
       }
       try {
         const { isMainAdmin, canUpdateResource } = await import("@/utils/permissions");
-<<<<<<< HEAD
-        const userProfile: UserProfile = { ...user, role: user.roles, createdAt: null, updatedAt: null } as any;
-
-=======
         const userProfile: UserProfile = {
           id: user.id,
           email: user.email,
@@ -139,7 +76,6 @@ const TeamManagement = () => {
           createdAt: null,
           updatedAt: null,
         };
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         const [isMainAdminResult, canUpdateDepts] = await Promise.all([
           isMainAdmin(userProfile),
           canUpdateResource(userProfile, "departments"),
@@ -155,66 +91,6 @@ const TeamManagement = () => {
         setLoading(false);
       }
     };
-<<<<<<< HEAD
-
-    // Defer access check slightly
-    const timer = setTimeout(checkAccess, 50);
-    return () => clearTimeout(timer);
-  }, [user]);
-
-  const fetchData = useCallback(async () => {
-    if (!user?.id) return;
-    setLoadingData(true);
-    try {
-      const now = Date.now();
-      const shouldRefresh = !usersCacheRef.current.length ||
-        (now - cacheTimestampRef.current) > CACHE_DURATION;
-
-      let fetchedUsers = usersCacheRef.current;
-      let fetchedDepts = departmentsCacheRef.current;
-      let fetchedTasks = tasksCacheRef.current;
-      let fetchedRoles = rolesCacheRef.current;
-
-      if (shouldRefresh) {
-        // Parallel data fetching
-        const [users, depts, tasks, roles] = await Promise.all([
-          getAllUsers(),
-          getDepartments(),
-          getTasks({ limit: 1000 }), // Higher limit for better stats
-          getRoles()
-        ]);
-
-        fetchedUsers = users;
-        fetchedDepts = depts;
-        fetchedTasks = tasks;
-        fetchedRoles = roles;
-
-        // Update cache
-        usersCacheRef.current = users;
-        departmentsCacheRef.current = depts;
-        tasksCacheRef.current = tasks;
-        rolesCacheRef.current = roles;
-        cacheTimestampRef.current = now;
-      }
-
-      setAllUsers(fetchedUsers);
-      setAllDepartments(fetchedDepts);
-      setAllTasks(fetchedTasks);
-      setAllRoles(fetchedRoles);
-
-      // Calculate Stats
-      const requests = await (isMainAdminUser ? getAllPendingTeamRequests() : getPendingTeamRequests(user.id));
-
-      let teamMembers: UserProfile[] = [];
-      let relevantTasks = fetchedTasks;
-
-      // Filter relevant users and tasks based on role
-      if (isMainAdminUser) {
-        teamMembers = fetchedUsers;
-      } else {
-        const managedDepartments = fetchedDepts.filter(d => d.managerId === user.id);
-
-=======
     checkAccess();
   }, [user]);
 
@@ -260,25 +136,10 @@ const TeamManagement = () => {
       } else {
         const managedDepartments = allDepts.filter(d => d.managerId === user.id);
         
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         if (managedDepartments.length === 0) {
           teamMembers = [];
         } else {
           const managedDeptIds = managedDepartments.map(d => d.id);
-<<<<<<< HEAD
-          teamMembers = fetchedUsers.filter(u => {
-            return (u.approvedTeams && u.approvedTeams.some(deptId => managedDeptIds.includes(deptId))) ||
-              (u.pendingTeams && u.pendingTeams.some(deptId => managedDeptIds.includes(deptId))) ||
-              (u.departmentId && managedDeptIds.includes(u.departmentId));
-          });
-        }
-
-        // Filter tasks related to team members
-        const teamMemberIds = teamMembers.map(u => u.id);
-        relevantTasks = fetchedTasks.filter(t =>
-          teamMemberIds.includes(t.createdBy) || t.createdBy === user.id
-        );
-=======
           
           teamMembers = allUsers.filter(u => {
             if (u.approvedTeams && u.approvedTeams.some(deptId => managedDeptIds.includes(deptId))) {
@@ -321,7 +182,6 @@ const TeamManagement = () => {
         } else {
           relevantTasks = allTasks.filter(t => t.createdBy === user.id);
         }
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       }
 
       const pendingTasks = relevantTasks.filter(t => t.approvalStatus === "pending");
@@ -336,16 +196,6 @@ const TeamManagement = () => {
         completedTasks: completedTasks,
         totalTasks: relevantTasks.length,
       });
-<<<<<<< HEAD
-
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error("Error fetching team data:", error);
-      }
-      toast.error("Veriler yüklenirken hata oluştu");
-    } finally {
-      setLoadingData(false);
-=======
     } catch (error: unknown) {
       if (import.meta.env.DEV) {
         console.error("Error fetching stats:", error);
@@ -353,23 +203,10 @@ const TeamManagement = () => {
       toast.error("İstatistikler yüklenirken hata oluştu");
     } finally {
       setLoadingStats(false);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     }
   }, [user?.id, isMainAdminUser]);
 
   const handleRefresh = useCallback(async () => {
-<<<<<<< HEAD
-    if (loadingData) return;
-    try {
-      // Clear cache to force refresh
-      usersCacheRef.current = [];
-      departmentsCacheRef.current = [];
-      tasksCacheRef.current = [];
-      rolesCacheRef.current = [];
-      cacheTimestampRef.current = 0;
-
-      await fetchData();
-=======
     if (loadingStats) return;
     try {
       // Clear cache
@@ -379,24 +216,10 @@ const TeamManagement = () => {
       cacheTimestampRef.current = 0;
       
       await fetchStats();
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       toast.success("Veriler yenilendi");
     } catch (error) {
       toast.error("Veriler yenilenirken hata oluştu");
     }
-<<<<<<< HEAD
-  }, [loadingData, fetchData]);
-
-  useEffect(() => {
-    if (canAccess && user?.id) {
-      // Initial fetch delayed slightly to prioritize UI render
-      const timer = setTimeout(() => {
-        fetchData();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [canAccess, fetchData, user?.id]);
-=======
   }, [loadingStats, fetchStats]);
 
   // Departmanları yükle - Hem admin hem de filtreleme için gerekli
@@ -420,15 +243,11 @@ const TeamManagement = () => {
     }
   }, [canAccess, fetchStats, user?.id]);
 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-<<<<<<< HEAD
-=======
       // Ctrl/Cmd + R to refresh - only if not in input/textarea
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
         const target = e.target as HTMLElement;
         if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && !target.isContentEditable) {
@@ -437,21 +256,14 @@ const TeamManagement = () => {
         }
       }
     };
-<<<<<<< HEAD
-=======
 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [handleRefresh]);
 
-<<<<<<< HEAD
-  // Calculate Most Active Members
-=======
 
 
   // En aktif üyeleri hesapla
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [mostActiveMembers, setMostActiveMembers] = useState<Array<{
     member: UserProfile;
     totalTasks: number;
@@ -460,33 +272,6 @@ const TeamManagement = () => {
   }>>([]);
 
   useEffect(() => {
-<<<<<<< HEAD
-    if (loadingData || !allUsers.length || !allTasks.length) {
-      // Only clear if we are genuinely reloading or have no data
-      if (!allUsers.length) setMostActiveMembers([]);
-      return;
-    }
-
-    // Defer calculation
-    const timer = setTimeout(() => {
-      const memberTaskCounts = allUsers.map(member => {
-        const memberTasks = allTasks.filter(t => t.createdBy === member.id);
-        const completedCount = memberTasks.filter(t => t.status === "completed").length;
-        return {
-          member,
-          totalTasks: memberTasks.length,
-          completedTasks: completedCount,
-          completionRate: memberTasks.length > 0 ? (completedCount / memberTasks.length) * 100 : 0,
-        };
-      }).sort((a, b) => b.completedTasks - a.completedTasks).slice(0, 5);
-
-      setMostActiveMembers(memberTaskCounts);
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [allUsers, allTasks, loadingData]);
-
-=======
     const allUsers = usersCacheRef.current;
     const allTasks = tasksCacheRef.current;
     
@@ -511,14 +296,10 @@ const TeamManagement = () => {
 
 
   // Sadece yönetici veya ekip liderleri erişebilir
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   if (loading) {
     return (
       <MainLayout>
         <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-<<<<<<< HEAD
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-=======
           <div className="text-center space-y-4">
             <div className="relative">
               <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
@@ -527,30 +308,25 @@ const TeamManagement = () => {
               </div>
             </div>
             <div>
-              <p className="text-[11px] sm:text-xs font-medium text-foreground">Yükleniyor...</p>
-              <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">Ekip yönetimi hazırlanıyor</p>
+              <p className="text-sm font-medium text-foreground">Yükleniyor...</p>
+              <p className="text-xs text-muted-foreground mt-1">Ekip yönetimi hazırlanıyor</p>
             </div>
           </div>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         </div>
       </MainLayout>
     );
   }
-<<<<<<< HEAD
-
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   if (!canAccess) {
     return <Navigate to="/" replace />;
   }
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
+      <div className="space-y-2 min-w-0 max-w-full overflow-x-hidden w-[90%] max-w-[90%] mx-auto">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2 border-b">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground">Ekip Yönetimi</h1>
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Ekip Yönetimi</h1>
           </div>
         </div>
 
@@ -558,7 +334,7 @@ const TeamManagement = () => {
         <div className="flex flex-row items-center justify-between gap-2 pb-2 border-b">
           <div className="flex flex-row items-center gap-2">
             <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-              <SelectTrigger className="w-full sm:w-[200px] h-9 text-[11px] sm:text-xs">
+              <SelectTrigger className="w-full sm:w-[200px] h-9 text-sm">
                 <SelectValue placeholder="Departman Filtrele" />
               </SelectTrigger>
               <SelectContent>
@@ -572,7 +348,7 @@ const TeamManagement = () => {
             </Select>
             {isMainAdminUser && (
               <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter}>
-                <SelectTrigger className="w-full sm:w-[200px] h-9 text-[11px] sm:text-xs">
+                <SelectTrigger className="w-full sm:w-[200px] h-9 text-sm">
                   <SelectValue placeholder="Ekip seçiniz" />
                 </SelectTrigger>
                 <SelectContent>
@@ -587,42 +363,12 @@ const TeamManagement = () => {
             )}
           </div>
           {/* Hero İstatistikler Açılma Butonu */}
-<<<<<<< HEAD
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setHeroStatsExpanded(!heroStatsExpanded)}
-            className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
-          >
-            {heroStatsExpanded ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-          </Button>
-        </div>
-
-        {/* Hero İstatistik Kartları */}
-        {heroStatsExpanded && (
-          <div className="grid gap-2 grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            {loadingData ? (
-              [...Array(6)].map((_, i) => (
-                <Card key={i} className="animate-pulse border p-2">
-                  <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
-                  <div className="h-6 bg-muted rounded w-3/4"></div>
-                </Card>
-              ))
-            ) : (
-              <>
-                <StatCard title="Toplam Üye" value={stats.totalMembers} icon={Users} variant="primary" />
-                <StatCard title="Bekleyen Onaylar" value={stats.pendingApprovals} icon={Clock} variant="warning" />
-                <StatCard title="Aktif Görevler" value={stats.activeTasks} icon={TrendingUp} variant="success" />
-                <StatCard title="Tamamlanan" value={stats.completedTasks} icon={CheckCircle2} variant="success" />
-                <StatCard title="Toplam Görev" value={stats.totalTasks} icon={FileText} variant="primary" />
-                <StatCard title="Katılım İstekleri" value={stats.pendingRequests} icon={UserPlus} variant="info" />
-=======
           {!heroStatsExpanded ? (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setHeroStatsExpanded(true)}
-              className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
+              className="h-7 px-2 gap-1 text-xs"
               aria-label="İstatistikleri göster"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
@@ -632,7 +378,7 @@ const TeamManagement = () => {
               variant="ghost"
               size="sm"
               onClick={() => setHeroStatsExpanded(false)}
-              className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
+              className="h-7 px-2 gap-1 text-xs"
               aria-label="İstatistikleri gizle"
             >
               <ChevronRight className="h-3.5 w-3.5" />
@@ -693,93 +439,58 @@ const TeamManagement = () => {
                   icon={UserPlus}
                   variant="info"
                 />
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               </>
             )}
           </div>
         )}
 
-<<<<<<< HEAD
-        {/* content grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0 items-stretch">
-          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col h-full">
-            {/* Görev Onayları */}
-=======
         {/* Two Column Layout - Sol: Görev Onayları + İstatistikler, Sağ: En Aktif Üyeler + Loglar */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0 items-start">
           {/* Sol Sütun - Görev Onayları ve İstatistikler */}
-          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col h-full">
+          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col">
             {/* Görev Onayları Bölümü */}
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-            <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200 flex-1 flex flex-col">
+            <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200">
               <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-md bg-primary/10">
                     <CheckSquare className="h-4 w-4 text-primary" />
                   </div>
-                  <h3 className="text-[11px] sm:text-xs font-semibold text-foreground">Görev Onayları</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Görev Onayları</h3>
                 </div>
               </div>
-              <CardContent className="p-2 flex-1 flex flex-col min-h-0">
-<<<<<<< HEAD
-                <Suspense fallback={<div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>}>
-                  <PendingTaskApprovals />
-                </Suspense>
-              </CardContent>
-            </Card>
-
-            {/* İstatistikler */}
-=======
+              <CardContent className="p-2">
                 <PendingTaskApprovals />
                 </CardContent>
               </Card>
 
             {/* İstatistikler Bölümü */}
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-            <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200 flex-1 flex flex-col">
+            <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200">
               <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-md bg-primary/10">
                     <BarChart3 className="h-4 w-4 text-primary" />
                   </div>
-                  <h3 className="text-[11px] sm:text-xs font-semibold text-foreground">İstatistikler</h3>
+                  <h3 className="text-sm font-semibold text-foreground">İstatistikler</h3>
                 </div>
               </div>
-              <CardContent className="p-2 flex-1 flex flex-col min-h-0">
-<<<<<<< HEAD
-                <Suspense fallback={<div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>}>
-                  <TeamStatsView
-                    selectedTeamFilter={selectedTeamFilter}
-                    users={allUsers}
-                    departments={allDepartments}
-                    tasks={allTasks}
-                  />
-                </Suspense>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col h-full">
-            {/* En Aktif Üyeler */}
-=======
+              <CardContent className="p-2">
                 <TeamStatsView selectedTeamFilter={selectedTeamFilter} />
                 </CardContent>
               </Card>
           </div>
 
           {/* Sağ Sütun - En Aktif Üyeler ve Loglar */}
-          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col h-full">
+          <div className="lg:col-span-1 space-y-2 min-w-0 flex flex-col">
 
             {/* En Aktif Üyeler Bölümü */}
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             {mostActiveMembers.length > 0 && (
-              <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200 flex-shrink-0">
+              <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200">
                 <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 rounded-md bg-primary/10">
                       <Award className="h-4 w-4 text-primary" />
                     </div>
-                    <h3 className="text-[11px] sm:text-xs font-semibold text-foreground">En Aktif Üyeler</h3>
+                    <h3 className="text-sm font-semibold text-foreground">En Aktif Üyeler</h3>
                   </div>
                 </div>
                 <CardContent className="p-2">
@@ -791,13 +502,13 @@ const TeamManagement = () => {
                             {index + 1}
                           </div>
                           <div>
-                            <p className="text-[11px] sm:text-xs font-medium">{member.fullName || member.email}</p>
-                            <p className="text-[11px] sm:text-xs text-muted-foreground">
+                            <p className="text-sm font-medium">{member.fullName || member.email}</p>
+                            <p className="text-xs text-muted-foreground">
                               {completedTasks} tamamlanan / {totalTasks} toplam
                             </p>
                           </div>
                         </div>
-                        <Badge variant="secondary" className="text-[10px] px-2 py-1">
+                        <Badge variant="secondary" className="text-xs px-2 py-1">
                           {completionRate.toFixed(0)}%
                         </Badge>
                       </div>
@@ -807,37 +518,17 @@ const TeamManagement = () => {
               </Card>
             )}
 
-<<<<<<< HEAD
-            {/* Ekip Logları */}
-=======
             {/* Ekip Logları Bölümü */}
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200 flex-1 flex flex-col">
               <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-md bg-primary/10">
                     <FileText className="h-4 w-4 text-primary" />
                   </div>
-                  <h3 className="text-[11px] sm:text-xs font-semibold text-foreground">Ekip Logları</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Ekip Logları</h3>
                 </div>
               </div>
               <CardContent className="p-2 flex-1 flex flex-col min-h-0">
-<<<<<<< HEAD
-                <Suspense fallback={<div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>}>
-                  <AuditLogs
-                    mode={isMainAdminUser ? "admin" : "team"}
-                    userId={user?.id}
-                    selectedTeamFilter={isMainAdminUser ? selectedTeamFilter : undefined}
-                  />
-                </Suspense>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Ekip Üyeleri - Tam Genişlik */}
-        <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200 w-full mt-2">
-=======
                 <AuditLogs 
                   mode={isMainAdminUser ? "admin" : "team"} 
                   userId={user?.id}
@@ -850,30 +541,12 @@ const TeamManagement = () => {
 
         {/* Ekip Üyeleri Bölümü - Tam Genişlik */}
         <Card className="border shadow-sm hover:shadow-md transition-shadow duration-200 w-full">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           <div className="px-3 pt-1.5 pb-1 border-b bg-muted/30">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-primary/10">
                 <Users className="h-4 w-4 text-primary" />
               </div>
-              <h3 className="text-[11px] sm:text-xs font-semibold text-foreground">Ekip Üyeleri</h3>
-<<<<<<< HEAD
-              {loadingData && <Loader2 className="h-3 w-3 animate-spin ml-2" />}
-            </div>
-          </div>
-          <CardContent className="p-2">
-            <Suspense fallback={<div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>}>
-              <TeamMembers
-                departmentFilter={departmentFilter}
-                users={allUsers}
-                departments={allDepartments}
-                roles={allRoles}
-                tasks={allTasks}
-              />
-            </Suspense>
-          </CardContent>
-        </Card>
-=======
+              <h3 className="text-sm font-semibold text-foreground">Ekip Üyeleri</h3>
             </div>
           </div>
           <CardContent className="p-2">
@@ -881,7 +554,6 @@ const TeamManagement = () => {
           </CardContent>
         </Card>
 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       </div>
     </MainLayout>
   );

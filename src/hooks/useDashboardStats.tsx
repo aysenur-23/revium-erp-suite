@@ -125,41 +125,6 @@ export const useDashboardStats = () => {
   return useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: async () => {
-<<<<<<< HEAD
-      // Progressive loading: Önce kritik verileri yükle, sonra diğerlerini
-      // İlk önce customers, orders, products yükle (kritik istatistikler için)
-      // Daha agresif limit'ler: 50 → 30, 100 → 50
-      const [customers, orders, products] = await Promise.all([
-        getCustomers().then(c => c.slice(0, 30)), // Son 30 müşteri (50 → 30)
-        getOrders().then(o => o.slice(0, 50)), // Son 50 sipariş (100 → 50)
-        getProducts().then(p => p.slice(0, 30)), // Son 30 ürün (50 → 30)
-      ]);
-
-      // Sonra tasks ve sales quotes yükle (daha az kritik, arka planda)
-      // Sales quotes'ı tamamen defer et (non-critical)
-      const [tasksResult, salesQuotesResult] = await Promise.allSettled([
-        getTasks({ limit: 20 }).then(t => t.slice(0, 20)), // Son 20 görev (30 → 20)
-        // Sales quotes'ı daha sonra yükle (non-blocking)
-        new Promise<SavedReport[]>((resolve) => {
-          setTimeout(() => {
-            getSavedReports({ reportType: "sales_quote" })
-              .then(resolve)
-              .catch(() => resolve([]));
-          }, 100); // 100ms delay ile defer et
-        }),
-      ]);
-
-      const tasks = tasksResult.status === 'fulfilled' ? tasksResult.value : [];
-      let salesQuotes: SavedReport[] = [];
-      if (salesQuotesResult.status === 'fulfilled') {
-        salesQuotes = salesQuotesResult.value;
-      } else {
-        if (import.meta.env.DEV) {
-          console.warn("Sales quotes yüklenemedi, devam ediliyor:", salesQuotesResult.reason);
-        }
-      }
-
-=======
       // Firebase'den tüm verileri paralel olarak al
       // getSavedReports hata verirse boş array kullan
       let salesQuotes: SavedReport[] = [];
@@ -180,7 +145,6 @@ export const useDashboardStats = () => {
         getTasks().then(t => t.slice(0, 50)), // Son 50 görev
       ]);
 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // İstatistikleri hesapla
       const currentMonth = new Date().getMonth();
       const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
@@ -324,21 +288,7 @@ export const useDashboardStats = () => {
     retry: 1, // Retry sayısını azalt (performans için)
     retryDelay: 2000, // Retry delay'i azalt (performans için - 2 saniye)
     staleTime: 120000, // 2 dakika stale time (performans için)
-<<<<<<< HEAD
-    // Placeholder data ekle - hızlı render için
-    placeholderData: () => ({
-      customers: { total: 0, trend: 0 },
-      orders: { total: 0, active: 0, trend: 0 },
-      products: { total_stock: 0, low_stock_count: 0, trend: 0 },
-      revenue: { current_month: 0, trend: 0 },
-      recent_orders: [],
-      low_stock_products: [],
-      quotes: { total_amount: 0, count: 0 },
-      quote_conversion_rate: 0,
-    }),
-=======
     // Placeholder data kaldırıldı - loading state gösterilecek
     // placeholderData kaldırıldı çünkü 0 değerleri gösteriyordu
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   });
 };

@@ -18,34 +18,6 @@ export const TaskHistory = () => {
     const fetchTasks = async () => {
       if (!user?.id) return;
 
-<<<<<<< HEAD
-      // Defer task history loading: İlk render'dan 500ms sonra yükle (non-critical)
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      try {
-        // Performans için: Sadece son 50 görevi al (limit ile)
-        const allTasks = await getTasks({ limit: 50 });
-        // Filter tasks assigned to current user
-        // Optimize: Sadece ilk 30 görev için assignment kontrolü yap
-        const limitedTasks = allTasks.slice(0, 30);
-        const userTasks: FirebaseTask[] = [];
-        
-        // Paralel assignment kontrolleri
-        await Promise.all(
-          limitedTasks.map(async (task) => {
-            try {
-              const assignments = await getTaskAssignments(task.id);
-              const isAssigned = assignments.some(a => a.assignedTo === user.id);
-              if (isAssigned) {
-                userTasks.push(task);
-              }
-            } catch (error) {
-              // Silently handle errors
-            }
-          })
-        );
-        
-=======
       try {
         const allTasks = await getTasks();
         // Filter tasks assigned to current user
@@ -57,7 +29,6 @@ export const TaskHistory = () => {
             userTasks.push(task);
           }
         }
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         setTasks(userTasks);
       } catch (error: unknown) {
         if (import.meta.env.DEV) {

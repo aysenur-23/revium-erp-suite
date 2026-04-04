@@ -101,7 +101,7 @@ export const generateCustomerReportPDF = async (data: CustomerReportData, startD
     drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
         title: "Toplam Müşteri",
         value: data.totalCustomers.toString(),
-        description: "Tüm müşteriler",
+        description: "Kayıtlı müşteri portföyü",
         color: {
             background: TAILWIND_COLORS.primaryCardBg,
             border: TAILWIND_COLORS.primaryCardBorder,
@@ -115,7 +115,7 @@ export const generateCustomerReportPDF = async (data: CustomerReportData, startD
     drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
         title: "Aktif Müşteri",
         value: data.activeCustomers.toString(),
-        description: "Sipariş veren müşteri",
+        description: "Sipariş oluşturan müşteri sayısı",
         color: {
             background: TAILWIND_COLORS.successCardBg,
             border: TAILWIND_COLORS.successCardBorder,
@@ -129,7 +129,7 @@ export const generateCustomerReportPDF = async (data: CustomerReportData, startD
     drawStatCard(doc, cardX, currentY, cardWidth, cardHeight, {
         title: "Yeni Müşteri",
         value: data.newCustomers.toString(),
-        description: "Tarih aralığında",
+        description: "Seçili dönemde eklenen müşteriler",
         color: {
             background: TAILWIND_COLORS.infoCardBg,
             border: TAILWIND_COLORS.infoCardBorder,
@@ -152,9 +152,9 @@ export const generateCustomerReportPDF = async (data: CustomerReportData, startD
 
         const total = data.segments.high + data.segments.medium + data.segments.low;
         const segmentData = [
-            ["Yüksek Değerli (>₺50K)", data.segments.high.toString(), total > 0 ? `%${((data.segments.high / total) * 100).toFixed(1)}` : "%0"],
-            ["Orta Değerli (₺10K-₺50K)", data.segments.medium.toString(), total > 0 ? `%${((data.segments.medium / total) * 100).toFixed(1)}` : "%0"],
-            ["Düşük Değerli (<₺10K)", data.segments.low.toString(), total > 0 ? `%${((data.segments.low / total) * 100).toFixed(1)}` : "%0"],
+            ["Y�ksek Deerli (>�50K)", data.segments.high.toString(), total > 0 ? `%${((data.segments.high / total) * 100).toFixed(1)}` : "%0"],
+            ["Orta Deerli (�10K-�50K)", data.segments.medium.toString(), total > 0 ? `%${((data.segments.medium / total) * 100).toFixed(1)}` : "%0"],
+            ["D�_�k Deerli (<�10K)", data.segments.low.toString(), total > 0 ? `%${((data.segments.low / total) * 100).toFixed(1)}` : "%0"],
         ];
 
         const tableStyles = createProfessionalTableStyles(doc, {
@@ -251,6 +251,6 @@ export const generateCustomerReportPDF = async (data: CustomerReportData, startD
         }
         return blob;
     } catch (outputError) {
-        throw new Error("PDF oluşturulamadı: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
+        throw new Error("PDF olu_turulamad1: " + (outputError instanceof Error ? outputError.message : "Bilinmeyen hata"));
     }
 };

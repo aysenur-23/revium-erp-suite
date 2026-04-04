@@ -23,12 +23,6 @@ import { DetailedValueReportModal } from "@/components/Statistics/DetailedValueR
 import { LoadingState } from "@/components/ui/loading-state";
 import { CustomerCard } from "@/components/Customers/CustomerCard";
 import { canCreateResource, canDeleteResource } from "@/utils/permissions";
-import { ResponsiveTable, ResponsiveTableColumn } from "@/components/shared/ResponsiveTable";
-import { Card as ResponsiveCard } from "@/components/ui/card";
-<<<<<<< HEAD
-import { StatCard } from "@/components/Dashboard/StatCard";
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
 const Customers = () => {
   const { user } = useAuth();
@@ -118,32 +112,20 @@ const Customers = () => {
         getAllUsers(),
         getSavedReports({ reportType: "sales_quote" }),
       ]);
-<<<<<<< HEAD
-
-=======
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Orders'ı arka planda yükle (müşteri kartlarında kullanılıyor ama hemen gerekli değil)
       getOrders().then(ordersData => {
         setOrders(ordersData);
       }).catch(error => {
         console.error("Error loading orders:", error);
       });
-<<<<<<< HEAD
-
-=======
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const userMap: Record<string, string> = {};
       usersData.forEach(u => {
         userMap[u.id] = u.fullName || u.displayName || u.email;
       });
       setUsersMap(userMap);
-<<<<<<< HEAD
-
-=======
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       const customerLastQuoteMap: Record<
         string,
         {
@@ -200,11 +182,7 @@ const Customers = () => {
 
   const handleDelete = async () => {
     if (!selectedCustomer) return;
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Yetki kontrolü
     if (!canDelete) {
       toast.error("Müşteri silme yetkiniz yok.");
@@ -213,25 +191,11 @@ const Customers = () => {
     }
 
     try {
-<<<<<<< HEAD
-      const customerIdToDelete = selectedCustomer.id;
-      await deleteCustomer(customerIdToDelete, user?.id);
-      toast.success("Müşteri silindi");
-      // Önce state'i temizle
-      setSelectedCustomer(null);
-      setDeleteDialogOpen(false);
-      setDetailModalOpen(false);
-      // Listeyi manuel olarak güncelle (cache sorununu önlemek için)
-      setCustomers(prev => prev.filter(c => c.id !== customerIdToDelete));
-      // Sonra listeyi yenile
-      await fetchCustomers();
-=======
       await deleteCustomer(selectedCustomer.id, user?.id);
       toast.success("Müşteri silindi");
       fetchCustomers();
       setDeleteDialogOpen(false);
       setSelectedCustomer(null);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     } catch (error: unknown) {
       if (import.meta.env.DEV) {
         console.error("Delete customer error:", error);
@@ -280,17 +244,10 @@ const Customers = () => {
   useEffect(() => {
     const handleResizeMove = (e: MouseEvent) => {
       if (!resizingColumn) return;
-<<<<<<< HEAD
-
-      const diff = e.clientX - resizeStartX.current;
-      const newWidth = Math.max(50, resizeStartWidth.current + diff);
-
-=======
       
       const diff = e.clientX - resizeStartX.current;
       const newWidth = Math.max(50, resizeStartWidth.current + diff);
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       setColumnWidths(prev => {
         const updated = { ...prev, [resizingColumn]: newWidth };
         localStorage.setItem('customers-column-widths', JSON.stringify(updated));
@@ -364,19 +321,11 @@ const Customers = () => {
       }
 
       if (typeof aValue === "string" && typeof bValue === "string") {
-<<<<<<< HEAD
-        return sortDirection === "asc"
-          ? aValue.localeCompare(bValue, "tr-TR")
-          : bValue.localeCompare(aValue, "tr-TR");
-      } else {
-        return sortDirection === "asc"
-=======
         return sortDirection === "asc" 
           ? aValue.localeCompare(bValue, "tr-TR")
           : bValue.localeCompare(aValue, "tr-TR");
       } else {
         return sortDirection === "asc" 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           ? (aValue as number) - (bValue as number)
           : (bValue as number) - (aValue as number);
       }
@@ -463,17 +412,13 @@ const Customers = () => {
 
   return (
     <MainLayout>
-<<<<<<< HEAD
-      <div className="space-y-2 xs:space-y-2.5 sm:space-y-3 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
-=======
-      <div className="space-y-2 xs:space-y-2.5 sm:space-y-3 w-full max-w-full mx-auto px-1 xs:px-2">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-        <div className="flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2 xs:gap-3">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2 xs:gap-3">
-              <div className="min-w-0 flex-1">
-                <h1 className="text-lg sm:text-xl font-semibold text-foreground truncate">Müşteriler</h1>
-                <p className="text-muted-foreground mt-0.5 text-xs sm:text-sm">Müşteri ve tedarikçi listenizi yönetin</p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Müşteriler</h1>
+                <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Müşteri ve tedarikçi listenizi yönetin</p>
               </div>
               {/* İstatistikler Açılma Butonu */}
               {!statsExpanded ? (
@@ -481,7 +426,7 @@ const Customers = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => setStatsExpanded(true)}
-                  className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
+                  className="h-7 px-2 gap-1 text-xs"
                   aria-label="İstatistikleri göster"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
@@ -491,7 +436,7 @@ const Customers = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => setStatsExpanded(false)}
-                  className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
+                  className="h-7 px-2 gap-1 text-xs"
                   aria-label="İstatistikleri gizle"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
@@ -500,13 +445,8 @@ const Customers = () => {
             </div>
           </div>
           {canCreate && (
-<<<<<<< HEAD
-            <Button
-              className="gap-1 w-full xs:w-auto min-h-[44px] xs:min-h-[40px] sm:min-h-8 text-[11px] sm:text-xs"
-=======
             <Button 
-              className="gap-1 w-full xs:w-auto min-h-[44px] xs:min-h-[40px] sm:min-h-8 text-[11px] sm:text-xs" 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+              className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" 
               onClick={() => {
                 setCreateDialogOpen(true);
               }}
@@ -520,35 +460,9 @@ const Customers = () => {
 
         {/* İstatistikler */}
         {statsExpanded && (
-<<<<<<< HEAD
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 xs:gap-2.5 sm:gap-3">
-            {customerStatCards.map((item) => {
-              const variantMap: Record<string, "default" | "primary" | "success" | "warning" | "info"> = {
-                "total-customers": "primary",
-                "total-orders": "success",
-                "total-amount": "warning",
-                "active-customers": "info",
-              };
-              const variant = variantMap[item.key] || "default";
-              const value = typeof item.value === 'function' ? (item.value as () => string | number)() : item.value;
-
-              return (
-                <StatCard
-                  key={item.key}
-                  title={item.label}
-                  value={value}
-                  icon={item.icon}
-                  variant={variant}
-                  onClick={item.onClick}
-                  clickable
-                />
-              );
-            })}
-          </div>
-=======
           <Card className="border-2">
-          <CardContent className="p-1.5">
-            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-1.5 xs:gap-2 sm:gap-2">
+          <CardContent className="p-4 sm:p-5 md:pt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {customerStatCards.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -569,14 +483,14 @@ const Customers = () => {
                     }}
                     aria-label={`${item.label} kartı`}
                   >
-                    <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+                    <CardContent className="p-3 sm:p-4 md:p-5 flex items-center gap-2 sm:gap-3 md:gap-4">
                       <div className={cn("h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-md flex-shrink-0", item.accent)}>
                         <Icon className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[11px] sm:text-xs uppercase tracking-wide text-muted-foreground font-semibold">{item.label}</p>
-                        <p className="text-lg sm:text-xl font-semibold text-foreground mt-1 sm:mt-1.5">{item.value}</p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1 hidden sm:block">{item.description}</p>
+                        <p className="text-[10px] sm:text-xs uppercase tracking-wide text-muted-foreground font-semibold">{item.label}</p>
+                        <p className="text-lg font-semibold text-foreground mt-1 sm:mt-1.5">{item.value}</p>
+                        <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 sm:mt-1 hidden sm:block">{item.description}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -585,18 +499,17 @@ const Customers = () => {
             </div>
           </CardContent>
         </Card>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         )}
 
         {/* Filtreler */}
         <Card className="border-2">
-          <CardContent className="p-2">
+          <CardContent className="p-3 sm:p-4 md:p-6">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4">
               {/* Arama Kutusu */}
               <div className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] md:min-w-[250px]">
                 <SearchInput
                   placeholder="İsim, e-posta veya şirket ara..."
-                  className="w-full h-9 sm:h-10 text-[11px] sm:text-xs"
+                  className="w-full h-9 sm:h-10 text-xs sm:text-sm"
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
@@ -606,15 +519,11 @@ const Customers = () => {
                   }}
                 />
               </div>
-<<<<<<< HEAD
-
-=======
               
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               {/* Filtreler */}
               <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
                 <Select value={quickFilter} onValueChange={(value) => setQuickFilter(value as typeof quickFilter)}>
-                  <SelectTrigger className="w-full h-9 sm:h-10 text-[11px] sm:text-xs">
+                  <SelectTrigger className="w-full h-9 sm:h-10 text-xs sm:text-sm">
                     <SelectValue placeholder="Filtrele" />
                   </SelectTrigger>
                   <SelectContent>
@@ -625,11 +534,7 @@ const Customers = () => {
                   </SelectContent>
                 </Select>
               </div>
-<<<<<<< HEAD
-
-=======
               
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               {/* Filtreleri Temizle */}
               {(searchTerm || quickFilter !== "all") && (
                 <Button
@@ -640,7 +545,7 @@ const Customers = () => {
                     setQuickFilter("all");
                     setActiveStatCard(null);
                   }}
-                  className="h-9 sm:h-10 text-[11px] sm:text-xs"
+                  className="h-9 sm:h-10 text-xs sm:text-sm"
                 >
                   <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Temizle</span>
@@ -651,221 +556,15 @@ const Customers = () => {
         </Card>
 
         {/* Liste Görünümü */}
-        <div className="w-full max-w-full overflow-hidden">
-          <div className="hidden md:block border border-[#DFE1E6] dark:border-[#38414A] rounded-sm bg-white dark:bg-[#1D2125] w-full overflow-hidden">
-            <div className="w-full overflow-x-auto overflow-y-visible scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/30 -webkit-overflow-scrolling-touch overscroll-behavior-contain">
-              <div className="table border-collapse min-w-full" style={{ tableLayout: 'fixed' }}>
-                {/* Tablo Başlıkları */}
-<<<<<<< HEAD
-                <div className="table-header-group bg-[#F4F5F7] dark:bg-[#22272B]">
-                  <div className="table-row">
-                    <div
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative sticky left-0 z-20 bg-[#F4F5F7] dark:bg-[#22272B]"
-                      style={{ width: columnWidths.name || 250, minWidth: 250, maxWidth: 250 }}
-                      onClick={() => handleSort("name")}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        İsim / Şirket
-                        {sortColumn === "name" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("name", e)}
-                      />
-                    </div>
-                    <div
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.email || 180, minWidth: 180, maxWidth: 180 }}
-                      onClick={() => handleSort("email")}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        E-posta
-                        {sortColumn === "email" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("email", e)}
-                      />
-                    </div>
-                    <div
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.phone || 130, minWidth: 130, maxWidth: 130 }}
-                    >
-                      Telefon
-                      <div
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("phone", e)}
-                      />
-                    </div>
-                    <div
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.orderCount || 70, minWidth: 70, maxWidth: 70 }}
-                      onClick={() => handleSort("orderCount")}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        Sipariş
-                        {sortColumn === "orderCount" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("orderCount", e)}
-                      />
-                    </div>
-                    <div
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.totalAmount || 150, minWidth: 150, maxWidth: 150 }}
-                      onClick={() => handleSort("totalAmount")}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        Toplam Tutar
-                        {sortColumn === "totalAmount" && (
-                          sortDirection === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("totalAmount", e)}
-                      />
-                    </div>
-                    <div
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.status || 70, minWidth: 70, maxWidth: 70 }}
-                    >
-                      Durum
-                      <div
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("status", e)}
-                      />
-                    </div>
-                    <div
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.createdBy || 140, minWidth: 140, maxWidth: 140 }}
-                    >
-                      Oluşturan
-                      <div
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("createdBy", e)}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tablo İçeriği */}
-                <div
-                  ref={listContainerRef}
-                  className="table-row-group overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/30 -webkit-overflow-scrolling-touch overscroll-behavior-contain"
-                  style={{ maxHeight: 'calc(100vh - 400px)' }}
-                >
-                  {filteredCustomers.map((customer) => {
-                    const customerOrders = orders.filter(
-                      (order) => order.customerId === customer.id || order.customer_id === customer.id
-                    );
-                    const orderCount = customerOrders.length;
-                    const totalAmount = customerOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-                    const isActive = orderCount > 0;
-
-                    return (
-                      <div
-                        key={customer.id}
-                        className="table-row group border-b border-[#DFE1E6] dark:border-[#38414A] hover:bg-[#F4F5F7] dark:hover:bg-[#22272B] transition-all duration-200 cursor-pointer bg-white dark:bg-[#1D2125]"
-                        onClick={() => {
-                          // Müşterinin hala listede olduğundan emin ol
-                          const customerExists = customers.some(c => c.id === customer.id);
-                          if (!customerExists) {
-                            toast.error("Bu müşteri artık mevcut değil.");
-                            return;
-                          }
-                          setSelectedCustomer(customer);
-                          setDetailModalOpen(true);
-                        }}
-                      >
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A] sticky left-0 z-10 bg-white dark:bg-[#1D2125]">
-                          <div className="flex flex-col gap-1">
-                            <span className="font-semibold text-sm text-[#172B4D] dark:text-[#B6C2CF]">
-                              {customer.name}
-                            </span>
-                            {customer.company && (
-                              <span className="text-xs text-[#42526E] dark:text-[#B6C2CF]">
-                                {customer.company}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
-                          {customer.email ? (
-                            <div className="flex items-center gap-1.5">
-                              <Mail className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
-                              <span className="text-xs text-[#42526E] dark:text-[#B6C2CF] truncate">
-                                {customer.email}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
-                          )}
-                        </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
-                          {customer.phone ? (
-                            <div className="flex items-center gap-1.5">
-                              <Phone className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
-                              <span className="text-xs text-[#42526E] dark:text-[#B6C2CF]">
-                                {formatPhoneForDisplay(customer.phone)}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
-                          )}
-                        </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
-                          <div className="flex items-center gap-1.5">
-                            <Package className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
-                            <span className="text-xs font-medium text-[#42526E] dark:text-[#B6C2CF]">
-                              {orderCount}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
-                          <span className="text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF]">
-                            ₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalAmount)}
-                          </span>
-                        </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
-                          <Badge
-                            variant={isActive ? "default" : "secondary"}
-                            className={cn(
-                              "text-xs font-medium",
-                              isActive
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
-                                : "bg-muted/60 text-muted-foreground border-border/50"
-                            )}
-                          >
-                            {isActive ? "Aktif" : "Pasif"}
-                          </Badge>
-                        </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
-                          {customer.createdBy ? (
-                            <span className="text-xs text-[#42526E] dark:text-[#B6C2CF]">
-                              {usersMap[customer.createdBy] || "Bilinmeyen"}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-=======
+        <div className="w-full max-w-full min-w-0 overflow-x-auto">
+          <div className="hidden md:block border border-[#DFE1E6] dark:border-[#38414A] rounded-sm bg-white dark:bg-[#1D2125] min-w-full">
+            <div className="table border-collapse" style={{ tableLayout: 'fixed', width: '100%' }}>
+              {/* Tablo Başlıkları */}
               <div className="table-header-group bg-[#F4F5F7] dark:bg-[#22272B]">
                 <div className="table-row">
                   <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative sticky left-0 z-20 bg-[#F4F5F7] dark:bg-[#22272B]"
-                    style={{ width: columnWidths.name || 250, minWidth: 250, maxWidth: 250 }}
+                    className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.name || 250, minWidth: 150 }}
                     onClick={() => handleSort("name")}
                   >
                     <div className="flex items-center gap-1.5">
@@ -880,8 +579,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.email || 180, minWidth: 180, maxWidth: 180 }}
+                    className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.email || 200, minWidth: 150 }}
                     onClick={() => handleSort("email")}
                   >
                     <div className="flex items-center gap-1.5">
@@ -896,8 +595,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.phone || 130, minWidth: 130, maxWidth: 130 }}
+                    className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.phone || 150, minWidth: 120 }}
                   >
                     Telefon
                     <div 
@@ -906,8 +605,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.orderCount || 70, minWidth: 70, maxWidth: 70 }}
+                    className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.orderCount || 120, minWidth: 100 }}
                     onClick={() => handleSort("orderCount")}
                   >
                     <div className="flex items-center gap-1.5">
@@ -922,8 +621,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.totalAmount || 150, minWidth: 150, maxWidth: 150 }}
+                    className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.totalAmount || 150, minWidth: 120 }}
                     onClick={() => handleSort("totalAmount")}
                   >
                     <div className="flex items-center gap-1.5">
@@ -938,8 +637,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.status || 70, minWidth: 70, maxWidth: 70 }}
+                    className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.status || 120, minWidth: 100 }}
                   >
                     Durum
                     <div 
@@ -948,8 +647,8 @@ const Customers = () => {
                     />
                   </div>
                   <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                    style={{ width: columnWidths.createdBy || 140, minWidth: 140, maxWidth: 140 }}
+                    className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                    style={{ width: columnWidths.createdBy || 150, minWidth: 120 }}
                   >
                     Oluşturan
                     <div 
@@ -963,8 +662,7 @@ const Customers = () => {
               {/* Tablo İçeriği */}
               <div 
                 ref={listContainerRef}
-                className="table-row-group overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/30 -webkit-overflow-scrolling-touch overscroll-behavior-contain"
-                style={{ maxHeight: 'calc(100vh - 400px)' }}
+                style={{ maxHeight: 'calc(100vh - 400px)', overflowY: 'auto', display: 'table-row-group' }}
               >
                 {filteredCustomers.map((customer) => {
                   const customerOrders = orders.filter(
@@ -983,7 +681,7 @@ const Customers = () => {
                         setDetailModalOpen(true);
                       }}
                     >
-                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A] sticky left-0 z-10 bg-white dark:bg-[#1D2125]">
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         <div className="flex flex-col gap-1">
                           <span className="font-semibold text-sm text-[#172B4D] dark:text-[#B6C2CF]">
                             {customer.name}
@@ -995,7 +693,7 @@ const Customers = () => {
                           )}
                         </div>
                       </div>
-                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         {customer.email ? (
                           <div className="flex items-center gap-1.5">
                             <Mail className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
@@ -1007,7 +705,7 @@ const Customers = () => {
                           <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
                         )}
                       </div>
-                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         {customer.phone ? (
                           <div className="flex items-center gap-1.5">
                             <Phone className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
@@ -1019,7 +717,7 @@ const Customers = () => {
                           <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
                         )}
                       </div>
-                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         <div className="flex items-center gap-1.5">
                           <Package className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
                           <span className="text-xs font-medium text-[#42526E] dark:text-[#B6C2CF]">
@@ -1027,12 +725,12 @@ const Customers = () => {
                           </span>
                         </div>
                       </div>
-                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         <span className="text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF]">
                           ₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalAmount)}
                         </span>
                       </div>
-                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         <Badge 
                           variant={isActive ? "default" : "secondary"} 
                           className={cn(
@@ -1045,7 +743,7 @@ const Customers = () => {
                           {isActive ? "Aktif" : "Pasif"}
                         </Badge>
                       </div>
-                      <div className="table-cell px-0 sm:px-0.5 md:px-1 py-2.5 sm:py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                      <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                         {customer.createdBy ? (
                           <span className="text-xs text-[#42526E] dark:text-[#B6C2CF]">
                             {usersMap[customer.createdBy] || "Bilinmeyen"}
@@ -1057,8 +755,6 @@ const Customers = () => {
                     </div>
                   );
                 })}
-              </div>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               </div>
             </div>
           </div>
@@ -1078,40 +774,23 @@ const Customers = () => {
                   key={customer.id}
                   className="cursor-pointer hover:shadow-lg transition-all"
                   onClick={() => {
-<<<<<<< HEAD
-                    // Müşterinin hala listede olduğundan emin ol
-                    const customerExists = customers.some(c => c.id === customer.id);
-                    if (!customerExists) {
-                      toast.error("Bu müşteri artık mevcut değil.");
-                      return;
-                    }
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     setSelectedCustomer(customer);
                     setDetailModalOpen(true);
                   }}
                 >
-                  <CardContent className="p-3 sm:p-4 space-y-2">
+                  <CardContent className="p-4 space-y-2">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <h3 className="font-semibold text-[11px] sm:text-xs">{customer.name}</h3>
+                        <h3 className="font-semibold text-sm">{customer.name}</h3>
                         {customer.company && (
-                          <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">{customer.company}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{customer.company}</p>
                         )}
                       </div>
-<<<<<<< HEAD
-                      <Badge
-                        variant={isActive ? "default" : "secondary"}
-                        className={cn(
-                          isActive
-                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-=======
                       <Badge 
                         variant={isActive ? "default" : "secondary"}
                         className={cn(
                           isActive 
                             ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             : "bg-muted/60 text-muted-foreground"
                         )}
                       >
@@ -1119,13 +798,13 @@ const Customers = () => {
                       </Badge>
                     </div>
                     {customer.email && (
-                      <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Mail className="h-3.5 w-3.5" />
                         {customer.email}
                       </div>
                     )}
                     {customer.phone && (
-                      <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Phone className="h-3.5 w-3.5" />
                         {formatPhoneForDisplay(customer.phone)}
                       </div>
@@ -1133,9 +812,9 @@ const Customers = () => {
                     <div className="flex items-center justify-between pt-2 border-t">
                       <div className="flex items-center gap-1.5">
                         <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-[11px] sm:text-xs font-medium">{orderCount} Sipariş</span>
+                        <span className="text-xs font-medium">{orderCount} Sipariş</span>
                       </div>
-                      <span className="text-[11px] sm:text-xs font-semibold">
+                      <span className="text-xs font-semibold">
                         ₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalAmount)}
                       </span>
                     </div>
@@ -1152,11 +831,11 @@ const Customers = () => {
               <User className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />
             </div>
             <h3 className="text-[14px] sm:text-[15px] font-semibold text-foreground">Müşteri Bulunamadı</h3>
-            <p className="text-[11px] sm:text-xs text-muted-foreground max-w-sm mx-auto mt-2">
+            <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mx-auto mt-2">
               {searchTerm ? `"${searchTerm}" aramasıyla eşleşen sonuç yok.` : "Henüz kayıtlı müşteri bulunmuyor. Yeni müşteri ekleyerek başlayın."}
             </p>
             {searchTerm && (
-              <Button variant="link" onClick={() => setSearchTerm("")} className="mt-2 text-[11px] sm:text-xs">
+              <Button variant="link" onClick={() => setSearchTerm("")} className="mt-2 text-xs sm:text-sm">
                 Aramayı temizle
               </Button>
             )}
@@ -1173,35 +852,10 @@ const Customers = () => {
       {selectedCustomer && (
         <CustomerDetailModal
           open={detailModalOpen}
-<<<<<<< HEAD
-          onOpenChange={(open) => {
-            setDetailModalOpen(open);
-            if (!open) {
-              setSelectedCustomer(null);
-            }
-          }}
-          customer={selectedCustomer}
-          onUpdate={() => {
-            fetchCustomers();
-          }}
-          onDelete={() => {
-            // Önce state'i temizle
-            const deletedCustomerId = selectedCustomer?.id;
-            setSelectedCustomer(null);
-            setDetailModalOpen(false);
-            // Listeyi manuel olarak güncelle (cache sorununu önlemek için)
-            if (deletedCustomerId) {
-              setCustomers(prev => prev.filter(c => c.id !== deletedCustomerId));
-            }
-            // Sonra listeyi yenile
-            fetchCustomers();
-          }}
-=======
           onOpenChange={setDetailModalOpen}
           customer={selectedCustomer}
           onUpdate={fetchCustomers}
           onDelete={fetchCustomers}
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         />
       )}
 

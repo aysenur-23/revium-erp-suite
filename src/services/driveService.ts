@@ -13,11 +13,7 @@ export interface DriveUploadOptions {
   fileName?: string;
   type?: DriveUploadType;
   folderId?: string;
-<<<<<<< HEAD
-  metadata?: Record<string, unknown>;
-=======
   metadata?: Record<string, any>;
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   makePublic?: boolean;
 }
 
@@ -41,11 +37,7 @@ const getGoogleAccessToken = async (): Promise<string> => {
   }
 
   const user = auth.currentUser;
-<<<<<<< HEAD
-
-=======
   
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   // Kullanıcı Google provider ile giriş yapmış mı kontrol et
   const isGoogleProvider = user.providerData.some(
     (provider) => provider.providerId === "google.com"
@@ -55,19 +47,11 @@ const getGoogleAccessToken = async (): Promise<string> => {
     // Google provider ile giriş yapılmamış, Google ile bağlan
     const provider = new GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/drive.file");
-<<<<<<< HEAD
-
-    try {
-      const credential = await signInWithPopup(auth, provider);
-      const oauthCredential = GoogleAuthProvider.credentialFromResult(credential);
-
-=======
     
     try {
       const credential = await signInWithPopup(auth, provider);
       const oauthCredential = GoogleAuthProvider.credentialFromResult(credential);
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (!oauthCredential?.accessToken) {
         throw new Error("Google Drive erişim token'ı alınamadı");
       }
@@ -75,19 +59,6 @@ const getGoogleAccessToken = async (): Promise<string> => {
       // Token'ı kaydet
       const expiresIn = 3600; // 1 saat
       saveToken(oauthCredential.accessToken, expiresIn);
-<<<<<<< HEAD
-
-      return oauthCredential.accessToken;
-    } catch (error: unknown) {
-      if (import.meta.env.DEV) {
-        console.error("Google token alma hatası:", error);
-      }
-
-      if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === "auth/popup-closed-by-user") {
-        throw new Error("Google bağlantısı iptal edildi.");
-      }
-
-=======
       
       return oauthCredential.accessToken;
     } catch (error: unknown) {
@@ -101,7 +72,6 @@ const getGoogleAccessToken = async (): Promise<string> => {
         throw new Error("Google bağlantısı iptal edildi.");
       }
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       throw new Error(error instanceof Error ? error.message : "Google token alınamadı");
     }
   }
@@ -111,30 +81,18 @@ const getGoogleAccessToken = async (): Promise<string> => {
   // kullanıcının ID token'ını kullanarak Google OAuth token'ı alabiliriz
   // Ancak bu mümkün değil, bu yüzden kullanıcıyı yeniden Google ile giriş yapmaya yönlendirmeliyiz
   // Ya da stored token'ı kullan
-<<<<<<< HEAD
-
-=======
   
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   // Stored token yoksa, kullanıcıyı Google ile yeniden giriş yapmaya yönlendir
   const storedToken = getStoredToken();
   if (!storedToken) {
     // Token yok, kullanıcıyı Google ile bağlanmaya yönlendir
     const provider = new GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/drive.file");
-<<<<<<< HEAD
-
-    try {
-      const credential = await signInWithPopup(auth, provider);
-      const oauthCredential = GoogleAuthProvider.credentialFromResult(credential);
-
-=======
     
     try {
       const credential = await signInWithPopup(auth, provider);
       const oauthCredential = GoogleAuthProvider.credentialFromResult(credential);
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       if (!oauthCredential?.accessToken) {
         throw new Error("Google Drive erişim token'ı alınamadı");
       }
@@ -142,19 +100,6 @@ const getGoogleAccessToken = async (): Promise<string> => {
       // Token'ı kaydet
       const expiresIn = 3600; // 1 saat
       saveToken(oauthCredential.accessToken, expiresIn);
-<<<<<<< HEAD
-
-      return oauthCredential.accessToken;
-    } catch (error: unknown) {
-      if (import.meta.env.DEV) {
-        console.error("Google token alma hatası:", error);
-      }
-
-      if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === "auth/popup-closed-by-user") {
-        throw new Error("Google bağlantısı iptal edildi.");
-      }
-
-=======
       
       return oauthCredential.accessToken;
     } catch (error: unknown) {
@@ -168,7 +113,6 @@ const getGoogleAccessToken = async (): Promise<string> => {
         throw new Error("Google bağlantısı iptal edildi.");
       }
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       throw new Error(error instanceof Error ? error.message : "Google token alınamadı");
     }
   }
@@ -231,17 +175,10 @@ export const authorizeDrive = async (): Promise<boolean> => {
 
     const provider = new GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/drive.file");
-<<<<<<< HEAD
-
-    const credential = await signInWithPopup(auth, provider);
-    const oauthCredential = GoogleAuthProvider.credentialFromResult(credential);
-
-=======
     
     const credential = await signInWithPopup(auth, provider);
     const oauthCredential = GoogleAuthProvider.credentialFromResult(credential);
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (!oauthCredential?.accessToken) {
       throw new Error("Google Drive erişim token'ı alınamadı");
     }
@@ -249,21 +186,6 @@ export const authorizeDrive = async (): Promise<boolean> => {
     // Token'ı kaydet
     const expiresIn = 3600; // 1 saat
     saveToken(oauthCredential.accessToken, expiresIn);
-<<<<<<< HEAD
-
-    return true;
-  } catch (error: unknown) {
-    if (import.meta.env.DEV) {
-      console.error("Drive authorization error:", error);
-    }
-
-    if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === "auth/popup-closed-by-user") {
-      throw new Error("Google bağlantısı iptal edildi.");
-    }
-
-    const errorMsg = error instanceof Error ? error.message : (typeof error === 'string' ? error : (error as { message: string })?.message);
-    throw new Error(errorMsg || "Google Drive yetkilendirmesi başarısız oldu");
-=======
     
     return true;
   } catch (error: unknown) {
@@ -278,7 +200,6 @@ export const authorizeDrive = async (): Promise<boolean> => {
     }
     
     throw new Error(error?.message || "Google Drive yetkilendirmesi başarısız oldu");
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   }
 };
 
@@ -471,19 +392,10 @@ export const uploadFileToDrive = async (
 
     let errorMessage = "Google Drive yüklemesi başarısız oldu";
 
-<<<<<<< HEAD
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    } else if (typeof error === "string") {
-      errorMessage = error;
-    } else if (error && typeof error === 'object' && 'message' in error) {
-      errorMessage = (error as { message: string }).message;
-=======
     if (error?.message) {
       errorMessage = error.message;
     } else if (typeof error === "string") {
       errorMessage = error;
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     }
 
     // Özel hata mesajları
@@ -533,13 +445,9 @@ export const deleteDriveFile = async (fileId: string): Promise<void> => {
     }
   } catch (error: unknown) {
     if (import.meta.env.DEV) {
-<<<<<<< HEAD
-      console.error("Drive delete error:", error);
-=======
       if (import.meta.env.DEV) {
         console.error("Drive delete error:", error);
       }
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     }
 
     let errorMessage = "Drive dosyası silinemedi";
@@ -547,11 +455,6 @@ export const deleteDriveFile = async (fileId: string): Promise<void> => {
       errorMessage = error.message;
     } else if (typeof error === "string") {
       errorMessage = error;
-<<<<<<< HEAD
-    } else if (error && typeof error === 'object' && 'message' in error) {
-      errorMessage = (error as { message: string }).message;
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     }
 
     throw new Error(errorMessage);

@@ -49,17 +49,10 @@ export const getCustomers = async (): Promise<Customer[]> => {
     try {
       const q = query(collection(firestore, "customers"), orderBy("createdAt", "desc"), limit(500));
       const snapshot = await getDocs(q);
-      const customers = snapshot.docs.map((doc) => ({
+      return snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Customer[];
-      
-      // Duplicate kontrolü - aynı ID'ye sahip müşterileri filtrele
-      const uniqueCustomers = customers.filter((customer, index, self) =>
-        index === self.findIndex((c) => c.id === customer.id)
-      );
-      
-      return uniqueCustomers;
     } catch (orderByError: unknown) {
       // Index hatası varsa orderBy olmadan al
       if (import.meta.env.DEV) {
@@ -73,14 +66,8 @@ export const getCustomers = async (): Promise<Customer[]> => {
         id: doc.id,
         ...doc.data(),
       })) as Customer[];
-      
-      // Duplicate kontrolü - aynı ID'ye sahip müşterileri filtrele
-      const uniqueCustomers = customers.filter((customer, index, self) =>
-        index === self.findIndex((c) => c.id === customer.id)
-      );
-      
       // Client-side sorting
-      return uniqueCustomers.sort((a, b) => {
+      return customers.sort((a, b) => {
         const aTime = a.createdAt?.toMillis() || 0;
         const bTime = b.createdAt?.toMillis() || 0;
         return bTime - aTime; // Descending order

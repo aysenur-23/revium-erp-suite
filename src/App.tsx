@@ -15,85 +15,59 @@ import { MainLayout } from "./components/Layout/MainLayout";
 // Redirect component for project tasks
 const ProjectTasksRedirect = () => {
   const { projectId } = useParams<{ projectId: string }>();
-  return <Navigate to={`/tasks?project=${projectId}`} replace />;
+  return <Navigate to={`/tasks?project=${projectId}&view=board`} replace />;
 };
 
 // Lazy load pages for better performance with error handling
-// Optimized for faster initial load - only retry on network errors
+// Optimized for faster initial load
 const lazyWithRetry = (componentImport: () => Promise<{ default: React.ComponentType<unknown> }>) => {
   return lazy(async () => {
-    try {
-      return await componentImport();
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      // Sadece network hatalarında retry yap
-      const isNetworkError = errorMessage.includes('ERR_CONNECTION_REFUSED') || 
-                             errorMessage.includes('ERR_NETWORK_CHANGED') ||
-                             errorMessage.includes('Failed to fetch') ||
-                             errorMessage.includes('NetworkError') ||
-                             errorMessage.includes('network');
-      
-      if (isNetworkError) {
-        // Network hatası: 1 retry, 50ms delay
-        if (import.meta.env.DEV) {
-          console.warn('Lazy loading network error, retrying in 50ms...');
-        }
-        await new Promise(resolve => setTimeout(resolve, 50));
-        try {
-          return await componentImport();
-        } catch (retryError) {
-          if (import.meta.env.DEV) {
-            console.error('Lazy loading failed after retry:', retryError);
+    let lastError: unknown;
+    const maxRetries = 3; // Retry sayısı artırıldı
+    const retryDelays = [100, 500, 1000]; // Artan gecikme süreleri
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await componentImport();
+      } catch (error) {
+        lastError = error;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Network hatalarını kontrol et
+        if (errorMessage.includes('ERR_CONNECTION_REFUSED') || 
+            errorMessage.includes('ERR_NETWORK_CHANGED') ||
+            errorMessage.includes('Failed to fetch')) {
+          // Son deneme değilse bekle ve tekrar dene
+          if (attempt < maxRetries - 1) {
+            const delay = retryDelays[attempt] || 1000;
+            if (import.meta.env.DEV) {
+              console.warn(`Lazy loading network error (attempt ${attempt + 1}/${maxRetries}), retrying in ${delay}ms...`);
+            }
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
           }
-          throw retryError;
+        }
+        
+        // Sadece development'ta log göster
+        if (import.meta.env.DEV) {
+          console.error(`Lazy loading error (attempt ${attempt + 1}/${maxRetries}):`, error);
+        }
+        
+        // Son deneme değilse bekle ve tekrar dene
+        if (attempt < maxRetries - 1) {
+          const delay = retryDelays[attempt] || 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
-      
-      // Network hatası değilse hemen fırlat (syntax error, module not found, vb.)
-      if (import.meta.env.DEV) {
-        console.error('Lazy loading error (non-network):', error);
-      }
-      throw error;
     }
+    
+    // Tüm denemeler başarısız oldu, hatayı fırlat
+    if (import.meta.env.DEV) {
+      console.error("Lazy loading failed after all retries:", lastError);
+    }
+    throw lastError;
   });
 };
-
-// Preload critical pages on app start
-<<<<<<< HEAD
-// Optimized: requestIdleCallback kullan ve daha geç başlat (non-blocking)
-const preloadCriticalPages = () => {
-  // Critical pages'i arka planda preload et (sadece gerçekten kritik olanlar)
-=======
-const preloadCriticalPages = () => {
-  // Critical pages'i arka planda preload et
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-  import("./pages/Dashboard").catch(() => {});
-  import("./pages/Tasks").catch(() => {});
-};
-
-// App başladığında critical sayfaları preload et
-if (typeof window !== 'undefined') {
-<<<<<<< HEAD
-  // requestIdleCallback kullan (tarayıcı müsait olduğunda)
-  // Fallback: setTimeout ile 2000ms sonra (100ms → 2000ms)
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(
-      () => {
-        // İlk idle callback'te hemen preload et
-        preloadCriticalPages();
-      },
-      { timeout: 2000 } // Maksimum 2 saniye bekle
-    );
-  } else {
-    // Fallback: setTimeout ile 2000ms sonra preload et (non-blocking)
-    setTimeout(preloadCriticalPages, 2000);
-  }
-=======
-  // Sayfa yüklendikten sonra preload et (non-blocking)
-  setTimeout(preloadCriticalPages, 100);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-}
 
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
 const Production = lazyWithRetry(() => import("./pages/Production"));
@@ -136,24 +110,14 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false, // Window focus'ta otomatik refetch'i kapat (performans için)
-      retry: 1, // Retry sayısını 1'e indir (hata durumunda 1 kez dene)
-<<<<<<< HEAD
-      staleTime: 10 * 60 * 1000, // 10 dakika stale time (5 dakika → 10 dakika, daha agresif cache)
-      gcTime: 15 * 60 * 1000, // 15 dakika cache time (10 dakika → 15 dakika, daha uzun cache)
-=======
-      staleTime: 5 * 60 * 1000, // 5 dakika stale time (daha agresif cache)
-      gcTime: 10 * 60 * 1000, // 10 dakika cache time (daha uzun cache)
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+      retry: 1, // Retry sayısını azalt
+      staleTime: 3 * 60 * 1000, // 3 dakika stale time (daha güncel veri için)
+      gcTime: 5 * 60 * 1000, // 5 dakika cache time (daha az memory kullanımı için)
       // İlk yüklemede daha hızlı render için
       refetchOnMount: false, // Mount'ta refetch yapma (cache'den göster - performans için)
-      refetchOnReconnect: false, // Reconnect'te refetch yapma
       networkMode: 'online', // Sadece online'dayken fetch yap
       // Performans için: Query'leri daha agresif cache'le
       structuralSharing: true, // Structural sharing ile gereksiz re-render'ları önle
-      // Placeholder data ile hızlı render
-      placeholderData: (previousData) => previousData, // Önceki data'yı placeholder olarak kullan
-      // Retry delay'i azalt (daha hızlı hata gösterimi)
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff, max 30s
     },
   },
 });
@@ -169,12 +133,6 @@ const router = createBrowserRouter(
     {
       element: <AppProviders />,
       errorElement: <ErrorPage />,
-<<<<<<< HEAD
-      future: {
-        v7_startTransition: true, // React Router v7 uyumluluğu için
-      },
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       children: [
         { path: "/verify-email", element: <VerifyEmail />, errorElement: <ErrorPage /> },
         { path: "/verify-email-prompt", element: <VerifyEmailPrompt />, errorElement: <ErrorPage /> },
@@ -184,8 +142,8 @@ const router = createBrowserRouter(
         { path: "/production", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><Production /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
         { path: "/tasks", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><Tasks /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
         { path: "/tasks/:id", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><TaskDetail /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
-        { path: "/tasks/archive", element: <ProtectedRoute><Navigate to="/tasks?filter=archive" replace /></ProtectedRoute>, errorElement: <ErrorPage /> },
-        { path: "/task-pool", element: <ProtectedRoute><Navigate to="/tasks?filter=pool" replace /></ProtectedRoute>, errorElement: <ErrorPage /> },
+        { path: "/tasks/archive", element: <ProtectedRoute><Navigate to="/tasks?filter=archive&view=board" replace /></ProtectedRoute>, errorElement: <ErrorPage /> },
+        { path: "/task-pool", element: <ProtectedRoute><Navigate to="/tasks?filter=pool&view=board" replace /></ProtectedRoute>, errorElement: <ErrorPage /> },
         { path: "/projects", element: <ProtectedRoute><Suspense fallback={<PageLoader />}><Projects /></Suspense></ProtectedRoute>, errorElement: <ErrorPage /> },
         { 
           path: "/projects/:projectId/tasks", 

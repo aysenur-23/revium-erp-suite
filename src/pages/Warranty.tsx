@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/ui/search-input";
 
-import { Plus, Loader2, Edit, Trash2, Package, X, Save, ShieldCheck, User, MoreVertical, Building2 } from "lucide-react";
+import { Plus, Loader2, Edit, Trash2, Package, DollarSign, X, Save, ShieldCheck, User, MoreVertical, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getWarrantyRecords,
@@ -194,12 +194,9 @@ const Warranty = () => {
       return;
     }
 
-    // Yetki kontrolü: Mühendisler, yöneticiler ve kaydı oluşturan kişi durum değiştirebilir
+    // Yetki kontrolü
     const record = records.find(r => r.id === recordId);
-    const isEngineer = user?.roles?.includes("engineer") || user?.roles?.includes("mühendis") || false;
-    const isCreator = record?.createdBy === user.id;
-    
-    if (!canUpdate && !isEngineer && !isCreator) {
+    if (!canUpdate && record?.createdBy !== user.id) {
       toast.error("Garanti kaydı durumunu değiştirme yetkiniz yok.");
       return;
     }
@@ -236,11 +233,8 @@ const Warranty = () => {
       return;
     }
 
-    // Yetki kontrolü: Mühendisler, yöneticiler ve kaydı oluşturan kişi düzenleyebilir
-    const isEngineer = user?.roles?.includes("engineer") || user?.roles?.includes("mühendis") || false;
-    const isCreator = selectedRecord.createdBy === user?.id;
-    
-    if (!canUpdate && !isEngineer && !isCreator) {
+    // Yetki kontrolü
+    if (!canUpdate && selectedRecord.createdBy !== user?.id) {
       toast.error("Garanti kaydı düzenleme yetkiniz yok.");
       setEditDialogOpen(false);
       return;
@@ -419,16 +413,16 @@ const Warranty = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[80%] max-w-[80%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex-1 min-w-0">
-            <h1 className="text-[16px] sm:text-[18px] font-semibold text-foreground leading-tight">Satış Sonrası Takip</h1>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1 leading-snug">
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Satış Sonrası Takip</h1>
+            <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
               Garantiye gelen ürünleri takip edin
             </p>
           </div>
           {canCreate && (
-            <Button className="gap-1 w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs" onClick={() => {
+            <Button className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" onClick={() => {
               resetForm();
               setCreateDialogOpen(true);
             }}>
@@ -441,14 +435,14 @@ const Warranty = () => {
 
         {/* Filtreler */}
         <Card>
-          <CardContent className="p-3 sm:p-4">
+          <CardContent className="p-3 sm:p-4 md:p-6">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4">
               <SearchInput
                 placeholder="Müşteri, ürün veya neden ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 containerClassName="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] md:min-w-[250px]"
-                className="h-9 sm:h-10 text-[11px] sm:text-xs"
+                className="h-9 sm:h-10 text-xs sm:text-sm"
               />
             </div>
           </CardContent>
@@ -457,104 +451,82 @@ const Warranty = () => {
         {/* Kayıtlar */}
         <Card>
           <CardContent className="p-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-3 sm:p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-3 sm:gap-4 md:gap-5 lg:gap-6 p-3 sm:p-4 md:p-6">
               {loading ? (
                 <div className="col-span-full text-center py-12 text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                  <p className="text-[11px] sm:text-xs">Yükleniyor...</p>
+                  <p className="text-sm">Yükleniyor...</p>
                 </div>
               ) : filteredRecords.length === 0 ? (
                 <div className="col-span-full text-center py-12 text-muted-foreground">
                   <Package className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                  <p className="text-[11px] sm:text-xs">{searchTerm ? "Arama sonucu bulunamadı" : "Henüz kayıt yok"}</p>
+                  <p className="text-sm">{searchTerm ? "Arama sonucu bulunamadı" : "Henüz kayıt yok"}</p>
                 </div>
               ) : (
-                filteredRecords.map((record) => {
-                  const getStatusColor = (status: string) => {
-                    switch (status) {
-                      case "completed":
-                        return "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-400";
-                      case "in_repair":
-                        return "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/20 dark:border-blue-800 dark:text-blue-400";
-                      case "returned":
-                        return "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-950/20 dark:border-purple-800 dark:text-purple-400";
-                      default:
-                        return "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/20 dark:border-amber-800 dark:text-amber-400";
-                    }
-                  };
-                  
-                  return (
-                    <Card
-                      key={record.id}
-                      className="group hover:shadow-md transition-all duration-200 cursor-pointer border border-border/60 hover:border-border bg-card flex flex-col h-full overflow-hidden"
-                      onClick={() => openDetailDialog(record)}
-                    >
-                      <CardContent className="p-3 sm:p-4 flex flex-col flex-1 gap-3 sm:gap-4">
-                        {/* Header */}
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-[14px] sm:text-[15px] leading-snug text-foreground mb-2 line-clamp-2" title={getProductName(record.productId)}>
+                filteredRecords.map((record) => (
+                  <Card
+                    key={record.id}
+                    className="group hover:shadow-lg transition-all duration-200 cursor-pointer border border-border/80 hover:border-primary/60 flex flex-col h-full overflow-hidden bg-card"
+                    onClick={() => openDetailDialog(record)}
+                  >
+                    <CardContent className="p-4 sm:p-5 flex flex-col flex-1 gap-4 min-h-[280px]">
+                      {/* Header Section */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="flex items-start gap-2 flex-wrap">
+                            <h3 className="font-semibold text-[14px] sm:text-[15px] leading-tight text-foreground break-words" title={getProductName(record.productId)}>
                               {getProductName(record.productId)}
                             </h3>
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
-                              <p className="text-[11px] sm:text-xs truncate" title={getCustomerName(record.customerId)}>
-                                {getCustomerName(record.customerId)}
-                              </p>
-                            </div>
                           </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" 
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="text-[11px] sm:text-xs">
+                          <div className="flex items-center gap-1.5 min-h-[20px]">
+                            <Building2 className="h-3.5 w-3.5 text-muted-foreground/70 flex-shrink-0" />
+                            <p className="text-xs text-muted-foreground truncate" title={getCustomerName(record.customerId)}>
+                              {getCustomerName(record.customerId)}
+                            </p>
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 hover:bg-muted rounded-md" 
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              openDetailDialog(record);
+                            }}>
+                              <Edit className="mr-2 h-4 w-4" /> Detayları Görüntüle
+                            </DropdownMenuItem>
+                            {(canUpdate || record.createdBy === user?.id) && (
                               <DropdownMenuItem onClick={(e) => {
                                 e.stopPropagation();
-                                openDetailDialog(record);
+                                openEditDialog(record);
                               }}>
-                                <Edit className="mr-2 h-4 w-4" /> Detayları Görüntüle
+                                <Edit className="mr-2 h-4 w-4" /> Düzenle
                               </DropdownMenuItem>
-                              {(canUpdate || record.createdBy === user?.id) && (
-                                <DropdownMenuItem onClick={(e) => {
-                                  e.stopPropagation();
-                                  openEditDialog(record);
-                                }}>
-                                  <Edit className="mr-2 h-4 w-4" /> Düzenle
-                                </DropdownMenuItem>
-                              )}
-                              {canDelete && (
-                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => {
-                                  e.stopPropagation();
-                                  openDeleteDialog(record);
-                                }}>
-                                  <Trash2 className="mr-2 h-4 w-4" /> Sil
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                        
-                        {/* Status Badge */}
-                        <div className="flex items-center justify-between">
-                          <Badge 
-                            variant="outline"
-                            className={cn(
-                              "text-[11px] sm:text-xs font-medium px-3 py-1",
-                              getStatusColor(record.status)
                             )}
-                          >
-                            {record.status === "received" ? "Alındı" : 
-                             record.status === "in_repair" ? "Onarımda" : 
-                             record.status === "completed" ? "Tamamlandı" : 
-                             record.status === "returned" ? "İade Edildi" : record.status}
-                          </Badge>
+                            {canDelete && (
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => {
+                                e.stopPropagation();
+                                openDeleteDialog(record);
+                              }}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Sil
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      
+                      {/* Status and Description Section */}
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center justify-between px-3 py-2.5 bg-muted/40 rounded-md border border-border/50 min-h-[44px]">
+                          <span className="text-xs font-medium text-muted-foreground">Durum</span>
                           <Select
                             value={record.status}
                             onValueChange={(value: WarrantyRecord["status"]) => {
@@ -562,12 +534,12 @@ const Warranty = () => {
                             }}
                           >
                             <SelectTrigger 
-                              className="w-auto h-7 text-[11px] sm:text-xs border-0 bg-transparent p-0 focus:ring-0 hover:bg-transparent"
+                              className="w-[140px] h-7 text-xs border-0 bg-transparent p-0 focus:ring-0"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent onClick={(e) => e.stopPropagation()} className="text-[11px] sm:text-xs">
+                            <SelectContent onClick={(e) => e.stopPropagation()}>
                               <SelectItem value="received">Alındı</SelectItem>
                               <SelectItem value="in_repair">Onarımda</SelectItem>
                               <SelectItem value="completed">Tamamlandı</SelectItem>
@@ -575,48 +547,74 @@ const Warranty = () => {
                             </SelectContent>
                           </Select>
                         </div>
-
-                        {/* Description */}
-                        <div className="space-y-3 flex-1">
-                          <div>
-                            <p className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wide">Neden</p>
-                            <p className="text-[11px] sm:text-xs text-foreground line-clamp-3 leading-relaxed">{record.reason || "-"}</p>
+                        <div className="px-3 py-2.5 bg-muted/40 rounded-md border border-border/50 min-h-[44px]">
+                          <p className="text-xs text-muted-foreground mb-1">Neden</p>
+                          <p className="text-sm font-medium text-foreground line-clamp-2">{record.reason || "-"}</p>
+                        </div>
+                        {record.repairDescription ? (
+                          <div className="px-3 py-2.5 bg-muted/40 rounded-md border border-border/50 min-h-[44px]">
+                            <p className="text-xs text-muted-foreground mb-1">Yapılan İşlem</p>
+                            <p className="text-sm font-medium text-foreground line-clamp-2">{record.repairDescription}</p>
                           </div>
-                          {record.repairDescription && (
-                            <div>
-                              <p className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wide">Yapılan İşlem</p>
-                              <p className="text-[11px] sm:text-xs text-foreground line-clamp-3 leading-relaxed">{record.repairDescription}</p>
-                            </div>
+                        ) : (
+                          <div className="min-h-[44px]"></div>
+                        )}
+                      </div>
+
+                      {/* Statistics Section */}
+                      <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border/60">
+                        <div className="flex flex-col gap-1.5 min-h-[60px] justify-center">
+                          <div className="flex items-center gap-1.5 min-h-[20px]">
+                            <DollarSign className="h-3.5 w-3.5 text-muted-foreground/70 flex-shrink-0" />
+                            <span className="text-xs font-medium text-muted-foreground">Maliyet</span>
+                          </div>
+                          <span className="text-xl font-bold text-foreground leading-none">
+                            ₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(record.cost)}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1.5 min-h-[60px] justify-center">
+                          <div className="flex items-center gap-1.5 min-h-[20px]">
+                            <Package className="h-3.5 w-3.5 text-muted-foreground/70 flex-shrink-0" />
+                            <span className="text-xs font-medium text-muted-foreground">Tarih</span>
+                          </div>
+                          <span className="text-xl font-bold text-foreground leading-none">
+                            {record.receivedDate.toDate().toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit" })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Footer Section */}
+                      <div className="pt-2 border-t border-border/60 space-y-2 mt-auto">
+                        {/* Status Badge */}
+                        <Badge 
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-center text-xs font-medium py-1.5",
+                            record.status === "completed" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+                            record.status === "in_repair" && "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+                            record.status === "returned" && "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
+                            record.status === "received" && "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
                           )}
-                        </div>
-
-                        {/* Stats */}
-                        <div className="grid grid-cols-2 gap-3 pt-3 border-t">
-                          <div>
-                            <p className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wide">Maliyet</p>
-                            <p className="text-base font-semibold text-foreground">
-                              ₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(record.cost)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wide">Tarih</p>
-                            <p className="text-base font-semibold text-foreground">
-                              {record.receivedDate.toDate().toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit" })}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Footer */}
-                        {record.createdBy && (
-                          <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-muted-foreground pt-2 border-t">
-                            <User className="h-3.5 w-3.5 flex-shrink-0" />
+                        >
+                          {record.status === "received" ? "Alındı" : 
+                           record.status === "in_repair" ? "Onarımda" : 
+                           record.status === "completed" ? "Tamamlandı" : 
+                           record.status === "returned" ? "İade Edildi" : record.status}
+                        </Badge>
+                        
+                        {/* Created By */}
+                        {record.createdBy ? (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70 min-h-[20px]">
+                            <User className="h-3 w-3 flex-shrink-0" />
                             <span className="truncate">{getUserName(record.createdBy)}</span>
                           </div>
+                        ) : (
+                          <div className="min-h-[20px]"></div>
                         )}
-                      </CardContent>
-                    </Card>
-                  );
-                })
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
               )}
             </div>
           </CardContent>
@@ -624,15 +622,7 @@ const Warranty = () => {
 
         {/* Detail Dialog */}
         <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-          <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
-            {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
-            <DialogTitle className="sr-only">
-              {selectedRecord ? `${getProductName(selectedRecord.productId)} - Garanti Kaydı Detayı` : "Garanti Kaydı Detayı"}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Garanti kaydı detayları
-            </DialogDescription>
-            
+          <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
             <div className="flex flex-col h-full min-h-0">
               {/* Header */}
               <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -642,9 +632,12 @@ const Warranty = () => {
                       <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground break-words">
+                      <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground break-words">
                         {selectedRecord ? getProductName(selectedRecord.productId) : "Garanti Kaydı Detayı"}
-                      </h2>
+                      </DialogTitle>
+                      <DialogDescription className="sr-only">
+                        Garanti kaydı detayları
+                      </DialogDescription>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 flex-shrink-0">
@@ -652,7 +645,7 @@ const Warranty = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0"
+                        className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
                         onClick={() => {
                           setDetailDialogOpen(false);
                           if (selectedRecord) openEditDialog(selectedRecord);
@@ -665,7 +658,7 @@ const Warranty = () => {
                     <Button
                       variant="default"
                       size="sm"
-                      className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 text-white"
+                      className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0 text-white"
                       onClick={() => setDetailDialogOpen(false)}
                     >
                       <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
@@ -679,9 +672,9 @@ const Warranty = () => {
               <div className="flex-1 overflow-hidden bg-gray-50/50 p-3 sm:p-4 min-h-0">
                 <div className="max-w-full mx-auto h-full overflow-y-auto">
                   {selectedRecord && (
-                    <div className="space-y-2">
+                    <div className="space-y-4 sm:space-y-6">
                       {/* Highlight Cards */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                         <Card>
                           <CardContent className="p-3 sm:p-4">
                             <div className="flex items-center gap-3">
@@ -689,8 +682,8 @@ const Warranty = () => {
                                 <User className="h-5 w-5 text-primary" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[11px] sm:text-xs text-muted-foreground">Müşteri</p>
-                                <p className="text-[11px] sm:text-xs font-semibold break-words">{getCustomerName(selectedRecord.customerId)}</p>
+                                <p className="text-xs text-muted-foreground">Müşteri</p>
+                                <p className="text-sm font-semibold break-words">{getCustomerName(selectedRecord.customerId)}</p>
                               </div>
                             </div>
                           </CardContent>
@@ -702,8 +695,8 @@ const Warranty = () => {
                                 <Package className="h-5 w-5 text-emerald-700" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[11px] sm:text-xs text-muted-foreground">Ürün</p>
-                                <p className="text-[11px] sm:text-xs font-semibold break-words">{getProductName(selectedRecord.productId)}</p>
+                                <p className="text-xs text-muted-foreground">Ürün</p>
+                                <p className="text-sm font-semibold break-words">{getProductName(selectedRecord.productId)}</p>
                               </div>
                             </div>
                           </CardContent>
@@ -715,8 +708,8 @@ const Warranty = () => {
                                 <Package className="h-5 w-5 text-blue-700" />
                               </div>
                               <div>
-                                <p className="text-[11px] sm:text-xs text-muted-foreground">Maliyet</p>
-                                <p className="text-[11px] sm:text-xs font-semibold">₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(selectedRecord.cost)}</p>
+                                <p className="text-xs text-muted-foreground">Maliyet</p>
+                                <p className="text-sm font-semibold">₺{new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(selectedRecord.cost)}</p>
                               </div>
                             </div>
                           </CardContent>
@@ -728,21 +721,21 @@ const Warranty = () => {
                                 <ShieldCheck className="h-5 w-5 text-amber-700" />
                               </div>
                               <div>
-                                <p className="text-[11px] sm:text-xs text-muted-foreground">Durum</p>
+                                <p className="text-xs text-muted-foreground">Durum</p>
                                 <Select
                                   value={selectedRecord.status}
                                   onValueChange={(value: WarrantyRecord["status"]) => {
                                     handleStatusChange(selectedRecord.id, value);
                                   }}
                                 >
-                                  <SelectTrigger className="h-8 text-[11px] sm:text-xs border-0 p-0 font-semibold min-h-[32px]">
+                                  <SelectTrigger className="h-8 text-xs border-0 p-0 font-semibold min-h-[32px]">
                                     <SelectValue />
                                   </SelectTrigger>
-                                  <SelectContent className="text-[11px] sm:text-xs">
-                                    <SelectItem value="received" className="text-[11px] sm:text-xs">Alındı</SelectItem>
-                                    <SelectItem value="in_repair" className="text-[11px] sm:text-xs">Onarımda</SelectItem>
-                                    <SelectItem value="completed" className="text-[11px] sm:text-xs">Tamamlandı</SelectItem>
-                                    <SelectItem value="returned" className="text-[11px] sm:text-xs">İade Edildi</SelectItem>
+                                  <SelectContent>
+                                    <SelectItem value="received">Alındı</SelectItem>
+                                    <SelectItem value="in_repair">Onarımda</SelectItem>
+                                    <SelectItem value="completed">Tamamlandı</SelectItem>
+                                    <SelectItem value="returned">İade Edildi</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -759,18 +752,18 @@ const Warranty = () => {
                         <CardContent className="space-y-4">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <Label className="text-[11px] sm:text-xs text-muted-foreground">Alınma Tarihi</Label>
+                              <Label className="text-sm text-muted-foreground">Alınma Tarihi</Label>
                               <div className="rounded-lg border bg-muted/30 px-3 py-2">
-                                <p className="text-[11px] sm:text-xs font-medium">
+                                <p className="text-sm font-medium">
                                   {selectedRecord.receivedDate.toDate().toLocaleDateString("tr-TR")}
                                 </p>
                               </div>
                             </div>
                             {selectedRecord.orderId && (
                               <div className="space-y-2">
-                                <Label className="text-[11px] sm:text-xs text-muted-foreground">İlgili Sipariş</Label>
+                                <Label className="text-sm text-muted-foreground">İlgili Sipariş</Label>
                                 <div className="rounded-lg border bg-muted/30 px-3 py-2">
-                                  <p className="text-[11px] sm:text-xs font-medium">
+                                  <p className="text-sm font-medium">
                                     {orders.find(o => o.id === selectedRecord.orderId)?.orderNumber || orders.find(o => o.id === selectedRecord.orderId)?.order_number || "Bulunamadı"}
                                   </p>
                                 </div>
@@ -779,27 +772,27 @@ const Warranty = () => {
                           </div>
                           
                           <div className="space-y-2">
-                            <Label className="text-[11px] sm:text-xs text-muted-foreground">Geliş Nedeni</Label>
+                            <Label className="text-sm text-muted-foreground">Geliş Nedeni</Label>
                             <div className="rounded-lg border bg-muted/30 px-3 py-2.5">
-                              <p className="text-[11px] sm:text-xs">{selectedRecord.reason}</p>
+                              <p className="text-sm">{selectedRecord.reason}</p>
                             </div>
                           </div>
 
                           {selectedRecord.repairDescription && (
                             <div className="space-y-2">
-                              <Label className="text-[11px] sm:text-xs text-muted-foreground">Yapılan İşlem</Label>
+                              <Label className="text-sm text-muted-foreground">Yapılan İşlem</Label>
                               <div className="rounded-lg border bg-muted/30 px-3 py-2.5">
-                                <p className="text-[11px] sm:text-xs">{selectedRecord.repairDescription}</p>
+                                <p className="text-sm">{selectedRecord.repairDescription}</p>
                               </div>
                             </div>
                           )}
                           {selectedRecord.createdBy && (
                             <div className="space-y-2">
-                              <Label className="text-[11px] sm:text-xs text-muted-foreground">Oluşturan</Label>
+                              <Label className="text-sm text-muted-foreground">Oluşturan</Label>
                               <div className="rounded-lg border bg-muted/30 px-3 py-2">
                                 <div className="flex items-center gap-2">
                                   <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                  <p className="text-[11px] sm:text-xs font-medium">{getUserName(selectedRecord.createdBy)}</p>
+                                  <p className="text-sm font-medium">{getUserName(selectedRecord.createdBy)}</p>
                                 </div>
                               </div>
                             </div>
@@ -842,15 +835,7 @@ const Warranty = () => {
 
         {/* Create Dialog */}
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
-            {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
-            <DialogTitle className="sr-only">
-              Yeni Garanti Kaydı
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Yeni garanti kaydı oluşturun
-            </DialogDescription>
-            
+          <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
             <div className="flex flex-col h-full min-h-0">
               {/* Header */}
               <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -859,15 +844,18 @@ const Warranty = () => {
                     <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                       <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                     </div>
-                    <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground truncate">
+                    <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
                       Yeni Garanti Kaydı
-                    </h2>
+                    </DialogTitle>
+                    <DialogDescription className="sr-only">
+                      Yeni garanti kaydı oluşturun
+                    </DialogDescription>
                   </div>
                   <div className="flex flex-wrap gap-2 flex-shrink-0">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0"
+                      className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
                       onClick={() => setCreateDialogOpen(false)}
                     >
                       <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
@@ -876,7 +864,7 @@ const Warranty = () => {
                     <Button
                       variant="default"
                       size="sm"
-                      className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 text-white"
+                      className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0 text-white"
                       onClick={handleCreate}
                     >
                       <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
@@ -896,19 +884,19 @@ const Warranty = () => {
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="create-customer" className="text-[11px] sm:text-xs" showRequired>
+                          <Label htmlFor="create-customer" className="text-sm sm:text-base" showRequired>
                             Müşteri
                           </Label>
                           <Select
                             value={formData.customerId}
                             onValueChange={(value) => setFormData({ ...formData, customerId: value })}
                           >
-                            <SelectTrigger id="create-customer" className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+                            <SelectTrigger id="create-customer" className="min-h-[44px] sm:min-h-0">
                               <SelectValue placeholder="Müşteri seçin" />
                             </SelectTrigger>
-                            <SelectContent className="text-[11px] sm:text-xs">
+                            <SelectContent>
                               {customers.map((customer) => (
-                                <SelectItem key={customer.id} value={customer.id} className="text-[11px] sm:text-xs">
+                                <SelectItem key={customer.id} value={customer.id}>
                                   {customer.name} {customer.company && `(${customer.company})`}
                                 </SelectItem>
                               ))}
@@ -916,19 +904,19 @@ const Warranty = () => {
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="create-product" className="text-[11px] sm:text-xs" showRequired>
+                          <Label htmlFor="create-product" className="text-sm sm:text-base" showRequired>
                             Ürün
                           </Label>
                           <Select
                             value={formData.productId}
                             onValueChange={(value) => setFormData({ ...formData, productId: value })}
                           >
-                            <SelectTrigger id="create-product" className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+                            <SelectTrigger id="create-product" className="min-h-[44px] sm:min-h-0">
                               <SelectValue placeholder="Ürün seçin" />
                             </SelectTrigger>
-                            <SelectContent className="text-[11px] sm:text-xs">
+                            <SelectContent>
                               {products.map((product) => (
-                                <SelectItem key={product.id} value={product.id} className="text-[11px] sm:text-xs">
+                                <SelectItem key={product.id} value={product.id}>
                                   {product.name}
                                 </SelectItem>
                               ))}
@@ -937,20 +925,20 @@ const Warranty = () => {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="create-order" className="text-[11px] sm:text-xs">Sipariş (Opsiyonel)</Label>
+                        <Label htmlFor="create-order" className="text-sm sm:text-base">Sipariş (Opsiyonel)</Label>
                         <Select
                           value={formData.orderId || "none"}
                           onValueChange={(value) =>
                             setFormData({ ...formData, orderId: value === "none" ? "" : value })
                           }
                         >
-                          <SelectTrigger id="create-order" className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+                          <SelectTrigger id="create-order" className="min-h-[44px] sm:min-h-0">
                             <SelectValue placeholder="Sipariş seçin" />
                           </SelectTrigger>
-                          <SelectContent className="text-[11px] sm:text-xs">
-                            <SelectItem value="none" className="text-[11px] sm:text-xs">Sipariş yok</SelectItem>
+                          <SelectContent>
+                            <SelectItem value="none">Sipariş yok</SelectItem>
                             {orders.map((order) => (
-                              <SelectItem key={order.id} value={order.id} className="text-[11px] sm:text-xs">
+                              <SelectItem key={order.id} value={order.id}>
                                 {order.orderNumber || order.order_number || order.id}
                               </SelectItem>
                             ))}
@@ -959,37 +947,37 @@ const Warranty = () => {
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="create-received-date" className="text-[11px] sm:text-xs">Alınma Tarihi</Label>
+                          <Label htmlFor="create-received-date" className="text-sm sm:text-base">Alınma Tarihi</Label>
                           <Input
                             id="create-received-date"
                             type="date"
                             value={formData.receivedDate}
                             onChange={(e) => setFormData({ ...formData, receivedDate: e.target.value })}
-                            className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+                            className="min-h-[44px] sm:min-h-0"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="create-status" className="text-[11px] sm:text-xs">Durum</Label>
+                          <Label htmlFor="create-status" className="text-sm sm:text-base">Durum</Label>
                           <Select
                             value={formData.status}
                             onValueChange={(value: WarrantyRecord["status"]) =>
                               setFormData({ ...formData, status: value })
                             }
                           >
-                            <SelectTrigger id="create-status" className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+                            <SelectTrigger id="create-status" className="min-h-[44px] sm:min-h-0">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="text-[11px] sm:text-xs">
-                              <SelectItem value="received" className="text-[11px] sm:text-xs">Alındı</SelectItem>
-                              <SelectItem value="in_repair" className="text-[11px] sm:text-xs">Onarımda</SelectItem>
-                              <SelectItem value="completed" className="text-[11px] sm:text-xs">Tamamlandı</SelectItem>
-                              <SelectItem value="returned" className="text-[11px] sm:text-xs">İade Edildi</SelectItem>
+                            <SelectContent>
+                              <SelectItem value="received">Alındı</SelectItem>
+                              <SelectItem value="in_repair">Onarımda</SelectItem>
+                              <SelectItem value="completed">Tamamlandı</SelectItem>
+                              <SelectItem value="returned">İade Edildi</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="create-reason" className="text-[11px] sm:text-xs" showRequired>
+                        <Label htmlFor="create-reason" className="text-sm sm:text-base" showRequired>
                           Neden Geldi
                         </Label>
                         <Textarea
@@ -998,22 +986,22 @@ const Warranty = () => {
                           onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                           placeholder="Ürünün garantiye gelme nedeni"
                           rows={4}
-                          className="text-[11px] sm:text-xs min-h-[100px] sm:min-h-[120px]"
+                          className="min-h-[100px] sm:min-h-[120px]"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="create-repair" className="text-[11px] sm:text-xs">Yapılan İşlem</Label>
+                        <Label htmlFor="create-repair" className="text-sm sm:text-base">Yapılan İşlem</Label>
                         <Textarea
                           id="create-repair"
                           value={formData.repairDescription}
                           onChange={(e) => setFormData({ ...formData, repairDescription: e.target.value })}
                           placeholder="Ürüne yapılan işlem açıklaması"
                           rows={4}
-                          className="text-[11px] sm:text-xs min-h-[100px] sm:min-h-[120px]"
+                          className="min-h-[100px] sm:min-h-[120px]"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="create-cost" className="text-[11px] sm:text-xs">Maliyet (₺)</Label>
+                        <Label htmlFor="create-cost" className="text-sm sm:text-base">Maliyet (₺)</Label>
                         <Input
                           id="create-cost"
                           type="number"
@@ -1022,7 +1010,7 @@ const Warranty = () => {
                           placeholder="0"
                           min="0"
                           step="0.01"
-                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+                          className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
                     </CardContent>
@@ -1035,15 +1023,7 @@ const Warranty = () => {
 
         {/* Edit Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent className="!max-w-[100vw] sm:!max-w-[85vw] !w-[100vw] sm:!w-[85vw] !h-[100vh] sm:!h-[80vh] !max-h-[100vh] sm:!max-h-[80vh] !left-0 sm:!left-[7.5vw] !top-0 sm:!top-[10vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
-            {/* DialogTitle ve DialogDescription DialogContent'in direkt child'ı olmalı (Radix UI gereksinimi) */}
-            <DialogTitle className="sr-only">
-              Garanti Kaydı Düzenle
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Garanti kaydını düzenleyin
-            </DialogDescription>
-            
+          <DialogContent className="!max-w-[100vw] sm:!max-w-[95vw] !w-[100vw] sm:!w-[95vw] !h-[100vh] sm:!h-[90vh] !max-h-[100vh] sm:!max-h-[90vh] !left-0 sm:!left-[2.5vw] !top-0 sm:!top-[5vh] !right-0 sm:!right-auto !bottom-0 sm:!bottom-auto !translate-x-0 !translate-y-0 overflow-hidden !p-0 gap-0 bg-white flex flex-col !m-0 !rounded-none sm:!rounded-lg !border-0 sm:!border">
             <div className="flex flex-col h-full min-h-0">
               {/* Header */}
               <DialogHeader className="p-3 sm:p-4 border-b bg-white flex-shrink-0 relative pr-12 sm:pr-16">
@@ -1052,15 +1032,18 @@ const Warranty = () => {
                     <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 flex-shrink-0">
                       <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                     </div>
-                    <h2 className="text-[16px] sm:text-[18px] font-semibold text-foreground truncate">
+                    <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground truncate">
                       Garanti Kaydı Düzenle
-                    </h2>
+                    </DialogTitle>
+                    <DialogDescription className="sr-only">
+                      Garanti kaydını düzenleyin
+                    </DialogDescription>
                   </div>
                   <div className="flex flex-wrap gap-2 flex-shrink-0">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0"
+                      className="border-primary/20 hover:bg-primary/5 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0"
                       onClick={() => setEditDialogOpen(false)}
                     >
                       <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
@@ -1070,7 +1053,7 @@ const Warranty = () => {
                       <Button
                         variant="default"
                         size="sm"
-                        className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-[11px] sm:text-xs flex-shrink-0 text-white"
+                        className="bg-primary hover:bg-primary/90 rounded-lg px-3 py-1.5 font-medium text-xs sm:text-sm flex-shrink-0 text-white"
                         onClick={handleEdit}
                       >
                         <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 flex-shrink-0" />
@@ -1091,19 +1074,19 @@ const Warranty = () => {
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="edit-customer" className="text-[11px] sm:text-xs" showRequired>
+                          <Label htmlFor="edit-customer" className="text-sm sm:text-base" showRequired>
                             Müşteri
                           </Label>
                           <Select
                             value={formData.customerId || ""}
                             onValueChange={(value) => setFormData({ ...formData, customerId: value })}
                           >
-                            <SelectTrigger id="edit-customer" className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+                            <SelectTrigger id="edit-customer" className="min-h-[44px] sm:min-h-0">
                               <SelectValue placeholder="Müşteri seçin" />
                             </SelectTrigger>
-                            <SelectContent className="text-[11px] sm:text-xs">
+                            <SelectContent>
                               {customers.map((customer) => (
-                                <SelectItem key={customer.id} value={customer.id} className="text-[11px] sm:text-xs">
+                                <SelectItem key={customer.id} value={customer.id}>
                                   {customer.name} {customer.company && `(${customer.company})`}
                                 </SelectItem>
                               ))}
@@ -1111,19 +1094,19 @@ const Warranty = () => {
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="edit-product" className="text-[11px] sm:text-xs" showRequired>
+                          <Label htmlFor="edit-product" className="text-sm sm:text-base" showRequired>
                             Ürün
                           </Label>
                           <Select
                             value={formData.productId || ""}
                             onValueChange={(value) => setFormData({ ...formData, productId: value })}
                           >
-                            <SelectTrigger id="edit-product" className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+                            <SelectTrigger id="edit-product" className="min-h-[44px] sm:min-h-0">
                               <SelectValue placeholder="Ürün seçin" />
                             </SelectTrigger>
-                            <SelectContent className="text-[11px] sm:text-xs">
+                            <SelectContent>
                               {products.map((product) => (
-                                <SelectItem key={product.id} value={product.id} className="text-[11px] sm:text-xs">
+                                <SelectItem key={product.id} value={product.id}>
                                   {product.name}
                                 </SelectItem>
                               ))}
@@ -1132,20 +1115,20 @@ const Warranty = () => {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="edit-order" className="text-[11px] sm:text-xs">Sipariş (Opsiyonel)</Label>
+                        <Label htmlFor="edit-order" className="text-sm sm:text-base">Sipariş (Opsiyonel)</Label>
                         <Select
                           value={formData.orderId || "none"}
                           onValueChange={(value) =>
                             setFormData({ ...formData, orderId: value === "none" ? "" : value })
                           }
                         >
-                          <SelectTrigger id="edit-order" className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+                          <SelectTrigger id="edit-order" className="min-h-[44px] sm:min-h-0">
                             <SelectValue placeholder="Sipariş seçin" />
                           </SelectTrigger>
-                          <SelectContent className="text-[11px] sm:text-xs">
-                            <SelectItem value="none" className="text-[11px] sm:text-xs">Sipariş yok</SelectItem>
+                          <SelectContent>
+                            <SelectItem value="none">Sipariş yok</SelectItem>
                             {orders.map((order) => (
-                              <SelectItem key={order.id} value={order.id} className="text-[11px] sm:text-xs">
+                              <SelectItem key={order.id} value={order.id}>
                                 {order.orderNumber || order.order_number || order.id}
                               </SelectItem>
                             ))}
@@ -1154,37 +1137,37 @@ const Warranty = () => {
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="edit-received-date" className="text-[11px] sm:text-xs">Alınma Tarihi</Label>
+                          <Label htmlFor="edit-received-date" className="text-sm sm:text-base">Alınma Tarihi</Label>
                           <Input
                             id="edit-received-date"
                             type="date"
                             value={formData.receivedDate}
                             onChange={(e) => setFormData({ ...formData, receivedDate: e.target.value })}
-                            className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+                            className="min-h-[44px] sm:min-h-0"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="edit-status" className="text-[11px] sm:text-xs">Durum</Label>
+                          <Label htmlFor="edit-status" className="text-sm sm:text-base">Durum</Label>
                           <Select
                             value={formData.status}
                             onValueChange={(value: WarrantyRecord["status"]) =>
                               setFormData({ ...formData, status: value })
                             }
                           >
-                            <SelectTrigger id="edit-status" className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0">
+                            <SelectTrigger id="edit-status" className="min-h-[44px] sm:min-h-0">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="text-[11px] sm:text-xs">
-                              <SelectItem value="received" className="text-[11px] sm:text-xs">Alındı</SelectItem>
-                              <SelectItem value="in_repair" className="text-[11px] sm:text-xs">Onarımda</SelectItem>
-                              <SelectItem value="completed" className="text-[11px] sm:text-xs">Tamamlandı</SelectItem>
-                              <SelectItem value="returned" className="text-[11px] sm:text-xs">İade Edildi</SelectItem>
+                            <SelectContent>
+                              <SelectItem value="received">Alındı</SelectItem>
+                              <SelectItem value="in_repair">Onarımda</SelectItem>
+                              <SelectItem value="completed">Tamamlandı</SelectItem>
+                              <SelectItem value="returned">İade Edildi</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="edit-reason" className="text-[11px] sm:text-xs" showRequired>
+                        <Label htmlFor="edit-reason" className="text-sm sm:text-base" showRequired>
                           Neden Geldi
                         </Label>
                         <Textarea
@@ -1193,22 +1176,22 @@ const Warranty = () => {
                           onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                           placeholder="Ürünün garantiye gelme nedeni"
                           rows={4}
-                          className="text-[11px] sm:text-xs min-h-[100px] sm:min-h-[120px]"
+                          className="min-h-[100px] sm:min-h-[120px]"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="edit-repair" className="text-[11px] sm:text-xs">Yapılan İşlem</Label>
+                        <Label htmlFor="edit-repair" className="text-sm sm:text-base">Yapılan İşlem</Label>
                         <Textarea
                           id="edit-repair"
                           value={formData.repairDescription}
                           onChange={(e) => setFormData({ ...formData, repairDescription: e.target.value })}
                           placeholder="Ürüne yapılan işlem açıklaması"
                           rows={4}
-                          className="text-[11px] sm:text-xs min-h-[100px] sm:min-h-[120px]"
+                          className="min-h-[100px] sm:min-h-[120px]"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="edit-cost" className="text-[11px] sm:text-xs">Maliyet (₺)</Label>
+                        <Label htmlFor="edit-cost" className="text-sm sm:text-base">Maliyet (₺)</Label>
                         <Input
                           id="edit-cost"
                           type="number"
@@ -1217,7 +1200,7 @@ const Warranty = () => {
                           placeholder="0"
                           min="0"
                           step="0.01"
-                          className="text-[11px] sm:text-xs min-h-[44px] sm:min-h-0"
+                          className="min-h-[44px] sm:min-h-0"
                         />
                       </div>
                     </CardContent>
@@ -1232,8 +1215,8 @@ const Warranty = () => {
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-[16px] sm:text-[18px]">Garanti Kaydını Sil</AlertDialogTitle>
-              <AlertDialogDescription className="text-[11px] sm:text-xs">
+              <AlertDialogTitle>Garanti Kaydını Sil</AlertDialogTitle>
+              <AlertDialogDescription>
                 {selectedRecord && (
                   <>
                     Bu garanti kaydını silmek istediğinizden emin misiniz?
@@ -1243,8 +1226,8 @@ const Warranty = () => {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="text-[11px] sm:text-xs">İptal</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete} className="text-[11px] sm:text-xs bg-destructive text-destructive-foreground">
+              <AlertDialogCancel>İptal</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
                 Sil
               </AlertDialogAction>
             </AlertDialogFooter>

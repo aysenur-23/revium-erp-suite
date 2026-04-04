@@ -4,10 +4,7 @@ import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-<<<<<<< HEAD
-=======
 import { testScroll, logScrollTest } from "@/utils/scrollTest";
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { SidebarProvider } from "@/contexts/SidebarContext";
 
 interface MainLayoutProps {
@@ -34,22 +31,6 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
   useEffect(() => {
     let resizeTimeout: NodeJS.Timeout;
     let lastWidth = typeof window !== "undefined" ? window.innerWidth : 0;
-<<<<<<< HEAD
-
-    const handleResize = () => {
-      if (typeof window === "undefined") return;
-
-      const currentWidth = window.innerWidth;
-      const MOBILE_BREAKPOINT = 768;
-
-      // Debounce: resize event'lerini sınırla
-      clearTimeout(resizeTimeout);
-
-      resizeTimeout = setTimeout(() => {
-        if (typeof window !== "undefined") {
-          const nowWidth = window.innerWidth;
-
-=======
     
     const handleResize = () => {
       if (typeof window === "undefined") return;
@@ -64,7 +45,6 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
         if (typeof window !== "undefined") {
           const nowWidth = window.innerWidth;
           
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           // Ekran küçüldüyse (768px altına düştüyse) sidebar'ı kapat
           if (nowWidth < MOBILE_BREAKPOINT && lastWidth >= MOBILE_BREAKPOINT) {
             setSidebarOpen(false);
@@ -73,11 +53,7 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
           else if (nowWidth >= MOBILE_BREAKPOINT && lastWidth < MOBILE_BREAKPOINT) {
             setSidebarOpen(true);
           }
-<<<<<<< HEAD
-
-=======
           
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           lastWidth = nowWidth;
         }
       }, 150); // 150ms debounce
@@ -104,25 +80,6 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
   // localStorage kaydetmeyi kaldırdık - her açılışta varsayılan olarak açık gelecek
   // Kullanıcı manuel olarak kapatırsa, o session için kapalı kalır
 
-<<<<<<< HEAD
-  // Route değiştiğinde mobilde menüyü kapat (sadece gerçek route değişikliğinde)
-  const prevPathnameRef = useRef(location.pathname);
-  const isInitialMount = useRef(true);
-
-  useEffect(() => {
-    // İlk mount'ta menüyü kapatma - sadece gerçek route değişikliğinde kapat
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      prevPathnameRef.current = location.pathname;
-      return;
-    }
-
-    // Sadece pathname gerçekten değiştiyse menüyü kapat
-    if (isMobile && sidebarOpen && prevPathnameRef.current !== location.pathname) {
-      setSidebarOpen(false);
-    }
-  }, [location.pathname, isMobile, sidebarOpen]);
-=======
   // Route değiştiğinde mobilde menüyü kapat
   useEffect(() => {
     if (isMobile && sidebarOpen) {
@@ -151,17 +108,12 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
       return () => clearTimeout(timeout);
     }
   }, [disableScroll, sidebarOpen]);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
   const handleToggleSidebar = () => {
     setSidebarOpen((prev) => !prev);
   };
 
   const closeSidebar = () => {
-<<<<<<< HEAD
-    // Sadece mobilde ve sidebar açıksa kapat
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     if (isMobile && sidebarOpen) {
       setSidebarOpen(false);
     }
@@ -171,15 +123,9 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
     <SidebarProvider closeSidebar={closeSidebar}>
       <div className="h-screen bg-background flex overflow-hidden max-w-full">
         {/* Sidebar - Full Height */}
-<<<<<<< HEAD
-        <Sidebar
-          isMobile={isMobile}
-          open={sidebarOpen}
-=======
         <Sidebar 
           isMobile={isMobile} 
           open={sidebarOpen} 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           onOpenChange={setSidebarOpen}
           isCollapsed={!isMobile && !sidebarOpen}
         />
@@ -187,26 +133,18 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden max-w-full">
           {/* Header Section - Fixed Height */}
           <div className="flex-shrink-0">
-<<<<<<< HEAD
-            <Header
-=======
             <Header 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               onMenuClick={handleToggleSidebar}
               sidebarOpen={sidebarOpen}
             />
           </div>
           {/* Content Section - Flexible, Scrollable */}
-<<<<<<< HEAD
-          <main
-=======
           <main 
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             ref={mainRef}
             className={cn(
               "flex-1",
               disableScroll ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden main-scroll-container",
-              "p-2 xs:p-2.5 sm:p-3 md:p-4 lg:p-6 transition-all duration-300",
+              "p-2 sm:p-3 md:p-4 lg:p-6 transition-all duration-300",
               "pb-safe",
               // Scroll iyileştirmeleri
               "scroll-smooth",
@@ -219,23 +157,16 @@ export const MainLayout = ({ children, disableScroll = false }: MainLayoutProps)
               "-webkit-overflow-scrolling-touch",
               // Küçük ekranlarda taşmaları engelle
               "max-w-full",
-              "min-w-0",
-              // Responsive width constraints
-              "w-full"
+              "min-w-0"
             )}
-<<<<<<< HEAD
-=======
             onClick={closeSidebar}
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
           >
             <div className={cn(
               disableScroll ? "h-full" : "w-full",
               !disableScroll && "min-h-0",
               // Küçük ekranlarda taşmaları engelle
               "max-w-full",
-              "overflow-x-hidden",
-              // Ensure no horizontal overflow
-              "min-w-0"
+              "overflow-x-hidden"
             )}>
               {children}
             </div>

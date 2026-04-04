@@ -352,11 +352,11 @@ export const RolePermissions = () => {
       <CardHeader>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <CardTitle className="flex items-center gap-2 text-[14px] sm:text-[15px] leading-tight">
-              <Shield className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <Shield className="h-5 w-5" />
               Rol Yetkileri
             </CardTitle>
-            <CardDescription className="text-[11px] sm:text-xs mt-1 leading-snug">
+            <CardDescription className="text-xs sm:text-sm mt-1">
               Rollerin hangi kaynaklara erişebileceğini ve hangi işlemleri yapabileceğini yönetin.
             </CardDescription>
           </div>
@@ -409,11 +409,7 @@ export const RolePermissions = () => {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-<<<<<<< HEAD
-                    <Label htmlFor="roleName" className="text-[11px] sm:text-xs">Rol Adı</Label>
-=======
                     <Label htmlFor="roleName">Rol Adı</Label>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     <Input
                       id="roleName"
                       placeholder="Örn: Satış Temsilcisi"
@@ -424,31 +420,17 @@ export const RolePermissions = () => {
                           setNewRoleKey(e.target.value.toLowerCase().replace(/\s+/g, "_"));
                         }
                       }}
-<<<<<<< HEAD
-                      className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="roleKey" className="text-[11px] sm:text-xs">Rol Anahtarı</Label>
-=======
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="roleKey">Rol Anahtarı</Label>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     <Input
                       id="roleKey"
                       placeholder="Örn: sales_representative"
                       value={newRoleKey}
                       onChange={(e) => setNewRoleKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"))}
-<<<<<<< HEAD
-                      className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
-                    />
-                    <p className="text-[11px] sm:text-xs text-muted-foreground">
-=======
                     />
                     <p className="text-xs text-muted-foreground">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       Küçük harf, rakam ve alt çizgi kullanın. Boşluklar otomatik olarak alt çizgiye dönüştürülür.
                     </p>
                   </div>
@@ -533,16 +515,9 @@ export const RolePermissions = () => {
                     </AlertDialog>
                   )}
                 </div>
-<<<<<<< HEAD
-                <div className="rounded-md border overflow-x-auto -mx-4 sm:mx-0 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-                  <div className="inline-block min-w-full align-middle px-4 sm:px-0">
-                    <div className="min-w-[600px] sm:min-w-0">
-                      <div className="grid grid-cols-5 gap-2 md:gap-4 p-2 md:p-4 font-medium bg-muted/50 text-[10px] sm:text-xs md:text-sm">
-=======
                 <div className="rounded-md border overflow-x-auto">
                   <div className="min-w-[600px] md:min-w-0">
                     <div className="grid grid-cols-5 gap-2 md:gap-4 p-2 md:p-4 font-medium bg-muted/50 text-xs md:text-sm">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       <div className="col-span-1 min-w-[120px]">Kaynak</div>
                       <div className="text-center flex items-center justify-center gap-1 min-w-[80px]">
                         <span className="hidden md:inline">Oluşturma</span>
@@ -628,11 +603,7 @@ export const RolePermissions = () => {
                       
                       return (
                         <div key={permission?.id || resourceKey}>
-<<<<<<< HEAD
-                          <div className="min-w-[600px] sm:min-w-0">
-=======
                           <div className="min-w-[600px] md:min-w-0">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             <div
                               className="grid grid-cols-5 gap-2 md:gap-4 p-2 md:p-4 items-center hover:bg-muted/20 transition-colors"
                             >
@@ -690,10 +661,6 @@ export const RolePermissions = () => {
                                 }
                               }}
                               disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || !permission}
-<<<<<<< HEAD
-                              className="h-5 w-5 sm:h-4 sm:w-4"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             />
                           </div>
                           <div className="flex justify-center min-w-[80px]">
@@ -707,10 +674,6 @@ export const RolePermissions = () => {
                                 }
                               }}
                               disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || !permission}
-<<<<<<< HEAD
-                              className="h-5 w-5 sm:h-4 sm:w-4"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             />
                           </div>
                           <div className="flex justify-center min-w-[80px]">
@@ -724,10 +687,6 @@ export const RolePermissions = () => {
                                 }
                               }}
                               disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || !permission}
-<<<<<<< HEAD
-                              className="h-5 w-5 sm:h-4 sm:w-4"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             />
                           </div>
                           <div className="flex justify-center min-w-[80px]">
@@ -741,10 +700,6 @@ export const RolePermissions = () => {
                                 }
                               }}
                               disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || !permission}
-<<<<<<< HEAD
-                              className="h-5 w-5 sm:h-4 sm:w-4"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                             />
                           </div>
                             </div>
@@ -766,14 +721,8 @@ export const RolePermissions = () => {
                                         }
                                       }}
                                       disabled={!!saving || !isAdmin || (role.key === "super_admin" && !isSuperAdmin) || !permission}
-<<<<<<< HEAD
-                                      className="h-5 w-5 sm:h-4 sm:w-4"
-                                    />
-                                    <Label className="text-[11px] sm:text-xs font-normal cursor-pointer">
-=======
                                     />
                                     <Label className="text-xs font-normal cursor-pointer">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                                       {subPermissions[subKey]}
                                     </Label>
                                   </div>
@@ -786,12 +735,7 @@ export const RolePermissions = () => {
                       );
                     });
                   })()}
-<<<<<<< HEAD
-                    </div>
-                  </div>
-=======
                 </div>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 </div>
               </div>
             </TabsContent>

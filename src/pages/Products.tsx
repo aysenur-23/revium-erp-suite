@@ -3,11 +3,7 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SearchInput } from "@/components/ui/search-input";
-<<<<<<< HEAD
-import { Plus, Package, X, AlertTriangle, TrendingUp, Box, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Building2, DollarSign, Trash2 } from "lucide-react";
-=======
 import { Plus, Package, X, AlertTriangle, TrendingUp, Box, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Building2, DollarSign } from "lucide-react";
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { getProducts, deleteProduct, Product } from "@/services/firebase/productService";
@@ -32,10 +28,6 @@ import { CURRENCY_OPTIONS, CURRENCY_SYMBOLS, DEFAULT_CURRENCY, type Currency } f
 import { convertFromTRY } from "@/services/exchangeRateService";
 import { canCreateResource, canDeleteResource } from "@/utils/permissions";
 import { UserProfile } from "@/services/firebase/authService";
-<<<<<<< HEAD
-import { StatCard } from "@/components/Dashboard/StatCard";
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
 const PRODUCT_CATEGORIES = [
   "Taşınabilir Güç Paketleri",
@@ -77,7 +69,6 @@ const Products = () => {
       category: 180,
       sku: 120,
       stock: 100,
-      minStock: 100,
       price: 120,
       status: 120,
       createdBy: 150,
@@ -406,13 +397,13 @@ const Products = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h1 className="text-lg sm:text-xl font-semibold text-foreground">Ürünler</h1>
-                <p className="text-muted-foreground mt-0.5 text-xs sm:text-sm">Stok ve ürün yönetimi</p>
+                <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Ürünler</h1>
+                <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Stok ve ürün yönetimi</p>
               </div>
               {/* İstatistikler Açılma Butonu */}
               {!statsExpanded ? (
@@ -420,7 +411,7 @@ const Products = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => setStatsExpanded(true)}
-                  className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
+                  className="h-7 px-2 gap-1 text-xs"
                   aria-label="İstatistikleri göster"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
@@ -430,7 +421,7 @@ const Products = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => setStatsExpanded(false)}
-                  className="h-7 px-2 gap-1 text-[11px] sm:text-xs"
+                  className="h-7 px-2 gap-1 text-xs"
                   aria-label="İstatistikleri gizle"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
@@ -439,50 +430,24 @@ const Products = () => {
             </div>
           </div>
           {canCreate && (
-          <Button 
-            className="gap-1 w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs" 
-            onClick={() => {
-              setCreateDialogOpen(true);
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Yeni Ürün</span>
-            <span className="sm:hidden">Yeni</span>
-          </Button>
+            <Button 
+              className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" 
+              onClick={() => {
+                setCreateDialogOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Yeni Ürün</span>
+              <span className="sm:hidden">Yeni</span>
+            </Button>
           )}
         </div>
 
         {/* İstatistikler */}
         {statsExpanded && (
-<<<<<<< HEAD
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 xs:gap-2.5 sm:gap-3">
-            {productStatCards.map((item) => {
-              const variantMap: Record<string, "default" | "primary" | "success" | "warning" | "info"> = {
-                "total-products": "primary",
-                "low-stock": "warning",
-                "out-of-stock": "default",
-                "total-value": "info",
-              };
-              const variant = variantMap[item.key] || "default";
-              const value = typeof item.value === 'function' ? item.value() : item.value;
-              
-              return (
-                <StatCard
-                  key={item.key}
-                  title={item.label}
-                  value={value}
-                  icon={item.icon}
-                  variant={variant}
-                  onClick={item.onClick}
-                  clickable
-                />
-              );
-            })}
-          </div>
-=======
           <Card>
-          <CardContent className="p-1.5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-2">
+          <CardContent className="p-4 sm:p-5 md:pt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {productStatCards.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -503,14 +468,14 @@ const Products = () => {
                     }}
                     aria-label={`${item.label} kartı`}
                   >
-                    <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+                    <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3 md:gap-4">
                       <div className={cn("h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0", item.accent)}>
                         <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[11px] sm:text-xs uppercase tracking-wide text-muted-foreground">{item.label}</p>
-                        <p className="text-lg sm:text-xl font-semibold text-foreground mt-0.5 sm:mt-1">{item.value}</p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 hidden sm:block">{item.description}</p>
+                        <p className="text-[10px] sm:text-xs uppercase tracking-wide text-muted-foreground">{item.label}</p>
+                        <p className="text-lg font-semibold text-foreground mt-0.5 sm:mt-1">{item.value}</p>
+                        <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 hidden sm:block">{item.description}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -519,18 +484,17 @@ const Products = () => {
             </div>
           </CardContent>
         </Card>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         )}
 
         {/* Filtreler */}
         <Card>
-          <CardContent className="p-2">
+          <CardContent className="p-3 sm:p-4 md:p-6">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4">
               {/* Arama Kutusu */}
               <div className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] md:min-w-[250px]">
                 <SearchInput
                   placeholder="Ürün, SKU veya kategori ara..."
-                  className="w-full h-9 sm:h-10 text-[11px] sm:text-xs"
+                  className="w-full h-9 sm:h-10 text-xs sm:text-sm"
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
@@ -547,7 +511,7 @@ const Products = () => {
                   setCategoryFilter(value);
                   setActiveStatCard(null);
                 }}>
-                  <SelectTrigger className="w-full h-9 sm:h-10 text-[11px] sm:text-xs">
+                  <SelectTrigger className="w-full h-9 sm:h-10 text-xs sm:text-sm">
                     <SelectValue placeholder="Kategori" />
                   </SelectTrigger>
                   <SelectContent>
@@ -567,7 +531,7 @@ const Products = () => {
                   setSelectedCurrency(value as Currency);
                   localStorage.setItem("productCurrency", value);
                 }}>
-                  <SelectTrigger className="w-full h-9 sm:h-10 text-[11px] sm:text-xs">
+                  <SelectTrigger className="w-full h-9 sm:h-10 text-xs sm:text-sm">
                     <SelectValue placeholder="Para Birimi" />
                   </SelectTrigger>
                   <SelectContent>
@@ -591,7 +555,7 @@ const Products = () => {
                     setStockView("all");
                     setActiveStatCard(null);
                   }}
-                  className="h-9 sm:h-10 text-[11px] sm:text-xs"
+                  className="h-9 sm:h-10 text-xs sm:text-sm"
                 >
                   <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Temizle</span>
@@ -614,7 +578,7 @@ const Products = () => {
                     ? "Arama sonucu bulunamadı"
                     : "Henüz ürün bulunmuyor"}
                 </h3>
-                <p className="text-[11px] sm:text-xs text-muted-foreground max-w-md mx-auto">
+                <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto">
                   {searchTerm || categoryFilter !== "all"
                     ? "Filtreleri değiştirerek tekrar deneyin"
                     : "Yeni ürün eklemek için yukarıdaki butona tıklayın"}
@@ -623,15 +587,15 @@ const Products = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="w-full max-w-full min-w-0">
-            <div className="hidden md:block border border-[#DFE1E6] dark:border-[#38414A] rounded-sm bg-white dark:bg-[#1D2125] w-full">
-              <div className="table border-collapse w-full" style={{ tableLayout: 'auto', width: '100%' }}>
+          <div className="w-full max-w-full min-w-0 overflow-x-auto">
+            <div className="hidden md:block border border-[#DFE1E6] dark:border-[#38414A] rounded-sm bg-white dark:bg-[#1D2125] min-w-full">
+              <div className="table border-collapse" style={{ tableLayout: 'fixed', width: '100%' }}>
                 {/* Tablo Başlıkları */}
                 <div className="table-header-group bg-[#F4F5F7] dark:bg-[#22272B]">
                   <div className="table-row">
                     <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-1.5 sm:py-2 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.name || 250, minWidth: 200 }}
+                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.name || 250, minWidth: 150 }}
                       onClick={() => handleSort("name")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -646,8 +610,8 @@ const Products = () => {
                       />
                     </div>
                     <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-1.5 sm:py-2 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.category || 220, minWidth: 180 }}
+                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.category || 180, minWidth: 120 }}
                       onClick={() => handleSort("category")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -662,8 +626,8 @@ const Products = () => {
                       />
                     </div>
                     <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-1.5 sm:py-2 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.sku || 140, minWidth: 130 }}
+                      className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.sku || 120, minWidth: 100 }}
                     >
                       SKU
                       <div 
@@ -672,8 +636,8 @@ const Products = () => {
                       />
                     </div>
                     <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-1.5 sm:py-2 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.stock || 90, minWidth: 70 }}
+                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.stock || 100, minWidth: 80 }}
                       onClick={() => handleSort("stock")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -688,18 +652,8 @@ const Products = () => {
                       />
                     </div>
                     <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-1.5 sm:py-2 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.minStock || 90, minWidth: 70 }}
-                    >
-                      Min Stok
-                      <div 
-                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#0052CC] dark:hover:bg-[#4C9AFF] opacity-0 hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleResizeStart("minStock", e)}
-                      />
-                    </div>
-                    <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-1.5 sm:py-2 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.price || 140, minWidth: 120 }}
+                      className="table-cell px-4 py-3 cursor-pointer hover:text-[#0052CC] dark:hover:text-[#4C9AFF] hover:bg-[#EBECF0] dark:hover:bg-[#2C333A] transition-all duration-200 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.price || 120, minWidth: 100 }}
                       onClick={() => handleSort("price")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -714,7 +668,7 @@ const Products = () => {
                       />
                     </div>
                     <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-1.5 sm:py-2 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
                       style={{ width: columnWidths.status || 120, minWidth: 100 }}
                     >
                       Durum
@@ -724,8 +678,8 @@ const Products = () => {
                       />
                     </div>
                     <div 
-                      className="table-cell px-0 sm:px-0.5 md:px-1 py-1.5 sm:py-2 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                      style={{ width: columnWidths.createdBy || 140, minWidth: 120 }}
+                      className="table-cell px-4 py-3 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
+                      style={{ width: columnWidths.createdBy || 150, minWidth: 120 }}
                     >
                       Oluşturan
                       <div 
@@ -733,17 +687,6 @@ const Products = () => {
                         onMouseDown={(e) => handleResizeStart("createdBy", e)}
                       />
                     </div>
-<<<<<<< HEAD
-                    {canDelete && (
-                      <div 
-                        className="table-cell px-0 sm:px-0.5 md:px-1 py-1.5 sm:py-2 text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF] uppercase tracking-wide border-r border-[#DFE1E6] dark:border-[#38414A] relative"
-                        style={{ width: 80, minWidth: 80 }}
-                      >
-                        İşlemler
-                      </div>
-                    )}
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   </div>
                 </div>
 
@@ -761,14 +704,14 @@ const Products = () => {
 
                     return (
                       <div
-                key={product.id}
+                        key={product.id}
                         className="table-row group border-b border-[#DFE1E6] dark:border-[#38414A] hover:bg-[#F4F5F7] dark:hover:bg-[#22272B] transition-all duration-200 cursor-pointer bg-white dark:bg-[#1D2125]"
                         onClick={() => {
-                  setSelectedProduct(product);
-                  setDetailModalOpen(true);
-                }}
+                          setSelectedProduct(product);
+                          setDetailModalOpen(true);
+                        }}
                       >
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-1 sm:py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                        <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-sm text-[#172B4D] dark:text-[#B6C2CF]">
                               {product.name}
@@ -785,7 +728,7 @@ const Products = () => {
                             )}
                           </div>
                         </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-1 sm:py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                        <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                           {product.category ? (
                             <div className="flex items-center gap-1.5">
                               <Building2 className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
@@ -797,7 +740,7 @@ const Products = () => {
                             <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
                           )}
                         </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-1 sm:py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                        <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                           {product.sku ? (
                             <span className="text-xs font-mono text-[#42526E] dark:text-[#B6C2CF]">
                               {product.sku}
@@ -806,20 +749,20 @@ const Products = () => {
                             <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
                           )}
                         </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-1 sm:py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                        <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                           <div className="flex items-center gap-1.5">
                             <Package className="h-3.5 w-3.5 text-[#42526E] dark:text-[#B6C2CF]" />
                             <span className="text-xs font-medium text-[#42526E] dark:text-[#B6C2CF]">
                               {stock}
                             </span>
+                            {minStock > 0 && (
+                              <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">
+                                (Min: {minStock})
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-1 sm:py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
-                          <span className="text-xs font-medium text-[#42526E] dark:text-[#B6C2CF]">
-                            {minStock > 0 ? minStock : "-"}
-                          </span>
-                        </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-1 sm:py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                        <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                           <span className="text-xs font-semibold text-[#42526E] dark:text-[#B6C2CF]">
                             {CURRENCY_SYMBOLS[selectedCurrency]}{new Intl.NumberFormat(selectedCurrency === "TRY" ? "tr-TR" : "en-US", { 
                               minimumFractionDigits: 0, 
@@ -827,7 +770,7 @@ const Products = () => {
                             }).format(price)}
                           </span>
                         </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-1 sm:py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                        <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                           <Badge 
                             variant={isOutOfStock ? "destructive" : isLowStock ? "secondary" : "default"}
                             className={cn(
@@ -840,7 +783,7 @@ const Products = () => {
                             {isOutOfStock ? "Stokta Yok" : isLowStock ? "Stok Düşük" : "Stokta Var"}
                           </Badge>
                         </div>
-                        <div className="table-cell px-0 sm:px-0.5 md:px-1 py-1 sm:py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
+                        <div className="table-cell px-4 py-3 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
                           {product.createdBy ? (
                             <span className="text-xs text-[#42526E] dark:text-[#B6C2CF]">
                               {usersMap[product.createdBy] || "Bilinmeyen"}
@@ -849,25 +792,6 @@ const Products = () => {
                             <span className="text-xs text-[#6B778C] dark:text-[#8C9CB8]">-</span>
                           )}
                         </div>
-<<<<<<< HEAD
-                        {canDelete && (
-                          <div className="table-cell px-0 sm:px-0.5 md:px-1 py-1 sm:py-1.5 align-middle border-r border-[#DFE1E6] dark:border-[#38414A]">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedProduct(product);
-                                setDeleteDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )}
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       </div>
                     );
                   })}
@@ -889,49 +813,21 @@ const Products = () => {
                     key={product.id}
                     className="cursor-pointer hover:shadow-lg transition-all"
                     onClick={() => {
-                  setSelectedProduct(product);
+                      setSelectedProduct(product);
                       setDetailModalOpen(true);
                     }}
                   >
-                    <CardContent className="p-3 sm:p-4 space-y-2">
+                    <CardContent className="p-4 space-y-2">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-[11px] sm:text-xs">{product.name}</h3>
+                          <h3 className="font-semibold text-sm">{product.name}</h3>
                           {product.category && (
-                            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                               <Building2 className="h-3 w-3" />
                               {product.category}
                             </p>
                           )}
                         </div>
-<<<<<<< HEAD
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <Badge 
-                            variant={isOutOfStock ? "destructive" : isLowStock ? "secondary" : "default"}
-                            className={cn(
-                              isOutOfStock && "bg-destructive/10 text-destructive",
-                              isLowStock && !isOutOfStock && "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-                              !isOutOfStock && !isLowStock && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                            )}
-                          >
-                            {isOutOfStock ? "Tükendi" : isLowStock ? "Düşük" : "Var"}
-                          </Badge>
-                          {canDelete && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedProduct(product);
-                                setDeleteDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-=======
                         <Badge 
                           variant={isOutOfStock ? "destructive" : isLowStock ? "secondary" : "default"}
                           className={cn(
@@ -942,20 +838,19 @@ const Products = () => {
                         >
                           {isOutOfStock ? "Tükendi" : isLowStock ? "Düşük" : "Var"}
                         </Badge>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       </div>
                       {product.sku && (
-                        <p className="text-[11px] sm:text-xs font-mono text-muted-foreground">SKU: {product.sku}</p>
+                        <p className="text-xs font-mono text-muted-foreground">SKU: {product.sku}</p>
                       )}
                       <div className="flex items-center justify-between pt-2 border-t">
                         <div className="flex items-center gap-1.5">
                           <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-[11px] sm:text-xs font-medium">Stok: {stock}</span>
+                          <span className="text-xs font-medium">Stok: {stock}</span>
                           {minStock > 0 && (
-                            <span className="text-[11px] sm:text-xs text-muted-foreground">(Min: {minStock})</span>
+                            <span className="text-xs text-muted-foreground">(Min: {minStock})</span>
                           )}
                         </div>
-                        <span className="text-[11px] sm:text-xs font-semibold">
+                        <span className="text-xs font-semibold">
                           {CURRENCY_SYMBOLS[selectedCurrency]}{new Intl.NumberFormat(selectedCurrency === "TRY" ? "tr-TR" : "en-US", { 
                             minimumFractionDigits: 0, 
                             maximumFractionDigits: 0 
@@ -990,10 +885,6 @@ const Products = () => {
             onOpenChange={setDetailModalOpen}
             product={selectedProduct}
             onUpdate={fetchProducts}
-            onDelete={() => {
-              setDetailModalOpen(false);
-              setDeleteDialogOpen(true);
-            }}
           />
         </>
       )}

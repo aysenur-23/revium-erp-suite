@@ -38,11 +38,7 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
     if (!db) {
       throw new Error("Firebase Firestore başlatılamadı. Lütfen .env dosyasında Firebase yapılandırmasını kontrol edin.");
     }
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Departments'ı al (authenticated olmayan kullanıcılar için de çalışmalı)
     let snapshot;
     try {
@@ -54,35 +50,6 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
       // İzin hatası olsa bile boş array döndür (kayıt sayfası için gerekli)
       return [];
     }
-<<<<<<< HEAD
-
-    // Tüm kullanıcıları önceden al (sadece authenticated kullanıcılar için)
-    let allUsers: UserProfile[] = [];
-    try {
-      // Auth durumunu kontrol et - sadece authenticated kullanıcılar için getAllUsers çağır
-      const { getAuth } = await import("firebase/auth");
-      const { auth } = await import("@/lib/firebase");
-      const currentAuth = auth || getAuth();
-
-      // Eğer kullanıcı giriş yapmamışsa getAllUsers çağırma (permission hatası önleme)
-      if (currentAuth?.currentUser) {
-        const { getAllUsers } = await import("./authService");
-        allUsers = await getAllUsers();
-      }
-    } catch (error: unknown) {
-      // Kullanıcılar alınamazsa sessizce devam et (permission hatası normal)
-      // Sadece gerçek hataları logla (permission-denied değilse)
-      const errorObj = error && typeof error === 'object' ? error as { code?: string; message?: string } : null;
-      if (errorObj?.code !== 'permission-denied' && !errorObj?.message?.includes('permissions')) {
-        if (import.meta.env.DEV) {
-          console.warn("Kullanıcılar yüklenemedi, getUserProfile ile devam edilecek:", error);
-        }
-      }
-    }
-
-    const departments: DepartmentWithStats[] = [];
-
-=======
     
     // Tüm kullanıcıları önceden al (daha verimli ve güvenilir)
     let allUsers: UserProfile[] = [];
@@ -98,18 +65,13 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
     
     const departments: DepartmentWithStats[] = [];
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     for (const docSnap of snapshot.docs) {
       const deptData = docSnap.data() as Omit<Department, "id">;
       const department: DepartmentWithStats = {
         id: docSnap.id,
         ...deptData,
       };
-<<<<<<< HEAD
-
-=======
       
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       // Fetch manager name if exists (sadece authenticated kullanıcılar için)
       if (department.managerId) {
         // Önce getAllUsers'dan dene (daha hızlı ve güvenilir)
@@ -117,46 +79,6 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
         if (managerFromAllUsers) {
           department.managerName = managerFromAllUsers.fullName || managerFromAllUsers.displayName || managerFromAllUsers.email || "Bilinmeyen";
         } else {
-<<<<<<< HEAD
-          // getAllUsers'da bulunamadıysa getUserProfile ile dene (sadece authenticated kullanıcılar için)
-          try {
-            const { getAuth } = await import("firebase/auth");
-            const { auth } = await import("@/lib/firebase");
-            const currentAuth = auth || getAuth();
-
-            // Sadece authenticated kullanıcılar için getUserProfile çağır
-            if (currentAuth?.currentUser) {
-              const { getUserProfile } = await import("./authService");
-              const managerProfile = await getUserProfile(department.managerId, false); // allowDeleted: false - silinmiş kullanıcıları gösterme
-              if (managerProfile) {
-                department.managerName = managerProfile.fullName || managerProfile.displayName || managerProfile.email || "Bilinmeyen";
-                // Eğer hiçbir isim alanı yoksa, managerId'yi logla
-                if (!managerProfile.fullName && !managerProfile.displayName && !managerProfile.email) {
-                  if (import.meta.env.DEV) {
-                    console.warn(`Manager ID ${department.managerId} için isim bilgisi bulunamadı. Departman: ${department.name}`);
-                  }
-                }
-              } else {
-                // Eğer kullanıcı silinmişse veya bulunamadıysa, managerId'yi temizle
-                if (import.meta.env.DEV) {
-                  console.warn(`Manager ID ${department.managerId} bulunamadı veya silinmiş. Departman: ${department.name}`);
-                }
-                department.managerName = undefined;
-                // managerId'yi null yap (async olarak güncelle) - sadece authenticated kullanıcılar için
-                if (currentAuth?.currentUser) {
-                  updateDoc(doc(db, DEPARTMENTS_COLLECTION, docSnap.id), {
-                    managerId: null,
-                    updatedAt: Timestamp.now(),
-                  }).catch((err: unknown) => {
-                    // Permission hatalarını sessizce handle et
-                    const errorObj = err && typeof err === 'object' ? err as { code?: string } : null;
-                    if (errorObj?.code !== 'permission-denied' && import.meta.env.DEV) {
-                      console.error("Error clearing deleted manager:", err);
-                    }
-                  });
-                }
-              }
-=======
           // getAllUsers'da bulunamadıysa getUserProfile ile dene
           try {
             const { getUserProfile } = await import("./authService");
@@ -184,7 +106,6 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
                   console.error("Error clearing deleted manager:", err);
                 }
               });
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             }
           } catch (error: unknown) {
             // Silinmiş kullanıcı hatası durumunda managerId'yi temizle
@@ -214,21 +135,6 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
           }
         }
       }
-<<<<<<< HEAD
-
-      // Count users in this department (sadece authenticated kullanıcılar için)
-      // N+1 sorgusunu önlemek için bellek içi hesaplama kullan
-      if (allUsers.length > 0) {
-        department.userCount = allUsers.filter(u => u.departmentId === docSnap.id).length;
-      } else {
-        // Eğer kullanıcılar yüklenemediyse (izin hatası vs) veya boşsa
-        department.userCount = 0;
-      }
-
-      departments.push(department);
-    }
-
-=======
       
       // Count users in this department (sadece authenticated kullanıcılar için)
       try {
@@ -244,7 +150,6 @@ export const getDepartments = async (): Promise<DepartmentWithStats[]> => {
       departments.push(department);
     }
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return departments;
   } catch (error: unknown) {
     // Beklenmeyen hatalar için boş array döndür (kayıt sayfası için gerekli)
@@ -263,29 +168,17 @@ export const getDepartmentById = async (departmentId: string): Promise<Departmen
     }
     const deptRef = doc(db, DEPARTMENTS_COLLECTION, departmentId);
     const deptSnap = await getDoc(deptRef);
-<<<<<<< HEAD
-
-    if (!deptSnap.exists()) {
-      return null;
-    }
-
-=======
     
     if (!deptSnap.exists()) {
       return null;
     }
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const deptData = deptSnap.data() as Omit<Department, "id">;
     const department: DepartmentWithStats = {
       id: deptSnap.id,
       ...deptData,
     };
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Fetch manager name if exists
     if (department.managerId) {
       try {
@@ -345,11 +238,7 @@ export const getDepartmentById = async (departmentId: string): Promise<Departmen
         }
       }
     }
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return department;
   } catch (error: unknown) {
     if (import.meta.env.DEV) {
@@ -381,24 +270,14 @@ export const createDepartment = async (
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     };
-<<<<<<< HEAD
-
-    const docRef = await addDoc(departmentsRef, newDepartment);
-
-=======
     
     const docRef = await addDoc(departmentsRef, newDepartment);
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Audit log
     if (userId || managerId) {
       await logAudit("CREATE", "departments", docRef.id, userId || managerId, null, newDepartment);
     }
-<<<<<<< HEAD
-
-=======
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     return docRef.id;
   } catch (error: unknown) {
     if (import.meta.env.DEV) {
@@ -425,33 +304,19 @@ export const updateDepartment = async (
     if (!db) {
       throw new Error("Firebase Firestore başlatılamadı. Lütfen .env dosyasında Firebase yapılandırmasını kontrol edin.");
     }
-<<<<<<< HEAD
-
-    // Eski veriyi al
-    const oldDepartment = await getDepartmentById(departmentId);
-
-=======
     
     // Eski veriyi al
     const oldDepartment = await getDepartmentById(departmentId);
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     const deptRef = doc(db, DEPARTMENTS_COLLECTION, departmentId);
     await updateDoc(deptRef, {
       ...updates,
       updatedAt: Timestamp.now(),
     });
-<<<<<<< HEAD
-
-    // Yeni veriyi al
-    const newDepartment = await getDepartmentById(departmentId);
-
-=======
     
     // Yeni veriyi al
     const newDepartment = await getDepartmentById(departmentId);
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Audit log
     if (userId) {
       await logAudit("UPDATE", "departments", departmentId, userId, oldDepartment, newDepartment);
@@ -473,15 +338,6 @@ export const deleteDepartment = async (departmentId: string, userId?: string | n
     if (!db) {
       throw new Error("Firebase Firestore başlatılamadı. Lütfen .env dosyasında Firebase yapılandırmasını kontrol edin.");
     }
-<<<<<<< HEAD
-
-    // Eski veriyi al
-    const oldDepartment = await getDepartmentById(departmentId);
-
-    const deptRef = doc(db, DEPARTMENTS_COLLECTION, departmentId);
-    await deleteDoc(deptRef);
-
-=======
     
     // Eski veriyi al
     const oldDepartment = await getDepartmentById(departmentId);
@@ -489,7 +345,6 @@ export const deleteDepartment = async (departmentId: string, userId?: string | n
     const deptRef = doc(db, DEPARTMENTS_COLLECTION, departmentId);
     await deleteDoc(deptRef);
     
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
     // Audit log
     if (userId) {
       await logAudit("DELETE", "departments", departmentId, userId, oldDepartment, null);

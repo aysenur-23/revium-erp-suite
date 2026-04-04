@@ -17,6 +17,7 @@ import {
     jsPDFWithFontStatus,
     transliterateTurkish,
     createPDFTemplate,
+    safeSetFont,
 } from "./pdfCore";
 
 // Helper for smart transliteration
@@ -75,11 +76,13 @@ export function drawStatCard(
     doc.roundedRect(x, y, width, height, cornerRadius, cornerRadius, 'S');
 
     // Başlık
+    safeSetFont(doc, "bold");
     doc.setFontSize(PDF_CONSTANTS.fontSizeCardTitle);
     doc.setTextColor(...config.color.text);
     doc.text(getSafeText(config.title, doc), x + padding, y + padding + 10);
 
     // Değer
+    safeSetFont(doc, "bold");
     doc.setFontSize(PDF_CONSTANTS.fontSizeCardValue);
     doc.setTextColor(...config.color.value);
     const valueText = String(config.value);
@@ -87,6 +90,7 @@ export function drawStatCard(
 
     // Açıklama (opsiyonel)
     if (config.description) {
+        safeSetFont(doc, "normal");
         doc.setFontSize(PDF_CONSTANTS.fontSizeCardDescription);
         doc.setTextColor(...config.color.text);
         doc.text(getSafeText(config.description, doc), x + padding, y + height - padding);
@@ -115,6 +119,7 @@ export function drawProfessionalTableHeader(
     doc.roundedRect(x, y, width, height, cornerRadius, cornerRadius, 'F');
 
     // Başlık metni
+    safeSetFont(doc, "bold");
     doc.setFontSize(PDF_CONSTANTS.fontSizeTableHeader);
     doc.setTextColor(...textColor);
     doc.text(getSafeText(config.title, doc), x + padding, y + (height / 2) + 5);
@@ -192,16 +197,19 @@ export function drawPDFHeader(
     }
 
     // Şirket adı
+    safeSetFont(doc, "bold");
     doc.setFontSize(18);
     doc.setTextColor(...PDF_CONSTANTS.primaryColor);
     doc.text(getSafeText(COMPANY_INFO.name, doc), template.header.titleX, template.header.titleY);
 
     // Rapor başlığı
+    safeSetFont(doc, "bold");
     doc.setFontSize(PDF_CONSTANTS.fontSizeTitle);
     doc.setTextColor(...TAILWIND_COLORS.gray600);
     doc.text(getSafeText(title, doc), template.header.titleX, template.header.titleY + 20);
 
     // Tarih bilgisi
+    safeSetFont(doc, "normal");
     doc.setFontSize(PDF_CONSTANTS.fontSizeSmall);
     doc.setTextColor(...TAILWIND_COLORS.gray500);
 
@@ -212,6 +220,7 @@ export function drawPDFHeader(
     doc.text(getSafeText(dateText, doc), template.header.titleX, template.header.titleY + 35);
 
     // Sağ üst: İletişim bilgileri
+    safeSetFont(doc, "normal");
     doc.setFontSize(9);
     doc.setTextColor(...TAILWIND_COLORS.gray400);
     const contactWidth = doc.getTextWidth(COMPANY_INFO.contactInfo);
@@ -238,6 +247,7 @@ export function drawPDFFooter(
 
     // Sayfa numarası
     if (pageNumber !== undefined) {
+        safeSetFont(doc, "normal");
         doc.setFontSize(10);
         doc.setTextColor(...TAILWIND_COLORS.gray500);
         const pageText = totalPages
@@ -262,6 +272,7 @@ export function drawPDFFooter(
     }
 
     // Copyright
+    safeSetFont(doc, "normal");
     doc.setFontSize(8);
     doc.setTextColor(...TAILWIND_COLORS.gray400);
     const year = new Date().getFullYear();

@@ -196,7 +196,7 @@ export const ProductRecipeDialog = ({
                                   }
                                   className="w-24"
                                 />
-                                <span className="text-[11px] sm:text-xs text-muted-foreground">
+                                <span className="text-sm text-muted-foreground">
                                   {material.unit}
                                 </span>
                               </div>
@@ -224,10 +224,10 @@ export const ProductRecipeDialog = ({
                 </Table>
                 <div className="flex justify-end mt-3 pt-3 border-t">
                   <div className="text-right">
-                    <p className="text-[11px] sm:text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       Toplam Hammadde Maliyeti (Birim)
                     </p>
-                    <p className="text-[11px] sm:text-xs font-bold">
+                    <p className="text-2xl font-bold">
                       ₺{(calculateTotalCost() || 0).toFixed(2)}
                     </p>
                   </div>

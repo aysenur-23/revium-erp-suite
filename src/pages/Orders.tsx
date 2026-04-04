@@ -7,8 +7,6 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Plus, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, MoreVertical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ResponsiveTable, ResponsiveTableColumn } from "@/components/shared/ResponsiveTable";
-import { Card as ResponsiveCard } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -34,17 +32,12 @@ import { CURRENCY_SYMBOLS, Currency } from "@/utils/currency";
 import { useAuth } from "@/contexts/AuthContext";
 import { canCreateResource, canDeleteResource, canUpdateResource } from "@/utils/permissions";
 import { UserProfile } from "@/services/firebase/authService";
-import { getPriorityMeta } from "@/utils/priority";
 
 const Orders = () => {
   const isMobile = useIsMobile();
-  const { user, isTeamLeader } = useAuth();
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
-<<<<<<< HEAD
-  const [loading, setLoading] = useState(false); // Başlangıçta false - placeholder data ile hızlı render
-=======
   const [loading, setLoading] = useState(true);
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("order_date");
@@ -69,17 +62,8 @@ const Orders = () => {
       filters.status = statusFilter;
     }
     
-<<<<<<< HEAD
-    // Defer subscription: İlk render'dan 100ms sonra başlat (non-blocking)
-    const timer = setTimeout(() => {
-      setLoading(true);
-      
-      // Gerçek zamanlı dinleme başlat
-      const unsubscribe = subscribeToOrders(filters, async (firebaseOrders) => {
-=======
     // Gerçek zamanlı dinleme başlat
     const unsubscribe = subscribeToOrders(filters, async (firebaseOrders) => {
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
       try {
         // Null/undefined kontrolü
         if (!Array.isArray(firebaseOrders)) {
@@ -106,8 +90,6 @@ const Orders = () => {
         const startIndex = (page - 1) * 50;
         const endIndex = startIndex + 50;
         const visibleOrdersWithoutTotal = ordersWithoutTotal.slice(startIndex, endIndex);
-<<<<<<< HEAD
-=======
         const ordersWithCalculatedTotals = await Promise.allSettled(
           visibleOrdersWithoutTotal.map(async (order) => {
             if (!order?.id) return null;
@@ -144,7 +126,6 @@ const Orders = () => {
             }
           })
         );
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         
         // Görünmeyen siparişleri totalAmount=0 ile ekle
         const beforeVisible = ordersWithoutTotal.slice(0, startIndex).map(order => ({
@@ -158,115 +139,6 @@ const Orders = () => {
           total_amount: 0,
         })) as Order[];
         
-<<<<<<< HEAD
-        // İlk render için: totalAmount=0 ile göster, sonra hesapla
-        const validOrdersInitial = [...processedWithTotal, ...beforeVisible, ...visibleOrdersWithoutTotal.map(o => ({ ...o, totalAmount: 0, total_amount: 0 })), ...afterVisible];
-        
-        // Defer totalAmount calculation: İlk render'dan sonra hesapla (200ms defer)
-        setTimeout(async () => {
-          const ordersWithCalculatedTotals = await Promise.allSettled(
-            visibleOrdersWithoutTotal.map(async (order) => {
-              if (!order?.id) return null;
-              try {
-                const items = await getOrderItems(order.id);
-                const calculatedTotal = (Array.isArray(items) ? items : []).reduce((sum, item) => {
-                  if (!item) return sum;
-                  const itemTotal = item.total || ((item.unitPrice || item.unit_price || 0) * (item.quantity || 0)) - (item.discount || 0);
-                  return sum + itemTotal;
-                }, 0);
-                
-                const calculatedQuantity = (Array.isArray(items) ? items : []).reduce((sum, item) => sum + (item?.quantity || 0), 0);
-                
-                const taxRate = order.taxRate || order.tax_rate || 0;
-                const subtotal = calculatedTotal;
-                const taxAmount = subtotal * (taxRate / 100);
-                const grandTotal = subtotal + taxAmount;
-                
-                return {
-                  ...order,
-                  totalAmount: grandTotal,
-                  total_amount: grandTotal,
-                  totalQuantity: calculatedQuantity,
-                  total_quantity: calculatedQuantity,
-                  subtotal: subtotal,
-                } as Order;
-              } catch (error: unknown) {
-                // Sessizce handle et - performans için
-                return {
-                  ...order,
-                  totalAmount: 0,
-                  total_amount: 0,
-                } as Order;
-              }
-            })
-          );
-          
-          const calculatedOrders: Order[] = ordersWithCalculatedTotals
-            .filter((result) => result.status === 'fulfilled' && result.value !== null)
-            .map(result => (result as PromiseFulfilledResult<Order>).value);
-          
-          // Tüm siparişleri birleştir (sıralama: processedWithTotal, beforeVisible, calculatedOrders, afterVisible)
-          const validOrders = [...processedWithTotal, ...beforeVisible, ...calculatedOrders, ...afterVisible];
-          
-          // Search ve sort işlemleri frontend'de yapılacak
-          let filtered = validOrders;
-          
-          if (searchQuery) {
-            const query = searchQuery.toLocaleLowerCase('tr-TR');
-            filtered = filtered.filter((order) =>
-              order.orderNumber?.toLocaleLowerCase('tr-TR').includes(query) ||
-              order.customerName?.toLocaleLowerCase('tr-TR').includes(query) ||
-              order.customerCompany?.toLocaleLowerCase('tr-TR').includes(query)
-            );
-          }
-          
-          // Sort
-          filtered.sort((a, b) => {
-            let aValue: unknown, bValue: unknown;
-            if (sortBy === 'order_date') {
-              aValue = a.orderDate || a.createdAt;
-              bValue = b.orderDate || b.createdAt;
-            } else if (sortBy === 'created_at') {
-              aValue = a.createdAt;
-              bValue = b.createdAt;
-            } else if (sortBy === 'delivery_date') {
-              aValue = a.deliveryDate || null;
-              bValue = b.deliveryDate || null;
-              // Null değerleri en sona al
-              if (aValue === null && bValue === null) return 0;
-              if (aValue === null) return 1;
-              if (bValue === null) return -1;
-            } else if (sortBy === 'total') {
-              aValue = a.totalAmount || 0;
-              bValue = b.totalAmount || 0;
-            } else if (sortBy === 'priority') {
-              aValue = (a as Order & { priority?: number }).priority ?? 0;
-              bValue = (b as Order & { priority?: number }).priority ?? 0;
-            } else {
-              aValue = a.orderNumber || '';
-              bValue = b.orderNumber || '';
-            }
-            
-            if (aValue instanceof Timestamp) aValue = aValue.toMillis();
-            if (bValue instanceof Timestamp) bValue = bValue.toMillis();
-            if (aValue instanceof Date) aValue = aValue.getTime();
-            if (bValue instanceof Date) bValue = bValue.getTime();
-            
-            return sortOrder === 'asc' 
-              ? (aValue > bValue ? 1 : -1)
-              : (aValue < bValue ? 1 : -1);
-          });
-          
-          // Pagination
-          setOrders(filtered.slice(startIndex, endIndex));
-          setTotalPages(Math.ceil(filtered.length / 50));
-        }, 200);
-        
-        // İlk render için: totalAmount=0 ile göster
-        const validOrders = validOrdersInitial;
-        
-        // İlk render için: Search ve sort işlemleri frontend'de yapılacak
-=======
         const calculatedOrders: Order[] = ordersWithCalculatedTotals
           .filter((result) => result.status === 'fulfilled' && result.value !== null)
           .map(result => (result as PromiseFulfilledResult<Order>).value);
@@ -275,7 +147,6 @@ const Orders = () => {
         const validOrders = [...processedWithTotal, ...beforeVisible, ...calculatedOrders, ...afterVisible];
         
         // Search ve sort işlemleri frontend'de yapılacak
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         let filtered = validOrders;
         
         if (searchQuery) {
@@ -287,29 +158,12 @@ const Orders = () => {
           );
         }
         
-<<<<<<< HEAD
-        // Sort (totalAmount=0 olanlar için basit sort)
-=======
         // Sort
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         filtered.sort((a, b) => {
           let aValue: unknown, bValue: unknown;
           if (sortBy === 'order_date') {
             aValue = a.orderDate || a.createdAt;
             bValue = b.orderDate || b.createdAt;
-          } else if (sortBy === 'created_at') {
-            aValue = a.createdAt;
-            bValue = b.createdAt;
-          } else if (sortBy === 'delivery_date') {
-            aValue = a.deliveryDate || null;
-            bValue = b.deliveryDate || null;
-<<<<<<< HEAD
-=======
-            // Null değerleri en sona al
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-            if (aValue === null && bValue === null) return 0;
-            if (aValue === null) return 1;
-            if (bValue === null) return -1;
           } else if (sortBy === 'total') {
             aValue = a.totalAmount || 0;
             bValue = b.totalAmount || 0;
@@ -331,11 +185,7 @@ const Orders = () => {
             : (aValue < bValue ? 1 : -1);
         });
         
-<<<<<<< HEAD
-        // Pagination
-=======
         // Pagination (startIndex ve endIndex zaten yukarıda hesaplandı)
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         setOrders(filtered.slice(startIndex, endIndex));
         setTotalPages(Math.ceil(filtered.length / 50));
         setLoading(false);
@@ -351,14 +201,6 @@ const Orders = () => {
     return () => {
       unsubscribe();
     };
-<<<<<<< HEAD
-    }, 100);
-    
-    return () => {
-      clearTimeout(timer);
-    };
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
   }, [statusFilter, sortBy, sortOrder, searchQuery, page]);
 
   const handleShowCustomer = async (customerId: string | null) => {
@@ -419,13 +261,6 @@ const Orders = () => {
       setCanCreate(canCreateOrder);
       setCanUpdate(canUpdateOrder);
       setCanDelete(canDeleteOrder);
-      
-      // Ekip lideri her zaman ekleme/düzenleme/silme yapabilir
-      if (isTeamLeader) {
-        setCanCreate(true);
-        setCanUpdate(true);
-        setCanDelete(true);
-      }
     };
 
     checkPermissions();
@@ -531,6 +366,18 @@ const Orders = () => {
     }
   };
 
+  const getPriorityMeta = (priority?: number | null) => {
+    if (priority === undefined || priority === null) {
+      return { label: "Öncelik: 0", className: "bg-muted text-muted-foreground" };
+    }
+    if (priority >= 4) {
+      return { label: `Öncelik: ${priority}`, className: "bg-destructive/15 text-destructive" };
+    }
+    if (priority >= 2) {
+      return { label: `Öncelik: ${priority}`, className: "bg-amber-100 text-amber-800" };
+    }
+    return { label: `Öncelik: ${priority}`, className: "bg-slate-200 text-slate-800" };
+  };
 
   if (loading) {
     return (
@@ -542,19 +389,15 @@ const Orders = () => {
 
   return (
     <MainLayout>
-<<<<<<< HEAD
-      <div className="space-y-2 w-full sm:w-[95%] md:w-[90%] lg:max-w-[1400px] mx-auto">
-=======
-      <div className="space-y-2 xs:space-y-2.5 sm:space-y-3 w-full max-w-full mx-auto px-1 xs:px-2">
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-[90%] max-w-[90%] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-4">
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg sm:text-xl font-semibold text-foreground">Siparişler</h1>
-            <p className="text-muted-foreground mt-0.5 text-xs sm:text-sm">Sipariş takibi ve yönetimi</p>
+            <h1 className="text-[20px] sm:text-[24px] font-semibold text-foreground">Siparişler</h1>
+            <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">Sipariş takibi ve yönetimi</p>
           </div>
           {canCreate && (
             <Button 
-              className="gap-1 w-full sm:w-auto min-h-[36px] sm:min-h-8 text-[11px] sm:text-xs" 
+              className="gap-1.5 sm:gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-10 text-xs sm:text-sm" 
               onClick={() => {
                 setCreateDialogOpen(true);
               }}
@@ -567,13 +410,13 @@ const Orders = () => {
         </div>
 
         <Card>
-          <CardContent className="p-1.5">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2">
+          <CardContent className="p-3 sm:p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4">
               {/* Arama Kutusu */}
               <div className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] md:min-w-[250px]">
                 <SearchInput
                   placeholder="Sipariş ara..."
-                  className="w-full h-9 sm:h-10 text-[11px] sm:text-xs"
+                  className="w-full h-9 sm:h-10 text-xs sm:text-sm"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -582,7 +425,7 @@ const Orders = () => {
               {/* Durum Filtresi */}
               <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full h-9 sm:h-10 text-[11px] sm:text-xs">
+                  <SelectTrigger className="w-full h-9 sm:h-10 text-xs sm:text-sm">
                     <SelectValue placeholder="Durum Filtrele" />
                   </SelectTrigger>
                   <SelectContent>
@@ -606,13 +449,11 @@ const Orders = () => {
               {/* Sıralama */}
               <div className="w-full sm:w-auto sm:min-w-[160px] md:min-w-[180px]">
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-full h-9 sm:h-10 text-[11px] sm:text-xs">
+                  <SelectTrigger className="w-full h-9 sm:h-10 text-xs sm:text-sm">
                     <SelectValue placeholder="Sırala" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="order_date">Sipariş Tarihine Göre</SelectItem>
-                    <SelectItem value="created_at">Oluşturulma Tarihine Göre</SelectItem>
-                    <SelectItem value="delivery_date">Teslimat Tarihine Göre</SelectItem>
+                    <SelectItem value="order_date">Tarihe Göre</SelectItem>
                     <SelectItem value="total">Tutara Göre</SelectItem>
                     <SelectItem value="priority">Önceliğe Göre</SelectItem>
                     <SelectItem value="order_number">Sipariş No</SelectItem>
@@ -625,7 +466,7 @@ const Orders = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                className="h-9 sm:h-10 text-[11px] sm:text-xs"
+                className="h-9 sm:h-10 text-xs sm:text-sm"
               >
                 {sortOrder === "asc" ? <ArrowUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" /> : <ArrowDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />}
                 <span className="hidden sm:inline">{sortOrder === "asc" ? "Artan" : "Azalan"}</span>
@@ -634,150 +475,103 @@ const Orders = () => {
           </CardContent>
         </Card>
 
-        {/* Responsive Table View */}
+        {/* Responsive Table View - Her zaman görünür */}
         <Card>
           <CardContent className="p-0">
-            <ResponsiveTable
-              data={orders}
-              columns={[
-                {
-                  key: "order_number",
-                  header: "Sipariş No",
-                  accessor: (order) => (
-                    <span className="font-medium text-sm whitespace-nowrap">
-                      {order.order_number || "-"}
-                    </span>
-                  ),
-                  priority: "high",
-                  minWidth: 120,
-                  sticky: true,
-                  headerClassName: "text-left",
-                  cellClassName: "text-left",
-                },
-                {
-                  key: "status",
-                  header: "Durum",
-                  accessor: (order) => (
-                    <Badge className={`${getStatusColor(order.status)} text-xs whitespace-nowrap`}>
-                      {getStatusLabel(order.status)}
-                    </Badge>
-                  ),
-                  priority: "high",
-                  minWidth: 120,
-                  headerClassName: "text-left",
-                  cellClassName: "text-left",
-                },
-                {
-                  key: "total",
-                  header: "Tutar",
-                  accessor: (order) => (
-                    <span className="font-semibold whitespace-nowrap">
-                      {formatCurrency(order.totalAmount || order.total_amount || 0, order.currency)}
-                    </span>
-                  ),
-                  priority: "high",
-                  minWidth: 120,
-                  headerClassName: "text-left",
-                  cellClassName: "text-left",
-                },
-                {
-                  key: "customer_name",
-                  header: "Müşteri",
-                  accessor: (order) => (
-                    <button
-                      type="button"
-                      className="hover:text-primary focus:outline-none truncate block text-left w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleShowCustomer(order.customer_id);
-                      }}
+            <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+              <Table className="min-w-[800px] sm:min-w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4">Sipariş No</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden md:table-cell">Müşteri</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden lg:table-cell">Tarih</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4">Durum</TableHead>
+                    <TableHead className="text-xs font-semibold px-2 sm:px-4 hidden xl:table-cell">Öncelik</TableHead>
+                    <TableHead className="text-right text-xs font-semibold px-2 sm:px-4">Tutar</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.map((order) => (
+                    <TableRow
+                      key={order.id}
+                      className="hover:bg-muted/50 transition-colors"
                     >
-                      {order.customer_name || "-"}
-                      {order.customer_company && (
-                        <span className="text-muted-foreground"> - {order.customer_company}</span>
-                      )}
-                    </button>
-                  ),
-                  priority: "medium",
-                  minWidth: 120,
-                  headerClassName: "text-left",
-                  cellClassName: "text-left",
-                },
-                {
-                  key: "order_date",
-                  header: "Tarih",
-                  accessor: (order) => (
-                    <span className="whitespace-nowrap">
-                      {order.order_date ? new Date(order.order_date).toLocaleDateString("tr-TR") : "-"}
-                    </span>
-                  ),
-                  priority: "medium",
-                  minWidth: 120,
-                  headerClassName: "text-left",
-                  cellClassName: "text-left",
-                },
-                {
-                  key: "priority",
-                  header: "Öncelik",
-                  accessor: (order) => (
-                    <Badge className={`${getPriorityMeta(order.priority || 0).className} text-xs whitespace-nowrap`}>
-                      {getPriorityMeta(order.priority || 0).label}
-                    </Badge>
-                  ),
-                  priority: "low",
-                  minWidth: 120,
-                  headerClassName: "text-left",
-                  cellClassName: "text-left",
-                },
-              ]}
-              renderCard={(order) => (
-                <ResponsiveCard 
-                  className="p-3 sm:p-4 cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => {
-                    setSelectedOrder(order);
-                    setDetailModalOpen(true);
-                  }}
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-sm truncate">{order.order_number}</h3>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      <TableCell 
+                        className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 cursor-pointer"
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setDetailModalOpen(true);
+                        }}
+                      >
+                        <div className="flex flex-col gap-0.5">
+                          <span>{order.order_number}</span>
+                          <span className="md:hidden text-[10px] text-muted-foreground">
+                            {order.customer_name || "-"}
+                          </span>
+                          <span className="lg:hidden text-[10px] text-muted-foreground">
+                            {order.order_date ? new Date(order.order_date).toLocaleDateString("tr-TR") : "-"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 hidden md:table-cell">
+                        <button
+                          type="button"
+                          className="text-left hover:text-primary focus:outline-none truncate max-w-[200px]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShowCustomer(order.customer_id);
+                          }}
+                        >
                           {order.customer_name || "-"}
-                        </p>
-                      </div>
-                      <Badge className={`${getStatusColor(order.status)} text-[10px] flex-shrink-0`}>
-                        {getStatusLabel(order.status)}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">
+                          {order.customer_company && (
+                            <span className="text-muted-foreground"> - {order.customer_company}</span>
+                          )}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-xs font-medium px-2 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">
                         {order.order_date ? new Date(order.order_date).toLocaleDateString("tr-TR") : "-"}
-                      </span>
-                      <span className="font-semibold">
+                      </TableCell>
+                      <TableCell className="px-2 sm:px-4 py-2 sm:py-3">
+                        <Badge className={`${getStatusColor(order.status)} text-[10px] sm:text-xs`}>
+                          {getStatusLabel(order.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-2 sm:px-4 py-2 sm:py-3 hidden xl:table-cell">
+                        <Badge className={`${getPriorityMeta(order.priority || 0).className} text-[10px] sm:text-xs`}>
+                          {getPriorityMeta(order.priority || 0).label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell 
+                        className="text-right text-xs font-semibold px-2 sm:px-4 py-2 sm:py-3 cursor-pointer"
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setDetailModalOpen(true);
+                        }}
+                      >
                         {formatCurrency(order.totalAmount || order.total_amount || 0, order.currency)}
-                      </span>
-                    </div>
-                  </div>
-                </ResponsiveCard>
-              )}
-              emptyMessage={searchQuery || statusFilter !== "all" ? "Arama sonucu bulunamadı" : "Henüz sipariş bulunmuyor"}
-              onRowClick={(order) => {
-                setSelectedOrder(order);
-                setDetailModalOpen(true);
-              }}
-              keyExtractor={(order) => order.id}
-            />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {orders.length === 0 && !loading && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-6 sm:py-8 text-xs sm:text-sm text-muted-foreground">
+                        {searchQuery || statusFilter !== "all" ? "Arama sonucu bulunamadı" : "Henüz sipariş bulunmuyor"}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
             {totalPages > 1 && (
-              <div className="flex flex-col gap-2 p-2 xs:p-3 border-t md:flex-row md:items-center md:justify-between">
-                <div className="text-[11px] sm:text-xs text-muted-foreground text-center md:text-left">
+              <div className="flex flex-col gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t md:flex-row md:items-center md:justify-between">
+                <div className="text-xs sm:text-sm text-muted-foreground text-center md:text-left">
                   Sayfa {page} / {totalPages}
                 </div>
                 <div className="flex gap-2 justify-center md:justify-end">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 sm:h-9 text-[11px] sm:text-xs min-h-[44px] sm:min-h-[36px]"
+                    className="h-8 sm:h-9 text-xs sm:text-sm"
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1 || loading}
                   >
@@ -786,7 +580,7 @@ const Orders = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 sm:h-9 text-[11px] sm:text-xs min-h-[44px] sm:min-h-[36px]"
+                    className="h-8 sm:h-9 text-xs sm:text-sm"
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages || loading}
                   >
@@ -805,9 +599,7 @@ const Orders = () => {
         onSuccess={() => {
           // Real-time subscribe otomatik güncelleyecek
           setCreateDialogOpen(false);
-          setSelectedOrder(null);
         }}
-        order={selectedOrder} // Edit modu için mevcut sipariş
       />
 
       {selectedOrder && (
@@ -816,9 +608,7 @@ const Orders = () => {
           onOpenChange={setDetailModalOpen}
           order={selectedOrder}
           onEdit={() => {
-            // Düzenleme dialog'unu aç (selectedOrder zaten set edilmiş)
-            setDetailModalOpen(false);
-            setCreateDialogOpen(true);
+            // OrderDetailModal içinde düzenleme yapılacak
           }}
           onDelete={() => {
             setDetailModalOpen(false);

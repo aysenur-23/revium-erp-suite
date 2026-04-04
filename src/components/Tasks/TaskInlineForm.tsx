@@ -36,14 +36,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Timestamp } from "firebase/firestore";
-<<<<<<< HEAD
-import { Loader2, Plus, Link as LinkIcon, ListChecks, X, Check, Paperclip, Lock, CircleDot, Clock, CheckCircle2 } from "lucide-react";
-=======
 import { Loader2, Plus, Link as LinkIcon, ListChecks, X, Check, Paperclip, Lock } from "lucide-react";
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
-import { PRIORITY_OPTIONS, PriorityLevel, convertOldPriorityToNew, convertNewPriorityToOld } from "@/utils/priority";
 
 type TaskInlineFormMode = "create" | "edit";
 
@@ -153,7 +148,7 @@ export const TaskInlineForm = ({
     return (
       <Card className={className}>
         <Card className="p-4 border-destructive/50 bg-destructive/5">
-          <p className="text-[11px] sm:text-xs text-destructive font-medium">
+          <p className="text-sm text-destructive font-medium">
             Görev oluşturma yetkiniz yok. Sadece yönetici veya ekip lideri görev oluşturabilir.
           </p>
         </Card>
@@ -163,7 +158,7 @@ export const TaskInlineForm = ({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [priority, setPriority] = useState<PriorityLevel>(1); // Default: Normal (1)
+  const [priority, setPriority] = useState<1 | 2 | 3 | 4 | 5>(2);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [checklistItems, setChecklistItems] = useState<ChecklistItemState[]>([]);
   const [newChecklistText, setNewChecklistText] = useState("");
@@ -259,7 +254,7 @@ export const TaskInlineForm = ({
     setTitle("");
     setDescription("");
     setDueDate("");
-    setPriority(1); // Default: Normal (1)
+    setPriority(2);
     setSelectedMembers([]);
     setChecklistItems([]);
     setNewChecklistText("");
@@ -292,9 +287,7 @@ export const TaskInlineForm = ({
       setTitle(task.title);
       setDescription(task.description || "");
       setDueDate(formatDateInput(task.dueDate));
-      // Eski sistem (1-5) varsa yeni sisteme (0-5) çevir
-      const oldPriority = task.priority || 2;
-      setPriority(convertOldPriorityToNew(oldPriority));
+      setPriority((task.priority as 1 | 2 | 3 | 4 | 5) || 2);
       setApprovalStatus(task.approvalStatus);
       setApprovalRequestedBy(task.approvalRequestedBy);
       setTaskCreatorId(task.createdBy);
@@ -773,82 +766,20 @@ export const TaskInlineForm = ({
       return;
     }
 
-    // Atama işlemleri - permission hatalarını throw et
-    try {
-      const assignErrors: Error[] = [];
-      await Promise.all(
-        toAdd.map(async (memberId) => {
-          try {
-            await assignTask(id, memberId, user.id);
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            // Permission hatası ise throw et
-            if (errorMessage.includes("permission") || errorMessage.includes("Permission") || errorMessage.includes("Missing or insufficient")) {
-              assignErrors.push(new Error(`Görev üyesi ekleme yetkisi yok: ${errorMessage}`));
-            } else {
-              // Email servisi hatası gibi diğer hatalar sessizce devam eder
-              if (import.meta.env.DEV) {
-                console.debug("Görev atama hatası (email servisi çalışmıyor olabilir):", memberId);
-              }
-            }
-          }
-        })
-      );
-      // Permission hataları varsa throw et
-      if (assignErrors.length > 0) {
-        throw assignErrors[0];
-      }
-    } catch (error) {
-      // Permission hatası ise throw et
-      if (error instanceof Error && (error.message.includes("permission") || error.message.includes("Permission") || error.message.includes("Missing or insufficient"))) {
-        throw error;
-      }
-      // Diğer hatalar sessizce devam eder
-      if (import.meta.env.DEV) {
-        console.debug("Görev atamaları sırasında hata oluştu (email servisi çalışmıyor olabilir)");
-      }
-    }
+    await Promise.all(
+      toAdd.map((memberId) => assignTask(id, memberId, user.id))
+    );
 
-    // Kaldırma işlemleri - permission hatalarını throw et
-    try {
-      const deleteErrors: Error[] = [];
-      await Promise.all(
-        toRemove.map(async (memberId) => {
-          try {
-            const assignment = existingAssignments.find(
-              (a) => a.assignedTo === memberId && a.status !== "rejected"
-            );
-            if (assignment) {
-              await deleteTaskAssignment(id, assignment.id, user?.id);
-            }
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            // Permission hatası ise throw et
-            if (errorMessage.includes("permission") || errorMessage.includes("Permission") || errorMessage.includes("Missing or insufficient")) {
-              deleteErrors.push(new Error(`Görev üyesi kaldırma yetkisi yok: ${errorMessage}`));
-            } else {
-              // Email servisi hatası gibi diğer hatalar sessizce devam eder
-              if (import.meta.env.DEV) {
-                console.debug("Görev ataması kaldırma hatası (email servisi çalışmıyor olabilir):", memberId);
-              }
-            }
-          }
-        })
-      );
-      // Permission hataları varsa throw et
-      if (deleteErrors.length > 0) {
-        throw deleteErrors[0];
-      }
-    } catch (error) {
-      // Permission hatası ise throw et
-      if (error instanceof Error && (error.message.includes("permission") || error.message.includes("Permission") || error.message.includes("Missing or insufficient"))) {
-        throw error;
-      }
-      // Diğer hatalar sessizce devam eder
-      if (import.meta.env.DEV) {
-        console.debug("Görev ataması kaldırmaları sırasında hata oluştu (email servisi çalışmıyor olabilir)");
-      }
-    }
+    await Promise.all(
+      toRemove.map(async (memberId) => {
+        const assignment = existingAssignments.find(
+          (a) => a.assignedTo === memberId && a.status !== "rejected"
+        );
+        if (assignment) {
+          await deleteTaskAssignment(id, assignment.id, user?.id);
+        }
+      })
+    );
   };
 
   const handleApproveTask = async () => {
@@ -978,33 +909,14 @@ export const TaskInlineForm = ({
             title: title.trim(),
             description: description.trim() || null,
             dueDate: parsedDueDate,
-<<<<<<< HEAD
-            priority: convertNewPriorityToOld(priority) as 1 | 2 | 3 | 4 | 5, // TaskService hala 1-5 kullanıyor
-=======
-            priority: convertNewPriorityToOld(priority), // TaskService hala 1-5 kullanıyor
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
+            priority: priority,
             projectId: finalProjectId || null,
             isPrivate: finalIsPrivate,
           },
           user.id
         );
 
-        // Görev üyelerini senkronize et - hata varsa kullanıcıya bildir
-        try {
-          await syncAssignments(taskId);
-        } catch (error: unknown) {
-          // Permission hatası ise kullanıcıya bildir
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          if (errorMessage.includes("permission") || errorMessage.includes("Permission") || errorMessage.includes("Missing or insufficient")) {
-            toast.error("Görev üyelerini değiştirme yetkiniz yok. Sadece yöneticiler, ekip liderleri veya görevi oluşturan kişi değiştirebilir.");
-            setSaving(false);
-            return;
-          }
-          // Diğer hatalar için genel mesaj
-          toast.error("Görev üyeleri güncellenirken hata oluştu: " + errorMessage);
-          setSaving(false);
-          return;
-        }
+        await syncAssignments(taskId);
 
         // Eğer checklist yoksa ve yeni maddeler varsa oluştur
         // Yetki kontrolü: Firestore'dan kontrol et
@@ -1078,11 +990,7 @@ export const TaskInlineForm = ({
         title: title.trim(),
         description: description.trim() || null,
         status: defaultStatus,
-<<<<<<< HEAD
-        priority: convertNewPriorityToOld(priority) as 1 | 2 | 3 | 4 | 5, // TaskService hala 1-5 kullanıyor
-=======
         priority: priority,
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         dueDate: parsedDueDate,
         labels: null,
         projectId: onlyInMyTasks ? null : (finalProjectId || null),
@@ -1149,11 +1057,7 @@ export const TaskInlineForm = ({
   return (
     <Card
       className={cn(
-<<<<<<< HEAD
-        "w-full border-primary/30 bg-muted/20 p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4 shadow-sm",
-=======
         "w-full border-primary/30 bg-muted/20 p-4 sm:p-6 space-y-4 shadow-sm",
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
         className
       )}
     >
@@ -1176,8 +1080,8 @@ export const TaskInlineForm = ({
             <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                  <h4 className="text-[11px] sm:text-xs font-semibold text-yellow-900">Onay Bekliyor</h4>
-                  <p className="text-[11px] sm:text-xs text-yellow-700">
+                  <h4 className="text-sm font-semibold text-yellow-900">Onay Bekliyor</h4>
+                  <p className="text-sm text-yellow-700">
                     Bu görev tamamlandı olarak işaretlendi ve onayınızı bekliyor.
                   </p>
                 </div>
@@ -1187,11 +1091,7 @@ export const TaskInlineForm = ({
                     <Button
                       size="sm"
                       variant="outline"
-<<<<<<< HEAD
-                      className="flex-1 sm:flex-none border-yellow-300 text-yellow-900 hover:bg-yellow-100 min-h-[44px] sm:min-h-0"
-=======
                       className="flex-1 sm:flex-none border-yellow-300 text-yellow-900 hover:bg-yellow-100"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       onClick={handleRejectTask}
                     >
                       <X className="h-4 w-4 mr-1" />
@@ -1199,11 +1099,7 @@ export const TaskInlineForm = ({
                     </Button>
                     <Button
                       size="sm"
-<<<<<<< HEAD
-                      className="flex-1 sm:flex-none bg-yellow-600 hover:bg-yellow-700 text-white border-none min-h-[44px] sm:min-h-0"
-=======
                       className="flex-1 sm:flex-none bg-yellow-600 hover:bg-yellow-700 text-white border-none"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                       onClick={handleApproveTask}
                     >
                       <Check className="h-4 w-4 mr-1" />
@@ -1218,7 +1114,7 @@ export const TaskInlineForm = ({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label className="text-[11px] sm:text-xs">Görev Başlığı *</Label>
+              <Label className="text-sm sm:text-base">Görev Başlığı *</Label>
               <Input
                 placeholder="Görev başlığı"
                 value={title}
@@ -1231,10 +1127,6 @@ export const TaskInlineForm = ({
                 disabled={isRestrictedUser}
                 maxLength={200}
                 aria-describedby="title-char-count"
-<<<<<<< HEAD
-                className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               />
               <div className="flex justify-between items-center">
                 <span className="text-xs text-muted-foreground" id="title-char-count">
@@ -1246,55 +1138,38 @@ export const TaskInlineForm = ({
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-[11px] sm:text-xs">Bitiş Tarihi</Label>
+              <Label className="text-sm sm:text-base">Bitiş Tarihi</Label>
               <Input
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 disabled={isRestrictedUser}
-<<<<<<< HEAD
-                className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-[11px] sm:text-xs">Öncelik</Label>
+            <Label className="text-sm sm:text-base">Öncelik</Label>
             <Select
               value={priority.toString()}
-              onValueChange={(value) => setPriority(Number(value) as PriorityLevel)}
+              onValueChange={(value) => setPriority(Number(value) as 1 | 2 | 3 | 4 | 5)}
               disabled={isRestrictedUser}
             >
-<<<<<<< HEAD
-              <SelectTrigger className="w-full min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="min-w-[var(--radix-select-trigger-width)] max-h-[300px] sm:max-h-[200px] p-1 sm:p-1">
-                {PRIORITY_OPTIONS.map((option) => (
-                  <SelectItem 
-                    key={option.value} 
-                    value={option.value.toString()} 
-                    className="text-[14px] sm:text-sm min-h-[44px] sm:min-h-[36px] flex items-center py-2.5 sm:py-1.5 px-3 sm:px-2 cursor-pointer"
-                  >
-=======
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PRIORITY_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value.toString()}>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
-                    {option.label} ({option.value})
-                  </SelectItem>
-                ))}
+                <SelectItem value="1">Çok Düşük</SelectItem>
+                <SelectItem value="2">Düşük</SelectItem>
+                <SelectItem value="3">Orta</SelectItem>
+                <SelectItem value="4">Yüksek</SelectItem>
+                <SelectItem value="5">Kritik</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-[11px] sm:text-xs">
+            <Label className="text-sm sm:text-base">
               Proje {!showOnlyInMyTasks && <span className="text-destructive">*</span>}
             </Label>
             <Select
@@ -1322,11 +1197,7 @@ export const TaskInlineForm = ({
               }}
               disabled={isRestrictedUser || (!isEdit && !canSelectProject) || onlyInMyTasks}
             >
-<<<<<<< HEAD
-              <SelectTrigger className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm">
-=======
               <SelectTrigger>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 <SelectValue placeholder="Proje seçiniz" />
               </SelectTrigger>
               <SelectContent>
@@ -1380,7 +1251,7 @@ export const TaskInlineForm = ({
           </div>
 
           <div className="space-y-2">
-            <Label className="text-[11px] sm:text-xs">Açıklama</Label>
+            <Label className="text-sm sm:text-base">Açıklama</Label>
             <Textarea
               rows={3}
               placeholder="Görev açıklaması"
@@ -1394,10 +1265,6 @@ export const TaskInlineForm = ({
               disabled={isRestrictedUser}
               maxLength={2000}
               aria-describedby="description-char-count"
-<<<<<<< HEAD
-              className="text-[14px] sm:text-sm min-h-[100px] sm:min-h-0"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             />
             <div className="flex justify-end">
               <span className="text-xs text-muted-foreground" id="description-char-count">
@@ -1407,7 +1274,7 @@ export const TaskInlineForm = ({
           </div>
 
           <div className="space-y-3">
-            <Label className="text-[11px] sm:text-xs">Görev Üyeleri</Label>
+            <Label className="text-sm sm:text-base">Görev Üyeleri</Label>
             <UserMultiSelect
               selectedUsers={selectedMembers}
               onSelectionChange={setSelectedMembers}
@@ -1421,7 +1288,7 @@ export const TaskInlineForm = ({
                     checked={isTaskInPool}
                     onCheckedChange={(checked) => setIsTaskInPool(checked as boolean)}
                   />
-                  <Label htmlFor="pool-mode" className="text-[11px] sm:text-xs font-normal cursor-pointer text-muted-foreground">
+                  <Label htmlFor="pool-mode" className="text-sm font-normal cursor-pointer text-muted-foreground">
                     Bu görevi Görev Havuzuna gönder (Atama yapılsa bile havuzda görünür)
                   </Label>
                 </div>
@@ -1442,7 +1309,7 @@ export const TaskInlineForm = ({
                       }
                     }}
                   />
-                  <Label htmlFor="only-my-tasks-inline" className="text-[11px] sm:text-xs font-normal cursor-pointer text-muted-foreground">
+                  <Label htmlFor="only-my-tasks-inline" className="text-sm font-normal cursor-pointer text-muted-foreground">
                     Sadece "Benim Görevlerim" sayfasında göster (Sadece ben görebilirim)
                   </Label>
                 </div>
@@ -1479,7 +1346,7 @@ export const TaskInlineForm = ({
                     <Label 
                       htmlFor="private-task-inline" 
                       className={cn(
-                        "text-[11px] sm:text-xs font-normal text-muted-foreground flex items-center gap-1",
+                        "text-sm font-normal text-muted-foreground flex items-center gap-1",
                         selectedProjectId && projects.find(p => p.id === selectedProjectId)?.isPrivate 
                           ? "cursor-default" 
                           : "cursor-pointer"
@@ -1494,8 +1361,6 @@ export const TaskInlineForm = ({
             </div>
           </div>
 
-<<<<<<< HEAD
-=======
           {isRestrictedUser && !approvalStatus && (
             <div className="flex justify-end mb-4">
               <Button 
@@ -1520,10 +1385,9 @@ export const TaskInlineForm = ({
               </Button>
             </div>
           )}
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
 
           <div className="space-y-3">
-            <Label className="flex items-center gap-2 text-[11px] sm:text-xs">
+            <Label className="flex items-center gap-2 text-sm sm:text-base">
               <ListChecks className="h-4 w-4" />
               Checklist
             </Label>
@@ -1538,15 +1402,9 @@ export const TaskInlineForm = ({
                     handleAddChecklistItem();
                   }
                 }}
-<<<<<<< HEAD
-                className="flex-1 min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
-              />
-              <Button type="button" onClick={handleAddChecklistItem} className="min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0">
-=======
                 className="flex-1"
               />
               <Button type="button" onClick={handleAddChecklistItem}>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -1562,16 +1420,12 @@ export const TaskInlineForm = ({
                         checked={!!item.completed}
                         onCheckedChange={() => handleToggleChecklistItem(item.id)}
                       />
-                      <span className="text-[11px] sm:text-xs">{item.text}</span>
+                      <span className="text-sm">{item.text}</span>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleRemoveChecklistItem(item.id)}
-<<<<<<< HEAD
-                      className="min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -1582,7 +1436,7 @@ export const TaskInlineForm = ({
           </div>
 
           <div className="space-y-3">
-            <Label className="flex items-center gap-2 text-[11px] sm:text-xs">
+            <Label className="flex items-center gap-2 text-sm sm:text-base">
               <Paperclip className="h-4 w-4" />
               Ekler (Dosya & Link)
             </Label>
@@ -1593,18 +1447,10 @@ export const TaskInlineForm = ({
                 placeholder="Link adı"
                 value={linkLabel}
                 onChange={(e) => setLinkLabel(e.target.value)}
-<<<<<<< HEAD
-                className="min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
-              />
-              <Input
-                placeholder="https://..."
-                className="sm:col-span-2 min-h-[44px] sm:min-h-0 text-[14px] sm:text-sm"
-=======
               />
               <Input
                 placeholder="https://..."
                 className="sm:col-span-2"
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
                 onKeyDown={(e) => {
@@ -1615,13 +1461,8 @@ export const TaskInlineForm = ({
                 }}
               />
             </div>
-<<<<<<< HEAD
-            <div className="flex gap-2 flex-wrap">
-              <Button type="button" variant="outline" size="sm" onClick={handleAddLink} className="min-h-[44px] sm:min-h-0 flex-1 sm:flex-initial">
-=======
             <div className="flex gap-2">
               <Button type="button" variant="outline" size="sm" onClick={handleAddLink}>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 <LinkIcon className="h-4 w-4 mr-1" />
                 Link Ekle
               </Button>
@@ -1640,10 +1481,6 @@ export const TaskInlineForm = ({
                     variant="outline" 
                     size="sm" 
                     onClick={() => fileInputRef.current?.click()}
-<<<<<<< HEAD
-                    className="min-h-[44px] sm:min-h-0 flex-1 sm:flex-initial"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                   >
                     <Paperclip className="h-4 w-4 mr-1" />
                     Dosya Yükle
@@ -1651,13 +1488,8 @@ export const TaskInlineForm = ({
                 </div>
               )}
               {!isEdit && (
-<<<<<<< HEAD
-                <div title="Dosya yüklemek için önce görevi oluşturmalısınız" className="cursor-not-allowed opacity-50 flex-1 sm:flex-initial">
-                  <Button type="button" variant="outline" size="sm" disabled className="min-h-[44px] sm:min-h-0 w-full sm:w-auto">
-=======
                 <div title="Dosya yüklemek için önce görevi oluşturmalısınız" className="cursor-not-allowed opacity-50">
                   <Button type="button" variant="outline" size="sm" disabled>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     <Paperclip className="h-4 w-4 mr-1" />
                     Dosya Yükle
                   </Button>
@@ -1670,7 +1502,7 @@ export const TaskInlineForm = ({
                 {attachments.map((att) => (
                   <div
                     key={att.id}
-                    className="flex items-center justify-between rounded-md border px-3 py-2 text-[11px] sm:text-xs"
+                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
                   >
                     <div className="truncate flex items-center">
                       {att.type === "file" ? (
@@ -1692,10 +1524,6 @@ export const TaskInlineForm = ({
                       variant="ghost"
                       size="sm"
                       onClick={() => handleRemoveAttachment(att.id)}
-<<<<<<< HEAD
-                      className="min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -1715,19 +1543,11 @@ export const TaskInlineForm = ({
                 }
               }}
               disabled={saving}
-<<<<<<< HEAD
-              className="min-h-[44px] sm:min-h-0 w-full sm:w-auto"
-=======
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
             >
               Vazgeç
             </Button>
             {!isRestrictedUser && (
-<<<<<<< HEAD
-              <Button onClick={handleSubmit} disabled={saving} className="min-h-[44px] sm:min-h-0 w-full sm:w-auto">
-=======
               <Button onClick={handleSubmit} disabled={saving}>
->>>>>>> 2bdcc7331f104f0af420939d7419e34ea46ff9d1
                 {saving ? "Kaydediliyor..." : isEdit ? "Güncelle" : "Görevi Oluştur"}
               </Button>
             )}

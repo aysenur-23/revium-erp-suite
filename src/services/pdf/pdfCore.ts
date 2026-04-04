@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PDF Generator Core
  * Core PDF functionality, constants, types, and shared utilities
  * Extracted and modularized from the unified generator service for better maintainability
@@ -22,7 +22,7 @@ export const COMPANY_INFO = {
     headerAddress: "Fevzi Cakmak Mah. Milenyum Cad. No:81",
 } as const;
 
-// PDF sabit değerleri - cache'lenmiş
+// PDF sabit deÄŸerleri - cache'lenmiÅŸ
 export const PDF_CONSTANTS = {
     margin: 50,
     headerHeight: 120,
@@ -170,7 +170,7 @@ export interface jsPDFWithFontStatus extends jsPDF {
 // Helper functions
 
 /**
- * Türkçe karakterleri ASCII'ye çevir
+ * TÃ¼rkÃ§e karakterleri ASCII'ye Ã§evir
  */
 export function transliterateTurkish(text: string): string {
     const turkishMap: Record<string, string> = {
@@ -195,7 +195,7 @@ export function transliterateTableData(
 ): (string | number)[][] {
     if (!data) return [];
 
-    // Roboto font yüklüyse transliterate yapma
+    // Roboto font yÃ¼klÃ¼yse transliterate yapma
     if (doc && doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
         return data; // Return original data
     }
@@ -208,7 +208,7 @@ export function transliterateTableData(
 }
 
 /**
- * PDF Template oluştur
+ * PDF Template oluÅŸtur
  */
 export function createPDFTemplate(doc: jsPDFWithFontStatus): PDFTemplateLayout {
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -238,7 +238,7 @@ export function createPDFTemplate(doc: jsPDFWithFontStatus): PDFTemplateLayout {
 }
 
 /**
- * Kart boyutlarını hesapla
+ * Kart boyutlarÄ±nÄ± hesapla
  */
 export function calculateCardDimensions(
     contentWidth: number,
@@ -261,7 +261,7 @@ export function formatCurrency(value: number, currency = "₺"): string {
 }
 
 /**
- * Güvenli sayı dönüşümü
+ * GÃ¼venli sayÄ± dÃ¶nÃ¼ÅŸÃ¼mÃ¼
  */
 export function safeNumber(value: unknown): number {
     if (typeof value === 'number') return value;
@@ -273,7 +273,7 @@ export function safeNumber(value: unknown): number {
 }
 
 /**
- * Güvenli para birimi formatı
+ * GÃ¼venli para birimi formatÄ±
  */
 export function safeFormatCurrency(value: number): string {
     if (typeof value !== 'number' || isNaN(value)) {
@@ -306,7 +306,7 @@ export function formatDate(dateStr: string): string {
 }
 
 /**
- * Kısa tarih formatı
+ * KÄ±sa tarih formatÄ±
  */
 export function formatDateShort(dateStr: string): string {
     try {
@@ -319,7 +319,7 @@ export function formatDateShort(dateStr: string): string {
 }
 
 /**
- * PDF oluştur
+ * PDF oluÅŸtur
  */
 export function createPdf(
     options: jsPDFOptions = { format: "a4", unit: "pt" }
@@ -328,7 +328,7 @@ export function createPdf(
 }
 
 /**
- * Sayfa sığmazsa yeni sayfa ekle
+ * Sayfa sÄ±ÄŸmazsa yeni sayfa ekle
  */
 export function ensureSpace(
     doc: jsPDF,
@@ -356,7 +356,7 @@ export function ensureSpace(
 }
 
 /**
- * Tablo sayfa sığmazsa yeni sayfa ekle
+ * Tablo sayfa sÄ±ÄŸmazsa yeni sayfa ekle
  */
 export function ensureTableFitsPage(
     doc: jsPDFWithFontStatus,
@@ -368,15 +368,15 @@ export function ensureTableFitsPage(
     const pageHeight = doc.internal.pageSize.getHeight();
     const footerHeight = PDF_CONSTANTS.footerHeight;
 
-    // Eğer tablo sayfa sığmazsa yeni sayfa ekle (daha fazla boşluk bırak)
+    // EÄŸer tablo sayfa sÄ±ÄŸmazsa yeni sayfa ekle (daha fazla boÅŸluk bÄ±rak)
     const minSpaceNeeded = requiredHeight + 70;
     if (currentY + minSpaceNeeded > pageHeight - footerHeight - margin) {
         doc.addPage();
         let nextY = margin + 30;
 
-        // Yeni sayfada template'i uygula - circular dependency olmaması için burada template oluşturma ve background çizme işlemini çağırmıyoruz
-        // Kullanıcının bu fonksiyonu çağırdığı yerde background ve template işlemlerini yapması gerekebilir
-        // Veya basitçe background çiz
+        // Yeni sayfada template'i uygula - circular dependency olmamasÄ± iÃ§in burada template oluÅŸturma ve background Ã§izme iÅŸlemini Ã§aÄŸÄ±rmÄ±yoruz
+        // KullanÄ±cÄ±nÄ±n bu fonksiyonu Ã§aÄŸÄ±rdÄ±ÄŸÄ± yerde background ve template iÅŸlemlerini yapmasÄ± gerekebilir
+        // Veya basitÃ§e background Ã§iz
 
         // Basit background (beyaz)
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -398,142 +398,48 @@ import { ROBOTO_REGULAR_BASE64, ROBOTO_BOLD_BASE64 } from "@/assets/fonts/roboto
 let cachedRobotoRegular: string | null = null;
 let cachedRobotoBold: string | null = null;
 
-// Use GitHub Raw as it's reliable and supports CORS usually
-const ROBOTO_REGULAR_URL = "https://raw.githubusercontent.com/bpampuch/pdfmake/master/examples/fonts/Roboto-Regular.ttf";
-const ROBOTO_BOLD_URL = "https://raw.githubusercontent.com/bpampuch/pdfmake/master/examples/fonts/Roboto-Medium.ttf";
-
-async function fetchFontBase64(url: string): Promise<string> {
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to fetch font from ${url}`);
-        const buffer = await response.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        const len = bytes.byteLength;
-        const chunkSize = 8192;
-        for (let i = 0; i < len; i += chunkSize) {
-            binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
-        }
-        return window.btoa(binary);
-    } catch (error) {
-        console.error("Font fetch error:", error);
-        throw error;
-    }
-}
-
 export const isRobotoName = (fontName?: string): boolean => {
     if (!fontName) return false;
     return fontName.toLowerCase().includes("roboto");
 };
 
-// Güçlendirilmiş Font Yönetimi
+// GÃ¼Ã§lendirilmiÅŸ Font YÃ¶netimi
 export const registerFonts = async (doc: jsPDFWithFontStatus) => {
-    // Eğer font zaten yüklendiyse tekrar yükleme
     if (doc._robotoFontLoaded && !doc._robotoFontLoadFailed) {
         return;
     }
 
-    // Reset flags
     doc._robotoFontLoadFailed = false;
 
-    // 1. Try to use cached remote fonts or fetch them
     try {
         if (!cachedRobotoRegular) {
-            console.log("Fetching Roboto Regular from GitHub...");
-            cachedRobotoRegular = await fetchFontBase64(ROBOTO_REGULAR_URL);
+            cachedRobotoRegular = ROBOTO_REGULAR_BASE64.replace(/^data:.*?,/, '').replace(/\s+/g, '').trim();
         }
         if (!cachedRobotoBold) {
-            console.log("Fetching Roboto Bold from GitHub...");
-            cachedRobotoBold = await fetchFontBase64(ROBOTO_BOLD_URL);
+            cachedRobotoBold = ROBOTO_BOLD_BASE64.replace(/^data:.*?,/, '').replace(/\s+/g, '').trim();
         }
 
-        if (cachedRobotoRegular && cachedRobotoBold) {
-            // Add to VFS
-            try {
-                doc.addFileToVFS("Roboto-Regular.ttf", cachedRobotoRegular);
-                doc.addFileToVFS("Roboto-Bold.ttf", cachedRobotoBold);
-
-                doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
-                doc.addFont("Roboto-Bold.ttf", "Roboto", "bold");
-
-                // Set default font
-                doc.setFont("Roboto", "normal");
-
-                // Verify
-                doc.setFontSize(12);
-                // Test turkish char which was failing before
-                // We assume the downloaded font has it.
-                doc._robotoFontLoaded = true;
-                doc._robotoFontLoadFailed = false;
-                console.log("Roboto fonts loaded successfully from GitHub");
-                return;
-            } catch (vfsError) {
-                console.error("VFS add error for CDN fonts:", vfsError);
-                throw vfsError;
-            }
+        if (!cachedRobotoRegular || !cachedRobotoBold) {
+            throw new Error("Embedded font data is missing.");
         }
-    } catch (fetchError) {
-        console.warn("CDN Font fetch failed:", fetchError);
-        // Fallback to Local Base64
-        try {
-            console.log("Falling back to local Base64 fonts...");
 
-            // Base64 string'lerin düzgün formatta olduğundan emin ol
-            let cleanRegular = ROBOTO_REGULAR_BASE64.replace(/^data:.*?,/, '').trim();
-            let cleanBold = ROBOTO_BOLD_BASE64.replace(/^data:.*?,/, '').trim();
-
-            cleanRegular = cleanRegular.replace(/\.\.\.$/, '').trim();
-            cleanBold = cleanBold.replace(/\.\.\.$/, '').trim();
-
-            // Base64 boyutu kontrolü: Tam Roboto fontu (Regular) genellikle ~160KB+'dır.
-            // Yerel dosyamız (~96KB) muhtemelen subset ve Türkçe karakterleri içermiyor.
-            // Bu yüzden 150.000 karakterden (yaklaşık 110KB) küçükse reddediyoruz.
-            const MIN_FONT_LENGTH = 150000;
-
-            if (!cleanRegular || !cleanBold || cleanRegular.length < MIN_FONT_LENGTH) {
-                console.warn(`Local font appears too small/incomplete (Length: ${cleanRegular.length}). rejecting.`);
-                throw new Error("Local font is incomplete (subset), skipping to force transliteration fallback.");
-            }
-
-            cleanRegular = cleanRegular.replace(/\s+/g, '');
-            cleanBold = cleanBold.replace(/\s+/g, '');
-
-            // Add to VFS
-            try {
-                doc.addFileToVFS("Roboto-Regular.ttf", cleanRegular);
-                doc.addFileToVFS("Roboto-Bold.ttf", cleanBold);
-            } catch (vfsError) {
-                throw new Error("Local Font VFS error: " + vfsError);
-            }
-
-            // Add fonts
-            try {
-                doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
-                doc.addFont("Roboto-Bold.ttf", "Roboto", "bold");
-
-                doc.setFont("Roboto", "normal");
-                doc._robotoFontLoaded = true;
-                doc._robotoFontLoadFailed = false;
-                console.log("Roboto fonts loaded from Local Base64");
-                return;
-            } catch (addFontError) {
-                throw new Error("Local Font add error: " + addFontError);
-            }
-
-        } catch (localError) {
-            console.error("Local font fallback failed:", localError);
-            // Final fallback to Helvetica
-            doc.setFont("helvetica", "normal");
-            doc._robotoFontLoaded = false;
-            doc._robotoFontLoadFailed = true;
-            console.warn("Falling back to Helvetica (Transliteration Mode)");
-        }
+        doc.addFileToVFS("Roboto-Regular.ttf", cachedRobotoRegular);
+        doc.addFileToVFS("Roboto-Bold.ttf", cachedRobotoBold);
+        doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
+        doc.addFont("Roboto-Bold.ttf", "Roboto", "bold");
+        doc.setFont("Roboto", "normal");
+        doc._robotoFontLoaded = true;
+        doc._robotoFontLoadFailed = false;
+    } catch (localError) {
+        console.error("Local font load failed:", localError);
+        doc.setFont("helvetica", "normal");
+        doc._robotoFontLoaded = false;
+        doc._robotoFontLoadFailed = true;
     }
 };
 
 export const createSafeText = (doc: jsPDFWithFontStatus) => {
-    // Roboto font Türkçe karakterleri destekliyor
-    // Sadece Helvetica kullanılırken transliterate et
+    // Roboto yüklüyse orijinal metni koru, yalnızca son çare olarak transliterate et.
     return (text: string, x: number, y: number, fontSize: number, isBold: boolean = false) => {
         // null/undefined kontrolü
         if (text == null || text === '') {
@@ -541,60 +447,48 @@ export const createSafeText = (doc: jsPDFWithFontStatus) => {
         }
 
         const textStr = String(text);
-
-        // ÖNCE translitere edilmiş versiyonu hazırla (yedek olarak)
-        // TODO: Full UTF-8 supported font is required for proper Turkish character rendering.
-        // Currently forcing transliteration to avoid missing glyphs (e.g. 'Ş' appearing empty).
         const transliteratedText = transliterateTurkish(textStr);
 
-        // Font yüklenmemişse veya yükleme başarısızsa direkt helvetica kullan ve transliterate et
+        // Font yüklenmemişse veya yükleme başarısızsa helvetica fallback kullan.
         if (!doc._robotoFontLoaded || doc._robotoFontLoadFailed) {
             try {
                 doc.setFont("helvetica", isBold ? "bold" : "normal");
                 doc.setFontSize(fontSize);
                 doc.text(transliteratedText, x, y);
             } catch (error: unknown) {
-                // Hata durumunda sessizce devam et - ama loglayalım
-                console.warn('createSafeText: Helvetica ile yazılamadı:', error);
+                console.warn("createSafeText: Helvetica ile yazılamadı:", error);
             }
             return;
         }
 
-        // Roboto kullan (transliterate etmeden)
-        const textToRender = textStr;
-
-        // Roboto kullanmayı dene
-        let robotoSuccess = false;
+        let robotoSelected = false;
         try {
             doc.setFont("Roboto", isBold ? "bold" : "normal");
             doc.setFontSize(fontSize);
             const currentFont = doc.getFont();
 
             if (currentFont && isRobotoName(currentFont.fontName)) {
-                // Roboto font başarıyla ayarlandı, Türkçe karakterleri koruyarak yaz
-                try {
-                    doc.text(textToRender, x, y);
-                    robotoSuccess = true;
-                } catch (writeError) {
-                    // Text yazma hatası - robotoSuccess false kalacak, fallback'e geçilecek
-                    console.warn('createSafeText: Roboto textStr yazılamadı, fallback deneniyor:', writeError);
-                }
+                robotoSelected = true;
             }
         } catch (fontError) {
-            // Font ayarlama hatası
-            console.warn('createSafeText: Roboto font ayarlanamadı:', fontError);
+            console.warn("createSafeText: Roboto font ayarlanamadı:", fontError);
         }
 
-        // Roboto başarısız olduysa, Helvetica ile translitere edilmiş text'i yaz
-        if (!robotoSuccess) {
+        if (robotoSelected) {
             try {
-                doc.setFont("helvetica", isBold ? "bold" : "normal");
-                doc.setFontSize(fontSize);
-                doc.text(transliteratedText, x, y);
-            } catch (fallbackError) {
-                // Son çare: loglayıp devam et
-                console.error('createSafeText: Fallback da başarısız:', fallbackError);
+                doc.text(textStr, x, y);
+                return;
+            } catch (writeError) {
+                console.warn("createSafeText: Roboto ile yazılamadı, fallback deneniyor:", writeError);
             }
+        }
+
+        try {
+            doc.setFont("helvetica", isBold ? "bold" : "normal");
+            doc.setFontSize(fontSize);
+            doc.text(transliteratedText, x, y);
+        } catch (fallbackError) {
+            console.error("createSafeText: Fallback da başarısız:", fallbackError);
         }
     };
 };
@@ -626,38 +520,22 @@ export const safeSetFont = (doc: jsPDFWithFontStatus, style: "normal" | "bold" =
         return;
     }
 
-    let attempts = 0;
-    let fontSet = false;
-    const maxAttempts = 3;
-
-    while (attempts < maxAttempts && !fontSet) {
-        try {
-            doc.setFont("Roboto", style);
-            const currentFont = doc.getFont();
-            if (currentFont && isRobotoName(currentFont.fontName)) {
-                try {
-                    doc.setFontSize(12);
-                    doc.text("İğüşöç", -1000, -1000);
-                    fontSet = true;
-                    break;
-                } catch (testError) {
-                    // ignore
-                }
-            }
-            attempts++;
-        } catch (error) {
-            attempts++;
+    try {
+        doc.setFont("Roboto", style);
+        const currentFont = doc.getFont();
+        if (currentFont && isRobotoName(currentFont.fontName)) {
+            return;
         }
+    } catch {
+        // fallback below
     }
 
-    if (!fontSet) {
-        try {
-            doc.setFont("helvetica", style);
-            doc._robotoFontLoaded = false;
-            doc._robotoFontLoadFailed = true;
-        } catch {
-            // ignore
-        }
+    try {
+        doc.setFont("helvetica", style);
+        doc._robotoFontLoaded = false;
+        doc._robotoFontLoadFailed = true;
+    } catch {
+        // ignore
     }
 };
 
@@ -676,7 +554,7 @@ export const createWillDrawCell = (doc: jsPDFWithFontStatus) => {
             return val;
         };
 
-        // Sadece Roboto yüklü değilse transliterate et
+        // Sadece Roboto yÃ¼klÃ¼ deÄŸilse transliterate et
         if (!doc._robotoFontLoaded || doc._robotoFontLoadFailed) {
             cell.text = forceTransliterate(cell.text);
         }
@@ -701,4 +579,5 @@ export const createWillDrawCell = (doc: jsPDFWithFontStatus) => {
         }
     };
 };
+
 
